@@ -189,6 +189,12 @@ export function createAuthSessionService(
     // tab (not a replay) and gets a brand-new session without revocation.
     // Outside the window it is a replay and every session is revoked.
     if (timingSafeHashEqual(session.previousRefreshTokenHash, hash)) {
+      // A revoked (signed-out, admin-revoked) or expired session must not be
+      // resurrected through its previous token, even inside the grace window.
+      const sessionExpiresMs = Date.parse(session.expiresAt);
+      if (session.revoked || !Number.isFinite(sessionExpiresMs) || sessionExpiresMs <= Date.now()) {
+        throw new VellumError("UNAUTHENTICATED", "Refresh token is revoked or expired");
+      }
       const rotatedAtMs = session.rotatedAt ? Date.parse(session.rotatedAt) : Number.NaN;
       const elapsed = Date.now() - rotatedAtMs;
       const within = Number.isFinite(rotatedAtMs) && elapsed >= -5_000 && elapsed <= REFRESH_GRACE_WINDOW_MS;

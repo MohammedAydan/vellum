@@ -1,0 +1,9 @@
+{
+  "name": "vellum-sdk-js-harsh-tests",
+  "private": true,
+  "type": "module",
+  "description": "Black-box stress suite for @vellumdb/sdk-js. Runs against a LOCAL Vellum API with disposable PostgreSQL only.",
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts"
+  }
+}

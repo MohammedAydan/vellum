@@ -1,0 +1,11 @@
+name: vellum_flutter_stress
+publish_to: none
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+dependencies:
+  vellum_flutter:
+    path: ../../sdks/flutter
+  http: ^1.2.2
+  crypto: ^3.0.0
+dev_dependencies:
+  test: ^1.25.0

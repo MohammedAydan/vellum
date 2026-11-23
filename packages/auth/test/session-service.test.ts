@@ -116,6 +116,21 @@ describe("@vellum/auth / session service", () => {
     expect(rotatedCanary.accessToken).toEqual(expect.any(String));
   });
 
+  it("does not resurrect a revoked session through its previous token inside the grace window", async () => {
+    const { storage, service } = makeService();
+    const user = await storage.createAuthUser(ctx, { email: "signedout@example.com" });
+    const first = await service.issue({ ctx, user });
+    const rotated = await service.refresh(ctx, first.refreshToken);
+    await service.revoke(ctx, rotated.refreshToken);
+
+    await expect(service.refresh(ctx, first.refreshToken)).rejects.toMatchObject({
+      code: "UNAUTHENTICATED",
+      message: expect.stringContaining("revoked or expired"),
+    });
+    const sessions = await storage.listUserSessions(ctx, user.id);
+    expect(sessions).toHaveLength(1);
+  });
+
   it("revokes ALL sessions when a previous token is replayed OUTSIDE the grace window", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));

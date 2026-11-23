@@ -299,6 +299,21 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     platform.logger.warn("Auth token email delivery failed", { tokenType });
   }
 
+  /**
+   * Custom claims feed Security Rules (`auth.claims.*`) and `phoneVerified` is a
+   * trust signal. Both are server-controlled: an end user must never be able to
+   * assign them to themselves (privilege escalation). Admins set claims through
+   * `PUT /auth/admin/users/:uid/claims` with a secret key.
+   */
+  function rejectSelfAssignedPrivilege(body: { customClaims?: unknown; phoneVerified?: unknown }): void {
+    if (body.customClaims !== undefined || body.phoneVerified !== undefined) {
+      throw new VellumError(
+        "PERMISSION_DENIED",
+        "customClaims and phoneVerified cannot be set by end users; use the admin API with a secret key"
+      );
+    }
+  }
+
   // -------------------------------------------------------------------- SIGN-UP
 
   routes.post("/sign-up/email", async (c) => {
@@ -311,6 +326,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     }
 
     const body = parseOrThrow(SignUpEmailRequestSchema, await c.req.json());
+    rejectSelfAssignedPrivilege(body);
     assertPasswordPolicy(body.password, config);
     if (await storage.getAuthUserByEmail(tenant.ctx, body.email)) {
       throw new VellumError("ALREADY_EXISTS", "An end-user with this email already exists");
@@ -325,7 +341,6 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         photoUrl: body.photoUrl ?? null,
         phoneNumber: body.phoneNumber ?? null,
         ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
-        ...(body.customClaims !== undefined ? { customClaims: body.customClaims } : {}),
       })
     );
     const now = new Date().toISOString();
@@ -408,7 +423,11 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/sign-in/provider", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    // The server never verifies provider ids or tokens itself: providerUserId,
+    // email and emailVerified are claims made by the caller. Only a trusted
+    // backend holding a secret (sk_) key may assert them. A publishable key in
+    // a browser or app could otherwise sign in as any user by email.
+    requireProjectApiKey(c, platform, tenant, { serverOnly: true });
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
 
@@ -427,15 +446,22 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       if (!found) throw new VellumError("UNAUTHENTICATED", "The linked end-user no longer exists");
       if (found.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
       user = { ...found, lastSignInAt: now };
-      await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
     } else {
       if (!body.email) {
         throw new VellumError("INVALID_ARGUMENT", "An email is required when registering via an identity provider");
       }
       const byEmail = await storage.getAuthUserByEmail(tenant.ctx, body.email);
       if (byEmail) {
+        // Never link a new provider identity to an existing account on an
+        // unverified email claim.
+        if (body.emailVerified !== true) {
+          throw new VellumError(
+            "ALREADY_EXISTS",
+            "An account with this email exists; the provider must assert a verified email to link it"
+          );
+        }
+        if (byEmail.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
         user = { ...byEmail, lastSignInAt: now };
-        await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
       } else {
         await checkRegistrationGuards(tenant, config);
         const email = body.email;
@@ -451,6 +477,18 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         await projectIfEnabled(tenant, config, user);
       }
     }
+    // Provider sign-in must not bypass a verified second factor.
+    const mfa = config.enableTotpMfa ? await storage.getAuthMfa(tenant.ctx, user.id) : null;
+    if (mfa?.verified) {
+      const { token, expiresAt } = await persistActionToken(
+        tenant,
+        user.id,
+        TOKEN_TYPE_MFA_CHALLENGE,
+        MFA_TICKET_TTL_MS
+      );
+      return c.json({ mfaRequired: true, mfaTicket: token, factors: ["totp"], expiresAt });
+    }
+    await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
     await storage.upsertAuthIdentity(tenant.ctx, {
       userId: user.id,
       provider: body.provider,
@@ -508,6 +546,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const current = await requireEndUser(c, platform, tenant);
     const body = parseOrThrow(UpdateProfileRequestSchema, await c.req.json());
+    rejectSelfAssignedPrivilege(body);
     const patch: UpdateAuthUserInput = {};
     if (body.email !== undefined) {
       const email = body.email;
@@ -521,9 +560,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     if (body.displayName !== undefined) patch.displayName = body.displayName;
     if (body.photoUrl !== undefined) patch.photoUrl = body.photoUrl;
     if (body.phoneNumber !== undefined) patch.phoneNumber = body.phoneNumber;
-    if (body.phoneVerified !== undefined) patch.phoneVerified = body.phoneVerified;
     if (body.metadata !== undefined) patch.metadata = body.metadata;
-    if (body.customClaims !== undefined) patch.customClaims = body.customClaims;
     const updated = await storage.updateAuthUser(tenant.ctx, current.id, patch);
     // The projected `users/{uid}` document mirrors the auth record. Re-project
     // after every profile mutation (merge semantics preserve developer fields).
@@ -686,11 +723,11 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const body = parseOrThrow(MfaChallengeRequestSchema, await c.req.json());
     const ticketHash = sha256(body.mfaTicket);
     const failureKey = `mfa-challenge:${ticketHash}`;
-    // The ticket is already single-use: consuming it below on the first code
-    // attempt invalidates it immediately. The 5-failure counter below is an
-    // additional best-effort guard — on the 5th bad code we call
-    // `consumeAuthToken` again to guarantee the ticket cannot be replayed even
-    // if an earlier consume were skipped. Keys are hashes, never raw tickets.
+    // Bounded retries: the ticket survives a wrong code (peek, not consume) so a
+    // typo does not force a full re-login. After 5 bad codes the ticket is
+    // consumed (invalidated) and the user must sign in again. On success the
+    // ticket is consumed atomically before the session is issued. Keys are
+    // hashes, never raw tickets.
     const badCode = async (message: string): Promise<never> => {
       if (recordMfaFailure(failureKey)) {
         try {
@@ -701,7 +738,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       }
       throw new VellumError("UNAUTHENTICATED", message);
     };
-    const challenge = await storage.consumeAuthToken(
+    const challenge = await storage.peekAuthToken(
       tenant.ctx,
       ticketHash,
       TOKEN_TYPE_MFA_CHALLENGE
@@ -713,13 +750,27 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
     const isRecovery = body.factorType === "recovery_code" || !/^\d{6}$/.test(body.code);
     if (isRecovery) {
-      if (verifyRecoveryCode(body.code, mfa.recoveryCodesHashed) === -1) {
+      const usedIndex = verifyRecoveryCode(body.code, mfa.recoveryCodesHashed);
+      if (usedIndex === -1) {
         await badCode("Invalid recovery code");
+      } else {
+        // Recovery codes are single-use: burn the one that just worked.
+        await storage.upsertAuthMfa(tenant.ctx, {
+          userId: mfa.userId,
+          factorType: mfa.factorType,
+          secretEncrypted: mfa.secretEncrypted,
+          verified: true,
+          recoveryCodesHashed: mfa.recoveryCodesHashed.filter((_, index) => index !== usedIndex),
+          verifiedAt: mfa.verifiedAt ?? new Date().toISOString(),
+        });
       }
     } else if (!verifyTotpCode(decryptSecret(mfa.secretEncrypted, masterKey()), body.code)) {
       await badCode("Invalid TOTP code");
     }
     clearMfaFailures(failureKey);
+    // Consume atomically only after the code verified: a concurrent replay with
+    // the same ticket fails here instead of issuing a second session.
+    await storage.consumeAuthToken(tenant.ctx, ticketHash, TOKEN_TYPE_MFA_CHALLENGE);
     return c.json(await issueSession(tenant, user, c));
   });
 

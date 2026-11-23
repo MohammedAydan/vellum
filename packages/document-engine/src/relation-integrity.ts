@@ -63,7 +63,7 @@ export async function evaluateRelationRulesForDelete(params: {
     // A rule with targetCollection only fires when the DELETED document lives
     // in that collection; unscoped rules apply to every target collection.
     const scopedRules = rules.filter(
-      (r) => r.targetCollection === undefined || r.targetCollection === deletedCollection
+      (r) => r.targetCollection == null || r.targetCollection === deletedCollection
     );
     if (scopedRules.length === 0) continue;
     // Same-batch rows win over their DB counterparts: a staged set_null that

@@ -116,6 +116,21 @@ class VellumRealtimeTransport {
     }
   }
 
+  /// Refreshes socket credentials without dropping stream listeners or resume
+  /// positions. The server clears subscriptions on auth, then auth_ack restores
+  /// them through the normal resubscribe path.
+  void reauthenticate() {
+    if (_closed || !_authenticated || _channel == null) return;
+    _authenticated = false;
+    _connectTimer?.cancel();
+    _connectTimer = Timer(connectTimeout, () {
+      if (!_authenticated) {
+        _fail(TimeoutException('Realtime reauthentication timed out'));
+      }
+    });
+    _sendAuth();
+  }
+
   void unsubscribe(String subId) {
     _subscriptions.remove(subId);
     if (_closed) return;

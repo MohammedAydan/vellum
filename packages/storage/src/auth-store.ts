@@ -191,6 +191,8 @@ export interface AuthOperations {
 
   saveAuthToken(ctx: TenantContext, input: CreateAuthTokenInput): Promise<AuthTokenRecord>;
   consumeAuthToken(ctx: TenantContext, tokenHash: string, tokenType: string): Promise<AuthTokenRecord>;
+  /** Non-consuming validation: returns the live token without marking it used (for bounded-retry flows). */
+  peekAuthToken(ctx: TenantContext, tokenHash: string, tokenType: string): Promise<AuthTokenRecord>;
 }
 
 // ---------------------------------------------------------------- utilities
@@ -441,6 +443,9 @@ export abstract class AuthMethodDelegates {
 
   consumeAuthToken(...args: Parameters<AuthOperations['consumeAuthToken']>): ReturnType<AuthOperations['consumeAuthToken']> {
     return this.authOps.consumeAuthToken(...args);
+  }
+  peekAuthToken(...args: Parameters<AuthOperations['peekAuthToken']>): ReturnType<AuthOperations['peekAuthToken']> {
+    return this.authOps.peekAuthToken(...args);
   }
 }
 
@@ -924,6 +929,22 @@ export function createSqlAuthOperations(runInTx: AuthTxRunner): AuthOperations {
         return mapToken(row);
       });
     },
+    async peekAuthToken(ctx, tokenHash, tokenType) {
+      if (!tokenHash || !tokenType) {
+        throw new VellumError("UNAUTHENTICATED", "Invalid or expired action token");
+      }
+      return runInTx(ctx, async (tx) => {
+        const { rows } = await tx.query(
+          `SELECT ${TOKEN_COLUMNS} FROM project_auth_tokens
+           WHERE project_id=$1 AND token_hash=$2 AND token_type=$3
+             AND consumed_at IS NULL AND expires_at > now()`,
+          [ctx.projectId, tokenHash, tokenType]
+        );
+        const row = firstRow(rows);
+        if (!row) throw new VellumError("UNAUTHENTICATED", "Invalid or expired action token");
+        return mapToken(row);
+      });
+    },
   };
 }
 
@@ -1378,6 +1399,25 @@ export function createMemoryAuthOperations(state: AuthMemoryState): AuthOperatio
         const consumed: AuthTokenRecord = { ...matchedRecord, consumedAt: now() };
         state.tokens.set(matchedKey, consumed);
         return structuredClone(consumed);
+      }
+      throw new VellumError("UNAUTHENTICATED", "Invalid or expired action token");
+    },
+    async peekAuthToken(ctx, tokenHash, tokenType) {
+      requireAuthTenant(ctx);
+      if (!tokenHash || !tokenType) {
+        throw new VellumError("UNAUTHENTICATED", "Invalid or expired action token");
+      }
+      const nowMs = Date.now();
+      for (const v of state.tokens.values()) {
+        if (v.projectId !== ctx.projectId) continue;
+        if (
+          timingSafeEqualStr(v.tokenHash, tokenHash) &&
+          v.tokenType === tokenType &&
+          v.consumedAt === null &&
+          Date.parse(v.expiresAt) > nowMs
+        ) {
+          return structuredClone(v);
+        }
       }
       throw new VellumError("UNAUTHENTICATED", "Invalid or expired action token");
     },
