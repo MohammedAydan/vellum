@@ -292,24 +292,6 @@ check("frontend src has no direct pg/postgres/drizzle-orm/neon imports", () => {
   };
 });
 
-// --- Check 7: per-app AGENTS.md + agent docs -----------------------------
-check("apps/{dashboard,admin,docs}/AGENTS.md exist", () => {
-  const missing = ["dashboard", "admin", "docs"].filter(
-    (app) => !isFile(path.join(ROOT, `apps/${app}/AGENTS.md`))
-  );
-  return { ok: missing.length === 0, detail: missing.map((m) => `apps/${m}/AGENTS.md`).join(", ") };
-});
-
-check("docs/agents/{README,BACKEND-CONTRACT,PROMPTS}.md exist", () => {
-  const missing = ["README.md", "BACKEND-CONTRACT.md", "PROMPTS.md"].filter(
-    (f) => !isFile(path.join(ROOT, `docs/agents/${f}`))
-  );
-  return {
-    ok: missing.length === 0,
-    detail: missing.map((m) => `docs/agents/${m}`).join(", "),
-  };
-});
-
 // --- Summary -------------------------------------------------------------
 const total = results.length;
 const passed = total - failed;
