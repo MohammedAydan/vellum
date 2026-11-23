@@ -20,7 +20,7 @@
     "test:e2e": "playwright test",
     "qa:docs": "node scripts/qa/qa-docs-react.mjs",
     "test:e2e-real": "vitest run tests/e2e-real",
-    "test:coverage": "vitest run --coverage --coverage.include='packages/*/src/**/*.{ts,tsx}' --coverage.include='apps/*/src/**/*.{ts,tsx}' --exclude 'tests/e2e-real/**' --exclude 'tests/e2e/**' --exclude 'tests/integration/**' --exclude 'tests/load/**'",
+    "test:coverage": "vitest run --coverage --coverage.include='packages/*/src/**/*.{ts,tsx}' --coverage.include='apps/*/src/**/*.{ts,tsx}' --exclude 'tests/e2e-real/**' --exclude 'tests/e2e/**' --exclude 'tests/integration/**' --exclude 'tests/load/**' --exclude 'tests/sdk-js-harsh/**' --exclude 'tests/flutter-stress/**'",
     "dev:api": "corepack pnpm --filter @vellum/api dev",
     "dev:frontend": "node scripts/dev/frontend-gateway.mjs --mode=dev",
     "dev:stack": "node scripts/dev/dev-stack.mjs",
