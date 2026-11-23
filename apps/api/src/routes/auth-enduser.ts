@@ -299,6 +299,21 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     platform.logger.warn("Auth token email delivery failed", { tokenType });
   }
 
+  /**
+   * Custom claims feed Security Rules (`auth.claims.*`) and `phoneVerified` is a
+   * trust signal. Both are server-controlled: an end user must never be able to
+   * assign them to themselves (privilege escalation). Admins set claims through
+   * `PUT /auth/admin/users/:uid/claims` with a secret key.
+   */
+  function rejectSelfAssignedPrivilege(body: { customClaims?: unknown; phoneVerified?: unknown }): void {
+    if (body.customClaims !== undefined || body.phoneVerified !== undefined) {
+      throw new VellumError(
+        "PERMISSION_DENIED",
+        "customClaims and phoneVerified cannot be set by end users; use the admin API with a secret key"
+      );
+    }
+  }
+
   // -------------------------------------------------------------------- SIGN-UP
 
   routes.post("/sign-up/email", async (c) => {
@@ -311,6 +326,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     }
 
     const body = parseOrThrow(SignUpEmailRequestSchema, await c.req.json());
+    rejectSelfAssignedPrivilege(body);
     assertPasswordPolicy(body.password, config);
     if (await storage.getAuthUserByEmail(tenant.ctx, body.email)) {
       throw new VellumError("ALREADY_EXISTS", "An end-user with this email already exists");
@@ -325,7 +341,6 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         photoUrl: body.photoUrl ?? null,
         phoneNumber: body.phoneNumber ?? null,
         ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
-        ...(body.customClaims !== undefined ? { customClaims: body.customClaims } : {}),
       })
     );
     const now = new Date().toISOString();
@@ -531,6 +546,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const current = await requireEndUser(c, platform, tenant);
     const body = parseOrThrow(UpdateProfileRequestSchema, await c.req.json());
+    rejectSelfAssignedPrivilege(body);
     const patch: UpdateAuthUserInput = {};
     if (body.email !== undefined) {
       const email = body.email;
@@ -544,9 +560,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     if (body.displayName !== undefined) patch.displayName = body.displayName;
     if (body.photoUrl !== undefined) patch.photoUrl = body.photoUrl;
     if (body.phoneNumber !== undefined) patch.phoneNumber = body.phoneNumber;
-    if (body.phoneVerified !== undefined) patch.phoneVerified = body.phoneVerified;
     if (body.metadata !== undefined) patch.metadata = body.metadata;
-    if (body.customClaims !== undefined) patch.customClaims = body.customClaims;
     const updated = await storage.updateAuthUser(tenant.ctx, current.id, patch);
     // The projected `users/{uid}` document mirrors the auth record. Re-project
     // after every profile mutation (merge semantics preserve developer fields).
