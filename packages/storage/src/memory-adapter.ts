@@ -110,18 +110,6 @@ function warnAboutMemoryDependentScan(): void {
   );
 }
 
-/** Mirrors the SQL reference arms: scalar, tagged `{ _ref }` / `{ $ref }`, and array members. */
-function matchesReference(value: unknown, targetPath: string): boolean {
-  if (typeof value === "string") return value === targetPath;
-  if (Array.isArray(value)) return value.some((item) => matchesReference(item, targetPath));
-  if (typeof value === "object" && value !== null) {
-    const rec = value as Record<string, unknown>;
-    if (Object.prototype.hasOwnProperty.call(rec, "_ref") && rec["_ref"] === targetPath) return true;
-    if (Object.prototype.hasOwnProperty.call(rec, "$ref") && rec["$ref"] === targetPath) return true;
-  }
-  return false;
-}
-
 function requireMemoryTenant(ctx: TenantContext): void {
   if (!ctx || typeof ctx.projectId !== "string" || ctx.projectId.length === 0) {
     throw new VellumError(
@@ -132,6 +120,7 @@ function requireMemoryTenant(ctx: TenantContext): void {
 }
 
 export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapter {
+  private transactionTail: Promise<void> = Promise.resolve();
   /** Exposed for test assertions and debug inspection. */
   public readonly authMemory = createAuthMemoryState();
 
@@ -271,6 +260,15 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
       );
     }
 
+    if (activeFrame?.store === this) return this.executeMemoryTransaction(projectId, fn);
+    // Snapshots cover the whole in-memory store. Serialize top-level work so
+    // rollback cannot restore over another tenant's successful commit.
+    const run = this.transactionTail.then(() => this.executeMemoryTransaction(projectId, fn));
+    this.transactionTail = run.then(() => undefined, () => undefined);
+    return run;
+  }
+
+  private executeMemoryTransaction<T>(projectId: string, fn: (tx: TxHandle) => T | Promise<T>): T | Promise<T> {
     const ctx: TenantContext = { projectId };
     const rlsContext = Object.freeze({
       projectId,
@@ -304,6 +302,12 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
 
     const outboxLenBefore = this.outbox.length;
     const seqBefore = this.outboxSeq;
+    const collectionsSnapshot = structuredClone(this.collections);
+    const restoreMetadata = (): void => {
+      this.collections = collectionsSnapshot;
+      this.knownCollections.clear();
+      this.collectionConfigCache.clear();
+    };
 
     const txHandle = this.createTxHandle(ctx);
 
@@ -311,6 +315,7 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
       const result = memoryTxStorage.run({ store: this, projectId }, () => fn(txHandle));
       if (result instanceof Promise) {
         return result.catch((err: unknown) => {
+          restoreMetadata();
           this.rollback(
             docsSnapshot,
             indexesSnapshot,
@@ -324,6 +329,7 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
       }
       return result;
     } catch (err: unknown) {
+      restoreMetadata();
       this.rollback(
         docsSnapshot,
         indexesSnapshot,
@@ -656,15 +662,15 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
         if (FORBIDDEN_PROP_NAMES.has(field)) return [];
         warnAboutMemoryDependentScan();
         const prefix = this.tenantPrefix(ctx);
-        const boundedLimit = Math.max(1, Math.min(Math.floor(Number(limit) || 50), 500));
+        const boundedLimit = Math.max(1, Math.min(Math.floor(Number(limit) || 50), 501));
         const results: DocumentRecord[] = [];
         for (const [key, row] of this.documents.entries()) {
           if (!key.startsWith(prefix) || row.projectId !== ctx.projectId) continue;
           if (row.collectionPath !== collectionPath || !isLiveDocument(row)) continue;
-          const fieldVal = Object.prototype.hasOwnProperty.call(row.data, field)
-            ? row.data[field]
-            : undefined;
-          if (matchesReference(fieldVal, targetPath)) results.push(structuredClone(row));
+          if (documentReferencesPath(row.data, targetPath, field) ||
+              documentReferencesPath(row.data, targetPath.split("/").at(-1)!, field)) {
+            results.push(structuredClone(row));
+          }
         }
         // SQL orders by path FIRST, then applies LIMIT — sort before slicing.
         results.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
