@@ -27,6 +27,11 @@ import type {
 } from "../types.js";
 import { buildDocumentSnapshot, normalizeInclude, type WireDocument } from "./snapshots.js";
 
+/** Maps a write option to the Idempotency-Key header the API dedupes on. */
+function idempotencyHeaders(options: { idempotencyKey?: string | undefined }): Record<string, string> {
+  return options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {};
+}
+
 export interface DocumentReferenceContext {
   request<R = unknown>(
     method: string,
@@ -207,7 +212,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
         ...(options.ttlSeconds !== undefined ? { ttlSeconds: options.ttlSeconds } : {}),
         ...(options.expiresAt !== undefined ? { expiresAt: options.expiresAt } : {}),
       },
-      {},
+      idempotencyHeaders(options),
       true,
       options.signal
     );
@@ -228,7 +233,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
         ...(options.expiresAt !== undefined ? { expiresAt: options.expiresAt } : {}),
         ...(options.upsert !== undefined ? { upsert: options.upsert } : {}),
       },
-      {},
+      idempotencyHeaders(options),
       true,
       options.signal
     );
@@ -251,7 +256,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
         data,
         ifVersion: options.ifVersion ?? null,
       },
-      {},
+      idempotencyHeaders(options),
       true,
       options.signal
     );
@@ -265,7 +270,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
       "DELETE",
       `/documents/${this.encodedPath()}${qs}`,
       undefined,
-      {},
+      idempotencyHeaders(options),
       true,
       options.signal
     );
