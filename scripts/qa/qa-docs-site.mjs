@@ -96,7 +96,7 @@ check("Flutter tab shows reference note", (await page.locator('[data-example-pan
 
 // All links from root + nested pages, both locales.
 let broken = [];
-for (const p of ["/index.html", "/reference/rest-control-plane.html", "/ar/index.html", "/ar/reference/rest-control-plane.html"]) {
+for (const p of ["/index.html", "/reference/rest-data-plane.html", "/ar/index.html", "/ar/reference/rest-data-plane.html"]) {
   if (!htmlFiles.includes(p.slice(1))) continue;
   await goto(p);
   const hrefs = await page.locator(".nav-link").evaluateAll((as) => as.map((a) => a.getAttribute("href")));

@@ -1,3 +1,4 @@
+import { docsPageSlugs } from './docs-pages.mjs';
 import { chromium } from 'playwright';
 import AxeBuilder from '@axe-core/playwright';
 import { requestBodies } from './docs-request-bodies.mjs';
@@ -6,7 +7,7 @@ const base=process.env.DOCS_BASE_URL||'http://127.0.0.1:5175';
 const dir=process.env.DOCS_EVIDENCE||'/downloads/docs-after';mkdirSync(dir,{recursive:true});
 const browser=await chromium.launch();const failures=[];const pages={};const bodies=[];let count=0;
 function check(ok,msg){if(!ok)failures.push(msg);}
-const slugs=['index','quickstart','authentication','crud','field-transforms','query','pagination','indexes','smart-indexing','relationships','realtime','batch-and-transactions','end-user-auth','security-rules','security-rules-dsl','sdks/javascript','sdks/flutter','rest-api','reference/rest-data-plane','reference/rest-control-plane','reference/realtime-protocol','reference/wire-format','reference/errors','errors-and-limits','reference/packages','production-checklist','deployment','live-verification','security-and-defense','metering-and-billing'];
+const slugs = docsPageSlugs();
 for(const lang of ['en','ar']) {
  const context=await browser.newContext(); const page=await context.newPage();page.on('pageerror',e=>failures.push(`${lang} runtime: ${e.message}`));
  for(const slug of slugs){

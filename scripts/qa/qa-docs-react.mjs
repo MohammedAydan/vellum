@@ -1,3 +1,4 @@
+import { docsPageSlugs } from './docs-pages.mjs';
 /**
  * Browser QA for the React documentation site.
  * Requires the unified gateway on :3000 with a freshly built React docs bundle.
@@ -70,14 +71,7 @@ const missing = await page.request.get(`${base}/docs/assets/definitely-missing.j
 check("missing asset returns 404", missing.status() === 404, `status=${missing.status()}`);
 
 // 8. Every page in both languages renders an h1 and no runtime error.
-const slugs = [
-  "index", "quickstart", "authentication", "crud", "field-transforms", "query", "pagination",
-  "indexes", "smart-indexing", "relationships", "realtime", "batch-and-transactions", "end-user-auth",
-  "security-rules", "security-rules-dsl", "sdks/javascript", "sdks/flutter", "rest-api", "reference/rest-data-plane",
-  "reference/rest-control-plane", "reference/realtime-protocol", "reference/wire-format",
-  "reference/errors", "errors-and-limits", "reference/packages", "production-checklist",
-  "deployment", "live-verification", "security-and-defense", "metering-and-billing",
-];
+const slugs = docsPageSlugs();
 let rendered = 0;
 for (const lang of ["", "ar/"]) {
   for (const slug of slugs) {
@@ -90,7 +84,7 @@ for (const lang of ["", "ar/"]) {
     } catch { /* counted as not rendered */ }
   }
 }
-check("all 60 localized pages render", rendered === 60, `${rendered}/60`);
+check("all localized pages render", rendered === slugs.length * 2, `${rendered}/${slugs.length * 2}`);
 check("no runtime page errors", errors.length === 0, errors.slice(0, 3).join(" ; "));
 
 await browser.close();
