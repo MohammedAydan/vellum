@@ -750,8 +750,19 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
     const isRecovery = body.factorType === "recovery_code" || !/^\d{6}$/.test(body.code);
     if (isRecovery) {
-      if (verifyRecoveryCode(body.code, mfa.recoveryCodesHashed) === -1) {
+      const usedIndex = verifyRecoveryCode(body.code, mfa.recoveryCodesHashed);
+      if (usedIndex === -1) {
         await badCode("Invalid recovery code");
+      } else {
+        // Recovery codes are single-use: burn the one that just worked.
+        await storage.upsertAuthMfa(tenant.ctx, {
+          userId: mfa.userId,
+          factorType: mfa.factorType,
+          secretEncrypted: mfa.secretEncrypted,
+          verified: true,
+          recoveryCodesHashed: mfa.recoveryCodesHashed.filter((_, index) => index !== usedIndex),
+          verifiedAt: mfa.verifiedAt ?? new Date().toISOString(),
+        });
       }
     } else if (!verifyTotpCode(decryptSecret(mfa.secretEncrypted, masterKey()), body.code)) {
       await badCode("Invalid TOTP code");
