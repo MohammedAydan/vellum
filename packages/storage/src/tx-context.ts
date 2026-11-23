@@ -488,15 +488,15 @@ export const SQL_CONDITIONAL_UPDATE_DOCUMENT = `UPDATE documents
 
 /**
  * JSONB-index-backed dependent lookup. Every value is a bind parameter; covers
- * `{ field: "target/path" }`, `{ field: { _ref / $ref: "target/path" } }`
- * and `{ field: ["target/path", ...] }`. Tenant isolation comes from both the
+ * nested fields, scalar paths/bare IDs, tagged references and arrays. This is
+ * a candidate lookup; the engine verifies exact reference semantics. Tenant isolation comes from both the
  * explicit predicate and the transaction's RLS GUC.
  */
 export const SQL_LIST_DEPENDENTS_BY_REFERENCE = `SELECT ${DOCUMENT_COLUMNS}
  FROM documents
  WHERE project_id = $1::uuid
    AND collection_path = $2 AND ${LIVE_DOCUMENT_PREDICATE}
-   AND (data->>$3 = $4 OR data->$3->>'$ref' = $4 OR data->$3->>'_ref' = $4 OR data->$3 @> to_jsonb($4::text))
+   AND (data @? $3::jsonpath OR data @? $4::jsonpath)
  ORDER BY path ASC
  LIMIT $5`;
 
@@ -1104,13 +1104,14 @@ export function createSqlTransactionHandle(
       const [collectionPath, field, targetPath, limit] = unwrapCtxArgs<
         [collectionPath: string, field: string, targetPath: string, limit: number]
       >(args, { projectId });
-      const boundedLimit = Math.max(1, Math.min(Math.floor(Number(limit) || 50), 500));
+      const boundedLimit = Math.max(1, Math.min(Math.floor(Number(limit) || 50), 501));
       const { rows } = await runPrepared<DocumentRecord>(
         client,
         prepared,
-        "vellum_list_dependents_by_reference",
+        "vellum_list_dependents_by_reference_v2",
         SQL_LIST_DEPENDENTS_BY_REFERENCE,
-        [projectId, collectionPath, field, targetPath, boundedLimit]
+        [projectId, collectionPath, referenceMatchJsonPath(targetPath, field),
+          referenceMatchJsonPath(targetPath.split("/").at(-1)!, field), boundedLimit]
       );
       return rows;
     },
