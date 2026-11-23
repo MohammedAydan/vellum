@@ -1,0 +1,17 @@
+# Pure-Dart analysis configuration for the live testbed.
+#
+# The CLI testbed, `dart test` and `dart analyze` run with the pure Dart SDK,
+# which does not ship `package:flutter`. The real Material widget tree lives in
+# `lib/src/showcase_flutter.dart` and is selected only by the conditional export
+# in `lib/flutter_ui_showcase.dart` when compiling with Flutter. It is excluded
+# here so pure-Dart analysis stays clean; under Flutter it is analysed by
+# `flutter analyze` as part of a normal Flutter project.
+include: package:lints/recommended.yaml
+
+analyzer:
+  exclude:
+    - lib/src/showcase_flutter.dart
+
+linter:
+  rules:
+    avoid_print: false

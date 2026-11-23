@@ -1,0 +1,8 @@
+=== Raw REST API ===
+{"POST /documents/:path":{"status":201,"id":"rest-doc"}}
+{"GET /documents/:path":{"status":200,"version":1}}
+{"PUT /documents/:path":{"status":200,"version":2}}
+{"PATCH /documents/:path":{"status":200,"version":3}}
+{"POST /query":{"status":200,"ids":["rest-doc"]}}
+{"GET /documents/:collection":{"status":200,"count":1}}
+{"DELETE /documents/:path":{"status":200}}

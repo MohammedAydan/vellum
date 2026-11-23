@@ -1,0 +1,8 @@
+=== Authentication & API Keys ===
+{"signIn":{"success":true,"tokenLength":396,"userRole":"customer"}}
+{"session":{"status":200,"hasSession":true}}
+{"listKeys":{"status":200,"nonEmpty":true,"includesServerKey":true}}
+{"createKey":{"status":201,"keyType":"server","idReturned":true}}
+{"missingKey":{"status":401,"code":"UNAUTHENTICATED"}}
+{"revokeKey":{"status":200,"success":true}}
+{"revokedKeyRejected":{"status":401,"code":"UNAUTHENTICATED"}}

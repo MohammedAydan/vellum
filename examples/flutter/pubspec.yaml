@@ -1,0 +1,8 @@
+name: vellum_manifest_examples
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+dependencies:
+  vellum_flutter:
+    path: ../../sdks/flutter

@@ -1,0 +1,5 @@
+=== Cursor Pagination ===
+{"page":1,"ids":["u0","u1"],"cursorReturned":true}
+{"page":2,"ids":["u2","u3"],"cursorReturned":true}
+{"page":3,"ids":["u4","u5"],"cursorReturned":false}
+{"pages":3,"total":6,"unique":6,"nextCursor":null}

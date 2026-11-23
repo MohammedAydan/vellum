@@ -1,0 +1,7 @@
+=== Document CRUD & Optimistic Concurrency ===
+{"operation":"create profile","version":1,"data":{"note":"imported","email":"ada@example.com","status":"active","loginCount":0,"displayName":"Ada Lovelace"}}
+{"operation":"set(merge) verify status","version":2,"data":{"note":"imported","email":"ada@example.com","status":"verified","loginCount":0,"displayName":"Ada Lovelace"}}
+{"operation":"set(replace) minimal profile","version":3,"data":{"displayName":"Ada L."}}
+{"operation":"update(ifVersion=3) loginCount","version":4,"loginCount":7}
+{"operation":"update(ifVersion=3) from stale tab","code":"FAILED_PRECONDITION","status":412}
+{"operation":"delete(ifVersion=4)","status":404,"code":"NOT_FOUND"}

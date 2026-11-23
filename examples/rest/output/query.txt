@@ -1,0 +1,4 @@
+=== Structured Queries ===
+{"query":"region == north ORDER BY revenue DESC LIMIT 3 SELECT event,revenue","ids":["e","c","a"],"rows":[{"event":"purchase","revenue":50},{"event":"renewal","revenue":30},{"event":"signup","revenue":10}]}
+{"query":"revenue in [10,40] ORDER BY revenue ASC","ids":["a","d"],"indexUsed":"idx_docs_data_gin_active"}
+{"query":"raw query spec (no execution)","spec":{"collectionPath":"<run>","where":[{"field":"region","op":"==","value":"south"}],"limit":1}}

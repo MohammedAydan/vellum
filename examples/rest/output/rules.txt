@@ -1,0 +1,5 @@
+=== Security Rules AST ===
+{"before":{"hasRuleset":true,"ruleCount":0}}
+{"publish":"ok","versionAdvancedBy":1,"ruleCount":1}
+{"activeVersionMatchesPublished":true,"astVersion":1,"match":"<run>/{docId}","operations":["read","create"]}
+{"invalidAst":{"status":400,"code":"INVALID_ARGUMENT"}}

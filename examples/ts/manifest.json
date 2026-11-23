@@ -1,0 +1,119 @@
+[
+  {
+    "id": "quickstart",
+    "file": "quickstart.ts",
+    "title": "Quickstart",
+    "group": "Getting Started",
+    "description": "Health checks, then create, read, update and delete one document with @vellum/sdk-js.",
+    "rest": "rest/quickstart.mjs",
+    "dart": "flutter/quickstart.dart"
+  },
+  {
+    "id": "crud",
+    "file": "crud.ts",
+    "title": "Document CRUD & Optimistic Concurrency",
+    "group": "Data",
+    "description": "create, get, set (merge and replace), update with ifVersion, delete, and a rejected stale write.",
+    "rest": "rest/crud.mjs",
+    "dart": "flutter/crud.dart"
+  },
+  {
+    "id": "field-transforms",
+    "file": "field-transforms.ts",
+    "title": "Atomic Field Transforms",
+    "group": "Data",
+    "description": "increment, serverTimestamp, arrayUnion, arrayRemove and deleteField sentinels from fieldOp.",
+    "rest": "rest/field-transforms.mjs",
+    "dart": "flutter/field-transforms.dart"
+  },
+  {
+    "id": "query",
+    "file": "query.ts",
+    "title": "Structured Queries",
+    "group": "Querying",
+    "description": "where, orderBy, limit and select, including disjunctive in filters, via the query builder.",
+    "rest": "rest/query.mjs",
+    "dart": "flutter/query.dart"
+  },
+  {
+    "id": "pagination",
+    "file": "pagination.ts",
+    "title": "Cursor Pagination",
+    "group": "Querying",
+    "description": "Walk an ordered result set with opaque HMAC cursors using startAfter until nextCursor is null.",
+    "rest": "rest/pagination.mjs",
+    "dart": "flutter/pagination.dart"
+  },
+  {
+    "id": "indexes",
+    "file": "indexes.ts",
+    "title": "Composite Indexes",
+    "group": "Querying",
+    "description": "Create, list, query through and delete a tenant composite index using the REST API.",
+    "rest": "rest/indexes.mjs",
+    "dart": "flutter/indexes.dart"
+  },
+  {
+    "id": "realtime-snapshot",
+    "file": "realtime-snapshot.ts",
+    "title": "Realtime Snapshots",
+    "group": "Realtime",
+    "description": "Subscribe to a document and a query with onSnapshot, make writes, observe callbacks, unsubscribe.",
+    "rest": "rest/realtime-snapshot.mjs",
+    "dart": "flutter/realtime-snapshot.dart"
+  },
+  {
+    "id": "batch-write",
+    "file": "batch-write.ts",
+    "title": "Batch Write",
+    "group": "Data",
+    "description": "Mix create/set/update/delete in one atomic batch and observe precondition failure.",
+    "rest": "rest/batch-write.mjs",
+    "dart": "flutter/batch-write.dart"
+  },
+  {
+    "id": "transactions",
+    "file": "transactions.ts",
+    "title": "OCC Transactions",
+    "group": "Data",
+    "description": "Commit a runTransaction and demonstrate both a forced conflict and a stale-version precondition.",
+    "rest": "rest/transactions.mjs",
+    "dart": "flutter/transactions.dart"
+  },
+  {
+    "id": "rules",
+    "file": "rules.ts",
+    "title": "Security Rules AST",
+    "group": "Security",
+    "description": "Publish and inspect a versioned v1 rules AST over REST, reject an invalid AST, and restore state.",
+    "rest": "rest/rules.mjs",
+    "dart": "flutter/rules.dart"
+  },
+  {
+    "id": "errors",
+    "file": "errors.ts",
+    "title": "Errors & Limits",
+    "group": "Safety",
+    "description": "Trigger the canonical Vellum error codes for query complexity, quotas, conflicts and size limits.",
+    "rest": "rest/errors.mjs",
+    "dart": "flutter/errors.dart"
+  },
+  {
+    "id": "rest-api",
+    "file": "rest-api.ts",
+    "title": "Raw REST API",
+    "group": "REST",
+    "description": "Use fetch directly for document CRUD, collection listing and structured query with x-project-key.",
+    "rest": "rest/rest-api.mjs",
+    "dart": "flutter/rest-api.dart"
+  },
+  {
+    "id": "auth",
+    "file": "auth.ts",
+    "title": "Authentication & API Keys",
+    "group": "Auth",
+    "description": "Email sign-in, session inspection, server API key lifecycle and expected 401 responses.",
+    "rest": "rest/auth.mjs",
+    "dart": "flutter/auth.dart"
+  }
+]

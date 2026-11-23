@@ -1,0 +1,5 @@
+=== Batch Write ===
+{"batchStatus":"ok","writesSubmitted":4,"responseKeys":["results","committedAt"]}
+{"u1":{"group":"onboarding","seats":10},"u2":{"group":"onboarding","seats":2},"deletedStatus":404}
+{"preconditionBatchCode":"FAILED_PRECONDITION"}
+{"atomicRollback":true}

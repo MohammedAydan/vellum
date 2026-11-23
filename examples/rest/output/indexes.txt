@@ -1,0 +1,5 @@
+=== Composite Indexes ===
+{"createStatus":201,"outcome":"created"}
+{"listed":true,"foundInListing":true}
+{"query":"team == red ORDER BY score ASC","ids":["p1","p2"],"indexUsed":"idx_docs_data_gin_active"}
+{"deleted":true}

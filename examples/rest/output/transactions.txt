@@ -1,0 +1,5 @@
+=== OCC Transactions ===
+{"commit":"ok","transfer":{"amount":50,"fromBefore":100,"toBefore":50,"fromAfter":50,"toAfter":100},"commitResponseKeys":["results","committedAt"]}
+{"fromBalance":50,"toBalance":100,"version":2}
+{"scenario":"forced write/write conflict","status":409,"code":"ABORTED_CONFLICT"}
+{"scenario":"stale-version precondition","code":"FAILED_PRECONDITION","status":412}

@@ -1,0 +1,5 @@
+=== Quickstart ===
+{"live":"alive","ready":true}
+{"id":"status-page","version":1,"data":{"views":0,"status":"operational","service":"checkout-api"}}
+{"viewsAfterUpdate":1,"version":2}
+{"deleted":true}

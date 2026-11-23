@@ -1,0 +1,24 @@
+name: vellum_e2e_app
+description: Real Flutter Material 3 app that runs the full VELLUM live E2E suite and emits a Markdown report.
+publish_to: none
+version: 0.0.1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter_testbed_app:
+    path: ../../examples/flutter_testbed_app
+  flutter:
+    sdk: flutter
+  vellum_flutter:
+    path: ../../sdks/flutter
+  http: ^1.2.2
+  crypto: ^3.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

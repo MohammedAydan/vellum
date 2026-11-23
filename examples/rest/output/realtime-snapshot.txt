@@ -1,0 +1,4 @@
+=== Realtime Snapshots ===
+{"transport":"REST polling (fetch-only; no WebSocket transport)","target":"document","initialCallback":false,"readingViaRest":2,"mutationAsserted":true}
+{"transport":"REST polling (fetch-only; no WebSocket transport)","target":"query","initialCallback":false,"countViaRest":2,"mutationAsserted":true}
+{"finalReading":2}

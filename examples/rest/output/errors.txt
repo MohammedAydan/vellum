@@ -1,0 +1,8 @@
+=== Errors & Limits ===
+{"limit":"LIMIT_EXCEEDED","status":400}
+{"whereClauses":11,"code":"QUERY_TOO_COMPLEX"}
+{"batchOperations":101,"code":"BATCH_SIZE_EXCEEDED"}
+{"duplicateIndex":{"status":409,"code":"ALREADY_EXISTS"}}
+{"staleVersion":{"code":"FAILED_PRECONDITION","status":412}}
+{"documentTooLarge":{"status":413,"code":"DOCUMENT_TOO_LARGE"}}
+{"notFound":{"status":404,"code":"NOT_FOUND"}}

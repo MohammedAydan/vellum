@@ -1,0 +1,3 @@
+=== Atomic Field Transforms ===
+{"before":{"tags":["launch"],"likes":10,"history":["featured"],"scratch":"temporary"}}
+{"likes":15,"tags":["launch","release","news"],"removedFieldAbsent":true,"serverTimestampWireType":"ts"}
