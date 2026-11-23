@@ -1,3 +1,4 @@
+import { RelationshipCreation } from "../../relationship-creation";
 import {
   Api,
   Callout,
@@ -224,6 +225,7 @@ export default function Page() {
       description="Eager-loaded $ref relations, aggregations, OR groups, V2 text operators, upsert, bulk delete and document TTL."
       eyebrow="Core concepts"
     >
+      <RelationshipCreation lang="en" />
       <Section id="overview" title="Overview">
         <P>
           V2 extends the query engine with relationships and advanced operations. You can eagerly load
