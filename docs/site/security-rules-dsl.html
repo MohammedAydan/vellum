@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rules DSL · VELLUM Docs</title>
+<meta name="description" content="Complete syntax, built-ins, safe patterns and real-engine testing for document rules.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/security-rules-dsl.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellumdb/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security rules</a></li><li><a href="security-rules-dsl.html" class="nav-link">Rules DSL</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Guides</div><ul><li><a href="creating-relationships.html" class="nav-link">Untitled</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Security <span>/</span> <strong>Rules DSL</strong></div>
+    <article class="article"><h1 id="rules-dsl">Rules DSL<a class="anchor" href="#rules-dsl" aria-label="Link to section">#</a></h1>
+<p>The DSL is a rules authoring language, not JavaScript, Dart or the Firebase rules language. It compiles into version 1 JSON expressions. Read <a href="security-rules.html">Security rules</a> first for operation contexts, list access and realtime differences.</p>
+<h2 id="syntax-and-first-complete-policy">Syntax and first complete policy<a class="anchor" href="#syntax-and-first-complete-policy" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TEXT</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">rules_version = '2';
+
+function ownsNamespace() {
+  return isOwner(path.userId);
+}
+
+match /users/{userId}/notes/{noteId} {
+  allow get, list: if ownsNamespace();
+  allow create, update: if ownsNamespace()
+    &amp;&amp; isType(incoming.title, 'string');
+  allow delete: if ownsNamespace();
+}</code></pre>
+</div>
+<p>The optional version declaration accepts '1' and '2'; both emit JSON version 1. Other versions produce a diagnostic, not a new evaluator. Match paths can begin with /. JSON examples use canonical relative paths. Prefer explicit path.userId; the corrected compiler also resolves a bare name that matches a wildcard.</p>
+<p>A file contains top-level function and match declarations and must produce at least one rule. Nested match blocks join their path to their parent and produce separate rules; parent permissions are not inherited. Use a recursive wildcard only as the final segment. Comments support // and /<em> ... </em>/. Statements use semicolons; always include them even where the parser accepts omission.</p>
+<p>allow get, list shares an expression. read expands to get and list; write expands to create, update and delete. Repeating an operation in one match block replaces its earlier expression, not OR. Separate matching rules use OR: a permissive rule elsewhere can defeat a restrictive one.</p>
+<h2 id="operators-values-and-precedence">Operators, values and precedence<a class="anchor" href="#operators-values-and-precedence" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Form</th><th>Meaning</th></tr></thead><tbody><tr><td>a == b, a != b</td><td>Typed equality or inequality; missing operands do not pass either comparison.</td></tr><tr><td>a &lt; b, a &lt;= b, a &gt; b, a &gt;= b</td><td>Wire ordering. Guard the type before checking numeric bounds.</td></tr><tr><td>a in ['one', 'two']</td><td>Array membership using typed equality.</td></tr><tr><td>hasKey(value, 'field')</td><td>Direct own-key check, not a dotted-path lookup or allowlist.</td></tr><tr><td>isType(value, 'string')</td><td>Type predicate; see the complete type table in Security rules.</td></tr><tr><td>a &amp;&amp; b</td><td>Both expressions pass.</td></tr><tr><td>a OR b (double vertical bar)</td><td>At least one passes.</td></tr><tr><td>!a</td><td>Negation. Use parentheses around compound expressions.</td></tr></tbody></table></div>
+<p>Comparisons bind more tightly than !, then &amp;&amp;, then || in this parser. Use parentheses instead of relying on unfamiliar precedence. Values include single/double-quoted strings, signed numbers, booleans, null and literal arrays. Dynamic array entries are not supported. Do not use JavaScript object literals, bracket property access, methods, arithmetic, loops, assignment, ternaries, regex, string concatenation or database calls.</p>
+<p>A bare field in a boolean position is compared with true; there is no JavaScript truthiness. Prefer explicit predicates. Functions are boolean-expression helpers, not value-returning arithmetic helpers. Use a function as a complete predicate, not as an operand in another comparison or inside an array.</p>
+<h2 id="every-built-in">Every built-in<a class="anchor" href="#every-built-in" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Built-in</th><th>Arguments</th><th>Exact behavior</th></tr></thead><tbody><tr><td>isSignedIn()</td><td>None</td><td>auth.uid != null. Anonymous users with a uid count as signed in.</td></tr><tr><td>isAuth()</td><td>None</td><td>Alias of isSignedIn().</td></tr><tr><td>isOwner(id)</td><td>One value</td><td>Signed in AND uid equals id.</td></tr><tr><td>hasRole(role)</td><td>One value</td><td>auth.claims.role equals role. It does not inspect claims.roles.</td></tr><tr><td>hasAnyRole(['writer', 'reviewer'])</td><td>One literal string array</td><td>Singular auth.claims.role is in that array.</td></tr><tr><td>isEmailVerified()</td><td>None</td><td>auth.email_verified equals true. Does not itself require a uid.</td></tr><tr><td>unchanged(['ownerId', 'createdAt'])</td><td>One literal string array</td><td>Each listed field in the full new data equals stored data. Dotted field paths work. Empty array returns true. Missing fields do not compare equal.</td></tr><tr><td>onlyChanged(['title'])</td><td>One literal string array</td><td>Negated equality for each listed field, with a diagnostic. Does NOT forbid other changes. Empty array returns true. Do not use as a write allowlist.</td></tr><tr><td>hasKey(value, 'field')</td><td>Two values</td><td>Own direct key on a non-array object; reserved prototype-related keys are blocked.</td></tr><tr><td>isType(value, 'type')</td><td>Two values</td><td>null, bool/boolean, string, number, array, map, or matching wire tag such as ref, int, ts, bytes, geo.</td></tr></tbody></table></div>
+<p>There are no other built-ins. Incorrect argument counts fail compilation. unchanged, onlyChanged and hasAnyRole require string arrays, not a runtime variable containing an array. Never let a client assign its own trusted role claim. Never replace missing identity checks with auth != null: the unauthenticated auth context is an object with uid:null.</p>
+<h2 id="context-aliases">Context aliases<a class="anchor" href="#context-aliases" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>DSL</th><th>Canonical JSON variable</th></tr></thead><tbody><tr><td>auth.uid, request.auth.uid</td><td>auth.uid</td></tr><tr><td>auth.email, auth.email_verified, auth.is_anonymous</td><td>Same path</td></tr><tr><td>auth.claims.team, request.auth.claims.team</td><td>auth.claims.team</td></tr><tr><td>path.userId</td><td>path.userId</td></tr><tr><td>resource, resource.title, resource.data.title</td><td>resource.data, resource.data.title, resource.data.title</td></tr><tr><td>incoming, incoming.title</td><td>request.data, request.data.title</td></tr><tr><td>request.resource.data.title</td><td>request.data.title</td></tr><tr><td>request.data.title, request.time</td><td>Same path</td></tr></tbody></table></div>
+<p>incoming is the full post-write document after merges and transforms. It is null on read/delete. resource is null on create and at collection-level list gates. Missing fields are undefined, distinct from explicit null.</p>
+<h2 id="public-reads-trusted-roles-and-field-validation">Public reads, trusted roles and field validation<a class="anchor" href="#public-reads-trusted-roles-and-field-validation" aria-label="Link to section">#</a></h2>
+<p>This policy intentionally makes every post publicly readable. Only signed-in users can create their own post, the original author can edit without transferring ownership, and a verified reviewer role may delete.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TEXT</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">match /posts/{postId} {
+  allow read: if true;
+  allow create: if isSignedIn()
+    &amp;&amp; incoming.authorId == auth.uid
+    &amp;&amp; isType(incoming.title, 'string')
+    &amp;&amp; isType(incoming.score, 'number')
+    &amp;&amp; incoming.score &gt;= 0 &amp;&amp; incoming.score &lt;= 100;
+  allow update: if isOwner(resource.authorId)
+    &amp;&amp; unchanged(['authorId'])
+    &amp;&amp; isType(incoming.title, 'string')
+    &amp;&amp; isType(incoming.score, 'number')
+    &amp;&amp; incoming.score &gt;= 0 &amp;&amp; incoming.score &lt;= 100;
+  allow delete: if hasRole('reviewer');
+}</code></pre>
+</div>
+<p>These predicates constrain named fields but do not reject additional fields. isType(title,'string') allows an empty string; no length predicate is available. To make posts private, do not merely change get while leaving list:true. Use the private namespace pattern instead, or deny list on a mixed-owner collection.</p>
+<h2 id="relations-and-immutable-fields">Relations and immutable fields<a class="anchor" href="#relations-and-immutable-fields" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TEXT</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">match /users/{userId}/notes/{noteId} {
+  allow get, list: if isOwner(path.userId);
+  allow create: if isOwner(path.userId)
+    &amp;&amp; isType(incoming.author, 'ref')
+    &amp;&amp; incoming.author.$v == auth.claims.profilePath;
+  allow update: if isOwner(path.userId)
+    &amp;&amp; unchanged(['author']);
+}</code></pre>
+</div>
+<p>This assumes the verified token contains a trusted profilePath claim, such as profiles/alice. The type check confirms a tagged reference and $v compares its target path. It does not check target existence, read the target, grant target access or create an inverse relation. The application must not let an end user self-assign profilePath. Included targets still require their own get permission.</p>
+<p>unchanged checks the full post-write value, so a patch that omits author can pass while replacing the document without author fails. Use explicit required-field/type checks on create; unchanged alone is not a create validator.</p>
+<h2 id="reusable-functions">Reusable functions<a class="anchor" href="#reusable-functions" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TEXT</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">function mayRead(userId) {
+  return isOwner(userId) || hasAnyRole(['reviewer', 'support']);
+}
+match /users/{userId}/tickets/{ticketId} {
+  allow get, list: if mayRead(path.userId);
+}</code></pre>
+</div>
+<p>Functions contain exactly one return expression. Parameters substitute complete values/expressions; forward references work. Definitions are top-level and names must be unique. User functions shadow built-ins, so do not name your helper isOwner or isSignedIn. Calls are inlined; recursion is rejected, inlining depth is capped at 16 and the final expression still must fit depth 10 and 100 nodes. Helpers do not add new runtime capabilities.</p>
+<h2 id="compile-decompile-and-simulate">Compile, decompile and simulate<a class="anchor" href="#compile-decompile-and-simulate" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Method and path</th><th>Request</th><th>Response</th></tr></thead><tbody><tr><td>POST /v1/projects/:projectId/rules/compile</td><td>source: DSL text</td><td>ast and diagnostics</td></tr><tr><td>POST /v1/projects/:projectId/rules/decompile</td><td>rulesAst: version 1 AST</td><td>dsl text</td></tr><tr><td>POST /v1/projects/:projectId/rules/simulate</td><td>operation, path, optional rulesAst, auth, resourceData, incomingData</td><td>allowed, matchedRule, evaluationTrace</td></tr></tbody></table></div>
+<p>Use the project's API key in X-Project-Key. These tools do not write documents or activate rules. Supplying auth in a simulation only chooses test input; it cannot authenticate a real data request. Omitting rulesAst in simulation uses the active ruleset, if any. Decompilation preserves supported expression behavior, not original comments, helper names or formatting.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">JSON</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">{
+  <span class="hl-string">&quot;operation&quot;</span>: <span class="hl-string">&quot;get&quot;</span>,
+  <span class="hl-string">&quot;path&quot;</span>: <span class="hl-string">&quot;users/alice/notes/one&quot;</span>,
+  <span class="hl-string">&quot;auth&quot;</span>: { <span class="hl-string">&quot;uid&quot;</span>: <span class="hl-string">&quot;alice&quot;</span>, <span class="hl-string">&quot;claims&quot;</span>: {} },
+  <span class="hl-string">&quot;resourceData&quot;</span>: { <span class="hl-string">&quot;title&quot;</span>: <span class="hl-string">&quot;Private note&quot;</span> },
+  <span class="hl-string">&quot;incomingData&quot;</span>: <span class="hl-keyword">null</span>,
+  <span class="hl-string">&quot;rulesAst&quot;</span>: {
+    <span class="hl-string">&quot;version&quot;</span>: <span class="hl-number">1</span>,
+    <span class="hl-string">&quot;rules&quot;</span>: [{
+      <span class="hl-string">&quot;match&quot;</span>: <span class="hl-string">&quot;users/{userId}/notes/{noteId}&quot;</span>,
+      <span class="hl-string">&quot;allow&quot;</span>: { <span class="hl-string">&quot;get&quot;</span>: {
+        <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;all&quot;</span>,
+        <span class="hl-string">&quot;conditions&quot;</span>: [
+          { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;!=&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.uid&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;val&quot;</span>: <span class="hl-keyword">null</span> } },
+          { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.uid&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;path.userId&quot;</span> } }
+        ]
+      } }
+    }]
+  }
+}</code></pre>
+</div>
+<p>Repeat with uid:bob and uid:null and expect denial. Then issue real document requests with public-key/end-user credentials against the active ruleset. The simulation does not prove collection gates, query filtering, key scopes, tenant authentication or realtime behavior.</p>
+<h2 id="diagnostics-and-pitfalls">Diagnostics and pitfalls<a class="anchor" href="#diagnostics-and-pitfalls" aria-label="Link to section">#</a></h2>
+<p>Syntax errors include one-based line/column and a caret snippet. Non-fatal diagnostics can accompany a successful AST: unknown functions, unknown variable roots, unsupported version declarations, non-literal arrays and onlyChanged. Require zero diagnostics for production policies, then still run negative tests. A typo under a known root may not produce a diagnostic at all.</p>
+<p>An unknown function becomes false, but !unknownFunction() can therefore become true. Undefined-field comparisons also behave differently under negation. Do not treat an unknown identifier or a warning as a safe deny for an entire policy. Prefer positive existence, type and identity checks.</p>
+<p>Source length is capped at 131072 JavaScript string code units; the error calls this bytes, but the implementation measures string length. The token cap is 16384; parser nesting is capped at 64. Keep policies short enough that runtime membership checks also stay within the 256-step budget. There is no general field allowlist: onlyChanged is not one, hasKey is not one, and validation in an untrusted client is not one.</p>
+<p>The complete examples in these two guides are extracted by tests/integration/rules-guide-examples.test.ts and evaluated with real authorization and the local document engine. Run corepack pnpm exec vitest run tests/integration/rules-guide-examples.test.ts when changing them.</p></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#syntax-and-first-complete-policy" class="toc-link toc-l2">Syntax and first complete policy</a><a href="#operators-values-and-precedence" class="toc-link toc-l2">Operators, values and precedence</a><a href="#every-built-in" class="toc-link toc-l2">Every built-in</a><a href="#context-aliases" class="toc-link toc-l2">Context aliases</a><a href="#public-reads-trusted-roles-and-field-validation" class="toc-link toc-l2">Public reads, trusted roles and field validation</a><a href="#relations-and-immutable-fields" class="toc-link toc-l2">Relations and immutable fields</a><a href="#reusable-functions" class="toc-link toc-l2">Reusable functions</a><a href="#compile-decompile-and-simulate" class="toc-link toc-l2">Compile, decompile and simulate</a><a href="#diagnostics-and-pitfalls" class="toc-link toc-l2">Diagnostics and pitfalls</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

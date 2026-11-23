@@ -36,7 +36,6 @@ With `enable_user_projection` on (default), auth writes `users/{uid}` via `Docum
 ## REST surfaces
 
 - **End-user** (`/v1/projects/:p/auth`): `sign-up/email`, `sign-in/email`, `sign-in/anonymous`, `sign-in/provider`, `token/refresh`, `sign-out`, `GET|PATCH /user`, `password/reset`, `password/confirm`, `email/verify/request`, `email/verify/confirm`, `mfa/enroll`, `mfa/verify`, `mfa/challenge`, `/.well-known/jwks.json`.
-- **User management** (`.../auth/admin`, server key): user directory/CRUD, `PUT /users/:uid/claims`, revoke, import, `GET|PATCH /config`.
 
 See the [full REST reference](../../docs/07-end-user-auth.md).
 
