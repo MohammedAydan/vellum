@@ -583,6 +583,19 @@ export function createConsoleRoutes(platform: VellumPlatformContext) {
     );
   });
 
+/**
+ * Document data must be a JSON object. The `body.data ?? body` shorthand
+ * would otherwise accept a bare string/array/number body and persist it as a
+ * character- or index-keyed object, silently corrupting the document.
+ */
+function requireDocumentData(body: unknown): Record<string, unknown> {
+  const data = (body as Record<string, unknown> | null)?.["data"] ?? body;
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new VellumError("INVALID_ARGUMENT", "Document data must be a JSON object");
+  }
+  return data as Record<string, unknown>;
+}
+
   routes.post("/console/projects/:projectId/documents/*", async (c) => {
     const projectId = c.req.param("projectId");
     const { project, apiKeyRecord, authContext } = await engineContext(c, projectId, true);
@@ -591,7 +604,7 @@ export function createConsoleRoutes(platform: VellumPlatformContext) {
     const created = await documentEngine.createDocument({
       projectId,
       path,
-      data: (body.data ?? body) as Record<string, unknown>,
+      data: requireDocumentData(body),
       apiKeyRecord,
       authContext,
     });
@@ -612,7 +625,7 @@ export function createConsoleRoutes(platform: VellumPlatformContext) {
     const saved = await documentEngine.setDocument({
       projectId,
       path,
-      data: (body.data ?? body) as Record<string, unknown>,
+      data: requireDocumentData(body),
       merge: Boolean(body.merge ?? url.searchParams.get("merge") === "true"),
       ifVersion: typeof body.ifVersion === "number" ? body.ifVersion : null,
       apiKeyRecord,
@@ -634,7 +647,7 @@ export function createConsoleRoutes(platform: VellumPlatformContext) {
     const updated = await documentEngine.updateDocument({
       projectId,
       path,
-      data: (body.data ?? body) as Record<string, unknown>,
+      data: requireDocumentData(body),
       ifVersion: typeof body.ifVersion === "number" ? body.ifVersion : null,
       apiKeyRecord,
       authContext,
