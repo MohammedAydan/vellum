@@ -1000,7 +1000,11 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     return c.json(
       await platform.documentEngine.exportCollectionDocuments(
         { projectId, apiKeyRecord, authContext },
-        name
+        name,
+        {
+          ...(c.req.query("limit") === undefined ? {} : { limit: Number(c.req.query("limit")) }),
+          ...(c.req.query("cursor") === undefined ? {} : { cursor: c.req.query("cursor") }),
+        }
       )
     );
   });

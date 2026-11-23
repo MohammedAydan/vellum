@@ -42,3 +42,17 @@ describe('HTTP mutation idempotency', () => {
     expect((await send('POST','/documents/items/one',{data:{n:1}},'x'.repeat(257))).status).toBe(400);
   });
 });
+
+describe('collection export pagination', () => {
+  it('forwards limit and cursor instead of silently exporting every row', async () => {
+    const {send} = await fixture();
+    for (let i=0;i<7;i++) await send('PUT',`/documents/exported/d${i}`,{data:{n:i}});
+    const first = await send('GET','/collections/exported/export?limit=3');
+    expect(first.status).toBe(200); const a = await first.json();
+    expect(a.documents).toHaveLength(3); expect(a.nextCursor).toBeTruthy();
+    const next = await send('GET',`/collections/exported/export?limit=3&cursor=${encodeURIComponent(a.nextCursor)}`);
+    const b = await next.json(); expect(b.documents).toHaveLength(3);
+    expect(b.documents.map((d: {id:string})=>d.id).some((id:string)=>a.documents.some((d:{id:string})=>d.id===id))).toBe(false);
+    expect((await send('GET','/collections/exported/export?limit=-1')).status).toBe(400);
+  });
+});
