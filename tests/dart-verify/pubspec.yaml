@@ -1,0 +1,15 @@
+name: vellum_dart_verify
+description: Cross-cutting real-backend verification harness for VELLUM (documents, auth, authorization).
+publish_to: "none"
+version: 0.0.1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  http: ^1.2.2
+  vellum_flutter:
+    path: ../../sdks/flutter
+
+dev_dependencies:
+  lints: ^4.0.0
