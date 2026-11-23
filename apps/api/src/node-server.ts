@@ -295,10 +295,16 @@ const handleShutdown = (): void => {
       process.exit(1);
     });
 };
-process.once("SIGTERM", handleShutdown);
-process.once("SIGINT", handleShutdown);
-
 if (isMain) {
+  // Signal handlers belong to the process owner: register them only when this
+  // module IS the process entrypoint. An embedder that imports
+  // startNodeApiServer() keeps control of its own lifecycle via the returned
+  // stop(); previously the handlers were registered at import time with
+  // activeServerStop === null, so SIGTERM in an embedded process took the
+  // immediate process.exit(0) branch below - no drain, no metering flush, and
+  // the host application's own cleanup never ran.
+  process.once("SIGTERM", handleShutdown);
+  process.once("SIGINT", handleShutdown);
   startNodeApiServer()
     .then(({ port, stop }) => {
       activeServerStop = stop;
