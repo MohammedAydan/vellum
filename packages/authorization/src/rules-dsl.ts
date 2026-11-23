@@ -782,6 +782,12 @@ class DslParser {
     }
 
     const t = this.current();
+    // Quoted strings are always literals: 'null', 'true' and 'false' must not
+    // be read as keywords.
+    if (t.type === "string") {
+      this.next();
+      return { val: t.value };
+    }
     if (t.value === "true" || t.value === "false") {
       this.next();
       return t.value === "true";

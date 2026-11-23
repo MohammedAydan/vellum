@@ -107,3 +107,14 @@ describe("rules DSL array literals", () => {
     expect(JSON.stringify(diagnostics ?? [])).not.toContain("non-literal");
   });
 });
+
+describe("rules DSL quoted keyword strings", () => {
+  it("keeps 'null', 'true' and 'false' as string literals", () => {
+    const { ast } = compileRulesDsl(
+      "match /x/{id} { allow read: if isType(resource.data.v, 'null') || resource.data.s in ['true', 'false']; }"
+    );
+    const json = JSON.stringify(ast.rules[0]!.allow["get"]);
+    expect(json).toContain('{"val":"null"}');
+    expect(json).toContain('["true","false"]');
+  });
+});
