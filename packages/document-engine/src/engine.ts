@@ -57,7 +57,6 @@ import {
   createBatchedRelationResolver,
   projectIncludedDoc,
   resolveIncludes,
-  MAX_RELATION_DEPTH,
   type IncludeSpec,
   type RelationDocument,
 } from "./relations.js";
@@ -1118,13 +1117,11 @@ export class DocumentEngine implements DocumentEnginePort {
           committedOutboxEvents.push(ev);
           cascadeDeletes += 1;
           storageBytesDelta -= row.sizeBytes;
-          if (depth < MAX_RELATION_DEPTH) {
-            cascadeQueue.push({ path: row.path, depth: depth + 1 });
-          }
+          cascadeQueue.push({ path: row.path, depth: depth + 1 });
         };
 
         const applyRelationRulesForDelete = async (deletedPath: string, depth: number): Promise<void> => {
-          if (rulesByCollection.size === 0 || depth > MAX_RELATION_DEPTH) return;
+          if (rulesByCollection.size === 0) return;
           if (visitedCascadePaths.has(deletedPath)) return;
           visitedCascadePaths.add(deletedPath);
           if (depth > maxCascadeDepth) maxCascadeDepth = depth;
@@ -1348,12 +1345,12 @@ export class DocumentEngine implements DocumentEnginePort {
           results.push(this.formatPublicDoc(docRow));
         }
 
-        // Depth-limited cascade worklist (never recurse past MAX_RELATION_DEPTH).
+        // Bounded cascade worklist. The final boundary checks for remaining edges
+        // and fails closed instead of leaving dangling dependents.
         // A head index replaces `shift()`, which is O(n) per removal and made a
         // widening cascade quadratic. Appended work is picked up naturally.
         for (let head = 0; head < cascadeQueue.length; head += 1) {
           const item = cascadeQueue[head]!;
-          if (item.depth > MAX_RELATION_DEPTH) continue;
           await applyRelationRulesForDelete(item.path, item.depth);
         }
 
@@ -1885,7 +1882,7 @@ export class DocumentEngine implements DocumentEnginePort {
         let maxCascadeWidth = 0;
 
         const evaluate = async (deletedPath: string, depth: number): Promise<void> => {
-          if (rulesByCollection.size === 0 || depth > MAX_RELATION_DEPTH) return;
+          if (rulesByCollection.size === 0) return;
           if (visitedCascadePaths.has(deletedPath)) return;
           visitedCascadePaths.add(deletedPath);
           if (depth > maxCascadeDepth) maxCascadeDepth = depth;
@@ -1951,9 +1948,7 @@ export class DocumentEngine implements DocumentEnginePort {
           committedOutboxEvents.push(ev);
           cascadeDeletes += 1;
           storageBytesDelta -= row.sizeBytes;
-          if (depth < MAX_RELATION_DEPTH) {
-            cascadeQueue.push({ path: row.path, depth: depth + 1 });
-          }
+          cascadeQueue.push({ path: row.path, depth: depth + 1 });
         };
 
         for (const doc of docs) {
@@ -1990,7 +1985,6 @@ export class DocumentEngine implements DocumentEnginePort {
         // Head-index worklist (no `shift()`), mirroring batchWrite.
         for (let head = 0; head < cascadeQueue.length; head += 1) {
           const item = cascadeQueue[head]!;
-          if (item.depth > MAX_RELATION_DEPTH) continue;
           await evaluate(item.path, item.depth);
         }
 
