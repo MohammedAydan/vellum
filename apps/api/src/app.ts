@@ -568,6 +568,19 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
    * NEVER spread into ctx, so privileged fields (`bypassRules`, `internal`,
    * `debug`, `idempotencyKey`, `rateLimitKey`) cannot be forwarded by a caller.
    */
+  /**
+   * Document data must be a JSON object. The `body.data ?? body` shorthand
+   * would otherwise accept a bare string/array/number body and persist it as
+   * a character- or index-keyed object, silently corrupting the document.
+   */
+  function requireDocumentData(body: unknown): Record<string, unknown> {
+    const data = (body as Record<string, unknown> | null)?.["data"] ?? body;
+    if (typeof data !== "object" || data === null || Array.isArray(data)) {
+      throw new VellumError("INVALID_ARGUMENT", "Document data must be a JSON object");
+    }
+    return data as Record<string, unknown>;
+  }
+
   function v2WriteOptions(body: Record<string, unknown>): Record<string, unknown> {
     const opts: Record<string, unknown> = {};
     if (typeof body["ttlSeconds"] === "number") opts["ttlSeconds"] = body["ttlSeconds"];
@@ -1108,7 +1121,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     const created = await platform.documentEngine.createDocument({
       projectId,
       path: docPath,
-      data: (body.data ?? body) as Record<string, unknown>,
+      data: requireDocumentData(body),
       ...v2WriteOptions(body as Record<string, unknown>),
       ...mutationIdempotency(c, body, apiKeyRecord.id, authContext.uid),
       apiKeyRecord,
@@ -1132,7 +1145,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     const saved = await platform.documentEngine.setDocument({
       projectId,
       path: docPath,
-      data: (body.data ?? body) as Record<string, unknown>,
+      data: requireDocumentData(body),
       merge,
       ifVersion,
       ...v2WriteOptions(body as Record<string, unknown>),
@@ -1157,7 +1170,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     const updated = await platform.documentEngine.updateDocument({
       projectId,
       path: docPath,
-      data: (body.data ?? body) as Record<string, unknown>,
+      data: requireDocumentData(body),
       ifVersion,
       ...v2WriteOptions(body as Record<string, unknown>),
       ...mutationIdempotency(c, body, apiKeyRecord.id, authContext.uid),

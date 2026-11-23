@@ -237,6 +237,8 @@ export interface DocumentSetOptions extends RequestOptions {
   ttlSeconds?: number;
   expiresAt?: string;
   upsert?: boolean;
+  /** Sent as the Idempotency-Key header: safe retries/replays dedupe server-side (Flutter SDK parity). */
+  idempotencyKey?: string;
 }
 
 export type DocumentUpsertOptions = Omit<DocumentSetOptions, "upsert">;
@@ -244,14 +246,20 @@ export type DocumentUpsertOptions = Omit<DocumentSetOptions, "upsert">;
 export interface DocumentCreateOptions extends RequestOptions {
   ttlSeconds?: number;
   expiresAt?: string;
+  /** Sent as the Idempotency-Key header: safe retries/replays dedupe server-side (Flutter SDK parity). */
+  idempotencyKey?: string;
 }
 
 export interface DocumentUpdateOptions extends RequestOptions {
   ifVersion?: number | null;
+  /** Sent as the Idempotency-Key header: safe retries/replays dedupe server-side (Flutter SDK parity). */
+  idempotencyKey?: string;
 }
 
 export interface DocumentDeleteOptions extends RequestOptions {
   ifVersion?: number;
+  /** Sent as the Idempotency-Key header: safe retries/replays dedupe server-side (Flutter SDK parity). */
+  idempotencyKey?: string;
 }
 
 export interface IndexSuggestionEvent {
