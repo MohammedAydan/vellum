@@ -35,7 +35,7 @@ description: رموز EdDSA للمستخدمين النهائيين، تدوير
 
 ## واجهات REST
 
-- **المستخدم النهائي** (`/v1/projects/:p/auth`): `sign-up/email`، `sign-in/email`، `sign-in/anonymous`، `sign-in/provider`، `token/refresh`، `sign-out`، `GET|PATCH /user`، `password/reset`، `password/confirm`، `email/verify/request`، `email/verify/confirm`، `mfa/enroll`، `mfa/verify`، `mfa/challenge`، `/.well-known/jwks.json`.
+- **المستخدم النهائي** (`/v1/projects/:p/auth`): `sign-up/email`، `sign-in/email`، `sign-in/anonymous`، `sign-in/provider` (يتطلب مفتاحًا سريًا `sk_` فقط؛ للخوادم الموثوقة التي تتحقق من هوية المزود بنفسها)، `token/refresh`، `sign-out`، `GET|PATCH /user`، `password/reset`، `password/confirm`، `email/verify/request`، `email/verify/confirm`، `mfa/enroll`، `mfa/verify`، `mfa/challenge`، `/.well-known/jwks.json`.
 
 راجع [مرجع REST الكامل](../../../docs/07-end-user-auth.md).
 
