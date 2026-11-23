@@ -88,6 +88,28 @@ describe("end-user auth guards", () => {
     expect((await f.signIn("a@example.com")).status).toBe(200);
   });
 
+  it("lets exactly one of many parallel sign-ups use the last hourly slot", async () => {
+    const f = await fixture();
+    expect((await f.signUp("seed@example.com")).status).toBe(201);
+    await f.patchConfig({ maxSignupsPerHour: 2 });
+
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, i) => f.signUp(`parallel${i}@example.com`))
+    );
+    const statuses = results.map((r) => r.status).sort();
+    expect(statuses.filter((status) => status === 201)).toHaveLength(1);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(7);
+  });
+
+  it("does not spend an hourly slot on rejected sign-ups", async () => {
+    const f = await fixture();
+    // The first request also initializes the project auth config.
+    expect((await f.signUp("weak@example.com", "x")).status).toBe(400);
+    await f.patchConfig({ maxSignupsPerHour: 1 });
+    expect((await f.signUp("weak2@example.com", "x")).status).toBe(400);
+    expect((await f.signUp("ok@example.com")).status).toBe(201);
+  });
+
   it("throttles repeated failed end-user sign-ins and refuses even the correct password while locked", async () => {
     const f = await fixture();
     expect((await f.signUp("a@example.com")).status).toBe(201);
