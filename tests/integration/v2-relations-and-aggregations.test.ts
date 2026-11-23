@@ -166,6 +166,8 @@ describe("V2 relations", () => {
       await put(parentPath, { title: `Post ${i}`, authorId: { $ref: userPath } });
     }
 
+    // Count only the read phase: writes with $ref values also batch-read their
+    // targets (reference validation), which is not what this test measures.
     const before = memoryCounter.batchReadCalls;
     for (const path of parents) {
       const doc = await engine.getDocument({
