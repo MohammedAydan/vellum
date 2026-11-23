@@ -408,7 +408,11 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/sign-in/provider", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    // The server never verifies provider ids or tokens itself: providerUserId,
+    // email and emailVerified are claims made by the caller. Only a trusted
+    // backend holding a secret (sk_) key may assert them. A publishable key in
+    // a browser or app could otherwise sign in as any user by email.
+    requireProjectApiKey(c, platform, tenant, { serverOnly: true });
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
 
@@ -427,15 +431,22 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       if (!found) throw new VellumError("UNAUTHENTICATED", "The linked end-user no longer exists");
       if (found.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
       user = { ...found, lastSignInAt: now };
-      await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
     } else {
       if (!body.email) {
         throw new VellumError("INVALID_ARGUMENT", "An email is required when registering via an identity provider");
       }
       const byEmail = await storage.getAuthUserByEmail(tenant.ctx, body.email);
       if (byEmail) {
+        // Never link a new provider identity to an existing account on an
+        // unverified email claim.
+        if (body.emailVerified !== true) {
+          throw new VellumError(
+            "ALREADY_EXISTS",
+            "An account with this email exists; the provider must assert a verified email to link it"
+          );
+        }
+        if (byEmail.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
         user = { ...byEmail, lastSignInAt: now };
-        await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
       } else {
         await checkRegistrationGuards(tenant, config);
         const email = body.email;
@@ -451,6 +462,18 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         await projectIfEnabled(tenant, config, user);
       }
     }
+    // Provider sign-in must not bypass a verified second factor.
+    const mfa = config.enableTotpMfa ? await storage.getAuthMfa(tenant.ctx, user.id) : null;
+    if (mfa?.verified) {
+      const { token, expiresAt } = await persistActionToken(
+        tenant,
+        user.id,
+        TOKEN_TYPE_MFA_CHALLENGE,
+        MFA_TICKET_TTL_MS
+      );
+      return c.json({ mfaRequired: true, mfaTicket: token, factors: ["totp"], expiresAt });
+    }
+    await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
     await storage.upsertAuthIdentity(tenant.ctx, {
       userId: user.id,
       provider: body.provider,
