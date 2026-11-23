@@ -85,8 +85,10 @@ describe("ordering", () => {
   });
   it("multi-field ordering (needs composite index; clear error otherwise)", async () => {
     await expectApiError(env.secret().collection(c).orderBy("grp", "asc").orderBy("i", "desc").limit(100).get(), { status: 400 }).catch(() => undefined);
-    expect((await env.createIndex(c, [{ path: "grp", direction: "asc" }, { path: "i", direction: "desc" }])).status).toBe(201);
-    await new Promise((r) => setTimeout(r, 500));
+    const idxFields = [{ path: "grp", direction: "asc" }, { path: "i", direction: "desc" }];
+    expect((await env.createIndex(c, idxFields)).status).toBe(201);
+    // Index builds are async (status 'building' -> 'ready' via the worker); poll for readiness.
+    await env.waitForIndexReady(c, idxFields);
     const r = await env.secret().collection(c).orderBy("grp", "asc").orderBy("i", "desc").limit(100).get();
     const rows = r.docs.map((d) => d.data() as any);
     for (let k = 1; k < rows.length; k++) {

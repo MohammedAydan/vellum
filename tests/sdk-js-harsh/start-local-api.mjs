@@ -6,5 +6,7 @@ import { startNodeApiServer } from "../../apps/api/dist/node-server.js";
 if (!/127\.0\.0\.1|localhost/.test(process.env.CONTROL_DATABASE_URL ?? "")) throw new Error("refusing: control DB is not local");
 const platform = await createVellumPlatformFromEnv();
 platform.rateLimiter.checkAndConsume = () => {};
-const server = await startNodeApiServer({ platform, port: Number(process.env.API_PORT ?? 18080) });
+// Short worker interval (LOCAL TESTING ONLY) so the index-builder worker flips freshly
+// created composite indexes from 'building' to 'ready' quickly; the production default is 30s.
+const server = await startNodeApiServer({ platform, port: Number(process.env.API_PORT ?? 18080), workerIntervalMs: 200 });
 console.log("listening", server.port);

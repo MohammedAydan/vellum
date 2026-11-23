@@ -59,6 +59,7 @@ export interface Env {
   setRulesAst(rulesAst: unknown): Promise<{ status: number; body: any }>;
   setRelationRules(rules: Array<{ collection: string; field: string; onDelete: string; targetCollection?: string }>): Promise<{ status: number; body: any }>;
   createIndex(collectionPath: string, fields: Array<{ path: string; direction?: string }> | any[]): Promise<{ status: number; body: any }>;
+  waitForIndexReady(collectionPath: string, fields: Array<{ path: string; direction?: string }> | any[], timeoutMs?: number): Promise<void>;
   authConfig(patch: Record<string, unknown>): Promise<{ status: number; body: any }>;
   admin(method: string, path: string, body?: unknown): Promise<{ status: number; body: any }>;
   clients: Array<{ dispose?: () => void }>;
@@ -119,6 +120,22 @@ export async function provision(label = "harsh"): Promise<Env> {
     setRulesAst: (rulesAst) => http(`/v1/projects/${projectId}/rulesets`, { method: "POST", token: consoleToken, body: JSON.stringify({ rulesAst }) }),
     setRelationRules: (rules) => http(`/v1/projects/${projectId}/relation-rules`, { method: "PUT", token: consoleToken, body: JSON.stringify({ rules }) }),
     createIndex: (collectionPath, fields) => http(`/v1/projects/${projectId}/indexes`, { method: "POST", key: secretKey, body: JSON.stringify({ collectionPath, fields }) }),
+    // Composite indexes are built asynchronously by the index-builder worker
+    // (status 'building' -> 'ready'); a query that needs one must wait for
+    // readiness rather than assume a fixed delay.
+    waitForIndexReady: async (collectionPath, fields, timeoutMs = 15_000) => {
+      const want = JSON.stringify(fields.map((f: any) => ({ path: f.path, direction: f.direction ?? f.dir ?? "asc" })));
+      const deadline = Date.now() + timeoutMs;
+      for (;;) {
+        const r = await http(`/v1/projects/${projectId}/indexes`, { key: secretKey });
+        const match = (r.body?.indexes ?? []).find((i: any) => i.collectionPath === collectionPath &&
+          JSON.stringify((i.fields ?? []).map((f: any) => ({ path: f.path, direction: f.direction ?? f.dir ?? "asc" }))) === want);
+        if (match?.status === "ready") return;
+        if (match?.status === "failed") throw new Error(`index build failed: ${JSON.stringify(match)}`);
+        if (Date.now() > deadline) throw new Error(`index on '${collectionPath}' still ${match?.status ?? "missing"} after ${timeoutMs}ms`);
+        await new Promise((r2) => setTimeout(r2, 250));
+      }
+    },
     authConfig: (patch) => http(`/v1/projects/${projectId}/auth/admin/config`, { method: "PATCH", key: secretKey, body: JSON.stringify(patch) }),
     admin: (method, path, body) => http(`/v1/projects/${projectId}/auth/admin${path}`, { method, key: secretKey, body: body === undefined ? undefined : JSON.stringify(body) }),
     cleanup() {
