@@ -1,0 +1,16 @@
+name: vellum_flutter
+description: Official Flutter & Dart SDK for VELLUM with reactive end-user auth, Tagged Wire Format, OCC transactions, withConverter<T>(), and realtime WebSocket streams.
+version: 0.0.1
+homepage: https://github.com/MohammedAydan/vellum
+repository: https://github.com/MohammedAydan/vellum/tree/main/sdks/flutter
+issue_tracker: https://github.com/MohammedAydan/vellum/issues
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  http: ^1.2.2
+  web_socket_channel: ^3.0.1
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^4.0.0
