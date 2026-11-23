@@ -19,8 +19,10 @@ void _handleIndexSuggestionHeaders(
   if (!warn || headers.isEmpty) return;
   try {
     final String? url = _responseHeader(headers, 'x-vellum-index-url');
-    final String? rawSuggestion = _responseHeader(headers, 'x-vellum-index-suggestion');
-    if ((url == null || url.isEmpty) && (rawSuggestion == null || rawSuggestion.isEmpty)) {
+    final String? rawSuggestion =
+        _responseHeader(headers, 'x-vellum-index-suggestion');
+    if ((url == null || url.isEmpty) &&
+        (rawSuggestion == null || rawSuggestion.isEmpty)) {
       return;
     }
 
@@ -35,9 +37,10 @@ void _handleIndexSuggestionHeaders(
     }
 
     final Object? rawFingerprint = payload['fingerprint'];
-    final String fingerprint = (rawFingerprint is String && rawFingerprint.isNotEmpty)
-        ? rawFingerprint
-        : 'url:${_fingerprintHash(url ?? rawSuggestion ?? '')}';
+    final String fingerprint =
+        (rawFingerprint is String && rawFingerprint.isNotEmpty)
+            ? rawFingerprint
+            : 'url:${_fingerprintHash(url ?? rawSuggestion ?? '')}';
     if (!_seenIndexFingerprints.add(fingerprint)) return;
 
     final String reason = payload['reason'] is String
@@ -66,8 +69,10 @@ void _handleIndexSuggestionHeaders(
       final List<String> lines = <String>[
         '[VELLUM Index Advisor] Missing composite index (fingerprint: ${_redactSecrets(fingerprint)})',
         '  Reason: ${_redactSecrets(reason)}',
-        if (collectionPath != null) '  Collection: ${_redactSecrets(collectionPath)}',
-        if (url != null && url.isNotEmpty) '  One-click fix: ${_redactSecrets(url)}',
+        if (collectionPath != null)
+          '  Collection: ${_redactSecrets(collectionPath)}',
+        if (url != null && url.isNotEmpty)
+          '  One-click fix: ${_redactSecrets(url)}',
       ];
       Zone.current.print(lines.join('\n'));
     }
@@ -161,7 +166,9 @@ Future<VellumHttpResponse> _sendHttpRequestWithHeaders(
 
   if (response.statusCode >= 400) {
     final error = decoded is Map ? decoded['error'] : null;
-    final err = error is Map ? error.cast<String, Object?>() : const <String, Object?>{};
+    final err = error is Map
+        ? error.cast<String, Object?>()
+        : const <String, Object?>{};
     final retryAfter = _responseHeader(response.headers, 'retry-after');
     final errDetails = err['details'] is Map
         ? (err['details'] as Map).cast<String, Object?>()
@@ -172,7 +179,10 @@ Future<VellumHttpResponse> _sendHttpRequestWithHeaders(
     };
     throw VellumException(
       code: err['code'] is String ? err['code'] as String : 'INTERNAL_ERROR',
-      message: err['message'] is String ? err['message'] as String : response.body,
+      message: err['message'] is String
+          ? err['message'] as String
+          : 'HTTP ${response.statusCode} response without an API error envelope. '
+              'Check endpoint/baseUrl and the project REST prefix.',
       statusCode: response.statusCode,
       requestId: _responseHeader(response.headers, 'x-request-id'),
       details: details,
@@ -217,7 +227,8 @@ Future<VellumHttpResponse> defaultHttpTransportWithHeaders(
 ) async {
   final client = http.Client();
   try {
-    return await _sendHttpRequestWithHeaders(client, method, url, headers, body);
+    return await _sendHttpRequestWithHeaders(
+        client, method, url, headers, body);
   } finally {
     client.close();
   }
@@ -255,7 +266,8 @@ HttpTransport httpClientTransportWithHeaders(http.Client client) {
     Map<String, String> headers,
     JsonMap? body,
   ) async {
-    return await _sendHttpRequestWithHeaders(client, method, url, headers, body);
+    return await _sendHttpRequestWithHeaders(
+        client, method, url, headers, body);
   };
 }
 
@@ -267,16 +279,74 @@ HttpTransport _resolveTransport(HttpTransport? explicit, http.Client? client) {
 
 /// Derives the full REST prefix from a host `endpoint`.
 String _deriveBaseUrl(String endpoint, String projectId) {
-  final cleanEndpoint =
-      endpoint.endsWith('/') ? endpoint.substring(0, endpoint.length - 1) : endpoint;
+  final cleanEndpoint = endpoint.endsWith('/')
+      ? endpoint.substring(0, endpoint.length - 1)
+      : endpoint;
   return '$cleanEndpoint/v1/projects/${Uri.encodeComponent(projectId)}';
+}
+
+/// Validates configuration before any project key can be sent to a wrong route.
+String _resolveBaseUrl(String? endpoint, String? baseUrl, String projectId) {
+  Never invalid(String message) => throw VellumException(
+        code: 'INVALID_ARGUMENT',
+        message: message,
+        statusCode: 400,
+      );
+  if (projectId.trim().isEmpty ||
+      projectId != projectId.trim() ||
+      RegExp(r'[\x00-\x1f\x7f/\\?#]').hasMatch(projectId)) {
+    invalid(
+        'projectId must be a non-empty project identifier without path separators');
+  }
+  if (endpoint != null && baseUrl != null) {
+    invalid(
+        'Use endpoint or baseUrl, not both. baseUrl is a full project REST prefix.');
+  }
+  final value = (baseUrl ?? endpoint ?? '').trim();
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      uri.hasQuery ||
+      uri.hasFragment ||
+      uri.userInfo.isNotEmpty ||
+      (uri.hasScheme && (uri.scheme != 'https' && uri.scheme != 'http')) ||
+      (uri.hasScheme && uri.host.isEmpty) ||
+      (!uri.hasScheme &&
+          (uri.hasAuthority || (value.isNotEmpty && !value.startsWith('/'))))) {
+    invalid(
+        'Use an HTTP(S) URL or a root-relative URL, without credentials, query or fragment');
+  }
+  final clean = value.replaceFirst(RegExp(r'/+$'), '');
+  final path = uri.path.replaceFirst(RegExp(r'/+$'), '');
+  if (baseUrl != null) {
+    if (path.isEmpty || path == '/v1') {
+      invalid(
+          'baseUrl must include /v1/projects/<projectId>, not just the API origin or /v1. '
+          'Use endpoint with the API origin instead. /v1/auth is console authentication, not project user authentication.');
+    }
+    final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+    final projects = segments.lastIndexOf('projects');
+    if (projects >= 0 &&
+        (projects + 1 >= segments.length ||
+            segments[projects + 1] != projectId ||
+            projects + 2 != segments.length)) {
+      invalid(
+          'baseUrl must target the same projectId and end at its project REST prefix');
+    }
+    return clean;
+  }
+  if (path.endsWith('/v1') || path.contains('/v1/projects/')) {
+    invalid(
+        'endpoint is the API origin, without /v1 or /v1/projects/<projectId>. '
+        'Use baseUrl only for a full project REST prefix.');
+  }
+  return _deriveBaseUrl(clean, projectId);
 }
 
 /// Primary Client Entrypoint for `vellum_flutter`.
 ///
 /// Configure the REST target either with `endpoint` (a host origin, from which
 /// the SDK derives `/v1/projects/:projectId`) or with `baseUrl` (the
-/// full prefix, used verbatim). `httpClient` and `authStorage` are the
+/// full prefix, with trailing slashes removed). Supply only one option. `httpClient` and `authStorage` are the
 /// preferred injection names; `httpTransport` and `authTokenStorage` remain as
 /// fully supported aliases for existing callers.
 class VellumClient implements VellumClientPort {
@@ -330,8 +400,8 @@ class VellumClient implements VellumClientPort {
     this.retryMaxDelay = const Duration(seconds: 15),
     this.coalesceInFlightGets = true,
     Random? random,
-  })  : endpoint = endpoint ?? '',
-        baseUrl = baseUrl ?? _deriveBaseUrl(endpoint ?? '', projectId),
+  })  : endpoint = (endpoint ?? '').trim().replaceFirst(RegExp(r'/+$'), ''),
+        baseUrl = _resolveBaseUrl(endpoint, baseUrl, projectId),
         httpTransport = _resolveTransport(httpTransport, httpClient),
         authTokenStorage =
             authStorage ?? authTokenStorage ?? InMemoryAuthTokenStorage(),
@@ -378,7 +448,8 @@ class VellumClient implements VellumClientPort {
   void setCachedDocument(String path, DocumentSnapshot<Object?> snap) =>
       _memoryCache[path] = snap;
 
-  DocumentSnapshot<Object?>? getCachedDocument(String path) => _memoryCache[path];
+  DocumentSnapshot<Object?>? getCachedDocument(String path) =>
+      _memoryCache[path];
 
   void clearCache() => _memoryCache.clear();
 
@@ -476,7 +547,8 @@ class VellumClient implements VellumClientPort {
         }
         final Duration delay;
         if (retryAfterDelay != null) {
-          delay = retryAfterDelay > retryMaxDelay ? retryMaxDelay : retryAfterDelay;
+          delay =
+              retryAfterDelay > retryMaxDelay ? retryMaxDelay : retryAfterDelay;
         } else {
           final ms = computeRetryBackoffMs(
             attempt,
@@ -523,7 +595,8 @@ class VellumClient implements VellumClientPort {
 
     Future<JsonMap> run() async {
       try {
-        return await _executeWithRetry(method, relativePath, url, headers, body);
+        return await _executeWithRetry(
+            method, relativePath, url, headers, body);
       } on VellumException catch (err) {
         // Reactive 401: coalesce into one single-flight refresh and replay the
         // exact request once with the new bearer. Never retry the refresh
@@ -619,8 +692,7 @@ class VellumClient implements VellumClientPort {
 
   /// Reads a document by path. Thin alias for `doc(path).get()`.
   @override
-  Future<DocumentSnapshot<JsonMap>> getDoc(String path) =>
-      doc(path).get();
+  Future<DocumentSnapshot<JsonMap>> getDoc(String path) => doc(path).get();
 
   /// Creates or overwrites a document by path, optionally merging.
   @override
@@ -762,9 +834,10 @@ class VellumClient implements VellumClientPort {
     for (var i = 0; i < writes.length; i += chunkSize) {
       final end = min(i + chunkSize, writes.length);
       final chunk = writes.sublist(i, end);
-      final key = idempotencyKeyPrefix != null && idempotencyKeyPrefix.isNotEmpty
-          ? '$idempotencyKeyPrefix-$chunkIndex'
-          : null;
+      final key =
+          idempotencyKeyPrefix != null && idempotencyKeyPrefix.isNotEmpty
+              ? '$idempotencyKeyPrefix-$chunkIndex'
+              : null;
       results.add(await batchWrite(chunk, idempotencyKey: key));
       chunkIndex++;
     }
@@ -805,9 +878,11 @@ class VellumClient implements VellumClientPort {
     int maxAttempts = 5,
   }) async {
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      final beginRes = await request('POST', '/transactions:begin', body: const <String, Object?>{});
+      final beginRes = await request('POST', '/transactions:begin',
+          body: const <String, Object?>{});
       final txToken = beginRes['transactionToken'] as String;
-      final txContext = TransactionContext(client: this, transactionToken: txToken);
+      final txContext =
+          TransactionContext(client: this, transactionToken: txToken);
 
       try {
         final result = await updateFn(txContext);
@@ -933,16 +1008,15 @@ class VellumClient implements VellumClientPort {
   /// Deletes every document in a collection while keeping the collection itself.
   @override
   Future<ClearCollectionResult> clearCollection(String name) async {
-    final JsonMap res =
-        await request('POST', '${_collectionPath(name)}/clear');
+    final JsonMap res = await request('POST', '${_collectionPath(name)}/clear',
+        body: <String, Object?>{});
     return ClearCollectionResult.fromJson(res);
   }
 
   /// Drops the collection and all of its documents.
   @override
   Future<DeleteCollectionResult> deleteCollection(String name) async {
-    final JsonMap res =
-        await request('DELETE', _collectionPath(name));
+    final JsonMap res = await request('DELETE', _collectionPath(name));
     return DeleteCollectionResult.fromJson(res);
   }
 
