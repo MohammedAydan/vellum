@@ -1,0 +1,27 @@
+{
+  "name": "@vellum/api-contract",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "echo 'no integration tests'",
+    "test:security": "echo 'no security tests'"
+  },
+  "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^7.3.4",
+    "@vellum/core": "workspace:*",
+    "zod": "^3.25.76"
+  }
+}
