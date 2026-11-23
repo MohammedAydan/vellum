@@ -723,11 +723,11 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const body = parseOrThrow(MfaChallengeRequestSchema, await c.req.json());
     const ticketHash = sha256(body.mfaTicket);
     const failureKey = `mfa-challenge:${ticketHash}`;
-    // The ticket is already single-use: consuming it below on the first code
-    // attempt invalidates it immediately. The 5-failure counter below is an
-    // additional best-effort guard — on the 5th bad code we call
-    // `consumeAuthToken` again to guarantee the ticket cannot be replayed even
-    // if an earlier consume were skipped. Keys are hashes, never raw tickets.
+    // Bounded retries: the ticket survives a wrong code (peek, not consume) so a
+    // typo does not force a full re-login. After 5 bad codes the ticket is
+    // consumed (invalidated) and the user must sign in again. On success the
+    // ticket is consumed atomically before the session is issued. Keys are
+    // hashes, never raw tickets.
     const badCode = async (message: string): Promise<never> => {
       if (recordMfaFailure(failureKey)) {
         try {
@@ -738,7 +738,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       }
       throw new VellumError("UNAUTHENTICATED", message);
     };
-    const challenge = await storage.consumeAuthToken(
+    const challenge = await storage.peekAuthToken(
       tenant.ctx,
       ticketHash,
       TOKEN_TYPE_MFA_CHALLENGE
@@ -768,6 +768,9 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       await badCode("Invalid TOTP code");
     }
     clearMfaFailures(failureKey);
+    // Consume atomically only after the code verified: a concurrent replay with
+    // the same ticket fails here instead of issuing a second session.
+    await storage.consumeAuthToken(tenant.ctx, ticketHash, TOKEN_TYPE_MFA_CHALLENGE);
     return c.json(await issueSession(tenant, user, c));
   });
 

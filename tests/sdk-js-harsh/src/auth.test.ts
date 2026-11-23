@@ -138,9 +138,8 @@ describe("end-user auth", () => {
     expect(r.mfaRequired).toBe(true); expect(r.mfaTicket).toBeTruthy();
     expect(b.currentUser).toBeNull();
     await expectApiError(b.auth.verifyMfaChallenge({ mfaTicket: r.mfaTicket, code: "000000" }), {});
-    // NOTE: the ticket is consumed by the first attempt, even a wrong one: user must sign in again.
-    const r1b: any = await b.auth.signInWithEmailAndPassword(e, PW);
-    const st = await b.auth.verifyMfaChallenge({ mfaTicket: r1b.mfaTicket, code: totp(en.secret) });
+    // Bounded retries: a wrong code no longer consumes the ticket; the same ticket still works.
+    const st = await b.auth.verifyMfaChallenge({ mfaTicket: r.mfaTicket, code: totp(en.secret) });
     expect(st.accessToken).toBeTruthy(); expect(b.currentUser?.email).toBe(e);
     const r2: any = await env.pub().auth.signInWithEmailAndPassword(e, PW);
     const rc = en.recoveryCodes[0]!;
@@ -148,6 +147,18 @@ describe("end-user auth", () => {
     expect(st2.accessToken).toBeTruthy();
     const r3: any = await env.pub().auth.signInWithEmailAndPassword(e, PW);
     await expectApiError(env.pub().auth.verifyMfaChallenge({ mfaTicket: r3.mfaTicket, code: rc, factorType: "recovery_code" }), {});
+  });
+  it("TOTP MFA: 5 wrong codes invalidate the ticket", async () => {
+    const e = email(); const a = env.pub(); await a.auth.signUpWithEmailAndPassword(e, PW);
+    const en = await a.auth.enrollTotpMfa();
+    await a.auth.confirmTotpMfa(totp(en.secret));
+    const b = env.pub();
+    const r: any = await b.auth.signInWithEmailAndPassword(e, PW);
+    for (let k = 0; k < 5; k++) {
+      await expectApiError(b.auth.verifyMfaChallenge({ mfaTicket: r.mfaTicket, code: "000000" }), {});
+    }
+    // Ticket is now consumed: even the correct code is rejected.
+    await expectApiError(b.auth.verifyMfaChallenge({ mfaTicket: r.mfaTicket, code: totp(en.secret) }), {});
   });
   it("OAuth sign-in rejects unconfigured provider / missing credentials", async () => {
     await expectApiError(env.pub().auth.signInWithOAuth({ provider: "google", idToken: "x.y.z" }), {}).then((e) => expect(e.status).toBeGreaterThanOrEqual(400));
