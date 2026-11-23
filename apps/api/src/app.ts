@@ -25,6 +25,7 @@ import {
   bodyLimit,
   createCorsOriginValidator,
   parseAllowedOrigins,
+  extractClientIp,
   redactHeaders,
   safeJsonParse,
   securityHeaders,
@@ -148,6 +149,15 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
   });
 
   app.use("*", bodyLimit());
+  // POST routes whose body is optional. SDKs send `Content-Type: application/json`
+  // on every POST, so an empty body must reach these handlers unchanged
+  // (they fall back to `{}` via optionalJsonBody or never read the body).
+  const BODY_OPTIONAL_POST_PATHS = [
+    /^\/v1\/projects\/[^/]+\/collections\/[^/]+\/clear$/,
+    /^\/v1\/console\/projects\/[^/]+\/collections\/[^/]+\/clear$/,
+    /^\/v1\/auth\/sign-out$/,
+    /^\/v1\/projects\/[^/]+\/auth\/(?:sign-in\/anonymous|sign-out|email\/verify\/request|mfa\/enroll)$/,
+  ];
   // Validate transport JSON once, before any route-specific parser/catch.
   // Only parse errors are client errors; unrelated SyntaxErrors stay 500.
   app.use("*", async (c, next) => {
@@ -156,7 +166,11 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
       const raw = await c.req.text();
       // DELETE commonly carries a JSON header without a body. Leave its
       // authorization/route contract intact; nonempty malformed JSON still fails.
-      try { if (!(c.req.method === "DELETE" && raw.length === 0)) safeJsonParse(raw); }
+      const emptyAllowed =
+        raw.trim().length === 0 &&
+        (c.req.method === "DELETE" ||
+          (c.req.method === "POST" && BODY_OPTIONAL_POST_PATHS.some((re) => re.test(c.req.path))));
+      try { if (!emptyAllowed) safeJsonParse(raw); }
       catch (error) {
         if (error instanceof SyntaxError) {
           throw new VellumError("INVALID_ARGUMENT", "Malformed JSON request body: invalid JSON syntax");
@@ -239,6 +253,36 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
   app.use("/v1/auth/sign-in/email", authRateLimit({ ...LOGIN_LIMIT, scope: "sign-in-email" }));
   app.use("/v1/auth/sign-up/email", authRateLimit({ ...LOGIN_LIMIT, scope: "sign-up-email" }));
   app.use("/v1/admin/login", authRateLimit({ ...LOGIN_LIMIT, scope: "admin-login" }));
+
+  // Project END-USER credentials (`/v1/projects/:projectId/auth/*`). These were
+  // previously unthrottled (the limits above cover only console routes). The key
+  // includes projectId so tenants never share a bucket for the same ip/email.
+  const endUserKey = async (c: Context): Promise<string> => {
+    let email = "";
+    try {
+      const body = (await c.req.raw.clone().json()) as { email?: unknown } | null;
+      if (typeof body?.email === "string") email = body.email.trim().toLowerCase();
+    } catch {
+      // No JSON body.
+    }
+    return sha256Hex(`${c.req.param("projectId") ?? ""}|${extractClientIp(c)}|${email}`);
+  };
+  const endUserIpKey = (c: Context): Promise<string> =>
+    Promise.resolve(sha256Hex(`${c.req.param("projectId") ?? ""}|${extractClientIp(c)}`));
+  // 10 failures / 15 min per (project, ip, email); lockout is enforced before the handler runs.
+  app.use(
+    "/v1/projects/:projectId/auth/sign-in/email",
+    authRateLimit({ ...LOGIN_LIMIT, scope: "enduser-sign-in", keyFrom: endUserKey })
+  );
+  // 30 sign-up attempts / 15 min per (project, ip); every attempt counts.
+  app.use(
+    "/v1/projects/:projectId/auth/sign-up/email",
+    authRateLimit({ max: 30, windowMs: 15 * 60 * 1000, countAll: true, scope: "enduser-sign-up", keyFrom: endUserIpKey })
+  );
+  app.use(
+    "/v1/projects/:projectId/auth/sign-in/anonymous",
+    authRateLimit({ max: 30, windowMs: 15 * 60 * 1000, countAll: true, scope: "enduser-anonymous", keyFrom: endUserIpKey })
+  );
 
   // 5 requests / 15 min — every request counts (no account enumeration).
   app.use(
