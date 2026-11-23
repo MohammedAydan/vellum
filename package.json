@@ -51,7 +51,8 @@
     "codegen:openapi": "tsx scripts/generate-openapi.ts",
     "codegen:dart-errors": "tsx scripts/generate-dart-errors.ts",
     "codegen:check": "tsx scripts/generate-openapi.ts --check && tsx scripts/generate-dart-errors.ts --check",
-    "version:check": "node scripts/check-version-sync.mjs"
+    "version:check": "node scripts/check-version-sync.mjs",
+    "docs:typecheck-examples": "node scripts/qa/check-sdk-doc-snippets.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

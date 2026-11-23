@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { ALL_PAGES, NAV_GROUPS, neighbors, pageHref } from "../nav";
-import { getPage } from "../registry";
+import { PAGES, getPage } from "../registry";
 
 describe("documentation site structure", () => {
   it("exposes every page in exactly one navigation group", () => {
     const slugs = NAV_GROUPS.flatMap((group) => group.items.map((item) => item.slug));
     expect(slugs).toHaveLength(ALL_PAGES.length);
     expect(new Set(slugs).size).toBe(slugs.length);
-    expect(slugs).toHaveLength(30);
+    expect(new Set(slugs)).toEqual(new Set(Object.keys(PAGES.en)));
+    expect(new Set(slugs)).toEqual(new Set(Object.keys(PAGES.ar)));
   });
 
   it("gives every page a title and description in both languages", () => {

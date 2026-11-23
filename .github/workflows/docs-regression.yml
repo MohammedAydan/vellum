@@ -34,6 +34,8 @@ jobs:
       - uses: dart-lang/setup-dart@v1
       - run: corepack enable && corepack pnpm install --frozen-lockfile
       - run: corepack pnpm build
+      - name: Compile displayed consumer SDK examples
+        run: corepack pnpm docs:typecheck-examples
       - name: Create isolated databases and apply unmodified migrations
         run: |
           psql postgresql://vellum:vellum@127.0.0.1:5432/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE docs_control'
