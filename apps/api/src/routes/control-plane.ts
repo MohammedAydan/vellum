@@ -4,7 +4,7 @@
  * and records immutable audit logs for all mutations.
  */
 
-import { Hono, type Context } from "hono";
+import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { VellumError } from "@vellum/core";
 import {
   CreateOrganizationRequestSchema,
@@ -34,6 +34,7 @@ async function publishInvalidation(kind: "api_key" | "ruleset" | "relation_rules
 }
 import {
   assertOrgAccess,
+  assertProjectAccess,
   getSession,
   getUserOrgMemberships,
   invalidateUserOrgMembershipsCache,
@@ -57,9 +58,17 @@ export function createControlPlaneRoutes(
   // document plane after mounting at /v1.
   // Super-admin operators read the same project metadata from
   // /admin, so accept either realm token on these shared read-only routes.
-  const sessionGuard = superAdminSessionService
+  // Anonymous callers are only tolerated outside production (local dev, tests,
+  // examples). In production a valid session is mandatory: an unauthenticated
+  // caller could otherwise list tenants and mint secret API keys for any
+  // project. Evaluated per request so the NODE_ENV guard cannot be bypassed by
+  // module load order.
+  const lenientGuard = superAdminSessionService
     ? optionalRealmSession(sessionService, superAdminSessionService)
     : optionalSession(sessionService);
+  const strictGuard = requireRealmSession(sessionService, superAdminSessionService);
+  const sessionGuard: MiddlewareHandler = (c, next) =>
+    (process.env["NODE_ENV"] === "production" ? strictGuard : lenientGuard)(c, next);
 
   // Helper to extract actor metadata for audit logs
   function getActorMetadata(c: Context) {
@@ -129,6 +138,11 @@ export function createControlPlaneRoutes(
       });
     }
 
+    const session = getSession(c);
+    if (session) {
+      await assertOrgAccess(controlStore, session, orgId, { write: true });
+    }
+
     const { name, slug } = parsed.data;
     const { project } = await controlStore.createProject({
       organizationId: orgId,
@@ -173,6 +187,11 @@ export function createControlPlaneRoutes(
 
     const { name, keyType, expiresAt } = parsed.data;
 
+    const keySession = getSession(c);
+    if (keySession) {
+      await assertProjectAccess(controlStore, keySession, projectId, { write: true });
+    }
+
     const generated = generateProjectApiKey({
       keyType: keyType === "secret" ? "server" : "public",
       pepper: apiKeyPepper,
@@ -199,17 +218,22 @@ export function createControlPlaneRoutes(
       userAgent: meta.userAgent,
     });
 
+    const { secretHash: _createdSecretHash, ...safeApiKey } = apiKeyRecord;
     return c.json(
       {
-        apiKey: apiKeyRecord,
+        apiKey: safeApiKey,
         rawKey: generated.fullKey,
       },
       201
     );
   });
 
-  routes.get("/projects/:projectId/api-keys", sessionGuard, (c) => {
+  routes.get("/projects/:projectId/api-keys", sessionGuard, async (c) => {
     const projectId = c.req.param("projectId");
+    const listSession = getSession(c);
+    if (listSession) {
+      await assertProjectAccess(controlStore, listSession, projectId);
+    }
 
     const keys = Array.from(controlStore.apiKeysById.values()).filter(
       (k) => k.projectId === projectId
@@ -273,6 +297,11 @@ export function createControlPlaneRoutes(
       });
     }
 
+    const rulesSession = getSession(c);
+    if (rulesSession) {
+      await assertProjectAccess(controlStore, rulesSession, projectId, { write: true });
+    }
+
     const { rulesAst } = parsed.data;
     validateSecurityRulesetAst(rulesAst);
 
@@ -295,8 +324,12 @@ export function createControlPlaneRoutes(
     return c.json(published, 201);
   });
 
-  routes.get("/projects/:projectId/rulesets", sessionGuard, (c) => {
+  routes.get("/projects/:projectId/rulesets", sessionGuard, async (c) => {
     const projectId = c.req.param("projectId");
+    const getRulesSession = getSession(c);
+    if (getRulesSession) {
+      await assertProjectAccess(controlStore, getRulesSession, projectId);
+    }
 
     const active = controlStore.getActiveRuleset(projectId);
     if (!active) {
