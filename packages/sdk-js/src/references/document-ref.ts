@@ -36,6 +36,8 @@ export interface DocumentReferenceContext {
     includeAuth?: boolean,
     signal?: AbortSignal
   ): Promise<R>;
+  getSessionEpoch?(): number;
+  prepareRead?(): Promise<string | null>;
   readonly readCache: BoundedReadCache<WireDocument> | null;
   readonly dedupeReads: boolean;
   readonly inFlightGets: Map<string, Promise<WireDocument>>;
@@ -103,6 +105,15 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
       throw createAbortError(options.signal);
     }
 
+    const bearer = await this.ctx.prepareRead?.();
+    if (options.signal?.aborted) throw createAbortError(options.signal);
+    const readEpoch = this.ctx.getSessionEpoch?.();
+    const assertCurrent = (): void => {
+      if (readEpoch !== this.ctx.getSessionEpoch?.()) {
+        throw Object.assign(new Error("Document read invalidated; retry with the current session"), { code: "READ_INVALIDATED" });
+      }
+    };
+
     const params = new URLSearchParams();
     if (options.include !== undefined) {
       params.set("include", JSON.stringify(options.include.map(normalizeInclude)));
@@ -111,7 +122,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
       params.set("select", JSON.stringify(options.select));
     }
     const query = params.toString();
-    const cacheKey = `${this.path}\0${query}`;
+    const cacheKey = `${this.path}\0${query}\0${bearer ?? ""}`;
 
     if (this.ctx.readCache && options.bypassCache !== true) {
       const cached = this.ctx.readCache.get(cacheKey);
@@ -127,6 +138,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
       const existing = this.ctx.inFlightGets.get(cacheKey);
       if (existing) {
         const sharedDoc = await existing;
+        assertCurrent();
         return buildDocumentSnapshot(sharedDoc, this.converter);
       }
     }
@@ -138,6 +150,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
     const fetchPromise = this.ctx
       .request<WireDocument>("GET", relativePath, undefined, {}, true, options.signal)
       .then((doc) => {
+        assertCurrent();
         const sanitized = sanitizeAndClone(doc);
         if (
           this.ctx.readCache &&
