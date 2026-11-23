@@ -128,8 +128,12 @@ class VellumAuth implements VellumAuthPort {
         _currentUser?.accessToken != user?.accessToken) {
       client.clearCache();
     }
+    final sameUserTokenChanged = user != null &&
+        _currentUser?.id == user.id &&
+        _currentUser?.accessToken != user.accessToken;
     if (_currentUser?.id != user?.id) client.realtime.dispose();
     _currentUser = user;
+    if (sameUserTokenChanged) client.realtime.refreshCredentials();
     _scheduleRefresh();
     if (emit && !_authController.isClosed) _authController.add(user);
     await storage.writeAccessToken(user?.accessToken);

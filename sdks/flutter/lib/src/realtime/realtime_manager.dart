@@ -68,6 +68,9 @@ class VellumRealtimeManager implements VellumRealtimePort {
     }
   }
 
+  /// Re-authenticates active subscriptions after an end-user token rotation.
+  void refreshCredentials() => _transport?.reauthenticate();
+
   /// Closes the underlying WebSocket transport and notifies all active streams.
   @override
   void dispose() {
