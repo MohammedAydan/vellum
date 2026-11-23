@@ -102,7 +102,8 @@ await batch.commit();`,
         <Code
           lang="ts"
           title="تقسيم دفعة كبيرة بأمان مع تتبع التقدم"
-          code={`const summary = await db.batchWriteChunked(operations, {
+          code={`const operations = [{ type: "set", path: "users/u_123", data: { name: "Ada" } }];
+const summary = await db.batchWriteChunked(operations, {
   chunkSize: 100, // التزم بحد الخادم 100 عملية للدفعة الذرية الواحدة
   concurrency: 4,
   onProgress: ({ completedOperations, totalOperations, completedChunks, totalChunks }) => {

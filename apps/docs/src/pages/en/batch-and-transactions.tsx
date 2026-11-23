@@ -154,6 +154,7 @@ export default function Page() {
               lang: "ts",
               code: `const controller = new AbortController();
 
+const items = [{ id: "sku_1", name: "Notebook" }];
 const ops = items.map((item) => ({
   type: "set" as const,
   path: \`catalog/\${item.id}\`,
@@ -165,7 +166,7 @@ const result = await db.batchWriteChunked(ops, {
   chunkSize: 100,       // match MAX_BATCH_OPERATIONS for server atomicity per chunk
   concurrency: 4,       // bounded parallel chunks (default: 4)
   signal: controller.signal,
-  onChunkComplete(progress) {
+  onProgress(progress) {
     console.log(\`Chunk \${progress.chunkIndex + 1}/\${progress.totalChunks} done\`);
   },
 });`,
@@ -173,11 +174,12 @@ const result = await db.batchWriteChunked(ops, {
             {
               label: "Flutter / Dart (batch().commitChunked())",
               lang: "dart",
-              code: `final batch = db.batch();
+              code: `final items = [{'id': 'notebook', 'stock': 10}];
+final batch = db.batch();
 for (final item in items) {
   batch.set(
-    db.collection('catalog').doc(item.id),
-    item.toJson(),
+    db.collection('catalog').doc(item['id'] as String),
+    item,
     merge: true,
   );
 }

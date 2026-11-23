@@ -1,3 +1,4 @@
+import { SdkEndpointNote } from "../../../sdk-endpoint-note";
 import { betaJavaScriptInstall, betaDartInstall } from "../../../beta-install";
 import {
   Callout,
@@ -17,8 +18,9 @@ export default function Page() {
       description="Complete reference for vellum_flutter—streamPages()/streamDocuments(), writeBatchChunked()/batch().commitChunked(), coalesceInFlightGets, Retry-After retries, sessionEpoch, and dispose()."
     >
 
+      <SdkEndpointNote />
       <Section id="beta-install" title="Beta installation">
-        <P>Public npm and pub.dev packages are pending release approval. Use this pinned Beta checkout or Git dependency. Repository access is required; no package publication is needed.</P>
+        <P>Version 0.0.1 is available on npm and pub.dev. Install the published Beta packages below. Repository access is not required.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />
         <Code lang="yaml" title="Flutter / Dart 3.4+" code={betaDartInstall} />
       </Section>
@@ -44,7 +46,7 @@ final db = VellumClient(
   projectId: const String.fromEnvironment('VELLUM_PROJECT_ID'),
   apiKey: const String.fromEnvironment('VELLUM_API_KEY'),
   httpClient: httpClient,
-  authStorage: SecureAuthTokenStorage(), // implement AuthTokenStorage with flutter_secure_storage
+  authStorage: InMemoryAuthTokenStorage(), // Use a secure AuthTokenStorage implementation for persistence
   requestTimeout: const Duration(seconds: 30),
   maxRetries: 3,
   retryBaseDelay: const Duration(milliseconds: 250),
@@ -74,7 +76,16 @@ await db.auth.restore();`}
         <Code
           lang="dart"
           title="withConverter<T>() paired with lazy cursor streaming"
-          code={`final orders = db.collection('orders').withConverter<Order>(
+          code={`class Order {
+  final String id;
+  final int totalCents;
+  const Order(this.id, this.totalCents);
+  factory Order.fromMap(Map<String, dynamic> data, String id) =>
+      Order(id, (data['totalCents'] as num?)?.toInt() ?? 0);
+  Map<String, dynamic> toMap() => {'totalCents': totalCents};
+}
+
+final orders = db.collection('orders').withConverter<Order>(
   fromVellum: (data, id) => Order.fromMap(data, id),
   toVellum: (order) => order.toMap(),
 );
@@ -103,10 +114,11 @@ await for (final snap in orders
           title="Bulk writes with automatic chunking and idempotency prefixes"
           code={`// 1. Fluent builder (recommended)
 final batch = db.batch();
+final items = [{'sku': 'notebook', 'stock': 10}];
 for (final item in items) {
   batch.set(
-    db.collection('inventory').doc(item.sku),
-    item.toJson(),
+    db.collection('inventory').doc(item['sku'] as String),
+    item,
     merge: true,
   );
 }
@@ -116,6 +128,9 @@ final chunkResults = await batch.commitChunked(
 );
 
 // 2. Or submit raw write maps directly
+final rawWriteMaps = <Map<String, Object?>>[
+  {'type': 'set', 'path': 'inventory/notebook', 'data': {'stock': 10}},
+];
 final rawResults = await db.writeBatchChunked(
   rawWriteMaps,
   chunkSize: 100,
@@ -144,7 +159,7 @@ final rawResults = await db.writeBatchChunked(
 // On widget / provider disposal:
 await sub.cancel();
 db.dispose();
-httpClient.close();`}
+// Close the injected httpClient here if this scope created it.`}
         />
 
         <Callout tone="info" title="Path-traversal &amp; secret-redaction safety">
@@ -157,6 +172,13 @@ httpClient.close();`}
         </Callout>
       </Section>
 
+      <Callout tone="warning" title="Account changes and realtime">
+        Recreate realtime subscriptions after signing in, signing out, or switching users.
+        The next SDK fixes end old subscriptions at that boundary so one account cannot keep
+        another account's live data. For published 0.0.1, dispose the old client and create a
+        new client per account boundary; do not share cached clients between users. Custom
+        getAuthToken providers must reset subscriptions when their identity changes.
+      </Callout>
       <Section id="modular-architecture" title="Modular architecture &amp; tamper-proofing">
         <P>
           <code>vellum_flutter</code> is organized as a single pure-Dart, Flutter-Web-safe library (

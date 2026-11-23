@@ -163,9 +163,11 @@ export default function Page() {
   switch (e.code) {
     case "FAILED_PRECONDITION":
     case "ABORTED_CONFLICT": // re-read, then retry the operation
-      return retryWithBackoff();
+      console.warn("Re-read the document, then retry with a bounded backoff.");
+      break;
     case "PERMISSION_DENIED": // check scopes or rules
-      return showAccessError();
+      console.error("Access denied: check key scopes and security rules.");
+      break;
     default:
       throw err;
   }
@@ -174,10 +176,12 @@ export default function Page() {
             {
               label: "Respect Retry-After",
               lang: "ts",
-              code: `if (e.code === "RATE_LIMITED") {
+              code: `async function waitAfterRateLimit(e: { code?: string; details?: Record<string, unknown> }) {
+if (e.code === "RATE_LIMITED") {
   const ms = Number(e.details?.retryAfterMs ?? 1000);
   await new Promise((resolve) => setTimeout(resolve, ms));
-  return retry();
+  // Retry the original idempotent operation within a bounded retry loop.
+}
 }`,
             },
             {

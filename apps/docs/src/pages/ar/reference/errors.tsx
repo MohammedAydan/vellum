@@ -149,12 +149,10 @@ export default function Page() {
         <Code
           lang="ts"
           title="تفرّع على الرمز"
-          code={`import { VellumError } from "@vellum/core";
-
-try {
+          code={`try {
   await db.collection("users").doc("u_123").update({ name: "Ada" }, { ifVersion: 4 });
 } catch (err) {
-  const e = err as VellumError;
+  const e = err as Error & { code?: string };
   switch (e.code) {
     case "FAILED_PRECONDITION":
       // أعد القراءة ثم أعد المحاولة بالنسخة الحالية.

@@ -6,11 +6,13 @@ import { quickstartTypeScript, quickstartDart } from '../quickstart-examples';
 const root=resolve(import.meta.dirname,'../../../..');
 const read=(path:string)=>readFileSync(resolve(root,path),'utf8');
 describe('docs remediation contracts',()=>{
- it('pins beta installs to the same source revision and requires supported runtimes',()=>{
-   const ref=betaJavaScriptInstall.match(/git checkout ([a-f0-9]{40})/)?.[1];
-   expect(ref).toBeTruthy(); expect(betaDartInstall).toContain(`ref: ${ref}`);
-   expect(betaJavaScriptInstall).toContain('Node.js 22+');expect(betaDartInstall).toContain('Dart 3.4+');
-   expect(betaDartInstall).toContain('path: sdks/flutter');
+ it('uses published packages with supported runtimes instead of a stale source pin',()=>{
+   expect(betaJavaScriptInstall).toContain('npm install @vellumdb/sdk-js@0.0.1');
+   expect(betaDartInstall).toContain('vellum_flutter: ^0.0.1');
+   expect(betaJavaScriptInstall).toContain('Node.js 22+');
+   expect(betaDartInstall).toContain('Dart 3.4+');
+   expect(betaJavaScriptInstall).not.toContain('git clone');
+   expect(betaDartInstall).not.toContain('git:');
  });
  it('uses one executable Quickstart source with guaranteed lifecycle cleanup',()=>{
    for(const lang of ['en','ar']){

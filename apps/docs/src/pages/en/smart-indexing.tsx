@@ -92,12 +92,8 @@ const db = createClient({
   projectId: process.env.VELLUM_PROJECT_ID!,
   apiKey: process.env.VELLUM_API_KEY!,
   warnOnMissingIndexes: process.env.NODE_ENV !== "production",
-  onIndexSuggestion(suggestion) {
-    telemetry.record("vellum.missing_index", {
-      fingerprint: suggestion.fingerprint,
-      collectionPath: suggestion.collectionPath,
-      url: suggestion.url,
-    });
+  onIndexSuggestion({ url, suggestion }) {
+    console.log("vellum.missing_index", { url, suggestion });
   },
 });`,
             },
@@ -106,11 +102,11 @@ const db = createClient({
               lang: "dart",
               code: `final db = VellumClient(
   endpoint: 'https://api.example.com',
-  projectId: projectId,
-  apiKey: apiKey,
-  warnOnMissingIndexes: kDebugMode,
+  projectId: const String.fromEnvironment('VELLUM_PROJECT_ID'),
+  apiKey: const String.fromEnvironment('VELLUM_API_KEY'),
+  warnOnMissingIndexes: true,
   onIndexSuggestion: (VellumIndexSuggestion suggestion) {
-    logger.warning(
+    print(
       'Missing index \${suggestion.fingerprint}: \${suggestion.url}',
     );
   },

@@ -279,7 +279,7 @@ const user = await db.auth.signUpWithEmailAndPassword("user@example.com", "S3cur
 const token = await db.auth.getIdToken();
 await db.auth.signOut();
 
-const unsub = db.collection("tasks").snapshots((snapshot) => console.log(snapshot.docs));`,
+const unsub = db.collection("tasks").onSnapshot((snapshot) => console.log(snapshot.docs));`,
             },
             {
               label: "Flutter",

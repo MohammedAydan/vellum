@@ -247,17 +247,17 @@ for (final doc in docsToSync) {
   batch.set(client.collection('catalog').doc(doc.id), doc.toMap(), merge: true);
 }
 
-// Single atomic batch (<= 500 ops)
+// Single atomic batch (<= 100 ops)
 await batch.commit(idempotencyKey: 'sync-small-batch');
 
-// Or auto-chunked into 500-op batches with per-chunk idempotency keys ("sync-job-0", "sync-job-1", ...)
+// Or auto-chunked into 100-op batches with per-chunk idempotency keys ("sync-job-0", "sync-job-1", ...)
 final responses = await batch.commitChunked(
-  chunkSize: 500,
+  chunkSize: 100,
   idempotencyKeyPrefix: 'sync-job',
 );
 
 // Direct list API
-await client.writeBatchChunked(rawWrites, chunkSize: 500, idempotencyKeyPrefix: 'bulk-import');
+await client.writeBatchChunked(rawWrites, chunkSize: 100, idempotencyKeyPrefix: 'bulk-import');
 ```
 
 ### OCC `runTransaction()`
@@ -369,3 +369,16 @@ Always call `client.dispose()` (or `client.close()`) when tearing down the clien
 client.dispose();
 httpClient.close();
 ```
+
+## Endpoint and account scope
+
+Pass the API origin as `endpoint` (for example `https://api.example.com`),
+without `/v1`, `/auth`, or a project suffix. The SDK adds the project route.
+Dart's optional `baseUrl` is a full REST-prefix override, such as
+`https://api.example.com/v1/projects/PROJECT_ID`; it is not interchangeable
+with `endpoint`. Do not pass both. Project `db.auth` signup accepts
+`displayName`; Console signup creates a different account and requires `name`.
+Do not add Console fields to fix a wrong project URL.
+
+Use `pk_` keys only with suitable security rules and end-user authentication.
+Never bundle an `sk_` key into browser or mobile code.
