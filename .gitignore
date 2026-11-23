@@ -1,0 +1,30 @@
+node_modules/
+dist/
+.next/
+coverage/
+*.log
+.DS_Store
+backups/
+pnpm-debug.log*
+test-results/
+playwright-report/
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+!.env.example
+storybook-static/
+tests/screenshots/
+
+
+
+# Portable local toolchains (Dart SDK, etc.)
+.tools/
+
+# Generated unified frontend bundle + served download artifacts
+dist-frontend/
+
+# Dart tooling
+.dart_tool/
+.vercel

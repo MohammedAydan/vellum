@@ -1,0 +1,6 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "examples/js-testbed-app"
+allowBuilds:
+  esbuild: true

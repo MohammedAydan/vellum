@@ -1,0 +1,42 @@
+# Dependencies and build artifacts — always rebuilt inside the image
+node_modules
+**/node_modules
+dist
+**/dist
+build
+**/build
+coverage
+**/coverage
+.turbo
+**/.turbo
+storybook-static
+**/storybook-static
+
+# VCS metadata
+.git
+.gitignore
+.gitattributes
+
+# Test artifacts and generated evidence/screenshots
+test-results
+**/test-results
+playwright-report
+**/playwright-report
+tests/screenshots
+tests/e2e/screenshots
+tests/load/results
+tests/e2e-real/results
+*.log
+*.trace.zip
+
+# Local secrets and environment overrides (never enter the image)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editors / OS noise
+.DS_Store
+.idea
+.vscode
