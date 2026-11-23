@@ -62,6 +62,16 @@ export function parseJwtExp(token: string): number | null {
   }
 }
 
+/** Identity hint for local state invalidation only, never for authorization. */
+export function parseJwtSubject(token: string | null): string | null {
+  const payload = token?.split(".")[1];
+  if (!payload || payload.length > MAX_JWT_PAYLOAD_BYTES) return null;
+  try {
+    const value: unknown = safeJsonParse(new TextDecoder().decode(base64UrlToBytes(payload)));
+    return isRecord(value) && typeof value["sub"] === "string" ? value["sub"] : null;
+  } catch { return null; }
+}
+
 /**
  * True when the token expires within `skewMs`; tokens without a parseable
  * `exp` are treated as non-expiring (no silent refresh is attempted).

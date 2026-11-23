@@ -8,9 +8,10 @@
  * frozen (`Object.freeze`) client facade with redacted `toJSON()`/`toString()`.
  */
 
+import { BrowserLocalStorage, DEFAULT_AUTH_STORAGE_KEY, resolveBrowserLocalStorage } from "../auth/auth-storage.js";
 import { VellumAuthClient } from "../auth/auth-client.js";
 import type { SignInOAuthPayload, SignOutOptions, SignUpEmailOptions } from "../auth/auth-client.js";
-import { isRecord } from "../auth/jwt-utils.js";
+import { isRecord, parseJwtSubject } from "../auth/jwt-utils.js";
 import { batchWriteChunked as runBatchWriteChunked } from "../batch/batch-chunked.js";
 import { BoundedReadCache } from "../cache/read-cache.js";
 import { computeReconnectBackoffMs, createAbortError, sleepWithSignal } from "../core/backoff.js";
@@ -86,6 +87,7 @@ interface CacheInternalState {
   readonly inFlightGets: Map<string, Promise<WireDocument>>;
   readonly pathWriteEpochs: Map<string, number>;
   globalCacheEpoch: number;
+  sessionEpoch: number;
 }
 
 interface RealtimeInternalState {
@@ -288,6 +290,7 @@ export class VellumClient implements VellumClientInterface {
       inFlightGets: new Map<string, Promise<WireDocument>>(),
       pathWriteEpochs: new Map<string, number>(),
       globalCacheEpoch: 0,
+      sessionEpoch: 0,
     };
 
     this.realtimeState = {
@@ -303,11 +306,28 @@ export class VellumClient implements VellumClientInterface {
       request: (method, relativePath, body, extraHeaders, includeAuth) =>
         this.transport.request(method, relativePath, body, extraHeaders, includeAuth),
       getAuthToken: config.getAuthToken ?? null,
-      authStorage: config.authStorage ?? null,
-      onTokenChanged: (_previousToken, nextToken) => this.reauthenticateRealtime(nextToken),
+      authStorage: config.authStorage ?? (resolveBrowserLocalStorage() ? new BrowserLocalStorage(
+        `${DEFAULT_AUTH_STORAGE_KEY}:${encodeURIComponent(this.endpoint)}:${encodeURIComponent(this.projectId)}`
+      ) : null),
+      onTokenChanged: (previousToken, nextToken) => {
+        this.clearCache();
+        if (nextToken !== null && (nextToken === this.auth.currentUser?.accessToken ||
+          (parseJwtSubject(previousToken) !== null && parseJwtSubject(previousToken) === parseJwtSubject(nextToken)))) {
+          this.reauthenticateRealtime(nextToken);
+        } else {
+          this.cacheState.sessionEpoch += 1;
+          this.endSessionSubscriptions();
+        }
+      },
+      onSessionChanged: () => {
+        this.cacheState.sessionEpoch += 1;
+        this.clearCache();
+        this.endSessionSubscriptions();
+      },
     });
 
     this.transport.setAuthHooks({
+      getSessionEpoch: () => this.cacheState.sessionEpoch,
       getValidAccessToken: () => this.auth.getValidAccessToken(),
       hasRefreshToken: () => Boolean(this.auth.currentUser?.refreshToken),
       refreshIfMatching: (staleAccessToken) => this.auth.refreshIfMatching(staleAccessToken),
@@ -322,6 +342,8 @@ export class VellumClient implements VellumClientInterface {
         includeAuth?: boolean,
         signal?: AbortSignal
       ) => this.transport.request<R>(method, relativePath, body, extraHeaders, includeAuth, signal),
+      prepareRead: () => this.auth.getValidAccessToken(),
+      getSessionEpoch: () => this.cacheState.sessionEpoch,
       readCache: this.cacheState.readCache,
       dedupeReads: this.cacheState.dedupeReads,
       inFlightGets: this.cacheState.inFlightGets,
@@ -415,6 +437,7 @@ export class VellumClient implements VellumClientInterface {
   public clearCache(): void {
     this.cacheState.globalCacheEpoch += 1;
     this.cacheState.readCache?.clear();
+    this.cacheState.inFlightGets.clear();
   }
 
   /* --------------------------------------------------------------------- */
@@ -540,6 +563,23 @@ export class VellumClient implements VellumClientInterface {
       ...(opts?.maxOutboundQueueSize !== undefined ? { maxOutboundQueueSize: opts.maxOutboundQueueSize } : {}),
     });
     return this.realtimeState.realtimeTransport;
+  }
+
+  /** Never carry a prior identity's documents or resume watermarks forward. */
+  private endSessionSubscriptions(): void {
+    const subscriptions = [...this.realtimeState.activeSubscriptions.values()];
+    this.realtimeState.activeSubscriptions.clear();
+    this.realtimeState.realtimeTransport?.close();
+    this.realtimeState.realtimeTransport = null;
+    for (const connection of this.realtimeState.hubConnections) {
+      try { connection.close(); } catch { /* already closed */ }
+    }
+    this.realtimeState.hubConnections.clear();
+    this.setConnectionState("disconnected");
+    const error = Object.assign(new Error("Authentication session changed; subscribe again"), { code: "SESSION_CHANGED" });
+    for (const sub of subscriptions) {
+      try { sub.onError?.(error); } catch { /* listener isolation */ }
+    }
   }
 
   private reauthenticateRealtime(nextToken: string): void {
@@ -693,8 +733,19 @@ export class VellumClient implements VellumClientInterface {
     options: { maxAttempts?: number; signal?: AbortSignal } = {}
   ): Promise<{ result: R; commit: unknown }> {
     const maxAttempts = options.maxAttempts ?? 5;
+    if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) {
+      throw new Error("@vellumdb/sdk-js: maxAttempts must be a positive safe integer");
+    }
+    await this.auth.getValidAccessToken();
+    const sessionEpoch = this.cacheState.sessionEpoch;
+    const assertSession = (): void => {
+      if (sessionEpoch !== this.cacheState.sessionEpoch) {
+        throw Object.assign(new Error("Authentication session changed during transaction"), { code: "SESSION_CHANGED" });
+      }
+    };
     const { signal } = options;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      assertSession();
       if (signal?.aborted) {
         throw createAbortError(signal);
       }
@@ -780,6 +831,7 @@ export class VellumClient implements VellumClientInterface {
 
       try {
         const userReturn = await updateFunction(txContext);
+        assertSession();
         const commitRes = await this.transport.request(
           "POST",
           "/transactions:commit",

@@ -64,8 +64,10 @@ export interface VellumAuthClientOptions {
   request: AuthRequest;
   getAuthToken: (() => Promise<string | null> | string | null) | null;
   authStorage?: AuthStorage | null;
+  /** Fired synchronously on sign-in, sign-out and disposal. */
+  onSessionChanged?: (() => void) | null;
   /** Fired whenever the effective bearer changes (sign-in or token rotation). */
-  onTokenChanged?: ((previousToken: string | null, nextToken: string) => void) | null;
+  onTokenChanged?: ((previousToken: string | null, nextToken: string | null) => void) | null;
 }
 
 export type SignUpEmailOptions = Omit<SignUpWithEmailAndPasswordInput, "email" | "password">;
@@ -86,7 +88,8 @@ export class VellumAuthClient {
   private readonly storage: AuthStorage;
   private readonly request: AuthRequest;
   private readonly getAuthToken: (() => Promise<string | null> | string | null) | null;
-  private readonly onTokenChanged: ((previousToken: string | null, nextToken: string) => void) | null;
+  private readonly onTokenChanged: ((previousToken: string | null, nextToken: string | null) => void) | null;
+  private readonly onSessionChanged: (() => void) | null;
   private readonly listeners = new Set<AuthStateListener>();
   private readonly state: AuthClientInternalState;
 
@@ -94,8 +97,10 @@ export class VellumAuthClient {
     this.request = options.request;
     this.getAuthToken = options.getAuthToken;
     this.storage = resolveAuthStorage(options.authStorage);
+    this.onSessionChanged = options.onSessionChanged ?? null;
     this.onTokenChanged = options.onTokenChanged ?? null;
-    const restored = this.storage.load();
+    let restored: AuthState | null = null;
+    try { restored = this.storage.load(); } catch { /* unavailable persistence */ }
     this.state = {
       currentUserValue: restored ? sanitizeAndClone(restored) : null,
       refreshTimer: null,
@@ -167,11 +172,17 @@ export class VellumAuthClient {
   }
 
   /** Notify the realtime layer exactly once per effective bearer change. */
-  private noteToken(token: string): void {
+  private noteToken(token: string | null): void {
     if (token === this.state.lastNotifiedToken) return;
     const previous = this.state.lastNotifiedToken;
     this.state.lastNotifiedToken = token;
     if (this.onTokenChanged) this.onTokenChanged(previous, token);
+  }
+
+  private assertSession(epoch: number): void {
+    if (this.state.disposed || this.state.sessionEpoch !== epoch) {
+      throw Object.assign(new Error("Authentication session changed while request was pending"), { code: "SESSION_CHANGED" });
+    }
   }
 
   private commitUser(next: AuthState, emit: boolean, advanceEpoch = true): void {
@@ -184,6 +195,7 @@ export class VellumAuthClient {
     } catch {
       // Persistence is best effort; the in-memory session remains authoritative.
     }
+    if (advanceEpoch) this.onSessionChanged?.();
     this.scheduleRefresh();
     if (emit) this.notifyAuthListeners(cloned);
     this.noteToken(cloned.accessToken);
@@ -215,10 +227,8 @@ export class VellumAuthClient {
       }
       if (resolved === null && explicit) resolved = explicit;
     }
-    if (resolved !== null) {
-      if (notify) this.noteToken(resolved);
-      else this.state.lastNotifiedToken = resolved;
-    }
+    if (notify) this.noteToken(resolved);
+    else this.state.lastNotifiedToken = resolved;
     return resolved;
   }
 
@@ -330,9 +340,11 @@ export class VellumAuthClient {
       typeof inputOrEmail === "string"
         ? { ...options, email: inputOrEmail, password: password ?? "" }
         : inputOrEmail;
+    const epoch = this.state.sessionEpoch;
     const session = parseSessionResponse(
       await this.request("POST", "/auth/sign-up/email", input, {}, false)
     );
+    this.assertSession(epoch);
     this.commitUser(session, true);
     return sanitizeAndClone(session);
   }
@@ -350,6 +362,7 @@ export class VellumAuthClient {
   ): Promise<AuthState | MfaRequiredResult> {
     const input: SignInWithEmailAndPasswordInput =
       typeof inputOrEmail === "string" ? { email: inputOrEmail, password: password ?? "" } : inputOrEmail;
+    const epoch = this.state.sessionEpoch;
     const payload = await this.request<Record<string, unknown>>(
       "POST",
       "/auth/sign-in/email",
@@ -357,6 +370,7 @@ export class VellumAuthClient {
       {},
       false
     );
+    this.assertSession(epoch);
     if (payload["mfaRequired"] === true) {
       // No session was issued: deliberately leave the current session intact.
       return parseMfaRequiredResponse(payload);
@@ -367,9 +381,11 @@ export class VellumAuthClient {
   }
 
   public async signInAnonymously(input: SignInAnonymouslyInput = {}): Promise<AuthState> {
+    const epoch = this.state.sessionEpoch;
     const session = parseSessionResponse(
       await this.request("POST", "/auth/sign-in/anonymous", input, {}, false)
     );
+    this.assertSession(epoch);
     this.commitUser(session, true);
     return sanitizeAndClone(session);
   }
@@ -382,9 +398,11 @@ export class VellumAuthClient {
   ): Promise<AuthState> {
     const input: SignInWithOAuthInput =
       typeof providerOrInput === "string" ? { ...payload, provider: providerOrInput } : providerOrInput;
+    const epoch = this.state.sessionEpoch;
     const session = parseSessionResponse(
       await this.request("POST", "/auth/sign-in/provider", input, {}, false)
     );
+    this.assertSession(epoch);
     this.commitUser(session, true);
     return sanitizeAndClone(session);
   }
@@ -412,9 +430,11 @@ export class VellumAuthClient {
             ...(factorType !== undefined ? { factorType } : {}),
           }
         : ticketOrInput;
+    const epoch = this.state.sessionEpoch;
     const session = parseSessionResponse(
       await this.request("POST", "/auth/mfa/challenge", input, {}, false)
     );
+    this.assertSession(epoch);
     this.commitUser(session, true);
     return sanitizeAndClone(session);
   }
@@ -437,7 +457,9 @@ export class VellumAuthClient {
 
   /** Fetch the latest public user record and refresh the local snapshot. */
   public async getUser(): Promise<VellumAuthUser> {
+    const epoch = this.state.sessionEpoch;
     const payload = await this.request<Record<string, unknown>>("GET", "/auth/user");
+    this.assertSession(epoch);
     const user = parseAuthUser(payload["user"]);
     if (this.state.currentUserValue && !this.state.disposed) {
       const merged: AuthState = sanitizeAndClone({ ...this.state.currentUserValue, ...user });
@@ -463,7 +485,9 @@ export class VellumAuthClient {
           "use sendPasswordResetEmail() followed by confirmPasswordReset()"
       );
     }
+    const epoch = this.state.sessionEpoch;
     const payload = await this.request<Record<string, unknown>>("PATCH", "/auth/user", patch);
+    this.assertSession(epoch);
     const user = parseAuthUser(payload["user"]);
     if (this.state.currentUserValue) this.commitUser({ ...this.state.currentUserValue, ...user }, true, false);
     return sanitizeAndClone(user);
@@ -518,35 +542,22 @@ export class VellumAuthClient {
 
   public async signOut(options: SignOutOptions = {}): Promise<void> {
     const user = this.state.currentUserValue;
-    try {
-      if (options.allSessions === true) {
-        // Omitting `refreshToken` makes the API revoke every session of the
-        // authenticated end-user (it then requires the bearer identity).
-        await this.request("POST", "/auth/sign-out", {}, {}, true);
-      } else {
-        await this.request(
-          "POST",
-          "/auth/sign-out",
-          user?.refreshToken ? { refreshToken: user.refreshToken } : {},
-          {},
-          false
-        );
-      }
-    } catch {
-      // Local sign-out must succeed even if the server is unreachable.
-    }
     this.state.sessionEpoch += 1;
     this.clearRefreshTimer();
     this.state.currentUserValue = null;
     this.state.refreshInFlightPromise = null;
     this.state.lastNotifiedToken = null;
-    try {
-      this.storage.clear();
-    } catch {
-      // Best effort: in-memory state is already cleared.
-    }
+    try { this.storage.clear(); } catch { /* local state is authoritative */ }
+    this.onSessionChanged?.();
     this.notifyAuthListeners(null);
-    // Listeners stay registered so a subsequent sign-in is observed too.
+    try {
+      await this.request(
+        "POST", "/auth/sign-out",
+        options.allSessions ? {} : user?.refreshToken ? { refreshToken: user.refreshToken } : {},
+        options.allSessions && user ? { authorization: `Bearer ${user.accessToken}` } : {},
+        false
+      );
+    } catch { /* Local sign-out succeeds while offline. */ }
   }
 
   /** Permanently clear timers, in-memory session state, and registered listeners. */
@@ -557,6 +568,7 @@ export class VellumAuthClient {
     this.state.currentUserValue = null;
     this.state.refreshInFlightPromise = null;
     this.state.lastNotifiedToken = null;
+    this.onSessionChanged?.();
     this.listeners.clear();
   }
 }
