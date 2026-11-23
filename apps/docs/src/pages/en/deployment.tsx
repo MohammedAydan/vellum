@@ -18,10 +18,9 @@ export default function Page() {
     >
       <P>
         Because VELLUM follows the Zero-Redis doctrine, a complete production stack consists of just
-        your stateless API container, the unified frontend gateway (Dashboard at <code>/</code>,
-        Admin Console at <code>/admin/</code>, Docs at <code>/docs/</code>), a TLS reverse proxy
-        (Caddy or Vercel), and external PostgreSQL (e.g. Neon, RDS, or Cloud SQL) for the Control
-        and Data planes.
+        your stateless API container, the unified frontend gateway (Docs at <code>/docs/</code>), a
+        TLS reverse proxy (Caddy or Vercel), and external PostgreSQL (e.g. Neon, RDS, or Cloud SQL)
+        for the Control and Data planes.
       </P>
 
       <Section id="hardened-docker" title="Hardened Docker &amp; Docker Compose">
@@ -133,7 +132,7 @@ export default function Page() {
             [
               <strong>Vercel</strong>,
               <><code>corepack pnpm build:frontend</code> → <code>dist-frontend</code></>,
-              "Immutable 1-year Cache-Control on /assets/*, HSTS + CSP + COOP headers, and rewrites for /admin, /docs, and /v1/*.",
+              "Immutable 1-year Cache-Control on /assets/*, HSTS + CSP + COOP headers, and rewrites for /docs and /v1/*.",
             ],
           ]}
         />

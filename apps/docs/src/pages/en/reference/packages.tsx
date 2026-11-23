@@ -18,9 +18,9 @@ export default function Page() {
           <PageLink slug="sdks/flutter">vellum_flutter</PageLink>, or plain HTTP instead.
         </P>
         <Callout tone="warning" title="Layering rule">
-          All domain logic lives in these framework-agnostic packages. The API, dashboard
-          and admin are thin delivery adapters: no AST evaluation, wire serialization or
-          SQL compilation belongs in a route handler or UI component.
+          All domain logic lives in these framework-agnostic packages. The API and the
+          frontend apps are thin delivery adapters: no AST evaluation, wire serialization
+          or SQL compilation belongs in a route handler or UI component.
         </Callout>
       </Section>
 
@@ -39,7 +39,7 @@ export default function Page() {
             [<code>@vellum/api-contract</code>, "Runtime Zod schemas, OpenAPI 3.1 generator, canonical WebSocket frames and boundary validators used by API routes.", "Contract"],
             [<code>@vellum/auth</code>, "End-user authentication primitives: password hashing, field encryption, JWT, realm sessions, MFA, session services and mail.", "Security"],
             [<code>@vellum/authorization</code>, "API-key generation/verification, JWT claims, session tokens and revocation, RFC 6238 TOTP helpers and the deterministic rules AST evaluator.", "Security"],
-            [<code>@vellum/database-control</code>, "Control Plane SQL, Drizzle schema and migrations: users, organizations, projects, key hashes, rulesets, metering and audit.", "Persistence"],
+            [<code>@vellum/database-control</code>, "Control Plane SQL, Drizzle schema and migrations: projects, key hashes, rulesets and platform settings.", "Persistence"],
             [<code>@vellum/database-data</code>, "Data Plane SQL, Drizzle schema and RLS policies: documents, index definitions, index entries, realtime outbox and OCC transactions.", "Persistence"],
             [<code>@vellum/storage</code>, "StorageAdapter contract with in-memory, PostgreSQL and Neon adapters; tenant transaction context that binds RLS settings; TTL caches and the invalidation bus.", "Persistence"],
             [<code>@vellum/query-engine</code>, "Query validation/normalization, composite-index selection, parameterized SQL compilation and HMAC-SHA256 signed cursors.", "Query"],
@@ -47,7 +47,7 @@ export default function Page() {
             [<code>@vellum/realtime</code>, "WebSocket hub, subscription matcher, gap-detecting outbox poller and the dedicated LISTEN/NOTIFY bus. No broker.", "Realtime"],
             [<code>@vellum/observability</code>, "Structured JSON logging with secret redaction, sliding-window rate limiting and request-id generation.", "Platform"],
             [<code>@vellumdb/sdk-js</code>, "Official TypeScript/JavaScript client SDK: createClient, references, queries, auth, batch/transactions and realtime snapshots.", "SDK"],
-            [<code>@vellum/ui</code>, "Private shadcn-based React component library, design tokens and RTL-aware English/Arabic i18n shared by the dashboards.", "UI"],
+            [<code>@vellum/ui</code>, "Private shadcn-based React component library, design tokens and RTL-aware English/Arabic i18n shared by the frontend apps.", "UI"],
           ]}
         />
       </Section>

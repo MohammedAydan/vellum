@@ -11,14 +11,12 @@ export default function Page() {
         <P>
           يتعامل المتصفح دائماً مع أصل عام واحد فقط. كل ما يقع تحت <code>/v1</code> — سواء طلبات{" "}
           <strong>REST</strong> أو ترقيات <strong>WebSocket</strong> — يُمرَّر إلى خادم Hono API المستقل
-          على المنفذ <code>8080</code>. يحافظ هذا التصميم على ملفات تعريف الارتباط كطرف أول (First-Party)،
-          ويلغي طلبات CORS التمهيدية للوحتَي التحكم، ويسمح بمشاركة الأصل دون مشاركة الجلسات.
+          على المنفذ <code>8080</code>. يحافظ هذا التصميم على ملفات تعريف الارتباط كطرف أول (First-Party)
+          ويلغي طلبات CORS التمهيدية.
         </P>
         <Table
           head={["المسار على الأصل العام", "التطبيق المخدوم"]}
           rows={[
-            [<code>/</code>, "لوحة تحكم العملاء (Customer Dashboard)"],
-            [<code>/admin/</code>, "لوحة المشرف العام (Platform Admin Console)"],
             [<code>/docs/</code>, "موقع التوثيق (استخدم الشرطة المائلة النهائية)"],
             [<code>/v1/*</code>, "وكيل API — يشمل HTTP وترقيات WebSocket"],
           ]}
@@ -28,7 +26,7 @@ export default function Page() {
           تُبنى البوابة العكسية <code>scripts/frontend-gateway.mjs</code> بالكامل على وحدات{" "}
           <code>node:*</code> الأصلية فقط. في وضع <code>--mode=prod</code> تخدم الشجرة المبنية{" "}
           <code>dist-frontend/</code> مباشرة؛ وفي وضع <code>--mode=dev</code> توجّه الطلبات إلى منافذ Vite
-          الداخلية (5173 للوحة العملاء، 5174 للوحة الإدارة، 5175 للتوثيق). تضبط البوابة ترويسات{" "}
+          الداخلية للتطبيقات المبنية (5175 للتوثيق). تضبط البوابة ترويسات{" "}
           <code>X-Content-Type-Options: nosniff</code> و<code>X-Frame-Options: DENY</code> و
           <code>Referrer-Policy</code>، وتمنح الأصول ذات التجزئة تخزيناً مؤقتاً غير قابل للتغيير لمدة عام،
           وتعيد <code>404</code> حقيقياً للأصول المفقودة بدلاً من إرجاع HTML. العنوان الافتراضي للخادم هو{" "}
@@ -59,7 +57,7 @@ corepack pnpm dev:stack`}
         <Table
           head={["العنوان", "الخدمة", "ملاحظات"]}
           rows={[
-            [<code>http://localhost:3000</code>, "بوابة الواجهات الموحّدة", "/ و /admin/ و /docs/ بالإضافة إلى وكيل /v1 لـ HTTP وWebSocket."],
+            [<code>http://localhost:3000</code>, "بوابة الواجهات الموحّدة", "/docs/ بالإضافة إلى وكيل /v1 لـ HTTP وWebSocket."],
             [<code>http://localhost:8080</code>, "خادم API المستقل", "الوصول المباشر للحزم البرمجية وcurl وفحوص /v1/health/live و /v1/health/ready."],
           ]}
         />
@@ -71,30 +69,6 @@ node scripts/frontend-gateway.mjs --mode=prod   # يخدم dist-frontend/ على
         />
       </Section>
 
-      <Section id="storage-and-cookies" title="عزل التخزين المحلي وملفات تعريف الارتباط">
-        <P>
-          لأن لوحتَي التحكم تعملان على أصل واحد، يتحقق العزل الصارم عبر بادئات مفاتيح منفصلة في{" "}
-          <code>localStorage</code> ومسارات كوكيز مقيدة بدقة:
-        </P>
-        <Table
-          head={["المجال", "رمز الوصول", "رمز التحديث", "كائن المستخدم"]}
-          rows={[
-            ["لوحة العملاء (/)", <code>vellum_console_access_token</code>, <code>vellum_console_refresh_token</code>, <code>vellum_console_user</code>],
-            ["لوحة المشرف العام (/admin/)", <code>vellum_super_admin_access_token</code>, <code>vellum_super_admin_refresh_token</code>, <code>vellum_super_admin_user</code>],
-          ]}
-        />
-        <Table
-          head={["المجال", "كوكي HttpOnly", "المسار (Path)"]}
-          rows={[
-            ["لوحة العملاء", <code>vellum_console_rt</code>, <code>/v1/console/auth</code>],
-            ["لوحة المشرف العام", <code>vellum_admin_rt</code>, <code>/v1/admin/auth</code>],
-          ]}
-        />
-        <P>
-          تضمن المسارات المقيدة عدم إرسال كوكي تحديث لوحة العملاء إلى مسار الإدارة مطلقاً والعكس صحيح.
-          يمكنك تشغيل <code>node scripts/qa-unified-gateway.mjs</code> للتحقق آلياً من هذا العزل.
-        </P>
-      </Section>
 
       <Section id="hosting-options" title="خيارات الاستضافة الإنتاجية">
         <Cards
@@ -158,7 +132,6 @@ node scripts/frontend-gateway.mjs --mode=prod   # يخدم dist-frontend/ على
             ["خطأ Unexpected token '<' لملف JS", "تم تقديم index.html بدلاً من أصل مفقود؛ تأكد من استبعاد مجلدات الأصول لتعود بـ 404 غير HTML."],
             ["خطأ 404 لملفات docs.css / docs.js", "افتح المسار القياسي /docs/ مع الشرطة المائلة النهائية لتُحل الروابط النسبية تحت /docs/assets/."],
             ["فشل تسجيل الدخول بخطأ CORS", "أدرج أصل المتصفح الدقيق في CORS_ALLOWED_ORIGINS أو فعّل وكيل /v1 على نفس الأصل."],
-            ["تعطل التجديد الصامت للجلسة", "تحقق من Set-Cookie: Path=/v1/console/auth للعملاء وPath=/v1/admin/auth للمشرفين."],
             ["فشل البناء على Node 20", "يتطلب الإنتاج Node 22+؛ اضبط NODE_VERSION=22 واستخدم صور node:22-alpine."],
             ["مسبار /v1/health/ready غير جاهز", "نفّذ corepack pnpm db:migrate على المستويين وتحقق من رابط DATA_DATABASE_URL_LISTEN."],
           ]}

@@ -74,8 +74,6 @@ API_KEY_PEPPER="<strong-unique-value>"
 CURSOR_HMAC_SECRET="<strong-unique-value>"
 SESSION_COOKIE_SECRET="<strong-unique-value>"
 MASTER_ENCRYPTION_KEY="<strong-unique-value>"
-CONSOLE_JWT_SECRET="<distinct-console-realm-secret>"
-SUPER_ADMIN_JWT_SECRET="<distinct-admin-realm-secret>"
 CORS_ALLOWED_ORIGINS="https://vellum.example.com"`}
         />
         <Callout tone="warning" title="نظافة الأسرار وإخفاؤها">
@@ -138,8 +136,6 @@ CORS_ALLOWED_ORIGINS="https://vellum.example.com"`}
           items={[
             "اعتمد مسجّل JSON المهيكل من @vellum/observability؛ يُصدر requestId وprojectId وdurationMs مع تنقية تلقائية للأسرار.",
             "يُفرض تحديد المعدل لكل مفتاح (الافتراضي 100 طلب/ثانية) ويعيد 429 RATE_LIMITED مع Retry-After.",
-            "تُسجَّل كل تعديلات مستوى التحكم في security_audit_logs المتسلسل المشفّر وغير القابل للتعديل.",
-            "لا تعرض لوحة الإدارة محتوى حقل documents.data الخاص بالعملاء أبداً — بل تقتصر على البيانات الوصفية والحصص وصحة الفهارس.",
           ]}
         />
       </Section>

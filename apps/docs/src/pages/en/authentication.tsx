@@ -1,49 +1,44 @@
-import { Api, Callout, Code, CodeTabs, Doc, OL, P, PageLink, Section, Table, UL } from "../../ui";
+import { Callout, CodeTabs, Doc, OL, P, PageLink, Section, Table, UL } from "../../ui";
 
 export default function Page() {
   return (
     <Doc
       title="Authentication"
-      description="API keys, end-user tokens, console sessions, TOTP MFA, rotation, and least-privilege access."
+      description="API keys, end-user tokens, rotation, and least-privilege access."
       eyebrow="Get started"
     >
-      <Section id="three-realms" title="Three isolated realms">
+      <Section id="isolated-credentials" title="Isolated credentials">
         <P>
-          VELLUM has three authentication realms. They share only stateless crypto primitives; storage, signing
-          secrets, JWT <code>typ</code>/<code>iss</code>/<code>aud</code>, claims, and middleware are fully
-          separate. A token minted for one realm is rejected by the other two.
+          VELLUM credentials are fully isolated per surface. They share only stateless crypto primitives;
+          storage, signing secrets, JWT <code>typ</code>/<code>iss</code>/<code>aud</code>, claims, and
+          middleware are separate, so a token minted for one surface is rejected anywhere else.
         </P>
         <Table
-          head={["Realm", "Surface", "Credential"]}
+          head={["Credential", "Surface", "Shape"]}
           rows={[
             [
-              <code>SUPER_ADMIN</code>,
-              <code>/v1/admin/**</code>,
-              "Platform operator session, refresh cookie vellum_admin_rt, path /v1/admin/auth.",
+              "Project API key",
+              <code>/v1/projects/:projectId/**</code>,
+              "pk_ / sk_ key sent in the x-vellum-api-key header.",
             ],
             [
-              <code>CUSTOMER_CONSOLE</code>,
-              <code>/v1/console/**</code>,
-              "Dashboard session, refresh cookie vellum_console_rt, path /v1/console/auth.",
-            ],
-            [
-              <code>PROJECT_END_USER</code>,
+              "End-user token",
               <code>/v1/projects/:projectId/auth/**</code>,
-              "Project-scoped end-user JWT issued by the document plane's auth service.",
+              "Project-scoped EdDSA JWT issued by the document plane's auth service.",
             ],
           ]}
         />
         <Callout tone="danger" title="The document plane is EdDSA-only">
           <p>
             Public document requests use an API key plus an optional EdDSA end-user bearer. There is no HS256
-            fallback, no anonymous fallback, and no implicit master key. A console session JWT is not accepted
-            on the document plane, and an API key is not accepted on the console plane. The live harness
-            verifies both directions of that rejection.
+            fallback, no anonymous fallback, and no implicit master key. Any credential minted outside the
+            document plane is rejected on it, and an API key never authorizes anything beyond it. The live
+            harness verifies both directions of that rejection.
           </p>
         </Callout>
         <P>
-          For realm internals, refresh rotation, and rate limits, see{" "}
-          <PageLink slug="end-user-auth">End users &amp; the three realms</PageLink>.
+          For token internals, refresh rotation, and rate limits, see{" "}
+          <PageLink slug="end-user-auth">End-user authentication</PageLink>.
         </P>
       </Section>
 
@@ -173,73 +168,12 @@ await client.auth.signOut();`,
         />
       </Section>
 
-      <Section id="console-sessions-and-mfa" title="Console sessions and TOTP MFA">
-        <P>
-          The dashboard authenticates against the control plane with email/password. Passwords are hashed with
-          scrypt (<code>N=2^14, r=8, p=1</code>). Console access tokens are short-lived; refresh tokens live in
-          realm-specific HttpOnly cookies. Every console request checks organization membership and writes an
-          audit-log entry.
-        </P>
-        <Table
-          head={["Endpoint", "Purpose"]}
-          rows={[
-            [<code>POST /v1/auth/sign-up/email</code>, "Create a user, default organization and project."],
-            [<code>POST /v1/auth/sign-in/email</code>, "Verify password and issue a customer_console session."],
-            [<code>GET /v1/auth/session</code>, "Validate the presented token and return its claims."],
-            [<code>POST /v1/auth/sign-out</code>, "Revoke the refresh session when one is presented."],
-            [<code>POST /v1/console/auth/refresh</code>, "Rotate the console access/refresh pair."],
-            [<code>POST /v1/admin/login</code>, "Issue a super_admin session for platform operators."],
-            [<code>POST /v1/admin/auth/session/refresh</code>, "Rotate the super-admin access/refresh pair."],
-          ]}
-        />
-        <P>
-          MFA is RFC 6238 TOTP: SHA-1, a 30-second period, six digits, and one-step (±30 s) tolerance. Every
-          MFA route requires a valid session. The secret is encrypted at rest in the control-plane{" "}
-          <code>mfa_secrets</code> table and recovery codes are stored as keyed hashes.
-        </P>
-        <Api method="GET" path="/v1/auth/mfa/status">
-          <P>Returns <code>{"{ enabled: boolean }"}</code> for the signed-in operator.</P>
-        </Api>
-        <Api method="POST" path="/v1/auth/mfa/setup">
-          <P>
-            Returns the secret, an <code>otpauth://</code> URI, and eight recovery codes. Repeated calls before
-            verification return the same secret and codes; the raw codes are shown only here.
-          </P>
-        </Api>
-        <Api method="POST" path="/v1/auth/mfa/verify">
-          <P>Accepts a six-digit TOTP code and enables MFA: <code>{"{ \"code\": \"123456\" }"}</code>.</P>
-        </Api>
-        <Api method="POST" path="/v1/auth/mfa/disable">
-          <P>Accepts a TOTP code or one unused recovery code.</P>
-        </Api>
-        <P>
-          Verification attempts are throttled by an in-process sliding window — five attempts per 60 seconds
-          by default — with all durable state in PostgreSQL. No Redis is involved.
-        </P>
-      </Section>
 
       <Section id="rotation" title="Create, revoke, and rotate keys">
         <P>
-          Keys are managed through the session-authenticated console API. The plaintext is returned only by
-          the create call; list responses contain prefixes, scopes, status, and usage metadata.
+          Keys are issued per project. The raw value is returned only at creation; afterwards only prefixes,
+          scopes, status, and usage metadata are visible.
         </P>
-        <Table
-          head={["Endpoint", "Purpose"]}
-          rows={[
-            [<code>POST /v1/console/projects/:projectId/api-keys</code>, "Create a key; the raw value appears only in this response."],
-            [<code>GET /v1/console/projects/:projectId/api-keys</code>, "List keys for the project."],
-            [<code>DELETE /v1/console/projects/:projectId/api-keys/:keyId</code>, "Revoke immediately and publish a cache invalidation."],
-          ]}
-        />
-        <Code
-          lang="bash"
-          title="Create a server key"
-          code={`curl -X POST \\
-  "https://api.example.com/v1/console/projects/<PROJECT_ID>/api-keys" \\
-  -H "Authorization: Bearer <CONSOLE_ACCESS_TOKEN>" \\
-  -H "Content-Type: application/json" \\
-  -d '{"name":"billing-worker","keyType":"server"}'`}
-        />
         <OL
           items={[
             <>Create the replacement key and store its raw value in your secret manager.</>,
@@ -259,8 +193,7 @@ await client.auth.signOut();`,
             <>Use a separate key per project; never reuse a key across projects.</>,
             <>Prefer <code>pk_</code> keys in client apps and let security rules decide access. Reserve <code>sk_</code> keys for trusted servers.</>,
             <>Choose the narrowest key type that works: prefer a read-only <code>pk_</code> key in client apps, and reserve an <code>sk_</code> key for trusted servers that need writes or index management.</>,
-            <>Set an expiry on temporary keys and audit every <code>api_key.created</code> and <code>api_key.revoked</code> event.</>,
-            <>Enable TOTP MFA for every console operator and store recovery codes in a secure vault.</>,
+            <>Set an expiry on temporary keys and rotate them on a schedule.</>,
           ]}
         />
         <Callout tone="danger" title="Never log credentials">

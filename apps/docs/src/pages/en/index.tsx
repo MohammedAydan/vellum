@@ -44,8 +44,8 @@ export default function Page() {
             [
               <strong>Control Plane</strong>,
               <code>CONTROL_DATABASE_URL</code>,
-              "Organizations, projects, API key hashes, rulesets, audit hash-chain, metering ledger, invoices, and Stripe billing state.",
-              "Three isolated auth realms (Super Admin, Customer Admin, End User) with separate signing secrets and cookie scopes.",
+              "Projects, API key hashes, rulesets, and platform settings.",
+              "Fully isolated credentials with separate signing secrets and storage; no credential crosses planes.",
             ],
             [
               <strong>Data Plane</strong>,

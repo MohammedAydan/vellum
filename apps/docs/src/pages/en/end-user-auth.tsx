@@ -1,21 +1,21 @@
-import { Api, Badge, Callout, Code, CodeTabs, Doc, H3, P, PageLink, Section, Steps, Table } from "../../ui";
+import { Api, Callout, Code, CodeTabs, Doc, H3, P, PageLink, Section, Steps, Table } from "../../ui";
 
 const PREFIX = "/v1/projects/:projectId/auth";
 
 export default function Page() {
   return (
     <Doc
-      title="End users & the three realms"
-      description="Three isolated authentication realms, EdDSA-only end-user tokens, refresh rotation, MFA, and the exact end-user REST paths."
+      title="End-user authentication"
+      description="EdDSA-only end-user tokens, refresh rotation, MFA, and the exact end-user REST paths."
       eyebrow="Authentication"
     >
       <Section id="overview" title="Overview">
         <P>
-          VELLUM authenticates three <strong>isolated realms</strong>. They share only stateless crypto primitives
-          from <code>@vellum/auth</code> — scrypt, AES-256-GCM, SHA-256, TOTP, token generators, and rotation math.
-          Storage tables, signing secrets, JWT <code>typ</code>/<code>iss</code>/<code>aud</code>, claim shapes,
-          session services, and middleware are completely separate. A token minted for one realm is rejected by
-          the other two.
+          VELLUM credentials are <strong>fully isolated</strong> per surface. They share only stateless crypto
+          primitives from <code>@vellum/auth</code> — scrypt, AES-256-GCM, SHA-256, TOTP, token generators, and
+          rotation math. Storage tables, signing secrets, JWT <code>typ</code>/<code>iss</code>/<code>aud</code>,
+          claim shapes, session services, and middleware are completely separate, so a token minted for one
+          surface is rejected anywhere else.
         </P>
         <P>
           The <strong>document plane</strong> is a fourth, independent boundary. It never trusts a control-plane
@@ -25,37 +25,17 @@ export default function Page() {
           <PageLink slug="authentication">Authentication</PageLink> for key types and{" "}
           <PageLink slug="security-rules">Security rules</PageLink> for how that identity is evaluated.
         </P>
-        <Callout tone="info" title="Realms are not interchangeable">
-          Console and super-admin sessions belong to <code>/v1/console/**</code> and <code>/v1/admin/**</code>.
-          They are never valid on <code>/v1/projects/:projectId/auth</code> or on document routes —
-          not even when a valid <code>pk_</code> key accompanies them.
+        <Callout tone="info" title="Credentials are not interchangeable">
+          Sessions and tokens minted outside this project&apos;s auth service are never valid on{" "}
+          <code>/v1/projects/:projectId/auth</code> or on document routes — not even when a valid{" "}
+          <code>pk_</code> key accompanies them.
         </Callout>
       </Section>
 
-      <Section id="three-realms" title="The three realms">
+      <Section id="end-user-realm" title="The end-user credential">
         <Table
-          head={["Realm", "Route family", "Session storage", "Secret / key", "Algorithm", "JWT typ", "iss", "aud"]}
+          head={["Credential", "Route family", "Session storage", "Secret / key", "Algorithm", "JWT typ", "iss", "aud"]}
           rows={[
-            [
-              <code>super_admin</code>,
-              <code>/v1/admin/**</code>,
-              <code>control_db.control_plane_refresh_sessions</code>,
-              <code>SUPER_ADMIN_JWT_SECRET</code>,
-              "HS256",
-              <code>vellum+superadmin+jwt</code>,
-              <code>vellum:control-plane:super-admin</code>,
-              <code>vellum-super-admin</code>,
-            ],
-            [
-              <code>customer_console</code>,
-              <code>/v1/console/**</code>,
-              <code>control_db.control_plane_refresh_sessions</code>,
-              <code>CONSOLE_JWT_SECRET</code>,
-              "HS256",
-              <code>vellum+console+jwt</code>,
-              <code>vellum:control-plane:console</code>,
-              <code>vellum-customer-console</code>,
-            ],
             [
               <code>project_end_user</code>,
               <code>/v1/projects/:p/auth</code>,
@@ -68,41 +48,11 @@ export default function Page() {
             ],
           ]}
         />
-        <H3 id="cross-realm-acceptance">Cross-realm acceptance</H3>
         <P>
-          Each guard verifies against its own service and then checks the realm claim. The super-admin guard
-          additionally loads the control-store user and requires <code>isPlatformSuperAdmin === true</code>;
-          the console guard enforces org and project membership from route params.
+          The end-user guard verifies the signature against the project&apos;s Ed25519 public key and then checks
+          the realm claim, <code>aud</code> (the project id) and <code>iss</code>. Anything else — including any
+          raw HS256 token — is rejected, even alongside a valid API key.
         </P>
-        <Table
-          head={["Token presented to →", "Console guard", "Super-admin guard", "End-user document plane / auth tier"]}
-          rows={[
-            [
-              <code>customer_console</code>,
-              <Badge tone="success">Accepted</Badge>,
-              <Badge tone="danger">Rejected</Badge>,
-              <Badge tone="danger">Rejected — not EdDSA</Badge>,
-            ],
-            [
-              <code>super_admin</code>,
-              <Badge tone="danger">Rejected</Badge>,
-              <Badge tone="success">Accepted</Badge>,
-              <Badge tone="danger">Rejected — not EdDSA</Badge>,
-            ],
-            [
-              <code>project_end_user</code>,
-              <Badge tone="danger">Rejected</Badge>,
-              <Badge tone="danger">Rejected</Badge>,
-              <Badge tone="success">Accepted</Badge>,
-            ],
-            [
-              "Raw HS256 token",
-              <Badge tone="danger">Rejected</Badge>,
-              <Badge tone="danger">Rejected</Badge>,
-              <Badge tone="danger">Rejected — alg/typ mismatch</Badge>,
-            ],
-          ]}
-        />
       </Section>
 
       <Section id="tokens-and-jwks" title="End-user tokens & JWKS">
@@ -138,7 +88,7 @@ export default function Page() {
 }`}
         />
         <Callout tone="danger" title="No HS256 fallback">
-          End-user verification is EdDSA-only on both HTTP and WebSocket. A console or super-admin HS256 token is
+          End-user verification is EdDSA-only on both HTTP and WebSocket. Any HS256 token is
           rejected on the document plane even when a valid <code>pk_</code> key is present. The public key is
           project-scoped; projects without an auth config are initialized on first use, with the Ed25519
           private key encrypted at rest.
@@ -247,9 +197,7 @@ export default function Page() {
         />
         <P>
           Both SDKs pre-flight refresh 45 seconds before <code>exp</code>, deduplicate with a single-flight mutex,
-          and react to a <code>401</code> with one forced refresh plus one transparent replay. The console and
-          super-admin refresh endpoints (<code>POST /v1/console/auth/refresh</code> and
-          <code> POST /v1/admin/auth/session/refresh</code>) use the same grace logic but reject cross-realm tokens.
+          and react to a <code>401</code> with one forced refresh plus one transparent replay.
         </P>
 
         <H3 id="mfa-flow">MFA flow</H3>
