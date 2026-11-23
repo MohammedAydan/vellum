@@ -83,6 +83,16 @@ async function parseResponsePayload(res: Response): Promise<unknown> {
     try {
       return safeJsonParse(rawText);
     } catch {
+      // A 2xx with an unparseable body must not be treated as a successful
+      // empty payload (that would silently turn a corrupt response into an
+      // empty query result). Error responses keep the {} fallback so the
+      // status-derived error below still fires.
+      if (res.ok) {
+        throw Object.assign(new Error("@vellumdb/sdk-js: malformed JSON in successful response"), {
+          code: "MALFORMED_RESPONSE",
+          status: res.status,
+        });
+      }
       return {};
     }
   }
