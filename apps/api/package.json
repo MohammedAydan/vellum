@@ -1,0 +1,51 @@
+{
+  "name": "@vellum/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run --root ../.. tests/integration",
+    "test:security": "vitest run --root ../.. tests/security",
+    "start": "node dist/node-server.js",
+    "dev": "node dist/node-server.js"
+  },
+  "dependencies": {
+    "@vellum/api-contract": "workspace:*",
+    "@vellum/auth": "workspace:*",
+    "@vellum/authorization": "workspace:*",
+    "@vellum/core": "workspace:*",
+    "@vellum/database-control": "workspace:*",
+    "@vellum/database-data": "workspace:*",
+    "@vellum/document-engine": "workspace:*",
+    "@vellum/observability": "workspace:*",
+    "@vellum/security": "workspace:*",
+    "@vellum/billing": "workspace:*",
+    "@vellum/query-engine": "workspace:*",
+    "@vellum/realtime": "workspace:*",
+    "@vellum/storage": "workspace:*",
+    "@hono/node-server": "^2.1.8",
+    "@hono/zod-openapi": "^1.6.3",
+    "better-auth": "^1.7.25",
+    "dotenv": "^18.0.10",
+    "hono": "^4.13.18",
+    "otplib": "^13.6.0",
+    "zod": "^4.6.7",
+    "@neondatabase/serverless": "^0.10.4"
+  },
+  "devDependencies": {
+    "@types/dotenv": "^8.2.3"
+  }
+}
