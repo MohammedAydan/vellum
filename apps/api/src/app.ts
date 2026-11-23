@@ -554,7 +554,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
 
   // Header-only opt-in. Scope replay to the authenticated credentials and exact
   // request so another caller or operation cannot retrieve a cached response.
-  function mutationIdempotency(c: Context, body: unknown): { idempotencyKey?: string } {
+  function mutationIdempotency(c: Context, body: unknown, apiKeyId: string, uid: string | null): { idempotencyKey?: string } {
     const key = c.req.header("Idempotency-Key");
     if (key === undefined) return {};
     if (key.length === 0 || key.length > 256 || key.includes("\u0000")) {
@@ -562,7 +562,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     }
     return { idempotencyKey: sha256Hex(JSON.stringify([
       key, c.req.method, new URL(c.req.url).pathname, body,
-      getApiKeyHeader(c), c.req.header("authorization") ?? c.req.header("x-vellum-user-token") ?? null,
+      apiKeyId, uid,
     ])) };
   }
 
@@ -613,7 +613,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     const result = await platform.documentEngine.batchWrite({
       projectId,
       writes,
-      ...mutationIdempotency(c, body),
+      ...mutationIdempotency(c, body, apiKeyRecord.id, authContext.uid),
       apiKeyRecord,
       authContext,
     });
@@ -629,7 +629,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     const result = await platform.documentEngine.batchWrite({
       projectId,
       writes,
-      ...mutationIdempotency(c, body),
+      ...mutationIdempotency(c, body, apiKeyRecord.id, authContext.uid),
       apiKeyRecord,
       authContext,
     });
@@ -1081,7 +1081,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
       path: docPath,
       data: (body.data ?? body) as Record<string, unknown>,
       ...v2WriteOptions(body as Record<string, unknown>),
-      ...mutationIdempotency(c, body),
+      ...mutationIdempotency(c, body, apiKeyRecord.id, authContext.uid),
       apiKeyRecord,
       authContext,
     });
@@ -1107,7 +1107,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
       merge,
       ifVersion,
       ...v2WriteOptions(body as Record<string, unknown>),
-      ...mutationIdempotency(c, body),
+      ...mutationIdempotency(c, body, apiKeyRecord.id, authContext.uid),
       apiKeyRecord,
       authContext,
     });
@@ -1131,7 +1131,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
       data: (body.data ?? body) as Record<string, unknown>,
       ifVersion,
       ...v2WriteOptions(body as Record<string, unknown>),
-      ...mutationIdempotency(c, body),
+      ...mutationIdempotency(c, body, apiKeyRecord.id, authContext.uid),
       apiKeyRecord,
       authContext,
     });
@@ -1151,7 +1151,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
       projectId,
       path: docPath,
       ifVersion: ifVersionParam !== null ? Number(ifVersionParam) : null,
-      ...mutationIdempotency(c, null),
+      ...mutationIdempotency(c, null, apiKeyRecord.id, authContext.uid),
       apiKeyRecord,
       authContext,
     });
