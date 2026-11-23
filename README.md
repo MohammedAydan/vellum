@@ -1,6 +1,6 @@
 # VELLUM — PostgreSQL-Native Multi-Tenant Document Database Platform
 
-> **Status: public beta, version `0.0.1`.** The project and every SDK share one version. APIs and the console are usable but may still change before a stable release. See [CHANGELOG.md](./CHANGELOG.md).
+> **Status: public beta, version `0.0.1`.** The project and every SDK share one version. APIs may still change before a stable release. See [CHANGELOG.md](./CHANGELOG.md).
 >
 > Deployment entry point: [two-project Vercel runbook and optional adapters](./docs/deployment/README.md).
 
@@ -8,9 +8,9 @@
   <img src="assets/brand/vellum-logo-dark.jpg" alt="VELLUM" width="520" />
 </div>
 
-VELLUM is a multi-tenant document database platform that runs entirely on PostgreSQL. There is no Redis and no external broker. It is built with **Node.js 22**, **TypeScript**, **Hono** and **PostgreSQL**, and ships a REST + WebSocket API, a customer console, a super-admin console, a bilingual (EN/AR) docs site, and official JavaScript/TypeScript and Flutter/Dart SDKs.
+VELLUM is a multi-tenant document database platform that runs entirely on PostgreSQL. There is no Redis and no external broker. It is built with **Node.js 22**, **TypeScript**, **Hono** and **PostgreSQL**, and ships a REST + WebSocket API, a bilingual (EN/AR) docs site, and official JavaScript/TypeScript and Flutter/Dart SDKs.
 
-It provides hierarchical collections, typed JSONB documents, a 13-operator parameterized SQL query compiler, order-preserving composite indexes, optimistic-concurrency transactions, declarative security rules, three-realm authentication, and native RFC 6455 realtime WebSockets.
+It provides hierarchical collections, typed JSONB documents, a 13-operator parameterized SQL query compiler, order-preserving composite indexes, optimistic-concurrency transactions, declarative security rules, isolated Ed25519 end-user authentication, and native RFC 6455 realtime WebSockets.
 
 ---
 
@@ -19,11 +19,11 @@ It provides hierarchical collections, typed JSONB documents, a 13-operator param
 | Capability | Engineering Guarantee |
 | :--- | :--- |
 | **PostgreSQL-Only (Zero-Redis)** | PostgreSQL is the **only** stateful runtime dependency. Realtime streaming uses `LISTEN/NOTIFY` + a durable `realtime_outbox` poller; cross-instance cache invalidation uses `NOTIFY vellum_cache_invalidate`; metadata/API-key/quota caches are bounded in-process LRU/TTL maps. |
-| **Dual-Plane Isolation** | Control Plane (`control_db`) and Data Plane (`data_db`) are strictly decoupled. Booting, authenticating operators, verifying API keys, and enforcing quotas never depend on the Data Plane. |
+| **Dual-Plane Isolation** | Control Plane (`control_db`) and Data Plane (`data_db`) are strictly decoupled. Booting, verifying API keys, and enforcing quotas never depend on the Data Plane. |
 | **Fail-Closed RLS on 12 Tables** | Every Data Plane table enforces `ENABLE` + `FORCE ROW LEVEL SECURITY` keyed on transaction-local `app.current_project_id` bound in a **single round-trip** (`set_config(..., true)`), with nested `SAVEPOINT`s and automatic `40001`/`40P01` retries. |
 | **13-Operator SQL Compiler** | All 13 operators (`==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not-in`, `array-contains`, `array-contains-any`, `contains_ci`, `starts_with_ci`, `text_search`) + `or` groups compile to 100% parameterized SQL with row-value tuple keyset pagination and HMAC-SHA256 cursors. |
 | **Zero-DDL Composite Indexes** | Order-preserving `sort_key BYTEA` entries in `document_index_entries` power multi-field composite range/sort scans via a commutative cost-ranked index matcher and proactive E→S→R Smart Index Advisor—no per-tenant `CREATE INDEX` locks. |
-| **Security Fortress & 3 Realms** | Disjoint `super_admin`, `customer_console`, and **Ed25519** `project_end_user` realms; universal `crypto.timingSafeEqual`; `256`-step Rules AST CPU budgets; SSRF/CSRF/payload/query-cost guards; spoof-resistant `TRUST_PROXY_HOPS` IP extraction; and HKDF HMAC-SHA256 immutable audit/billing chains. |
+| **Security Fortress** | Isolated **Ed25519** `project_end_user` tokens; universal `crypto.timingSafeEqual`; `256`-step Rules AST CPU budgets; SSRF/CSRF/payload/query-cost guards; and spoof-resistant `TRUST_PROXY_HOPS` IP extraction. |
 | **Hardened Production Runtime** | Non-root `node:22-alpine` containers with `/sbin/tini`, `read_only: true`, `cap_drop: [ALL]`, loopback-only ports behind Caddy 2 ACME TLS, coalesced `/health` & `/ready` probes, and graceful `SIGTERM`/`SIGINT` draining (`1001 Going Away`). |
 
 ---
@@ -34,7 +34,7 @@ It provides hierarchical collections, typed JSONB documents, a 13-operator param
 flowchart LR
     subgraph Clients["Clients & Unified Single-Origin Frontend (:3000)"]
         SDK["@vellumdb/sdk-js · vellum_flutter · REST / WS"]
-        UI["Dashboard (/) · Admin (/admin/) · Docs (/docs/)"]
+        UI["Docs (/docs/)"]
     end
 
     subgraph Edge["Caddy 2 Reverse Proxy (80 / 443)"]
@@ -95,20 +95,20 @@ corepack pnpm dev:stack
 
 `dev:stack` serves two local URLs. It does not build anything, so run the build first:
 
-- `http://localhost:3000`: Dashboard (`/`), Admin (`/admin/`), Docs (`/docs/`, `/docs/ar/`). The gateway proxies `/v1` to the local API. This proxy is a local convenience only; deployed frontends call the API by its absolute URL.
+- `http://localhost:3000`: Docs (`/docs/`, `/docs/ar/`). The gateway proxies `/v1` to the local API. This proxy is a local convenience only; deployed frontends call the API by its absolute URL.
 - `http://localhost:8080`: the API, including the WebSocket endpoint at `/v1/realtime`.
 
-Run one side alone with `corepack pnpm dev:backend` (API) or `corepack pnpm dev:console` (frontend). Key environment variables are documented in `.env.example` (database URLs, `API_PORT`, `JWT_SECRET`, `CURSOR_HMAC_SECRET`, `API_KEY_PEPPER`, `CORS_ALLOWED_ORIGINS`, `VITE_API_BASE_URL`).
+Run one side alone with `corepack pnpm dev:backend` (API) or `corepack pnpm dev:frontend` (frontend). Key environment variables are documented in `.env.example` (database URLs, `API_PORT`, `JWT_SECRET`, `CURSOR_HMAC_SECRET`, `API_KEY_PEPPER`, `CORS_ALLOWED_ORIGINS`, `VITE_API_BASE_URL`).
 
 ### 2. Deploy
 
-The primary path is two independent Vercel projects: `vellum-api` (backend) and `vellum-console` (static dashboard, admin and docs). See [DEPLOYMENT-SPLIT.md](./docs/DEPLOYMENT-SPLIT.md).
+The primary path is two independent Vercel projects: the backend (`vellum-api`) and the static frontend (`vellum-console`). See [DEPLOYMENT-SPLIT.md](./docs/DEPLOYMENT-SPLIT.md).
 
 Self-hosting with hardened Docker Compose and Caddy is an alternative:
 
 ```bash
 # Requires .env with NODE_ENV=production, DATABASE_MODE=postgres,
-# distinct CONSOLE_JWT_SECRET & SUPER_ADMIN_JWT_SECRET, and external PostgreSQL URLs.
+# and external PostgreSQL URLs.
 VELLUM_DOMAIN=example.com docker compose -f deploy/docker/docker-compose.prod.yml up -d --build
 ```
 
@@ -145,18 +145,16 @@ Every query compiles in `packages/query-engine/src/compiler.ts` to parameterized
 | Path | Description |
 | :--- | :--- |
 | `apps/api` | Hono HTTP REST API, native RFC 6455 WebSocket server, Zod fail-fast config, health/readiness probes, and maintenance workers |
-| `apps/dashboard` | Customer Console SPA (`/`): organizations, projects, collections, documents, Rules Studio, Auth Studio, API keys, Smart Index Advisor, usage & billing |
-| `apps/admin` | Super-Admin Operations SPA (`/admin/`) — security overview, threat/blocklist management, hash-chain verification, billing |
 | `apps/docs` | Bilingual (EN/AR) React Developer Documentation SPA (`/docs/`, `/docs/ar/`) |
 | `packages/core` | Path parser, tagged wire format (`$t`/`$op`), binary sort-key encoder, E→S→R index advisor, `SYSTEM_LIMITS` |
 | `packages/query-engine` | 13-operator SQL compiler, commutative composite index matcher, tuple keyset pagination, HMAC-SHA256 cursor codec |
 | `packages/document-engine` | CRUD, atomic `$op` transforms, batched `.include()` relations, OCC transactions, 24 h idempotency, circuit breakers |
 | `packages/storage` | `PgStorageAdapter`, `NeonStorageAdapter`, `MemoryStorageAdapter`, `SAVEPOINT`/retry `tx-context.ts`, `UNNEST` batches, LRU/TTL caches |
 | `packages/database-control` & `database-data` | Control Plane & Data Plane migrations (`0001`–`0013` in each), checksum-verified runner, hardened `rls.ts` (12 tables) |
-| `packages/auth`, `authorization`, `security`, `billing` | 3-realm auth (Ed25519 end-user JWTs), `pk_`/`sk_` keys, Rules AST/DSL, Fortress guards, HKDF hash chains, metering |
+| `packages/auth`, `authorization`, `security` | End-user auth (Ed25519 JWTs), `pk_`/`sk_` keys, Rules AST/DSL, Fortress guards |
 | `packages/realtime` | `RealtimeGatewayHub`, `OutboxPoller`, and PostgreSQL `LISTEN/NOTIFY` bus |
 | `packages/api-contract`, `observability` | Generated OpenAPI contract and shared API types; logging and tracing hooks |
-| `packages/ui` | `@vellum/ui`, the shared React design system used by the dashboard, admin and docs apps |
+| `packages/ui` | `@vellum/ui`, the shared React design system used by the frontend apps |
 | `packages/sdk-js` & `sdks/flutter` | Official TypeScript/JavaScript (`@vellumdb/sdk-js`) and Flutter/Dart (`vellum_flutter`) SDKs |
 | `examples/` | Runnable TS, REST and Dart examples plus live testbed apps (see [examples/README.md](./examples/README.md)) |
 | `tests/` | Contract, security, integration, Playwright e2e, real-HTTP/PostgreSQL e2e, load and Dart verification suites |
@@ -168,11 +166,11 @@ Every query compiles in `packages/query-engine/src/compiler.ts` to parameterized
 
 ```bash
 corepack pnpm verify          # Typecheck + ESLint + full unit test suite
-corepack pnpm test:security   # RLS isolation, 3-realm 403s, SSRF, CSRF, AST budgets, hash-chain tamper tests
+corepack pnpm test:security   # RLS isolation, credential-isolation 403s, SSRF, CSRF, AST budgets
 corepack pnpm test:integration # PostgreSQL integration tests
 corepack pnpm codegen:check   # OpenAPI and Dart error-code artifacts are up to date
 corepack pnpm version:check   # Project and SDK versions are aligned
-corepack pnpm test:e2e        # Playwright browser tests (dashboard, admin, docs)
+corepack pnpm test:e2e        # Playwright browser tests (frontend apps)
 corepack pnpm docs:verify     # Run docs examples and build the docs site
 corepack pnpm smoke           # Live HTTP + PostgreSQL smoke verification
 cd sdks/flutter && dart pub get && dart analyze --fatal-infos && dart test   # Flutter/Dart SDK
