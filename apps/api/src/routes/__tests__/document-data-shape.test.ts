@@ -58,7 +58,7 @@ describe("document data shape validation", () => {
   });
 
   it("still accepts an object body and the {data:{...}} envelope", async () => {
-    const { platform, write } = await fixture();
+    const { write } = await fixture();
     const plain = await write("PUT", "fuzz/ok1", JSON.stringify({ a: 1 }));
     expect(plain.status).toBe(200);
     expect(((await plain.json()) as { data?: unknown }).data).toEqual({ a: 1 });
