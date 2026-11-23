@@ -253,6 +253,32 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
   app.use("/v1/auth/sign-in/email", authRateLimit({ ...LOGIN_LIMIT, scope: "sign-in-email" }));
   app.use("/v1/auth/sign-up/email", authRateLimit({ ...LOGIN_LIMIT, scope: "sign-up-email" }));
   app.use("/v1/admin/login", authRateLimit({ ...LOGIN_LIMIT, scope: "admin-login" }));
+  // Per-account failure ceiling that does NOT depend on the client IP. The
+  // per-(ip,email) limits above are bypassed by anyone who can vary the apparent
+  // source address (rotating proxies, a botnet, or a spoofable forwarding
+  // header on a directly exposed deployment), so a password could be guessed
+  // without limit. 50 failures / 15 min per account bounds that.
+  const ACCOUNT_LIMIT = { max: 50, windowMs: 15 * 60 * 1000 } as const;
+  const emailOnlyKey = (prefix: string) => async (c: Context): Promise<string> => {
+    let email = "";
+    try {
+      const body = (await c.req.raw.clone().json()) as { email?: unknown } | null;
+      if (typeof body?.email === "string") email = body.email.trim().toLowerCase();
+    } catch {
+      // No JSON body.
+    }
+    return sha256Hex(`${prefix}|${email}`);
+  };
+  app.use("/v1/auth/sign-in/email", authRateLimit({ ...ACCOUNT_LIMIT, scope: "sign-in-email-account", keyFrom: emailOnlyKey("console") }));
+  app.use("/v1/admin/login", authRateLimit({ ...ACCOUNT_LIMIT, scope: "admin-login-account", keyFrom: emailOnlyKey("admin") }));
+  app.use(
+    "/v1/projects/:projectId/auth/sign-in/email",
+    authRateLimit({
+      ...ACCOUNT_LIMIT,
+      scope: "enduser-sign-in-account",
+      keyFrom: async (c) => `${c.req.param("projectId") ?? ""}|${await emailOnlyKey("enduser")(c)}`,
+    })
+  );
 
   // Project END-USER credentials (`/v1/projects/:projectId/auth/*`). These were
   // previously unthrottled (the limits above cover only console routes). The key
