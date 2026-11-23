@@ -244,6 +244,9 @@ function defaultTtlExpiry(config: CollectionConfig | null, nowMs: number): strin
   return new Date(nowMs + ttl * 1000).toISOString();
 }
 
+/** Bounded server-side retries for contended blind (precondition-free) writes. */
+const BLIND_WRITE_MAX_ATTEMPTS = 25;
+
 export class DocumentEngine implements DocumentEnginePort {
   public readonly controlStore: ControlStoreLike;
   public readonly dataStore: StorageAdapter;
@@ -883,7 +886,29 @@ export class DocumentEngine implements DocumentEnginePort {
   ): Promise<BatchWriteResult> {
     this.validateEngineContext(ctx);
     await this.enforceRateLimit(ctx);
-    return this.telemetry.span("engine.batchWrite", () => this.batchWriteImpl(ctx));
+    // Blind writes (no ifVersion / exists precondition, no OCC token) carry no
+    // caller-visible baseline, so losing a compare-and-swap race to another
+    // writer is not a conflict the caller can act on. Retry the whole (fully
+    // rolled back) batch against the new state, bounded, so contended atomic
+    // field ops such as `increment` serialize instead of surfacing 409.
+    const blind =
+      !(typeof ctx.transactionToken === "string" && ctx.transactionToken.length > 0) &&
+      ctx.writes.every(
+        (w) => (w.ifVersion === undefined || w.ifVersion === null) && typeof w.exists !== "boolean"
+      );
+    const maxAttempts = blind ? BLIND_WRITE_MAX_ATTEMPTS : 1;
+    return this.telemetry.span("engine.batchWrite", async () => {
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          return await this.batchWriteImpl(ctx);
+        } catch (error) {
+          const conflict = error instanceof VellumError && error.code === "ABORTED_CONFLICT";
+          if (!conflict || attempt >= maxAttempts) throw error;
+          this.telemetry.counter("batch.blind_write_retries", 1);
+          await new Promise((resolve) => setTimeout(resolve, Math.floor(Math.random() * 10 * attempt) + 1));
+        }
+      }
+    });
   }
 
   private async batchWriteImpl(
