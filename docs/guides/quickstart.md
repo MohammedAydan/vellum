@@ -83,7 +83,7 @@ try {
 
 ```yaml
 dependencies:
-  vellum_flutter: ^0.0.1
+  vellum_flutter: ^0.0.2
 ```
 
 ### 2. Initialize, Write, Read, Update & Clean Up

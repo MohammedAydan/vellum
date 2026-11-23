@@ -1,6 +1,6 @@
 # Flutter / Dart SDK Guide (`vellum_flutter`)
 
-Complete engineering guide for `vellum_flutter` v0.0.1 — grounded directly in `sdks/flutter/lib/vellum_flutter.dart`. The pre-rebrand import `package:vellum_flutter/vellum_flutter.dart` and the `Vellum*` typedefs remain as compatibility aliases; new code should use the `Vellum*` names.
+Complete engineering guide for `vellum_flutter` v0.0.2 — grounded directly in `sdks/flutter/lib/vellum_flutter.dart`. The pre-rebrand import `package:vellum_flutter/vellum_flutter.dart` and the `Vellum*` typedefs remain as compatibility aliases; new code should use the `Vellum*` names.
 
 Pure Dart (`>=3.4.0 <4.0.0`), strictly null-safe, with zero Flutter binding required. Works identically in Flutter mobile/web/desktop apps, Dart CLI tools, and Dart backend services.
 
@@ -12,7 +12,7 @@ Pure Dart (`>=3.4.0 <4.0.0`), strictly null-safe, with zero Flutter binding requ
 
 ```yaml
 dependencies:
-  vellum_flutter: ^0.0.1
+  vellum_flutter: ^0.0.2
 ```
 
 ```dart
