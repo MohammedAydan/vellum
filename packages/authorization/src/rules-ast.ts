@@ -335,6 +335,20 @@ function resolveOperand(operand: unknown, context: RuleEvaluationContext): unkno
   return undefined;
 }
 
+/**
+ * `auth.uid` / `auth.email` resolve to null for unauthenticated callers. If such
+ * an operand is compared with another null (a document field set to null or an
+ * unset path parameter), `==` would be true and an anonymous caller would match
+ * "owner == auth.uid". An unauthenticated identity never equals anything.
+ */
+function isAuthIdentityOperand(operand: unknown): boolean {
+  if (operand === null || typeof operand !== "object" || !hasOwn.call(operand, "var")) return false;
+  const v = (operand as AstOperandVar).var;
+  return (
+    v === "auth.uid" || v === "request.auth.uid" || v === "auth.email" || v === "request.auth.email"
+  );
+}
+
 interface EvalBudget {
   steps: number;
 }
@@ -373,6 +387,9 @@ function evaluateAstNodeInternal(
     case "==": {
       const l = resolveOperand(expr.left, context);
       const r = resolveOperand(expr.right, context);
+      if (l === null && r === null && (isAuthIdentityOperand(expr.left) || isAuthIdentityOperand(expr.right))) {
+        return false;
+      }
       return l !== undefined && r !== undefined && wireValuesEqual(l, r);
     }
     case "!=": {
