@@ -221,6 +221,7 @@ jobs:
       - name: Run coverage and write real numbers to evidence
         run: |
           set -o pipefail
+          mkdir -p test-results/docs
           corepack pnpm test:coverage | tee test-results/docs/coverage.txt
 
       - name: Upload coverage artifacts
