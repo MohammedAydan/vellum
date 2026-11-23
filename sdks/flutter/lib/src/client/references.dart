@@ -27,7 +27,8 @@ class DocumentReference<T> {
   /// Reads the document. [include] accepts `'field'` shorthands or [VellumInclude]
   /// specs; [select] accepts dot paths. Both are sent as URL-encoded JSON query
   /// parameters (`?include=[...]&select=[...]`).
-  Future<DocumentSnapshot<T>> get({List<Object>? include, List<String>? select}) async {
+  Future<DocumentSnapshot<T>> get(
+      {List<Object>? include, List<String>? select}) async {
     final queryParams = <String, String>{};
     if (include != null && include.isNotEmpty) {
       queryParams['include'] = jsonEncode(serializeIncludeRelations(include));
@@ -39,6 +40,7 @@ class DocumentReference<T> {
         ? ''
         : '?${queryParams.entries.map((MapEntry<String, String> entry) => '${entry.key}=${Uri.encodeQueryComponent(entry.value)}').join('&')}';
     final encodedPath = encodeVellumPath(path);
+    final authEpoch = client.auth.sessionEpoch;
     final res = await client.request('GET', '/documents/$encodedPath$suffix');
     final rawData = (res['data'] as Map).cast<String, Object?>();
     final rawIncluded = res['_included'];
@@ -49,9 +51,14 @@ class DocumentReference<T> {
       version: (res['version'] as num).toInt(),
       data: fromJson(rawData, res['documentId'] as String),
       included: rawIncluded is Map ? rawIncluded.cast<String, Object?>() : null,
-      redactedRefs: rawRedacted is List ? rawRedacted.whereType<String>().toList() : null,
+      redactedRefs:
+          rawRedacted is List ? rawRedacted.whereType<String>().toList() : null,
     );
-    client.setCachedDocument(path, snap);
+    if (authEpoch == client.auth.sessionEpoch &&
+        (include == null || include.isEmpty) &&
+        (select == null || select.isEmpty)) {
+      client.setCachedDocument(path, snap);
+    }
     return snap;
   }
 
@@ -248,10 +255,15 @@ class DocumentReference<T> {
         final snap = snapshotFromWire<T>(frame['document'], fromJson);
         if (snap != null && !controller.isClosed) controller.add(snap);
       } else if (type == 'error') {
-        final err = frame['error'] is Map ? (frame['error'] as Map).cast<String, Object?>() : frame;
+        final err = frame['error'] is Map
+            ? (frame['error'] as Map).cast<String, Object?>()
+            : frame;
         controller.addError(VellumException(
-          code: err['code'] is String ? err['code'] as String : 'REALTIME_ERROR',
-          message: err['message'] is String ? err['message'] as String : 'Realtime error',
+          code:
+              err['code'] is String ? err['code'] as String : 'REALTIME_ERROR',
+          message: err['message'] is String
+              ? err['message'] as String
+              : 'Realtime error',
           statusCode: 400,
         ));
       }
@@ -260,7 +272,9 @@ class DocumentReference<T> {
     controller = StreamController<DocumentSnapshot<T>>.broadcast(
       onListen: () {
         final cached = client.getCachedDocument(path);
-        if (cached != null && cached is DocumentSnapshot<T> && !controller.isClosed) {
+        if (cached != null &&
+            cached is DocumentSnapshot<T> &&
+            !controller.isClosed) {
           controller.add(cached);
         }
         subId = client.realtime.subscribe(
@@ -365,8 +379,10 @@ class Query<T> {
       _copy(select: List<String>.unmodifiable(fields));
 
   /// Eagerly loads relations. Items may be `'field'` shorthands or [VellumInclude]s.
-  Query<T> include(List<Object> relations) =>
-      _copy(include: <JsonMap>[...includeSpecs, ...serializeIncludeRelations(relations)]);
+  Query<T> include(List<Object> relations) => _copy(include: <JsonMap>[
+        ...includeSpecs,
+        ...serializeIncludeRelations(relations)
+      ]);
 
   Query<T> orderBy(String field, {String dir = 'asc'}) {
     return _copy(orderBy: [
@@ -419,7 +435,8 @@ class Query<T> {
 
   Future<QuerySnapshot<T>> get() async {
     final res = await client.request('POST', '/query', body: toQuerySpec());
-    final rawDocs = (res['documents'] as List<Object?>).map(asStringDynamicMap).toList();
+    final rawDocs =
+        (res['documents'] as List<Object?>).map(asStringDynamicMap).toList();
     final snapshots = rawDocs.map((d) {
       final dataMap = (d['data'] as Map).cast<String, Object?>();
       final id = d['documentId'] as String;
@@ -430,8 +447,11 @@ class Query<T> {
         path: d['path'] as String,
         version: (d['version'] as num).toInt(),
         data: fromJson(dataMap, id),
-        included: rawIncluded is Map ? rawIncluded.cast<String, Object?>() : null,
-        redactedRefs: rawRedacted is List ? rawRedacted.whereType<String>().toList() : null,
+        included:
+            rawIncluded is Map ? rawIncluded.cast<String, Object?>() : null,
+        redactedRefs: rawRedacted is List
+            ? rawRedacted.whereType<String>().toList()
+            : null,
       );
     }).toList();
 
@@ -478,7 +498,8 @@ class Query<T> {
     int? pageSize,
     int? maxPages,
   }) async* {
-    await for (final page in streamPages(pageSize: pageSize, maxPages: maxPages)) {
+    await for (final page
+        in streamPages(pageSize: pageSize, maxPages: maxPages)) {
       for (final doc in page.docs) {
         yield doc;
       }
@@ -501,7 +522,8 @@ class Query<T> {
         if (orGroups.isNotEmpty) 'or': orGroups,
         if (groupBy != null && groupBy.isNotEmpty) 'groupBy': groupBy,
         'metrics': metrics.map<String, Object?>(
-          (String name, AggregateMetric metric) => MapEntry<String, Object?>(name, metric.toJson()),
+          (String name, AggregateMetric metric) =>
+              MapEntry<String, Object?>(name, metric.toJson()),
         ),
       },
     );
@@ -529,7 +551,9 @@ class Query<T> {
   /// Counts matching documents. Returns `0` when the server returns no rows.
   Future<int> count() async {
     final JsonMap response = await aggregate(
-      metrics: <String, AggregateMetric>{'count': const AggregateMetric.count()},
+      metrics: <String, AggregateMetric>{
+        'count': const AggregateMetric.count()
+      },
     );
     return _aggregateValue(response, 'count')?.toInt() ?? 0;
   }
@@ -597,7 +621,8 @@ class Query<T> {
       if (controller.isClosed) return;
       final type = frame['type'];
       final seq = frame['seqId'];
-      final watermark = seq is num ? seq.toString() : (seq is String ? seq : null);
+      final watermark =
+          seq is num ? seq.toString() : (seq is String ? seq : null);
 
       if (type == 'initial_sync') {
         docs.clear();
@@ -608,7 +633,8 @@ class Query<T> {
             final snap = snapshotFromWire<T>(raw, fromJson);
             if (snap == null) continue;
             docs.add(snap);
-            changes.add(DocumentChange<T>(type: 'added', seqId: watermark ?? '0', doc: snap));
+            changes.add(DocumentChange<T>(
+                type: 'added', seqId: watermark ?? '0', doc: snap));
           }
         }
         emit(changes, watermark);
@@ -616,7 +642,11 @@ class Query<T> {
         final snap = snapshotFromWire<T>(frame['document'], fromJson);
         if (snap == null) return;
         final operation = frame['operation'];
-        final changeType = operation == 'create' ? 'added' : operation == 'delete' ? 'removed' : 'modified';
+        final changeType = operation == 'create'
+            ? 'added'
+            : operation == 'delete'
+                ? 'removed'
+                : 'modified';
         if (changeType == 'removed') {
           docs.removeWhere((doc) => doc.path == snap.path);
         } else {
@@ -628,13 +658,19 @@ class Query<T> {
           }
         }
         emit([
-          DocumentChange<T>(type: changeType, seqId: watermark ?? '0', doc: snap)
+          DocumentChange<T>(
+              type: changeType, seqId: watermark ?? '0', doc: snap)
         ], watermark);
       } else if (type == 'error') {
-        final err = frame['error'] is Map ? (frame['error'] as Map).cast<String, Object?>() : frame;
+        final err = frame['error'] is Map
+            ? (frame['error'] as Map).cast<String, Object?>()
+            : frame;
         controller.addError(VellumException(
-          code: err['code'] is String ? err['code'] as String : 'REALTIME_ERROR',
-          message: err['message'] is String ? err['message'] as String : 'Realtime error',
+          code:
+              err['code'] is String ? err['code'] as String : 'REALTIME_ERROR',
+          message: err['message'] is String
+              ? err['message'] as String
+              : 'Realtime error',
           statusCode: 400,
         ));
       }
