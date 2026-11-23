@@ -129,23 +129,33 @@ function liveSignups(projectId: string, now: number): number[] {
   return events;
 }
 
-function assertSignupBudget(projectId: string, maxPerHour: number): void {
-  if (liveSignups(projectId, Date.now()).length >= maxPerHour) {
+/**
+ * Atomically check the hourly budget and reserve a slot (no await between the
+ * check and the push), so parallel sign-ups cannot all pass one free slot. The
+ * returned function releases the slot when the sign-up fails.
+ */
+function reserveSignupSlot(projectId: string, maxPerHour: number): () => void {
+  const now = Date.now();
+  const events = liveSignups(projectId, now);
+  if (events.length >= maxPerHour) {
     throw new VellumError("TOO_MANY_REQUESTS", "The hourly sign-up limit for this project has been reached", {
       retryAfterSeconds: 300,
     });
   }
-}
-
-function recordSignup(projectId: string): void {
-  const now = Date.now();
-  const events = liveSignups(projectId, now);
   events.push(now);
   if (!signupEvents.has(projectId) && signupEvents.size >= SIGNUP_BUDGET_CACHE_POLICY.maxEntries) {
     const oldest = signupEvents.keys().next().value;
     if (oldest !== undefined) signupEvents.delete(oldest);
   }
   signupEvents.set(projectId, events);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const current = signupEvents.get(projectId);
+    const index = current?.indexOf(now) ?? -1;
+    if (current && index !== -1) current.splice(index, 1);
+  };
 }
 
 /** Test helper: reset in-process signup budgets. */
@@ -184,7 +194,20 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     if ((await storage.countAuthUsers(tenant.ctx)) >= config.maxUsersQuota) {
       throw new VellumError("QUOTA_EXCEEDED", "The end-user quota for this project has been reached");
     }
-    assertSignupBudget(tenant.projectId, config.maxSignupsPerHour);
+  }
+
+  /**
+   * Reserve an hourly sign-up slot and run the account creation. The slot is
+   * taken synchronously before any await, and returned if creation fails.
+   */
+  async function createWithSignupSlot<T>(config: ProjectAuthConfig, tenant: AuthTenant, create: () => Promise<T>): Promise<T> {
+    const release = reserveSignupSlot(tenant.projectId, config.maxSignupsPerHour);
+    try {
+      return await create();
+    } catch (error) {
+      release();
+      throw error;
+    }
   }
 
   function assertPasswordPolicy(password: string, config: ProjectAuthConfig): void {
@@ -293,16 +316,18 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       throw new VellumError("ALREADY_EXISTS", "An end-user with this email already exists");
     }
 
-    const user = await storage.createAuthUser(tenant.ctx, {
-      email: body.email,
-      emailVerified: false,
-      passwordHash: await hashPassword(body.password),
-      displayName: body.displayName ?? null,
-      photoUrl: body.photoUrl ?? null,
-      phoneNumber: body.phoneNumber ?? null,
-      ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
-      ...(body.customClaims !== undefined ? { customClaims: body.customClaims } : {}),
-    });
+    const user = await createWithSignupSlot(config, tenant, async () =>
+      storage.createAuthUser(tenant.ctx, {
+        email: body.email,
+        emailVerified: false,
+        passwordHash: await hashPassword(body.password),
+        displayName: body.displayName ?? null,
+        photoUrl: body.photoUrl ?? null,
+        phoneNumber: body.phoneNumber ?? null,
+        ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
+        ...(body.customClaims !== undefined ? { customClaims: body.customClaims } : {}),
+      })
+    );
     const now = new Date().toISOString();
     await storage.upsertAuthIdentity(tenant.ctx, {
       userId: user.id,
@@ -312,7 +337,6 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       lastSignInAt: now,
     });
     await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
-    recordSignup(tenant.projectId);
     await projectIfEnabled(tenant, config, user);
     return c.json(await issueSession(tenant, user, c), 201);
   });
@@ -370,14 +394,15 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       throw new VellumError("PERMISSION_DENIED", "Anonymous sign-in is disabled for this project");
     }
     const body = parseOrThrow(SignInAnonymousRequestSchema, await optionalJsonBody(c));
-    const user = await storage.createAuthUser(tenant.ctx, {
-      email: null,
-      emailVerified: false,
-      isAnonymous: true,
-      displayName: body.displayName ?? null,
-      ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
-    });
-    recordSignup(tenant.projectId);
+    const user = await createWithSignupSlot(config, tenant, () =>
+      storage.createAuthUser(tenant.ctx, {
+        email: null,
+        emailVerified: false,
+        isAnonymous: true,
+        displayName: body.displayName ?? null,
+        ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
+      })
+    );
     return c.json(await issueSession(tenant, user, c), 201);
   });
 
@@ -413,14 +438,16 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
       } else {
         await checkRegistrationGuards(tenant, config);
-        user = await storage.createAuthUser(tenant.ctx, {
-          email: body.email,
-          emailVerified: body.emailVerified ?? false,
-          displayName: body.displayName ?? null,
-          photoUrl: body.photoUrl ?? null,
-          ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
-        });
-        recordSignup(tenant.projectId);
+        const email = body.email;
+        user = await createWithSignupSlot(config, tenant, () =>
+          storage.createAuthUser(tenant.ctx, {
+            email,
+            emailVerified: body.emailVerified ?? false,
+            displayName: body.displayName ?? null,
+            photoUrl: body.photoUrl ?? null,
+            ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
+          })
+        );
         await projectIfEnabled(tenant, config, user);
       }
     }
