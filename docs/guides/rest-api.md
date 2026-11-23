@@ -7,7 +7,7 @@ description: A short map of the /v1 HTTP endpoint families, with a link to the f
 
 # REST API Orientation
 
-The HTTP API is mounted under `/v1` and returns JSON for every response, attaching `X-Request-Id`. Document-plane endpoints authenticate with the `x-project-key` header; console endpoints use a session bearer token. A machine-readable OpenAPI 3.1 document is served at `GET /v1/openapi.json`.
+The HTTP API is mounted under `/v1` and returns JSON for every response, attaching `X-Request-Id`. Document-plane endpoints authenticate with the `x-project-key` header. A machine-readable OpenAPI 3.1 document is served at `GET /v1/openapi.json`.
 
 :::note
 Prefer the [SDK](./quickstart.md) for application code. Use raw HTTP when calling from a language without an official SDK or when debugging. The full endpoint-by-endpoint reference lives in the [HTTP API reference](./reference/rest-data-plane.md).
@@ -34,10 +34,7 @@ curl -fsS "https://api.example.com/v1/openapi.json" | jq '.paths | keys[]'
 | Transactions | `/v1/.../transactions:begin`, `.../transactions:commit` | `x-project-key` + rules | OCC token issuance and atomic commit. |
 | Indexes | `/v1/.../indexes`, `/v1/.../indexes/:indexId` | Server key, `indexes:manage` | List, create, and delete composite indexes. |
 | Collections | `/v1/.../collections` | `x-project-key` | List real collection paths (studio helper). |
-| Auth | `/v1/auth/sign-up/email`, `/v1/auth/sign-in/email`, `/v1/auth/session`, `/v1/auth/sign-out` | Session / public | Email auth and session management. |
-| MFA | `/v1/auth/mfa/status`, `/setup`, `/verify`, `/disable` | Session | TOTP enrollment and verification. |
-| Console | `/v1/console/...` | Session JWT + org check | Dashboards; audited control-plane mutations. |
-| Rulesets | `/v1/projects/:projectId/rulesets` | Session | Publish and read security rulesets. |
+| End-user auth | `/v1/projects/:projectId/auth/**` | API key | End-user email sign-up/sign-in, token refresh, sign-out and MFA. |
 | Realtime | `/v1/realtime` (WebSocket) | `auth` frame | Live document and query streams. |
 
 ## A raw request
@@ -79,7 +76,7 @@ Never place a server key or session token in a URL or commit it to source contro
 ## Common pitfalls
 
 - **Putting the key in the URL.** Always send `x-project-key` (or `Authorization: Bearer`) in a header.
-- **Mixing up auth surfaces.** Document endpoints take an API key; console endpoints take a session bearer token.
+- **Mixing up credentials.** Document endpoints take an API key plus an optional EdDSA end-user bearer; no other credential is accepted on them.
 - **Forgetting `X-Request-Id`.** Capture it on every response so support can correlate incidents safely.
 - **Skipping the OpenAPI spec.** `GET /v1/openapi.json` is the authoritative, up-to-date request/response schema.
 

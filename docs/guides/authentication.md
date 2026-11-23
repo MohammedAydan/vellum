@@ -2,17 +2,16 @@
 title: Authentication
 order: 3
 group: Getting started
-description: API keys, console sessions, TOTP MFA, key rotation, and least-privilege access.
+description: API keys, end-user tokens, key rotation, and least-privilege access.
 ---
 
 # Authentication
 
-VELLUM has **three isolated authentication realms** — `SUPER_ADMIN`, `CUSTOMER_CONSOLE` and `PROJECT_END_USER`. They share only stateless crypto primitives; storage, signing secrets, JWT `typ`/`iss`/`aud`, claims and middleware are fully separate, so a token from one realm is rejected by the other two.
+VELLUM credentials are **fully isolated** per surface. They share only stateless crypto primitives; storage, signing secrets, JWT `typ`/`iss`/`aud`, claims and middleware are fully separate, so a token minted for one surface is rejected anywhere else.
 
-1. The **document plane** (`/v1/projects/...`) uses API keys via `x-vellum-api-key` (legacy `x-project-key`), with an optional **EdDSA-only** end-user bearer. There is no HS256 fallback, anonymous fallback or implicit master key.
-2. The **console** (`/v1/console/...`) and **admin** (`/v1/admin/...`) planes use realm-bound HS256 session tokens plus an HttpOnly `vellum_refresh_token` cookie.
+The **document plane** (`/v1/projects/...`) uses API keys via `x-vellum-api-key` (legacy `x-project-key`), with an optional **EdDSA-only** end-user bearer. There is no HS256 fallback, anonymous fallback or implicit master key.
 
-See [End-User Authentication & the Three Realms](./end-user-auth.md) for tokens, refresh rotation, the full REST reference and rate limits.
+See [End-User Authentication](./end-user-auth.md) for tokens, refresh rotation, the full REST reference and rate limits.
 
 :::note
 A public API key can safely appear in a browser or mobile app, but it grants **zero implicit data access**. Every operation is evaluated against the project's active security ruleset. A server key bypasses rules only for the explicit scopes it carries.
@@ -69,43 +68,9 @@ const db = createClient({
 
 When a public key is used, an optional `Authorization: Bearer <jwt>` supplies the end-user identity. The SDK's `getAuthToken` callback supplies this token on each request. The rules AST can read `auth.uid` and `auth.claims.<field>`, so the same public key can serve many users safely. See [Security rules](./security-rules.md).
 
-## Console sessions and password auth
-
-The dashboard authenticates with email/password against the control plane:
-
-| Endpoint | Purpose |
-| :--- | :--- |
-| `POST /v1/auth/sign-up/email` | Create a user, default organization, project with one project, and a production (`live`) key. |
-| `POST /v1/auth/sign-in/email` | Verify password (scrypt) and return a session token. |
-| `GET /v1/auth/session` | Validate the presented token and return its claims. |
-| `POST /v1/auth/sign-out` | Revoke the session refresh token when one is presented. |
-
-Console session access tokens are short-lived; a refresh token is held in an HttpOnly cookie. Every console request checks organization membership and writes an immutable audit-log entry.
-
-## TOTP MFA (console users)
-
-MFA is RFC 6238 TOTP (SHA-1, 30-second period, six digits, ±1 step tolerance). All MFA routes require a valid session:
-
-| Endpoint | Purpose |
-| :--- | :--- |
-| `GET /v1/auth/mfa/status` | `{ enabled: boolean }` |
-| `POST /v1/auth/mfa/setup` | Returns the secret, an `otpauth://` URI, and recovery codes. |
-| `POST /v1/auth/mfa/verify{ "code": "123456" }` | Enables MFA after a valid TOTP code. |
-| `POST /v1/auth/mfa/disable{ "code": "..." }` | Disables MFA using a TOTP code or a recovery code. |
-
-The TOTP secret is encrypted at rest in the control-plane `mfa_secrets` table and recovery codes are stored as keyed hashes. Verification attempts are throttled by an in-process sliding window (five attempts per 60 seconds by default) — no Redis is involved.
-
-:::tip
-Enrollment is idempotent while unverified: calling setup again before verification returns the same secret and codes. Store the recovery codes somewhere safe; they are shown only at setup time.
-:::
-
 ## Rotation and revocation
 
-Keys are managed through the session-authenticated console API under `/v1/projects/:projectId/api-keys`:
-
-- `POST` — create a key; the raw key appears only in this response.
-- `GET` — list keys (prefixes, scopes, status, usage metadata).
-- `DELETE /:keyId` — revoke a key immediately and publish a cache invalidation.
+Keys are issued per project. The raw key value is returned only at creation; afterwards only prefixes, scopes, status and usage metadata are visible.
 
 To rotate without downtime: create the new key, deploy it to clients, confirm traffic has moved, then revoke the old key. Because revocation is also enforced against the control-plane record, a cached key cannot be used after its `revokedAt` is set.
 
@@ -114,7 +79,7 @@ To rotate without downtime: create the new key, deploy it to clients, confirm tr
 - Use separate keys per project and never reuse a key across projects. Keys use only the `pk_`/`sk_` prefixes and are scoped to the project; there are no environment-scoped keys or deployment stages in the product.
 - Prefer `pk_` keys in client apps and let security rules decide access; use `sk_` keys only on trusted servers.
 - Grant the narrowest scope set: read-only services get `documents:read`, index tooling gets `indexes:manage`.
-- Set an expiry on temporary keys and audit every `api_key.created` / `api_key.revoked` event.
+- Set an expiry on temporary keys and rotate them on a schedule.
 
 :::warning
 Never log raw `pk_`/`sk_` keys, bearer JWTs, or database URLs. The structured logger in `@vellum/observability` redacts these patterns automatically; keep all application logs on that path.
@@ -122,7 +87,7 @@ Never log raw `pk_`/`sk_` keys, bearer JWTs, or database URLs. The structured lo
 
 ## Common pitfalls
 
-- **Confusing the two surfaces.** A console session JWT is not accepted on the document plane, and an API key is not accepted on the console plane.
+- **Confusing credentials.** Any credential minted outside the document plane is rejected on it, and an API key never authorizes anything beyond it.
 - **Assuming a public key is privileged.** With no active ruleset, public-key access is denied; rules must explicitly allow each operation.
 - **Using a `*` scope for convenience.** An over-scoped server key defeats least privilege; grant only what the service needs.
 - **Forgetting to rotate.** Create the replacement first, move clients, then revoke — never revoke before the new key is deployed.
