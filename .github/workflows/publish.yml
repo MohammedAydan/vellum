@@ -1,0 +1,58 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      # Must match the tag-pattern configured on pub.dev: v{{version}}
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  publish-npm:
+    name: Publish @vellumdb/sdk-js to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC trusted publishing (no long-lived npm token)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      # Trusted publishing requires npm CLI >= 11.5.1; Node 22 ships an older one.
+      - name: Update npm CLI
+        run: npm install -g npm@latest
+
+      - name: Check tag matches package version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION=$(node -p "require('./packages/sdk-js/package.json').version")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Build @vellumdb/sdk-js
+        run: corepack pnpm --filter @vellumdb/sdk-js build
+
+      - name: Publish to npm
+        working-directory: packages/sdk-js
+        run: npm publish --provenance
+
+  publish-pubdev:
+    name: Publish vellum_flutter to pub.dev
+    permissions:
+      id-token: write # OIDC automated publishing (no long-lived credentials)
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: sdks/flutter
