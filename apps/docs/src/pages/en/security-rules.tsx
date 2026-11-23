@@ -1,285 +1,50 @@
-import { Api, Callout, Code, CodeTabs, Doc, H3, P, PageLink, Section, Table } from "../../ui";
+import { Code, Doc, P, PageLink, Section, Table } from "../../ui";
+import "../../rules-guide.css";
 
-const RULES_PATH = "/v1/projects/:projectId/rulesets";
-const CONSOLE_RULES_PATH = "/v1/console/projects/:projectId/rulesets";
-
+// Keep these examples aligned with docs/guides/security-rules.md.
 export default function Page() {
   return (
-    <Doc
-      title="Security rules"
-      description="The v1 JSON rules AST: deny-by-default evaluation, wildcard matching, validation bounds, publishing, and simulation."
-      eyebrow="Security"
-    >
-      <Section id="how-it-works" title="How rules work">
-        <P>
-          Security rules decide whether a <strong>public API key</strong> (<code>pk_</code>) may read or write a
-          document. They are stored as a versioned JSON <strong>Abstract Syntax Tree</strong> in the control plane
-          and evaluated synchronously in memory — never by generating or executing code. Every public-key
-          operation (<code>get</code>, <code>list</code>, <code>create</code>, <code>update</code>,
-          <code> delete</code>) is checked against the project's active ruleset.
-        </P>
-        <P>
-          A <strong>server key</strong> (<code>sk_</code>) bypasses the AST only for operations covered by its
-          explicit scopes: <code>documents:read</code>, <code>documents:write</code>, or
-          <code> indexes:manage</code>. Public keys can never manage composite indexes. With no active ruleset,
-          all public-key access is denied.
-        </P>
-        <Callout tone="info" title="Rules consume identity; they do not create it">
-          The <code>auth.*</code> variables are populated from the EdDSA end-user bearer token resolved by the
-          document plane. Without a valid token, <code>auth.uid</code> is <code>null</code>. See{" "}
-          <PageLink slug="end-user-auth">End users & the three realms</PageLink>.
-        </Callout>
+    <Doc title="Security rules" description="Write and test least-privilege document rules, with precise query and realtime behavior." eyebrow="Security">
+      <div className="rules-guide">
+        <P>{"Rules authorize project document operations made with a public API key. A public key identifies the project; it does not prove who the end user is. A verified end-user token supplies identity. No active ruleset, no matching rule, or no successful expression means PERMISSION_DENIED. Server keys use their explicit scopes instead of end-user rules. Never put a server key in a client application."}</P>
+      <Section id="section-1" title="Start with a private user namespace">
+        <P>{"Put private records under users/{userId}/notes/{noteId}. Check the user wildcard, not a client-provided owner field. This also gives collection queries an owner boundary they can check without reading document data."}</P>
+        <Code lang="json" code={"{\n  \"version\": 1,\n  \"rules\": [\n    {\n      \"match\": \"users/{userId}/notes/{noteId}\",\n      \"allow\": {\n        \"get\": { \"op\": \"all\", \"conditions\": [\n          { \"op\": \"!=\", \"left\": { \"var\": \"auth.uid\" }, \"right\": { \"val\": null } },\n          { \"op\": \"==\", \"left\": { \"var\": \"auth.uid\" }, \"right\": { \"var\": \"path.userId\" } }\n        ] },\n        \"list\": { \"op\": \"all\", \"conditions\": [\n          { \"op\": \"!=\", \"left\": { \"var\": \"auth.uid\" }, \"right\": { \"val\": null } },\n          { \"op\": \"==\", \"left\": { \"var\": \"auth.uid\" }, \"right\": { \"var\": \"path.userId\" } }\n        ] },\n        \"create\": { \"op\": \"all\", \"conditions\": [\n          { \"op\": \"==\", \"left\": { \"var\": \"auth.uid\" }, \"right\": { \"var\": \"path.userId\" } },\n          { \"op\": \"isType\", \"left\": { \"var\": \"request.data.title\" }, \"right\": { \"val\": \"string\" } }\n        ] },\n        \"update\": { \"op\": \"all\", \"conditions\": [\n          { \"op\": \"==\", \"left\": { \"var\": \"auth.uid\" }, \"right\": { \"var\": \"path.userId\" } },\n          { \"op\": \"isType\", \"left\": { \"var\": \"request.data.title\" }, \"right\": { \"val\": \"string\" } }\n        ] },\n        \"delete\": { \"op\": \"==\", \"left\": { \"var\": \"auth.uid\" }, \"right\": { \"var\": \"path.userId\" } }\n      }\n    }\n  ]\n}"} />
+        <P>{"The equivalent readable language and more patterns are in "}<PageLink slug="security-rules-dsl" lang="en">{"Rules DSL"}</PageLink>{". Wildcards are strings. For writes above, an unauthenticated null uid cannot equal the userId path segment."}</P>
       </Section>
-
-      <Section id="ruleset-shape" title="Ruleset shape (v1)">
-        <P>
-          A ruleset has <code>version: 1</code> and a <code>rules</code> array. Each rule pairs a <code>match</code>
-          path pattern with an <code>allow</code> object whose keys are operations and whose values are expressions.
-          This example lets each signed-in user manage their own document and orders, while an admin may list and
-          delete users:
-        </P>
-        <Code
-          lang="json"
-          title="A realistic v1 ruleset"
-          code={`{
-  "version": 1,
-  "rules": [
-    {
-      "match": "users/{userId}",
-      "allow": {
-        "get": { "op": "==", "left": { "var": "auth.uid" }, "right": { "var": "path.userId" } },
-        "list": { "op": "==", "left": { "var": "auth.claims.role" }, "right": { "val": "admin" } },
-        "create": {
-          "op": "all",
-          "conditions": [
-            { "op": "==", "left": { "var": "auth.uid" }, "right": { "var": "path.userId" } },
-            { "op": "isType", "left": { "var": "request.data.ownerId" }, "right": { "val": "string" } }
-          ]
-        },
-        "update": {
-          "op": "all",
-          "conditions": [
-            { "op": "==", "left": { "var": "resource.data.ownerId" }, "right": { "var": "auth.uid" } },
-            { "op": "==", "left": { "var": "request.data.ownerId" }, "right": { "var": "resource.data.ownerId" } }
-          ]
-        },
-        "delete": { "op": "==", "left": { "var": "auth.claims.role" }, "right": { "val": "admin" } }
-      }
-    },
-    {
-      "match": "users/{userId}/orders/{orderId}",
-      "allow": {
-        "get": { "op": "==", "left": { "var": "auth.uid" }, "right": { "var": "path.userId" } },
-        "create": {
-          "op": "all",
-          "conditions": [
-            { "op": "==", "left": { "var": "auth.uid" }, "right": { "var": "path.userId" } },
-            { "op": ">", "left": { "var": "request.data.total" }, "right": { "val": 0 } }
-          ]
-        }
-      }
-    }
-  ]
-}`}
-        />
-        <H3 id="allow-operations">Allow operations</H3>
-        <Table
-          head={["Key", "Applies to", "Fallback behavior"]}
-          rows={[
-            [<code>get</code>, "Read one document", "Falls back to read"],
-            [<code>list</code>, "Query / list documents", "Falls back to read"],
-            [<code>create</code>, "Create a document", "Falls back to write"],
-            [<code>update</code>, "Patch an existing document", "Falls back to write"],
-            [<code>delete</code>, "Delete a document", "Falls back to write"],
-            [<code>read</code>, "Shorthand for get + list", "—"],
-            [<code>write</code>, "Shorthand for create + update + delete", "—"],
-          ]}
-        />
-        <H3 id="wildcard-matching">Wildcard matching</H3>
-        <P>
-          Patterns are matched segment by segment against the document path. A single-segment wildcard{" "}
-          <code>{"{paramName}"}</code> binds the matching segment to <code>path.paramName</code>. A recursive
-          wildcard <code>{"{document=**}"}</code> at the end of a pattern matches one or more remaining segments
-          and binds the relative sub-path to <code>path.document</code>. If several rules match a path, access is
-          granted when <strong>any</strong> matching rule evaluates to true for the operation — standard OR
-          semantics — and denied when no rule matches or none evaluates to true.
-        </P>
+      <Section id="section-2" title="Matching and operation selection">
+        <P>{"A ruleset is version 1 with a rules array. Each rule contains match and allow. Use canonical relative paths in JSON, such as users/{userId}, without project prefixes. A single wildcard binds one segment to path.userId. Put a recursive wildcard such as {rest=**} last; it captures one or more remaining segments. A rule on a parent document does not automatically apply to its subcollections. Nested DSL matches are separate rules after compilation, not inherited permissions."}</P>
+        <Table head={["Operation", "Context"]} rows={[["get", "A single document read. Existing data is available if the document exists."], ["list", "Collection query, aggregate, subscription or batch-read gate. See the operation differences below."], ["create", "Creation, including set when the document does not exist."], ["update", "Patch, merge, or replacement of an existing document."], ["delete", "Deletion of an existing document."], ["read", "JSON fallback for get and list."], ["write", "JSON fallback for create, update and delete."]]} />
+        <P>{"In JSON an explicit operation takes precedence over its fallback, even when false: get:false plus read:true denies get in that rule. Across separate matching rules, any successful grant allows access. There is no overriding deny rule. In DSL, read and write expand into individual operations; repeated declarations of the same operation in one match block replace the earlier expression. Combine conditions in one declaration instead."}</P>
       </Section>
-
-      <Section id="operators-and-context" title="Operators & context">
-        <H3 id="operators">Expression operators</H3>
-        <Table
-          head={["Category", "Operators", "Shape"]}
-          rows={[
-            ["Comparison", <code>{"==  !=  <  <=  >  >=  in"}</code>, "left and right operands"],
-            ["Object / type", <code>{"hasKey  isType"}</code>, "left and right operands"],
-            ["Combinator", <code>all</code>, "non-empty conditions array — every child must be true"],
-            ["Combinator", <code>any</code>, "non-empty conditions array — at least one child must be true"],
-            ["Combinator", <code>not</code>, "one condition — negates it"],
-          ]}
-        />
-        <P>
-          An operand is either a literal <code>{"{ \"val\": ... }"}</code> or a context lookup{" "}
-          <code>{"{ \"var\": \"...\" }"}</code>. Comparisons use the same typed wire-value equality and ordering
-          as the query engine, so a tagged value is compared by its underlying type rather than by string form.
-        </P>
-        <H3 id="variables">Available variables</H3>
-        <Table
-          head={["Variable", "Meaning"]}
-          rows={[
-            [<code>auth.uid</code>, "End-user id from the bearer JWT; null without a token."],
-            [<code>auth.email</code>, "End-user email, when present in the token."],
-            [<code>auth.email_verified</code>, "Boolean verification flag from the token."],
-            [<code>auth.is_anonymous</code>, "True for anonymous end users."],
-            [<code>{"auth.claims.<path>"}</code>, "Nested claim from the end-user JWT, e.g. auth.claims.role."],
-            [<code>{"path.<param>"}</code>, "Value bound by a wildcard in the matching rule."],
-            [<code>{"resource.data[.<path>]"}</code>, "Existing document data; null on create."],
-            [<code>{"request.data[.<path>]"}</code>, "Incoming document data; null on reads and deletes."],
-            [<code>request.time</code>, "Request timestamp in epoch milliseconds."],
-          ]}
-        />
-        <P>
-          <code>request.auth.*</code> is an alias of <code>auth.*</code> — both resolve to the same context. An
-          unknown variable, operator, or expression shape evaluates to false, which means deny.
-        </P>
+      <Section id="section-3" title="Context reference">
+        <Table head={["JSON variable", "Meaning"]} rows={[["auth.uid", "Verified end-user id, or null without identity. Use uid != null, not auth != null, to require sign-in."], ["auth.email", "Email from the verified identity, or null when absent."], ["auth.email_verified", "Verified-email flag, or null when absent."], ["auth.is_anonymous", "Anonymous-account flag, or null when absent. Anonymous accounts can still have a uid."], ["auth.claims.<field>", "Nested verified claim. hasRole uses the singular claims.role, not a roles array."], ["request.auth.*", "Alias of auth.* in both JSON and DSL."], ["path.<wildcard>", "String captured by match. Use explicit path.userId for clarity; the corrected DSL compiler also binds bare wildcard names."], ["resource.data", "Stored document, null on create or when no resource was loaded."], ["request.data", "Full validated document after merge and field transforms, not the raw patch. Null on read/delete."], ["request.time", "Evaluation time in epoch milliseconds, not a timestamp object."]]} />
+        <P>{"DSL resource.title maps to resource.data.title; incoming.title and request.resource.data.title map to request.data.title. Those are compiler aliases, not extra JSON variable roots. auth.token is not an exposed rules variable. Neither query filters nor query limits are exposed as request.query."}</P>
+        <P>{"Missing data fields resolve to undefined, not null. Equality and inequality with undefined return false. Negating such a comparison can therefore return true: ! (incoming.missing == resource.missing) is not a safe existence check. Use hasKey and isType for required fields. Missing wildcard bindings resolve to null, so use isSignedIn/isOwner when comparing optional values."}</P>
       </Section>
-
-      <Section id="evaluation-and-limits" title="Deterministic evaluation & bounds">
-        <P>
-          Authorization is a pure, in-memory walk of the AST. There is no <code>eval()</code>, no{" "}
-          <code>new Function()</code>, no network call, and no recursive I/O, so a deeply nested ruleset cannot
-          turn a request into a denial-of-service vector. Unless a matching rule explicitly allows an operation,
-          <code> authorizeOperation</code> throws <code>PERMISSION_DENIED</code> (403).
-        </P>
-        <Table
-          head={["Constraint", "Bound", "When exceeded"]}
-          rows={[
-            ["AST nesting depth", "<= 10 levels", "QUERY_TOO_COMPLEX at validation and evaluation"],
-            ["Nodes per rule expression", "<= 100 nodes", "QUERY_TOO_COMPLEX at validation"],
-            ["Circular references", "Forbidden", "INVALID_ARGUMENT at validation"],
-            ["Unknown operator or operation", "Forbidden", "INVALID_ARGUMENT at publish; false at evaluation"],
-            ["Dynamic code execution / I/O", "Never used", "Not applicable — evaluation is synchronous and in memory"],
-          ]}
-        />
-        <Callout tone="warning" title="Validation happens at publish time">
-          A malformed AST — wrong version, missing <code>match</code> or <code>allow</code>, unsupported operation
-          or operator — is rejected with <code>INVALID_ARGUMENT</code> before it can become active. The active
-          ruleset is always a previously validated version.
-        </Callout>
+      <Section id="section-4" title="Complete JSON expression reference">
+        <P>{"An expression is true, false, or an operator node. Operands are {val: literal} or {var: contextPath}. Logical operators contain expressions; comparison operators contain operands. They do not execute nested arithmetic or function calls at runtime."}</P>
+        <Table head={["Operator", "Shape and behavior"]} rows={[["==, !=", "left/right; typed wire equality, with no JavaScript coercion. Both operands must resolve."], ["<, <=, >, >=", "left/right; query-engine wire ordering. Undefined and null do not pass. Guard numeric validation with isType before range comparisons."], ["in", "left must equal an element of right, which must be an array. Not a substring or object-key test."], ["hasKey", "left is a non-array object; right is one direct own-key string. For a nested field, pass its parent object."], ["isType", "left is the value; right is a type string from the table below."], ["all", "Non-empty conditions array; every child must pass."], ["any", "Non-empty conditions array; at least one child must pass."], ["not", "One condition expression, negated."]]} />
+        <Table head={["isType name", "Accepted value"]} rows={[["null", "Literal null, not a missing field."], ["bool, boolean", "JavaScript boolean."], ["string", "String."], ["number", "Untagged JSON number. Tagged integers are not number."], ["array", "Array."], ["map", "Non-null, non-array object without an own $t key."], ["int, ts, ref, bytes, geo", "Matching tagged wire value. Check ref before reading a reference's $v."]]} />
+        <P>{"Do not rely on cross-type ordering to validate a numeric range. hasKey is not a key allowlist and there is no general size, regex, diff, length, cross-document get, exists, or database lookup function in this language."}</P>
       </Section>
-
-      <Section id="publish-and-simulate" title="Publishing & simulation">
-        <H3 id="publish">Publish</H3>
-        <P>
-          Publish a ruleset through the session-authenticated control-plane API. The request body is{" "}
-          <code>{"{ \"rulesAst\": { \"version\": 1, \"rules\": [...] } }"}</code>. A successful publish returns 201
-          with the new version, writes an audit entry, and invalidates the ruleset cache locally and across
-          instances via <code>NOTIFY vellum_cache_invalidate</code>. The effect is immediate for the project.
-        </P>
-        <Table
-          head={["Method", "Path", "Purpose"]}
-          rows={[
-            ["POST", <code>{RULES_PATH}</code>, "Validate and publish a new version."],
-            ["GET", <code>{RULES_PATH}</code>, "Read the active ruleset (or version 0 with a null AST when none is published)."],
-            ["POST", <code>{CONSOLE_RULES_PATH}</code>, "Console variant: validate, publish, and write a console.ruleset.published audit entry."],
-            ["GET", <code>{CONSOLE_RULES_PATH}</code>, "Console variant: read the active ruleset."],
-          ]}
-        />
-        <Api method="POST" path={RULES_PATH}>
-          <P>
-            Requires a console session bearer token. Invalid ASTs return <code>INVALID_ARGUMENT</code> or
-            <code> QUERY_TOO_COMPLEX</code>; a valid publish returns the stored ruleset with its new
-            <code> version</code>.
-          </P>
-        </Api>
-        <CodeTabs
-          tabs={[
-            {
-              label: "cURL",
-              lang: "bash",
-              code: `curl -X POST "https://api.vellum.dev${RULES_PATH}" \\
-  -H "Authorization: Bearer <SESSION_TOKEN>" \\
-  -H "content-type: application/json" \\
-  -d '{ "rulesAst": { "version": 1, "rules": [] } }'`,
-            },
-            {
-              label: "TypeScript (fetch)",
-              lang: "ts",
-              code: `const res = await fetch(
-  "https://api.vellum.dev${RULES_PATH}",
-  {
-    method: "POST",
-    headers: {
-      authorization: \`Bearer \${sessionToken}\`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ rulesAst }),
-  }
-);
-if (!res.ok) throw new Error(\`Publish failed: \${res.status}\`);
-const published = await res.json();`,
-            },
-          ]}
-        />
-        <H3 id="simulate">Simulate before publishing</H3>
-        <P>
-          The dashboard's <strong>Rule Simulator</strong> dry-runs a candidate AST against a simulated request. It
-          validates the AST and evaluates the same authorization path used reporting whether the
-          operation would be allowed and which rule matched (or the error code if it would be denied). Nothing is
-          published and no document-plane request is made.
-        </P>
-        <Code
-          lang="json"
-          title="Simulation context"
-          code={`{
-  "rulesAst": {
-    "version": 1,
-    "rules": [
-      {
-        "match": "users/{userId}",
-        "allow": {
-          "get": { "op": "==", "left": { "var": "auth.uid" }, "right": { "var": "path.userId" } }
-        }
-      }
-    ]
-  },
-  "operation": "get",
-  "path": "users/u_123",
-  "authUid": "u_123",
-  "authClaims": { "role": "member" },
-  "resourceData": { "ownerId": "u_123" },
-  "requestData": null
-}`}
-        />
-        <P>
-          For an end-to-end check, publish the candidate and issue a
-          normal request with a public key and an end-user bearer; a denied request returns
-          <code> PERMISSION_DENIED</code>. See{" "}
-          <PageLink slug="reference/errors">Error codes & retry guidance</PageLink>.
-        </P>
+      <Section id="section-5" title="Queries are not per-document get checks">
+        <P>{"An ordinary query checks list once against a synthetic document path under its collection, with resource.data and request.data both null. It does not re-run get for each result and does not inject owner filters. Aggregates also use the collection-level list gate. Granting list on a mixed-owner collection can expose rows whose individual get would fail. Adding a where(ownerId == uid) in an untrusted client is not an access-control boundary because the client can omit it."}</P>
+        <P>{"Use private user subcollections and compare path.userId for both get and list, as in the example. A rule requiring resource.data.ownerId for list denies the collection-level check, even if the query includes an owner filter. Do not compare the final document wildcard to uid for list; that segment is a synthetic marker, not a real record id."}</P>
+        <P>{"Batch get first checks list for each collection, then get with each loaded document's data; denied documents are omitted. Bulk delete checks list for the collection and delete for each selected document. Reverse-reference reads check get on the target and both get and list on referring rows. Do not assume one API operation's checks apply identically to every read API."}</P>
       </Section>
-
-      <Section id="pitfalls-and-next" title="Least privilege & common pitfalls">
-        <Table
-          head={["Pitfall", "Fix"]}
-          rows={[
-            ["Trusting a client-supplied ownerId", "Bind ownership to a path wildcard and compare it with auth.uid."],
-            ["Allowing updates without checking resource.data", "Check the stored owner as well as the incoming write so a patch cannot transfer ownership."],
-            ["Forgetting deny-by-default", "Confirm version: 1 and publish the ruleset; no match means deny."],
-            ["Overly deep or large expressions", "Stay within depth 10 and 100 nodes per expression."],
-            ["Granting broad read access", "Use list only where necessary, scoped by a claim such as auth.claims.role."],
-          ]}
-        />
-        <P>
-          Keep rules narrow: grant only the operations a role actually needs, scope them to the narrowest path
-          pattern, and prefer comparing against path wildcards and token claims over fields the client controls.
-        </P>
-        <P>
-          Continue with <PageLink slug="end-user-auth">End users & the three realms</PageLink>,{" "}
-          <PageLink slug="crud">CRUD & document paths</PageLink> for the paths rules match against, or{" "}
-          <PageLink slug="errors-and-limits">Quotas & limits</PageLink>.
-        </P>
+      <Section id="section-6" title="Realtime and relations">
+        <P>{"Query subscriptions require list on a synthetic path at subscription time. Individual realtime rows/events require get with their document data, including the corrected initial-snapshot behavior. Direct document subscriptions also perform a get gate before loading data, so a resource-only get condition can fail subscription setup. Path-based ownership works at both stages. Test initial snapshots, later changes and replay separately. Realtime's per-row get check does not make ordinary HTTP queries equally restrictive."}</P>
+        <P>{"A reference is data, not a permission grant or a cross-document rules lookup. Included targets are separately checked with get and the target's stored data. Denied references are redacted rather than granting access through the source. Rules cannot verify that a referenced target exists or inspect its owner. Use a fixed trusted path convention and test unauthorized includes. Relationship integrity rules and security rules are distinct features."}</P>
+        <P>{"The storage package is a document persistence adapter, not a separate client file-bucket rules language. Do not use Firebase-style storage match paths or assume these rules protect an unrelated upload service."}</P>
       </Section>
+      <Section id="section-7" title="Limits, errors and safe testing">
+        <Table head={["Limit", "Bound"]} rows={[["Rules per ruleset", "200"], ["Expression depth", "10"], ["Expression nodes", "100 per operation expression, including inlined functions"], ["Match pattern length", "2048 characters"], ["Variable path length", "512 characters"], ["in right-hand array", "At most 256 elements, also subject to the evaluation step budget"], ["Runtime expression work", "256 steps per expression; large membership checks can exhaust the budget"]]} />
+        <P>{"Unknown operators and invalid shapes are rejected by validation. Unknown variables may pass structural validation but resolve to undefined; negation and OR mean that an invalid subexpression is not proof that the whole rule denies. Reserved prototype-related field segments are blocked. Complexity failures use QUERY_TOO_COMPLEX; malformed ASTs use INVALID_ARGUMENT. A rule denial uses PERMISSION_DENIED. Invalid, expired or revoked API keys are separate authentication failures."}</P>
+        <P>{"Keep every test's identity, operation, full path, old data and full new data explicit. Test unauthenticated access, a different user, missing fields, wrong types, ownership changes, omitted client filters, nested paths, batch operations, included private targets and realtime setup/initial/live/replay. Test with a public key, because a server key can bypass the very rules you are checking."}</P>
+        <P>{"Compile and simulate endpoints are authoring tools, not activation or document-write APIs. A simulated allow is not proof of real API behavior, because a simulation supplies context directly. This guide does not claim that either SDK can activate rules. Verify actual document requests against the project's active ruleset before relying on a change."}</P>
+      </Section>
+      </div>
     </Doc>
   );
 }

@@ -1,0 +1,15 @@
+/* Keep dense reference tables readable in both text directions and on mobile. */
+.rules-guide .doc-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 0;
+}
+.rules-guide .doc-table th,
+.rules-guide .doc-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.rules-guide .doc-table th:first-child {
+  width: 30%;
+}
