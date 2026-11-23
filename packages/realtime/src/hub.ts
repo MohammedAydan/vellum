@@ -14,9 +14,10 @@
  *   on fan-out payloads so broken/mutating client callbacks cannot affect other subscribers.
  */
 
+import { projectDocumentFields } from "@vellum/document-engine";
 import { enrichRealtimeDocument, fetchRealtimeReferences, validateRealtimeIncludes } from "./relation-includes.js";
 import crypto from "node:crypto";
-import { VellumError, SYSTEM_LIMITS, parseDocumentPath, type ErrorCode } from "@vellum/core";
+import { VellumError, SYSTEM_LIMITS, parseDocumentPath, compareWireValues, type ErrorCode } from "@vellum/core";
 import { validateClientWsFrame, type ServerFrame, type ClientFrame } from "@vellum/api-contract";
 import { verifyEndUserAccessToken } from "@vellum/auth";
 import {
@@ -26,7 +27,7 @@ import {
   type AuthContext,
   type SecurityRulesetRecord,
 } from "@vellum/authorization";
-import { validateAndNormalizeQuery, documentMatchesQuery } from "@vellum/query-engine";
+import { validateAndNormalizeQuery, documentMatchesQuery, extractDocFieldValue } from "@vellum/query-engine";
 import type { StorageAdapter, OutboxEvent, DocumentRecord, TxHandle } from "@vellum/storage";
 import type {
   ConnectionSession,
@@ -118,8 +119,23 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
    * or been revoked since the initial WS handshake; otherwise returns null.
    */
   private checkSessionCredentialExpiry(session: ConnectionSession, nowMs: number = Date.now()): VellumError | null {
-    const apiKey = session.apiKeyRecord;
+    let apiKey = session.apiKeyRecord;
     if (apiKey) {
+      // Refresh by identity, not object reference: PostgreSQL mirror refresh and
+      // revocation replace records while existing sockets retain the old object.
+      let current: ApiKeyRecord | null | undefined;
+      if (this.controlStore.getApiKeyByPrefix) {
+        current = this.controlStore.getApiKeyByPrefix(apiKey.keyPrefix);
+      } else if ("apiKeysByPrefix" in this.controlStore && this.controlStore.apiKeysByPrefix instanceof Map) {
+        current = this.controlStore.apiKeysByPrefix.get(apiKey.keyPrefix) as ApiKeyRecord | undefined ?? null;
+      }
+      if (current !== undefined) {
+        if (!current || current.id !== apiKey.id || current.projectId !== session.projectId) {
+          return new VellumError("UNAUTHENTICATED", "API key is no longer active");
+        }
+        apiKey = current;
+        session.apiKeyRecord = current;
+      }
       if (apiKey.revokedAt) {
         return new VellumError("UNAUTHENTICATED", "API key has been revoked");
       }
@@ -392,13 +408,6 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     if (frame.path) {
       const parsed = parseDocumentPath(frame.path);
       targetPath = parsed.path;
-      authorizeOperation({
-        apiKeyRecord,
-        rulesetRecord: ruleset,
-        operation: "get",
-        path: targetPath,
-        authContext,
-      });
     } else if (frame.query) {
       const queryPayload: Record<string, unknown> = { ...frame.query };
       normalizedQuery = validateAndNormalizeQuery(queryPayload);
@@ -436,6 +445,8 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       const initialDocs: DocumentRecord[] = [];
       if (targetPath) {
         const doc = await tx.getDocument(targetPath, false);
+        authorizeOperation({ apiKeyRecord, rulesetRecord: this.controlStore.getActiveRuleset(projectId) ?? null,
+          operation: "get", path: targetPath, authContext, resourceData: doc?.data ?? null });
         if (doc) {
           subRecord.matchedPaths.add(doc.path);
           initialDocs.push(doc);
@@ -443,7 +454,21 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       } else if (normalizedQuery) {
         const activeDocs = (await tx.listActiveDocumentsInCollection?.(normalizedQuery.collectionPath)) ?? [];
         const docs = activeDocs
-          .filter((d: DocumentRecord) => documentMatchesQuery(d, normalizedQuery))
+          .filter((d: DocumentRecord) => {
+            if (!documentMatchesQuery(d, normalizedQuery)) return false;
+            try {
+              authorizeOperation({ apiKeyRecord, rulesetRecord: this.controlStore.getActiveRuleset(projectId) ?? null,
+                operation: "get", path: d.path, authContext, resourceData: d.data });
+              return true;
+            } catch { return false; }
+          })
+          .sort((a, b) => {
+            for (const order of normalizedQuery.orderBy) {
+              const compared = compareWireValues(extractDocFieldValue(a, order.field), extractDocFieldValue(b, order.field), order.dir);
+              if (compared !== 0) return compared;
+            }
+            return 0;
+          })
           .slice(0, normalizedQuery.limit);
         for (const doc of docs) {
           subRecord.matchedPaths.add(doc.path);
@@ -455,7 +480,8 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       const references = includes.length ? await fetchRealtimeReferences(projectId, initialDocs, includes, this.dataStore, tx) : new Map<string, DocumentRecord>();
       const payloads = await Promise.all(initialDocs.map(async (doc) => {
         const payload = this.toDocPayload(doc);
-        return includes.length ? enrichRealtimeDocument(payload, includes, references, apiKeyRecord, authContext, this.controlStore.getActiveRuleset(projectId) ?? null) : payload;
+        const enriched = includes.length ? await enrichRealtimeDocument(payload, includes, references, apiKeyRecord, authContext, this.controlStore.getActiveRuleset(projectId) ?? null) : payload;
+        return this.projectSubscriptionDocument(enriched, subRecord);
       }));
       if (session.closed || session.subscriptions.get(frame.subId) !== subRecord) return;
       session.sendFrame({
@@ -752,7 +778,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
         subId: subRecord.subId,
         seqId: seqNum,
         operation,
-        document: options?.document ?? {
+        document: this.projectSubscriptionDocument(options?.document ?? {
           path: ev.path,
           collectionPath: ev.collectionPath,
           collectionGroup: ev.collectionPath.split("/").pop() ?? ev.collectionPath,
@@ -761,7 +787,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           version: ev.version,
           createdAt: committedAtIso,
           updatedAt: committedAtIso,
-        },
+        }, subRecord),
       });
       if (!session.closed) {
         this.controlStore.incrementUsage(session.projectId!, {
@@ -804,7 +830,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           subId: subRecord.subId,
           seqId: seqNum,
           operation: "create",
-          document: options?.document ?? this.toDocPayload(pseudoAfterDoc!),
+          document: this.projectSubscriptionDocument(options?.document ?? this.toDocPayload(pseudoAfterDoc!), subRecord),
         });
         if (!session.closed) {
           this.controlStore.incrementUsage(session.projectId!, { realtimeMessagesSent: 1 });
@@ -815,7 +841,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           subId: subRecord.subId,
           seqId: seqNum,
           operation: "update",
-          document: options?.document ?? this.toDocPayload(pseudoAfterDoc!),
+          document: this.projectSubscriptionDocument(options?.document ?? this.toDocPayload(pseudoAfterDoc!), subRecord),
         });
         if (!session.closed) {
           this.controlStore.incrementUsage(session.projectId!, { realtimeMessagesSent: 1 });
@@ -827,7 +853,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           subId: subRecord.subId,
           seqId: seqNum,
           operation: "delete",
-          document: options?.document ?? {
+          document: this.projectSubscriptionDocument(options?.document ?? {
             path: ev.path,
             collectionPath: ev.collectionPath,
             collectionGroup: ev.collectionPath.split("/").pop() ?? ev.collectionPath,
@@ -836,13 +862,18 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
             version: ev.version,
             createdAt: committedAtIso,
             updatedAt: committedAtIso,
-          },
+          }, subRecord),
         });
         if (!session.closed) {
           this.controlStore.incrementUsage(session.projectId!, { realtimeMessagesSent: 1 });
         }
       }
     }
+  }
+
+  private projectSubscriptionDocument<T extends { data: Record<string, unknown> }>(document: T, sub: SubscriptionRecord): T {
+    const selected = sub.normalizedQuery?.select;
+    return selected?.length ? { ...document, data: projectDocumentFields(document.data, selected) } : document;
   }
 
   private toDocPayload(doc: DocumentRecord): {
