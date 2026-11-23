@@ -498,6 +498,21 @@ export function compileWhereClause(clause: WhereClause, params: unknown[]): stri
   }
 }
 
+/** Keep native JSON numbers numeric, including tagged int64, on fallback scans.
+ * The leading rank also makes missing/null values deterministic for keyset seeks.
+ * Use the exact same key for ORDER BY and cursor predicates.
+ */
+function fallbackOrderKey(json: string): string {
+  return `(CASE
+    WHEN ${json} IS NULL THEN jsonb_build_array(0)
+    WHEN jsonb_typeof(${json}) = 'null' THEN jsonb_build_array(1)
+    WHEN jsonb_typeof(${json}) = 'boolean' THEN jsonb_build_array(2, ${json})
+    WHEN jsonb_typeof(${json}) = 'number' THEN jsonb_build_array(3, ${json})
+    WHEN ${json} ->> '$t' = 'int' THEN jsonb_build_array(3, (${json} ->> '$v')::numeric)
+    WHEN jsonb_typeof(${json}) = 'string' THEN jsonb_build_array(4, ${json})
+    ELSE jsonb_build_array(5, ${json}) END)`;
+}
+
 function buildOrderBySql(orderBy: OrderByClause[], params: unknown[]): string {
   const parts: string[] = [];
   for (const o of orderBy) {
@@ -508,7 +523,7 @@ function buildOrderBySql(orderBy: OrderByClause[], params: unknown[]): string {
       parts.push(`d.${o.field === "createdAt" ? "created_at" : "updated_at"} ${dir}`);
     } else {
       const p = addParam(params, splitFieldPath(o.field));
-      parts.push(`(d.data #>> ${p}::text[]) COLLATE "C" ${dir}`);
+      parts.push(`${fallbackOrderKey(`(d.data #> ${p}::text[])`)} ${dir}`);
     }
   }
   return `ORDER BY ${parts.join(", ")}`;
@@ -579,21 +594,22 @@ function buildCursorPredicate(
     return `(d.${col} ${strictPrimaryOp} ${bound}::timestamptz OR (d.${col} = ${bound}::timestamptz AND d.document_id ${tieOp} ${id}))`;
   }
 
-  // Non-system order without a composite index: best-effort deterministic keyset.
+  // Unindexed values and cursor values share the same typed JSONB key.
   const raw = cursor.vals[0];
-  if (raw === undefined) return null;
   const p = addParam(params, splitFieldPath(primary.field));
   const id = addParam(params, cursor.docId);
   const strictPrimaryOp = primary.dir === "asc" ? ">" : "<";
-  const bound = addParam(params, String(raw));
+  const bound = addParam(params, JSON.stringify(raw ?? null));
+  const key = fallbackOrderKey(`(d.data #> ${p}::text[])`);
+  const cursorKey = fallbackOrderKey(`${bound}::jsonb`);
 
   if (primary.dir === tieDir) {
     const tupleOp = primary.dir === "asc"
       ? (inclusive ? ">=" : ">")
       : (inclusive ? "<=" : "<");
-    return `((d.data #>> ${p}::text[]) COLLATE "C", d.document_id) ${tupleOp} (${bound}::text, ${id})`;
+    return `(${key}, d.document_id) ${tupleOp} (${cursorKey}, ${id})`;
   }
-  return `((d.data #>> ${p}::text[]) COLLATE "C" ${strictPrimaryOp} ${bound}::text OR ((d.data #>> ${p}::text[]) COLLATE "C" = ${bound}::text AND d.document_id ${tieOp} ${id}))`;
+  return `(${key} ${strictPrimaryOp} ${cursorKey} OR (${key} = ${cursorKey} AND d.document_id ${tieOp} ${id}))`;
 }
 
 /**
