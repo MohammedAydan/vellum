@@ -257,10 +257,13 @@ function validateAstExpression(
  */
 export function matchRulePathPattern(pattern: string, targetPath: string): Record<string, string> | null {
   if (typeof targetPath !== "string" || targetPath.length > MAX_TARGET_PATH_LENGTH) return null;
-  const compiled = compileRulePattern(pattern);
+  // Canonical form has NO leading slash (document paths are `users/u1`). The DSL
+  // compiler emits `/users/{userId}`, so strip one leading slash from both sides
+  // here, at the single matching boundary, instead of trusting every caller.
+  const compiled = compileRulePattern(pattern.startsWith("/") ? pattern.slice(1) : pattern);
   if (compiled === null) return null;
 
-  const targetSegments = targetPath.split("/");
+  const targetSegments = (targetPath.startsWith("/") ? targetPath.slice(1) : targetPath).split("/");
   const bindings: Record<string, string> = {};
 
   for (let i = 0; i < compiled.length; i += 1) {
