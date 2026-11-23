@@ -1,343 +1,174 @@
-# 13 — Security Rules DSL (V2)
 
-> **Status:** current as of the V2 engine (Phases 1–4). The DSL compiles to the same
-> deterministic v1 JSON AST described in [04 — Authentication & Security Rules AST](./04-security-rules-ast.md).
-> It never generates or executes JavaScript: there is no `eval()` and no `new Function()`.
+# Rules DSL
 
-The Rules DSL is a small, human-friendly language for writing security rules. The
-compiler tokenizes and parses the source, expands macros and user functions, and emits a
-`SecurityRulesetAst` with `version: 1`. The runtime evaluator only ever sees that AST —
-the same deny-by-default, synchronous, in-memory evaluator that has always enforced the
-document plane. This gives you a readable authoring format without changing the security
-model.
+The DSL is a rules authoring language, not JavaScript, Dart or the Firebase rules language. It compiles into version 1 JSON expressions. Read [Security rules](./guides/security-rules.md) first for operation contexts, list access and realtime differences.
 
----
-
-## 1. `rules_version = '2'` is sugar
-
-A ruleset normally begins with a version declaration:
+## Syntax and first complete policy
 
 ```text
 rules_version = '2';
 
-match /users/{userId} {
-  allow get: if auth.uid == userId;
+function ownsNamespace() {
+  return isOwner(path.userId);
+}
+
+match /users/{userId}/notes/{noteId} {
+  allow get, list: if ownsNamespace();
+  allow create, update: if ownsNamespace()
+    && isType(incoming.title, 'string');
+  allow delete: if ownsNamespace();
 }
 ```
 
-**The declaration is sugar only.** `compileRulesDsl()` always emits
-`{ "version": 1, "rules": [...] }`, because `validateSecurityRulesetAst` requires
-`version === 1`. The `'2'` string simply signals the V2 authoring format. Declaring
-`'1'` is accepted; any other value produces a diagnostic ("not supported; expected
-'2'. Compiling as version 1 AST.") but does not change the emitted version. The
-declaration may be omitted entirely.
+The optional version declaration accepts '1' and '2'; both emit JSON version 1. Other versions produce a diagnostic, not a new evaluator. Match paths can begin with /. JSON examples use canonical relative paths. Prefer explicit path.userId; the corrected compiler also resolves a bare name that matches a wildcard.
 
-The emitted AST is exactly what you can publish through the rulesets endpoint or edit
-in the dashboard's JSON mode:
+A file contains top-level function and match declarations and must produce at least one rule. Nested match blocks join their path to their parent and produce separate rules; parent permissions are not inherited. Use a recursive wildcard only as the final segment. Comments support // and /* ... */. Statements use semicolons; always include them even where the parser accepts omission.
 
-```json
-{
-  "version": 1,
-  "rules": [
-    {
-      "match": "/users/{userId}",
-      "allow": {
-        "get": { "op": "==", "left": { "var": "auth.uid" }, "right": { "var": "path.userId" } }
-      }
-    }
-  ]
-}
-```
+allow get, list shares an expression. read expands to get and list; write expands to create, update and delete. Repeating an operation in one match block replaces its earlier expression, not OR. Separate matching rules use OR: a permissive rule elsewhere can defeat a restrictive one.
 
----
+## Operators, values and precedence
 
-## 2. Syntax
+| Form | Meaning |
+| --- | --- |
+| a == b, a != b | Typed equality or inequality; missing operands do not pass either comparison. |
+| a < b, a <= b, a > b, a >= b | Wire ordering. Guard the type before checking numeric bounds. |
+| a in ['one', 'two'] | Array membership using typed equality. |
+| hasKey(value, 'field') | Direct own-key check, not a dotted-path lookup or allowlist. |
+| isType(value, 'string') | Type predicate; see the complete type table in Security rules. |
+| a && b | Both expressions pass. |
+| a OR b (double vertical bar) | At least one passes. |
+| !a | Negation. Use parentheses around compound expressions. |
 
-### 2.1 Top level
+Comparisons bind more tightly than !, then &&, then || in this parser. Use parentheses instead of relying on unfamiliar precedence. Values include single/double-quoted strings, signed numbers, booleans, null and literal arrays. Dynamic array entries are not supported. Do not use JavaScript object literals, bracket property access, methods, arithmetic, loops, assignment, ternaries, regex, string concatenation or database calls.
 
-A ruleset is a sequence of declarations. It must contain at least one `match` block or
-compilation fails with *"Ruleset must contain at least one 'match' block"*.
+A bare field in a boolean position is compared with true; there is no JavaScript truthiness. Prefer explicit predicates. Functions are boolean-expression helpers, not value-returning arithmetic helpers. Use a function as a complete predicate, not as an operand in another comparison or inside an array.
+
+## Every built-in
+
+| Built-in | Arguments | Exact behavior |
+| --- | --- | --- |
+| isSignedIn() | None | auth.uid != null. Anonymous users with a uid count as signed in. |
+| isAuth() | None | Alias of isSignedIn(). |
+| isOwner(id) | One value | Signed in AND uid equals id. |
+| hasRole(role) | One value | auth.claims.role equals role. It does not inspect claims.roles. |
+| hasAnyRole(['writer', 'reviewer']) | One literal string array | Singular auth.claims.role is in that array. |
+| isEmailVerified() | None | auth.email_verified equals true. Does not itself require a uid. |
+| unchanged(['ownerId', 'createdAt']) | One literal string array | Each listed field in the full new data equals stored data. Dotted field paths work. Empty array returns true. Missing fields do not compare equal. |
+| onlyChanged(['title']) | One literal string array | Negated equality for each listed field, with a diagnostic. Does NOT forbid other changes. Empty array returns true. Do not use as a write allowlist. |
+| hasKey(value, 'field') | Two values | Own direct key on a non-array object; reserved prototype-related keys are blocked. |
+| isType(value, 'type') | Two values | null, bool/boolean, string, number, array, map, or matching wire tag such as ref, int, ts, bytes, geo. |
+
+There are no other built-ins. Incorrect argument counts fail compilation. unchanged, onlyChanged and hasAnyRole require string arrays, not a runtime variable containing an array. Never let a client assign its own trusted role claim. Never replace missing identity checks with auth != null: the unauthenticated auth context is an object with uid:null.
+
+## Context aliases
+
+| DSL | Canonical JSON variable |
+| --- | --- |
+| auth.uid, request.auth.uid | auth.uid |
+| auth.email, auth.email_verified, auth.is_anonymous | Same path |
+| auth.claims.team, request.auth.claims.team | auth.claims.team |
+| path.userId | path.userId |
+| resource, resource.title, resource.data.title | resource.data, resource.data.title, resource.data.title |
+| incoming, incoming.title | request.data, request.data.title |
+| request.resource.data.title | request.data.title |
+| request.data.title, request.time | Same path |
+
+incoming is the full post-write document after merges and transforms. It is null on read/delete. resource is null on create and at collection-level list gates. Missing fields are undefined, distinct from explicit null.
+
+## Public reads, trusted roles and field validation
+
+This policy intentionally makes every post publicly readable. Only signed-in users can create their own post, the original author can edit without transferring ownership, and a verified reviewer role may delete.
 
 ```text
-rules_version = '2';      // optional version declaration
-
-function isAdmin() {      // zero or more user functions
-  return hasRole('admin');
-}
-
-match /users/{userId} {   // one or more match blocks
-  allow get: if ...;
-  allow list, create: if ...;
-  match /orders/{orderId} {   // nested matches are flattened
-    allow read: if ...;
-  }
-}
-```
-
-Both `//` line comments and `/* … */` block comments are supported (an unterminated
-block comment is a syntax error). String literals accept single or double quotes with
-`\n`, `\t`, `\r`, `\\`, `\'`, `\"` and `\uXXXX` escapes. Numbers may be integer or
-decimal and may carry a leading sign. Booleans are `true` / `false`; `null` is `null`.
-
-### 2.2 Match paths
-
-`match /users/{userId}` declares a path pattern. A single-segment wildcard
-`{paramName}` binds the matching segment to `path.<paramName>`. A recursive wildcard
-`{document=**}` at the end matches one or more remaining segments. Nested `match`
-blocks are flattened into full paths (e.g. `/users/{userId}/orders/{orderId}`). Leading
-and trailing slashes are normalized.
-
-If several rules match a path, access is granted when **any** matching rule allows the
-operation — standard OR semantics — and denied by default when none does.
-
-### 2.3 Allow statements
-
-```text
-allow get: if <expression>;
-allow list, get: if <expression>;        // multiple operations share one expression
-allow read: if <expression>;             // expands to get + list
-allow write: if <expression>;            // expands to create + update + delete
-```
-
-Supported operations are `get`, `list`, `create`, `update`, `delete`, `read`, `write`.
-Anything else is rejected as *"Unsupported rule operation"*. The trailing semicolon is
-optional.
-
-### 2.4 Expressions
-
-| Construct | DSL | Emitted AST op |
-| :-------- | :-- | :------------- |
-| Logical AND | `a && b` | `all` with a conditions array |
-| Logical OR | `a \|\| b` | `any` with a conditions array |
-| Negation | `!a` | `not` with one condition |
-| Comparison | `a == b`, `!=`, `<`, `<=`, `>`, `>=` | same operator |
-| Membership | `a in ['x', 'y']` | `in` |
-| Key / type test | `hasKey(a, 'field')`, `isType(a, 'string')` | `hasKey`, `isType` |
-| Grouping | `(a && b) \|\| c` | nested combinators |
-| Literals | `true`, `false`, `null`, `123`, `'text'`, `[...]` | literal operands |
-
-Comparisons use the same typed wire-value equality/ordering as the query engine. Array
-literals must contain only literals; a non-literal element is replaced with `null` and
-reported as a diagnostic. The AST stays within the locked complexity bounds: **depth
-<= 10** and **<= 100 nodes per expression** (`SYSTEM_LIMITS`). Exceeding either is a
-syntax error.
-
----
-
-## 3. Aliases and context variables
-
-The DSL's short names map onto the exact variable paths understood by the evaluator:
-
-| DSL alias | Canonical AST variable | Meaning |
-| :-------- | :--------------------- | :------ |
-| `auth` | `auth` | End-user identity (`auth.uid`, `auth.email`, `auth.email_verified`, `auth.claims.*`) |
-| `resource` | `resource.data` | Existing document data (`null` on create) |
-| `incoming` | `request.data` | Incoming document data (`null` on reads/deletes) |
-| `request.auth.*` | `auth.*` | Alternate spelling of the identity claims |
-| `request.resource.data.*` | `request.data.*` | Alternate spelling of incoming data |
-| `path.<param>` | `path.<param>` | Value bound by a wildcard in the matching rule |
-| `request.time` | `request.time` | Request time (epoch milliseconds) |
-
-`resource.ownerId` and `resource.data.ownerId` are equivalent, as are `incoming.total`
-and `request.resource.data.total`. Unknown variable roots produce a diagnostic
-(*"Unknown variable …; compiled as a variable path and may resolve to undefined"*) and
-evaluate to `undefined` — which never grants access.
-
----
-
-## 4. Built-in macros
-
-Macros expand deterministically into v1 AST nodes. Arity is checked: a wrong argument
-count is a syntax error.
-
-| Macro | Args | Expansion / meaning |
-| :---- | :--- | :------------------ |
-| `isSignedIn()` / `isAuth()` | 0 | `auth.uid != null` |
-| `isOwner(ownerId)` | 1 | `auth.uid != null && auth.uid == ownerId` |
-| `hasRole(role)` | 1 | `auth.claims.role == role` |
-| `hasAnyRole(['a','b'])` | 1 (string array) | `auth.claims.role in ['a','b']` |
-| `isEmailVerified()` | 0 | `auth.email_verified == true` |
-| `unchanged(['a','b'])` | 1 (string array) | every listed field has `request.data.f == resource.data.f` |
-| `onlyChanged(['a','b'])` | 1 (string array) | every listed field has `!(request.data.f == resource.data.f)` — see the limitation below |
-| `hasKey(obj, 'field')` | 2 | `hasKey` AST node |
-| `isType(value, 'string')` | 2 | `isType` AST node |
-
-```text
-rules_version = '2';
-
-function isMember() {
-  return isSignedIn() && hasAnyRole(['member', 'admin']);
-}
-
-match /users/{userId} {
-  allow get: if isOwner(userId) || hasRole('admin');
-  allow create: if isOwner(userId) && isEmailVerified()
-                   && isType(incoming.displayName, 'string');
-  allow update: if isOwner(userId) && unchanged(['ownerId', 'createdAt']);
-  allow delete: if hasRole('admin');
-}
-```
-
-### 4.1 The `onlyChanged` limitation
-
-> **Important:** the v1 rules AST has no dynamic key-set comparison, so
-> `onlyChanged([...])` **cannot fully enforce** that no other keys changed. The compiler
-> emits a deterministic check that each listed field *differs* from its stored value and
-> attaches this diagnostic:
->
-> *"onlyChanged(...) cannot fully enforce that no other keys changed: the v1 rules AST
-> has no dynamic key-set comparison. Compiled a deterministic check that each listed
-> field differs; enforce 'all other keys unchanged' in application logic."*
->
-> If the entire write must be restricted to a known key set, enforce that in application
-> logic (or use `unchanged([...])` on the fields that must stay fixed).
-
-An unknown function name is compiled as the safe literal `false` and reported as a
-diagnostic — it never silently grants access.
-
----
-
-## 5. User-defined functions and inlining
-
-```text
-function canReadPost(postId) {
-  return isSignedIn() && (hasRole('admin') || isOwner(path.userId));
-}
-
 match /posts/{postId} {
-  allow get: if canReadPost(postId);
+  allow read: if true;
+  allow create: if isSignedIn()
+    && incoming.authorId == auth.uid
+    && isType(incoming.title, 'string')
+    && isType(incoming.score, 'number')
+    && incoming.score >= 0 && incoming.score <= 100;
+  allow update: if isOwner(resource.authorId)
+    && unchanged(['authorId'])
+    && isType(incoming.title, 'string')
+    && isType(incoming.score, 'number')
+    && incoming.score >= 0 && incoming.score <= 100;
+  allow delete: if hasRole('reviewer');
 }
 ```
 
-Functions are declared as `function name(p1, p2) { return <expression>; }`. Call sites
-are **inlined** into the calling expression: parameters are substituted with the
-supplied arguments, and the resulting AST is emitted inline. There are no function-call
-AST nodes at runtime.
+These predicates constrain named fields but do not reject additional fields. isType(title,'string') allows an empty string; no length predicate is available. To make posts private, do not merely change get while leaving list:true. Use the private namespace pattern instead, or deny list on a mixed-owner collection.
 
-- User definitions **shadow** built-in macros of the same name.
-- Forward references between functions are supported.
-- Recursion is rejected (*"Recursive function call … cannot be inlined"*), and inlining
-  is capped at depth 16 (*"Function inlining exceeded maximum depth of 16"*).
-- A wrong argument count is an error (*"Function 'x' expects N argument(s) but got M"*).
+## Relations and immutable fields
 
-Because inlining happens before the complexity guard, a function that expands to a huge
-tree still trips the depth-10 / 100-node limits.
+```text
+match /users/{userId}/notes/{noteId} {
+  allow get, list: if isOwner(path.userId);
+  allow create: if isOwner(path.userId)
+    && isType(incoming.author, 'ref')
+    && incoming.author.$v == auth.claims.profilePath;
+  allow update: if isOwner(path.userId)
+    && unchanged(['author']);
+}
+```
 
----
+This assumes the verified token contains a trusted profilePath claim, such as profiles/alice. The type check confirms a tagged reference and $v compares its target path. It does not check target existence, read the target, grant target access or create an inverse relation. The application must not let an end user self-assign profilePath. Included targets still require their own get permission.
 
-## 6. Diagnostics — exact line and column
+unchanged checks the full post-write value, so a patch that omits author can pass while replacing the document without author fails. Use explicit required-field/type checks on create; unchanged alone is not a create validator.
 
-Compiler diagnostics are 1-based. There are two channels:
+## Reusable functions
 
-- **`RulesDslSyntaxError`** — thrown for lexer, parser, grammar and complexity failures.
-  It exposes `line`, `column` and `snippet` (the offending source line plus a `^` caret),
-  and its message reads `"<message> (line L, column C)"`. Examples:
-  *"Unterminated string literal"*, *"Expected '}' but found 'end of input'"*,
-  *"Security rule expression exceeds maximum depth of 10"*.
-- **Diagnostics array** — returned alongside the AST from `compileRulesDsl()` for
-  semantic concerns that do not prevent compilation: unknown functions/variables,
-  `onlyChanged` limitation, non-literal array elements, and unsupported version strings.
-  Each has `{ message, line, column, snippet? }`.
+```text
+function mayRead(userId) {
+  return isOwner(userId) || hasAnyRole(['reviewer', 'support']);
+}
+match /users/{userId}/tickets/{ticketId} {
+  allow get, list: if mayRead(path.userId);
+}
+```
 
-The REST `POST /rules/compile` endpoint maps a syntax error to HTTP 400 with the exact
-position:
+Functions contain exactly one return expression. Parameters substitute complete values/expressions; forward references work. Definitions are top-level and names must be unique. User functions shadow built-ins, so do not name your helper isOwner or isSignedIn. Calls are inlined; recursion is rejected, inlining depth is capped at 16 and the final expression still must fit depth 10 and 100 nodes. Helpers do not add new runtime capabilities.
+
+## Compile, decompile and simulate
+
+| Method and path | Request | Response |
+| --- | --- | --- |
+| POST /v1/projects/:projectId/rules/compile | source: DSL text | ast and diagnostics |
+| POST /v1/projects/:projectId/rules/decompile | rulesAst: version 1 AST | dsl text |
+| POST /v1/projects/:projectId/rules/simulate | operation, path, optional rulesAst, auth, resourceData, incomingData | allowed, matchedRule, evaluationTrace |
+
+Use the project's API key in X-Project-Key. These tools do not write documents or activate rules. Supplying auth in a simulation only chooses test input; it cannot authenticate a real data request. Omitting rulesAst in simulation uses the active ruleset, if any. Decompilation preserves supported expression behavior, not original comments, helper names or formatting.
 
 ```json
 {
-  "error": {
-    "code": "INVALID_ARGUMENT",
-    "message": "Expected '}' but found 'end of input' (line 5, column 3)",
-    "line": 5,
-    "column": 3,
-    "snippet": "  allow get: if auth.uid == userId;\n  ^"
+  "operation": "get",
+  "path": "users/alice/notes/one",
+  "auth": { "uid": "alice", "claims": {} },
+  "resourceData": { "title": "Private note" },
+  "incomingData": null,
+  "rulesAst": {
+    "version": 1,
+    "rules": [{
+      "match": "users/{userId}/notes/{noteId}",
+      "allow": { "get": {
+        "op": "all",
+        "conditions": [
+          { "op": "!=", "left": { "var": "auth.uid" }, "right": { "val": null } },
+          { "op": "==", "left": { "var": "auth.uid" }, "right": { "var": "path.userId" } }
+        ]
+      } }
+    }]
   }
 }
 ```
 
-A successful compile returns `{ "ast": {...}, "diagnostics": [...] }`.
+Repeat with uid:bob and uid:null and expect denial. Then issue real document requests with public-key/end-user credentials against the active ruleset. The simulation does not prove collection gates, query filtering, key scopes, tenant authentication or realtime behavior.
 
----
+## Diagnostics and pitfalls
 
-## 7. Compile / decompile / simulate endpoints
+Syntax errors include one-based line/column and a caret snippet. Non-fatal diagnostics can accompany a successful AST: unknown functions, unknown variable roots, unsupported version declarations, non-literal arrays and onlyChanged. Require zero diagnostics for production policies, then still run negative tests. A typo under a known root may not produce a diagnostic at all.
 
-All three endpoints live under `/v1/projects/:projectId/rules/*` and accept
-either an API key or a realm-verified Customer Console session (the dashboard uses the
-latter). They are pure tooling — none of them publish a ruleset or touch document data.
+An unknown function becomes false, but !unknownFunction() can therefore become true. Undefined-field comparisons also behave differently under negation. Do not treat an unknown identifier or a warning as a safe deny for an entire policy. Prefer positive existence, type and identity checks.
 
-| Method | Path | Request | Response |
-| :----- | :--- | :------ | :------- |
-| `POST` | `…/rules/compile` | `{ "source": "<DSL>" }` (aliases `dsl`, `rulesDsl`, `rules` accepted) | `{ "ast": <v1 AST>, "diagnostics": [...] }` |
-| `POST` | `…/rules/decompile` | `{ "rulesAst": <v1 AST> }` or a bare AST | `{ "dsl": "<rules_version = '2'; …>" }` |
-| `POST` | `…/rules/simulate` | `{ "rulesAst"?, "operation", "path", "auth"?, "resourceData"?, "incomingData"? }` | `{ "allowed", "matchedRule", "evaluationTrace" }` |
+Source length is capped at 131072 JavaScript string code units; the error calls this bytes, but the implementation measures string length. The token cap is 16384; parser nesting is capped at 64. Keep policies short enough that runtime membership checks also stay within the 256-step budget. There is no general field allowlist: onlyChanged is not one, hasKey is not one, and validation in an untrusted client is not one.
 
-`decompile` renders a v1 AST back into idiomatic DSL (`&&`/`||`/`!`, aliases
-`resource`/`incoming`, and a leading `rules_version = '2';`). `simulate` uses the active
-ruleset when `rulesAst` is omitted, then walks every matching rule with the same
-evaluator used in production, returning a human-readable `evaluationTrace`.
-
-```bash
-BASE="https://api.example.com/v1/projects/$PROJECT_ID/rules"
-
-# Compile DSL → v1 AST + diagnostics.
-curl -s -X POST "$BASE/compile" \
-  -H "x-vellum-api-key: $API_KEY" -H "content-type: application/json" \
-  -d '{ "source": "rules_version = '\''2'\'';\nmatch /users/{uid} {\n  allow get: if isOwner(uid);\n}" }'
-
-# Decompile AST → DSL.
-curl -s -X POST "$BASE/decompile" \
-  -H "x-vellum-api-key: $API_KEY" -H "content-type: application/json" \
-  -d '{ "rulesAst": { "version": 1, "rules": [] } }'
-
-# Simulate an operation.
-curl -s -X POST "$BASE/simulate" \
-  -H "x-vellum-api-key: $API_KEY" -H "content-type: application/json" \
-  -d '{
-    "operation": "get",
-    "path": "users/u_123",
-    "auth": { "uid": "u_123", "claims": { "role": "member" } },
-    "resourceData": { "ownerId": "u_123" },
-    "incomingData": null
-  }'
-# → { "allowed": true, "matchedRule": "/users/{uid}",
-#     "evaluationTrace": [ "simulate: operation 'get' on path 'users/u_123'", ... ] }
-```
-
-Publishing still goes through the rulesets endpoint described in
-[04 — Security Rules AST](./04-security-rules-ast.md): send the compiled `rulesAst` as
-`{ "rulesAst": { "version": 1, "rules": [...] } }`. Only a validated v1 AST can become
-active.
-
----
-
-## 8. Dashboard: dual-mode studio + simulator
-
-The customer dashboard's **Rules Studio** offers two synchronized editing modes:
-
-- **DSL mode** — the default, with quick-insert templates of valid V2 DSL and live
-  compile-on-edit. Syntax errors show the message, line, column and snippet in the
-  editor gutter and a toast; non-fatal diagnostics are listed alongside the editor.
-- **JSON mode** — direct editing of the v1 AST, for advanced users and for round-tripping
-  an existing published ruleset (it is decompiled to DSL when switching back).
-
-The **Rule Simulator** panel runs `POST …/rules/simulate` against either the draft AST or
-the active ruleset with mock auth/resource/incoming payloads, showing `allowed`, the
-matched rule and the full evaluation trace. Nothing is published until you explicitly
-publish the ruleset, and the simulated request never reaches the document plane.
-
----
-
-## 9. Checklist and common pitfalls
-
-| Pitfall | Fix |
-| :------ | :--- |
-| Assuming `'2'` produces a v2 AST | It is sugar; the emitted AST is always `version: 1`. |
-| Relying on `onlyChanged` to lock the whole write | It only checks listed fields differ; enforce the rest in application logic. |
-| Trusting a client-supplied owner field | Compare `auth.uid` with a path wildcard (`isOwner(userId)`), not a writable field. |
-| Allowing updates without checking stored data | Add `unchanged(['ownerId'])` so a patch cannot transfer ownership. |
-| Calling an unknown function | It compiles to `false` with a diagnostic — grant nothing by accident. |
-| Exceeding 10 levels / 100 nodes | Split rules or simplify expressions; the compiler rejects them. |
-| Forgetting deny-by-default | No matching rule or no expression for the operation means deny. |
-
-Continue with the [Security Rules AST reference](./04-security-rules-ast.md) for the
-runtime evaluator and variable semantics, and [12 — Relationships & Advanced Queries](./12-relationships-and-advanced-queries.md)
-for the paths and writes that rules authorize.
+The complete examples in these two guides are extracted by tests/integration/rules-guide-examples.test.ts and evaluated with real authorization and the local document engine. Run corepack pnpm exec vitest run tests/integration/rules-guide-examples.test.ts when changing them.

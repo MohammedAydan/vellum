@@ -1,267 +1,58 @@
-import {
-  Api,
-  Callout,
-  Code,
-  Doc,
-  P,
-  PageLink,
-  Section,
-  Table,
-  UL,
-} from "../../ui";
+import { Code, Doc, P, PageLink, Section, Table } from "../../ui";
+import "../../rules-guide.css";
 
-const exampleDsl = `rules_version = '2';
-
-function isMember() {
-  return isSignedIn() && hasAnyRole(['member', 'admin']);
-}
-
-match /users/{userId} {
-  allow get: if isOwner(userId) || hasRole('admin');
-  allow create: if isOwner(userId) && isEmailVerified()
-                   && isType(incoming.displayName, 'string');
-  allow update: if isOwner(userId) && unchanged(['ownerId', 'createdAt']);
-  allow delete: if hasRole('admin');
-
-  match /orders/{orderId} {
-    allow read: if isOwner(userId);
-  }
-}`;
-
-const exampleAst = `{
-  "version": 1,
-  "rules": [
-    {
-      "match": "/users/{userId}",
-      "allow": {
-        "get": {
-          "op": "any",
-          "conditions": [
-            { "op": "==", "left": { "var": "auth.uid" }, "right": { "var": "path.userId" } },
-            { "op": "==", "left": { "var": "auth.claims.role" }, "right": { "val": "admin" } }
-          ]
-        }
-      }
-    }
-  ]
-}`;
-
-const endpoints = `BASE="https://api.example.com/v1/projects/$PROJECT_ID/rules"
-
-# ترجمة DSL → شجرة v1 + التشخيصات.
-curl -s -X POST "$BASE/compile" \\
-  -H "x-vellum-api-key: $API_KEY" -H "content-type: application/json" \\
-  -d '${JSON.stringify({ source: "rules_version = '2';\nmatch /users/{uid} {\n  allow get: if isOwner(uid);\n}" }).replaceAll("'", "'\\''")}'
-
-# تفكيك شجرة v1 → DSL.
-curl -s -X POST "$BASE/decompile" \\
-  -H "x-vellum-api-key: $API_KEY" -H "content-type: application/json" \\
-  -d '{ "rulesAst": { "version": 1, "rules": [] } }'
-
-# محاكاة عملية (تستخدم القواعد الفعّالة إن غاب rulesAst).
-curl -s -X POST "$BASE/simulate" \\
-  -H "x-vellum-api-key: $API_KEY" -H "content-type: application/json" \\
-  -d '{ "operation": "get", "path": "users/u_123",
-        "auth": { "uid": "u_123", "claims": { "role": "member" } },
-        "resourceData": { "ownerId": "u_123" }, "incomingData": null,
-        "rulesAst": { "version": 1, "rules": [] } }'`;
-
-const diagnostic = `{
-  "error": {
-    "code": "INVALID_ARGUMENT",
-    "message": "Expected '}' but found 'end of input' (line 5, column 3)",
-    "line": 5,
-    "column": 3,
-    "snippet": "  allow get: if auth.uid == userId;\n  ^"
-  }
-}`;
-
+// Keep these examples aligned with docs/guides/ar/security-rules-dsl.md.
 export default function Page() {
   return (
-    <Doc
-      title="لغة قواعد الأمان"
-      description="لغة مقروءة للقواعد تُترجم إلى شجرة v1 الحتمية، مع ماكروهات ودوال ومجموعة أدوات كاملة للترجمة والتفكيك والمحاكاة."
-      eyebrow="الأمان"
-    >
-      <Section id="overview" title="نظرة عامة">
-        <P>
-          لغة قواعد الأمان (Rules DSL) لغة صغيرة سهلة القراءة لكتابة قواعد الأمان. يُرمّز المُترجِم
-          المصدر ويحلّله، ويوسّع الماكروهات والدوال المعرَّفة من المستخدم، ثم يُصدر شجرة JSON بالإصدار 1 —
-          البنية نفسها الموصوفة في صفحة{" "}
-          <PageLink slug="security-rules" lang="ar">قواعد الأمان</PageLink>. لا يوجد <code>eval()</code> ولا{" "}
-          <code>new Function()</code>: لا يمشي مُقيِّم وقت التشغيل إلا على الشجرة الحتمية، في الذاكرة،
-          بالرفض الافتراضي.
-        </P>
-        <Callout tone="info" title="صيغة تأليف، لا نموذج أمني جديد">
-          اللغة تغيّر طريقة كتابة القواعد لا طريقة فرضها. النشر ما زال يخزّن قواعد{" "}
-          <code>version: 1</code> مُتحقَّقًا منها في مستوى التحكم.
-        </Callout>
+    <Doc title="لغة قواعد الأمان DSL" description="الصياغة الكاملة والدوال المدمجة وأنماط آمنة واختبارات بالمحرك الحقيقي." eyebrow="الأمان">
+      <div className="rules-guide">
+        <P>{"DSL لغة لكتابة القواعد، وليست JavaScript أو Dart أو لغة قواعد Firebase. تتحول إلى تعبيرات JSON بالإصدار 1. ابدأ بدليل "}<PageLink slug="security-rules" lang="ar">{"قواعد الأمان"}</PageLink>{" لفهم سياقات العمليات وصلاحية list واختلاف الوقت الفعلي."}</P>
+      <Section id="section-1" title="الصياغة وأول سياسة كاملة">
+        <Code lang="text" code={"rules_version = '2';\n\nfunction ownsNamespace() {\n  return isOwner(path.userId);\n}\n\nmatch /users/{userId}/notes/{noteId} {\n  allow get, list: if ownsNamespace();\n  allow create, update: if ownsNamespace()\n    && isType(incoming.title, 'string');\n  allow delete: if ownsNamespace();\n}"} />
+        <P>{"تصريح الإصدار اختياري؛ تقبل '1' و'2' وكلاهما ينتج JSON بالإصدار 1. أي إصدار آخر يصدر ملاحظة، ولا يغير المحرك. يمكن أن يبدأ مسار DSL بشرطة /. تستخدم أمثلة JSON المسارات النسبية. فضّل path.userId الصريحة؛ يدعم المترجم المصحح أيضًا الاسم المنفرد المطابق لمتغير المسار."}</P>
+        <P>{"يحتوي الملف تصريحات function وmatch في المستوى الأعلى ويجب أن ينتج قاعدة واحدة على الأقل. تضم match المتداخلة مسارها لمسار الأب وتنتج قواعد مستقلة دون وراثة الصلاحيات. ضع المتغير التكراري في نهاية المسار. التعليقات // و/* ... */ مدعومة. استخدم الفاصلة المنقوطة دائمًا حتى حين يسمح المحلل بحذفها."}</P>
+        <P>{"يجعل allow get, list العمليتين تشتركان في التعبير. يوسع read إلى get وlist وwrite إلى create وupdate وdelete. تكرار العملية داخل الكتلة نفسها يستبدل التعبير السابق ولا يضيف OR. أما القواعد المستقلة المطابقة فتستخدم OR؛ قد تهزم قاعدة متساهلة قاعدة أكثر تقييدًا."}</P>
       </Section>
-
-      <Section id="version" title="rules_version = '2' مجرد سكر نحوي">
-        <P>
-          تبدأ مجموعة القواعد عادةً بـ <code>rules_version = '2';</code>. هذا التصريح{" "}
-          <strong>سكر نحوي فقط</strong>: دالة <code>compileRulesDsl()</code> تُصدر دائمًا{" "}
-          <code>{"{ \"version\": 1, \"rules\": [...] }"}</code>، لأن المُتحقِّق يشترط الإصدار 1.
-          يُقبل تصريح <code>'1'</code>، وأي قيمة أخرى تُنتج تشخيصًا دون تغيير الإصدار المُصدر. يمكن حذف التصريح.
-        </P>
-        <Code lang="ts" title="DSL → شجرة" code={exampleDsl} />
-        <P>يُحوّل المُترجِم ذلك إلى شجرة v1 المستخدمة في باقي النظام:</P>
-        <Code lang="json" title="شجرة v1 المُصدرّة" code={exampleAst} />
+      <Section id="section-2" title="العوامل والقيم والأولوية">
+        <Table head={["الصيغة", "المعنى"]} rows={[["a == b, a != b", "مساواة أو اختلاف مع مراعاة النوع؛ لا تنجح أي منهما مع طرف غائب."], ["a < b, a <= b, a > b, a >= b", "ترتيب wire. افحص نوع الرقم قبل حدوده."], ["a in ['one', 'two']", "عضوية في مصفوفة باستخدام مساواة ذات أنواع محددة."], ["hasKey(value, 'field')", "مفتاح مباشر مملوك للكائن، لا مسار متداخل ولا قائمة سماح."], ["isType(value, 'string')", "فحص نوع؛ راجع جدول الأنواع في دليل القواعد."], ["a && b", "نجاح التعبيرين."], ["a OR b (الرمز المزدوج)", "نجاح واحد على الأقل."], ["!a", "النفي؛ استخدم أقواسًا مع التعبيرات المركبة."]]} />
+        <P>{"في هذا المحلل تربط المقارنات أولًا، ثم ! ثم && ثم ||. استخدم الأقواس بدل الاعتماد على أولوية غير مألوفة. القيم تشمل نصوصًا باقتباس مفرد أو مزدوج وأرقامًا بإشارة وقيمًا منطقية وnull ومصفوفات ثابتة. عناصر المصفوفة الديناميكية غير مدعومة. لا تستخدم كائنات JavaScript الحرفية أو الوصول بالأقواس أو methods أو الحساب أو الحلقات أو الإسناد أو الشرط الثلاثي أو regex أو تجميع النصوص أو استدعاءات قاعدة البيانات."}</P>
+        <P>{"يُقارن الحقل المنفرد في موضع شرط بالقيمة true، ولا توجد truthiness خاصة بـ JavaScript. اكتب شروطًا صريحة. الدوال مساعدات لتعبيرات منطقية وليست دوال لإرجاع قيم حسابية. استخدم استدعاء الدالة كشرط كامل، لا كطرف داخل مقارنة أخرى أو داخل مصفوفة."}</P>
       </Section>
-
-      <Section id="syntax" title="الصياغة">
-        <P>
-          مجموعة القواعد سلسلة من تصريحات <code>function</code> و<code>match</code>، ويجب أن تحتوي على
-         (match) واحد على الأقل. تُدعم التعليقات من نوع <code>//</code> و<code>/* … */</code>، والسلاسل
-          بعلامتي تنصيص، والأرقام والقيم المنطقية و<code>null</code> ومصفوفات القيم. يربط البديل{" "}
-          <code>{"{param}"}</code> مقطع مسار واحدًا، بينما يطابق <code>{"{document=**}"}</code> في
-          النهاية مقطعًا أو أكثر. تُدمج المسارات المتداخلة.
-        </P>
-        <Code lang="ts" title="أشكال جمل allow" code={`allow get: if <expression>;
-allow list, get: if <expression>;     // عمليات متشاركة في تعبير واحد
-allow read: if <expression>;          // تتوسع إلى get + list
-allow write: if <expression>;         // تتوسع إلى create + update + delete`} />
-        <Table
-          head={["الإنشاء", "DSL", "عملية الشجرة"]}
-          rows={[
-            ["AND منطقي", <code>a &amp;&amp; b</code>, <code>all</code>],
-            ["OR منطقي", <code>a || b</code>, <code>any</code>],
-            ["النفي", <code>!a</code>, <code>not</code>],
-            ["المقارنة", <code>== != &lt; &lt;= &gt; &gt;=</code>, "نفس العامل"],
-            ["الانتماء", <code>a in ['x','y']</code>, <code>in</code>],
-            ["المفتاح / النوع", <code>hasKey(a,'f') · isType(a,'string')</code>, "hasKey · isType"],
-          ]}
-        />
-        <Callout tone="warning" title="حدود التعقيد">
-          التعقيد محدود بعمق 10 و100 عقدة. تجاوز أي منهما خطأ صياغة — يتحقق المُترجِم من التعقيد بعد
-          توسيع الدوال.
-        </Callout>
+      <Section id="section-3" title="جميع الدوال المدمجة">
+        <Table head={["الدالة", "الوسائط", "السلوك الدقيق"]} rows={[["isSignedIn()", "دون وسائط", "auth.uid != null؛ الحساب المجهول ذو uid يعد مسجلًا."], ["isAuth()", "دون وسائط", "مرادف isSignedIn()."], ["isOwner(id)", "قيمة واحدة", "وجود هوية ومساواة uid للقيمة."], ["hasRole(role)", "قيمة واحدة", "مساواة auth.claims.role للقيمة، لا فحص مصفوفة claims.roles."], ["hasAnyRole(['writer', 'reviewer'])", "مصفوفة نصوص ثابتة", "وجود قيمة auth.claims.role المفردة داخل المصفوفة."], ["isEmailVerified()", "دون وسائط", "مساواة auth.email_verified لـ true، دون اشتراط uid بذاتها."], ["unchanged(['ownerId', 'createdAt'])", "مصفوفة نصوص ثابتة", "كل حقل جديد كامل يساوي الحقل المخزن. تقبل المسارات المنقطة. المصفوفة الفارغة true؛ الحقول الغائبة لا تتساوى."], ["onlyChanged(['title'])", "مصفوفة نصوص ثابتة", "نفي مساواة كل حقل مع إصدار ملاحظة. لا تمنع تغيير حقول أخرى؛ الفارغة true. ليست قائمة سماح للكتابة."], ["hasKey(value, 'field')", "قيمتان", "مفتاح مباشر مملوك لكائن غير مصفوفة؛ مفاتيح prototype المحجوزة ممنوعة."], ["isType(value, 'type')", "قيمتان", "null أو bool/boolean أو string أو number أو array أو map أو وسم wire مثل ref/int/ts/bytes/geo."]]} />
+        <P>{"لا توجد دوال مدمجة أخرى. العدد الخاطئ للوسائط يفشل التجميع. تتطلب unchanged وonlyChanged وhasAnyRole مصفوفات نصوص ثابتة، لا متغيرًا يحتوي مصفوفة. لا تسمح للعميل بمنح نفسه مطالبة دور موثوقة. ولا تستبدل فحص الهوية بـ auth != null؛ سياق غير المسجل كائن يحتوي uid:null."}</P>
       </Section>
-
-      <Section id="aliases" title="الأسماء المستعارة ومتغيرات السياق">
-        <P>تُترجم الأسماء القصيرة إلى مسارات المتغيرات التي يفهمها المُقيِّم:</P>
-        <Table
-          head={["الاسم في DSL", "متغير الشجرة", "المعنى"]}
-          rows={[
-            [<code>auth</code>, <code>auth</code>, "هوية المستخدم النهائي (uid, email, email_verified, claims.*)"],
-            [<code>resource</code>, <code>resource.data</code>, "بيانات المستند الحالية (null عند الإنشاء)"],
-            [<code>incoming</code>, <code>request.data</code>, "البيانات الواردة (null عند القراءة/الحذف)"],
-            [<code>request.auth.*</code>, <code>auth.*</code>, "طريقة بديلة لكتابة مطالبات الهوية"],
-            [<code>request.resource.data.*</code>, <code>request.data.*</code>, "طريقة بديلة للبيانات الواردة"],
-            [<code>path.&lt;param&gt;</code>, <code>path.&lt;param&gt;</code>, "القيمة المرتبطة ببديل المسار"],
-            [<code>request.time</code>, <code>request.time</code>, "وقت الطلب بالمللي ثانية"],
-          ]}
-        />
+      <Section id="section-4" title="اختصارات السياق">
+        <Table head={["DSL", "متغير JSON القياسي"]} rows={[["auth.uid, request.auth.uid", "auth.uid"], ["auth.email, auth.email_verified, auth.is_anonymous", "المسار نفسه"], ["auth.claims.team, request.auth.claims.team", "auth.claims.team"], ["path.userId", "path.userId"], ["resource, resource.title, resource.data.title", "resource.data, resource.data.title, resource.data.title"], ["incoming, incoming.title", "request.data, request.data.title"], ["request.resource.data.title", "request.data.title"], ["request.data.title, request.time", "المسار نفسه"]]} />
+        <P>{"incoming هو المستند الجديد الكامل بعد الدمج والتحويلات؛ null عند القراءة والحذف. resource يساوي null عند الإنشاء وبوابات list على المجموعة. الحقول الغائبة undefined وليست null صريحة."}</P>
       </Section>
-
-      <Section id="macros" title="الماكروهات المدمجة">
-        <Table
-          head={["الماكرو", "الوسائط", "المعنى"]}
-          rows={[
-            [<code>isSignedIn() / isAuth()</code>, "0", <code>auth.uid != null</code>],
-            [<code>isOwner(id)</code>, "1", "مسجّل الدخول ومعرّفه يساوي id"],
-            [<code>hasRole(role)</code>, "1", <code>auth.claims.role == role</code>],
-            [<code>hasAnyRole(['a','b'])</code>, "1", <code>auth.claims.role in [...]</code>],
-            [<code>isEmailVerified()</code>, "0", <code>auth.email_verified == true</code>],
-            [<code>unchanged(['a','b'])</code>, "1", "كل حقل مذكور لم يتغيّر"],
-            [<code>onlyChanged(['a','b'])</code>, "1", "كل حقل مذكور تغيّر — راجع القيد أدناه"],
-            [<code>hasKey(obj,'f') / isType(v,'string')</code>, "2", "اختبار مفتاح / نوع"],
-          ]}
-        />
-        <Callout tone="danger" title="قيد onlyChanged">
-          شجرة v1 لا تملك مقارنة ديناميكية لمجموعة المفاتيح، لذا لا يمكن لـ{" "}
-          <code>onlyChanged([...])</code> <strong>فرض</strong> أن المفاتيح الأخرى لم تتغيّر تمامًا. يُصدر
-          المُترجِم فحصًا بأن كل حقل مذكور قد اختلف، مع تشخيص ينصح بفرض "بقاء باقي المفاتيح كما هي" في
-          منطق التطبيق. الدالة المجهولة تُترجم إلى <code>false</code> — لا تمنح تصريحًا بالخطأ.
-        </Callout>
+      <Section id="section-5" title="قراءة عامة وأدوار موثوقة والتحقق من الحقول">
+        <P>{"تجعل هذه السياسة كل المنشورات عامة عمدًا. ينشئ المسجل منشوره، ويعدله المؤلف دون نقل الملكية، ويحذف صاحب دور reviewer الموثوق."}</P>
+        <Code lang="text" code={"match /posts/{postId} {\n  allow read: if true;\n  allow create: if isSignedIn()\n    && incoming.authorId == auth.uid\n    && isType(incoming.title, 'string')\n    && isType(incoming.score, 'number')\n    && incoming.score >= 0 && incoming.score <= 100;\n  allow update: if isOwner(resource.authorId)\n    && unchanged(['authorId'])\n    && isType(incoming.title, 'string')\n    && isType(incoming.score, 'number')\n    && incoming.score >= 0 && incoming.score <= 100;\n  allow delete: if hasRole('reviewer');\n}"} />
+        <P>{"تقيّد الشروط الحقول المذكورة ولا ترفض الحقول الإضافية. يقبل isType(title,'string') النص الفارغ؛ لا يوجد فحص للطول. لجعل المنشورات خاصة لا تغير get مع ترك list:true. استخدم مساحة خاصة بالمستخدم، أو امنع list على مجموعة متعددة الملاك."}</P>
       </Section>
-
-      <Section id="functions" title="الدوال المعرَّفة من المستخدم والتوسيع">
-        <P>
-          تُعرَّف الدوال كـ <code>function name(p) {"{ return <expr>; }"}</code>. تُوسَّع الاستدعاءات{" "}
-          <strong>في موقعها</strong> — تُستبدل الوسائط بالمعاملات وتُصدر الشجرة الناتجة دون عُقد استدعاء
-          في وقت التشغيل. التعريفات المعرَّفة من المستخدم تحجب الماكروهات بنفس الاسم، وتُدعم الإشارات
-          الأمامية، ويُرفض التكرار، ويقتصر التوسيع على عمق 16.
-        </P>
-        <Code lang="ts" title="دالة مُوسَّعة" code={`function canReadPost() {
-  return isSignedIn() && (hasRole('admin') || isOwner(path.userId));
-}
-match /posts/{postId} {
-  allow get: if canReadPost();
-}`} />
+      <Section id="section-6" title="العلاقات والحقول الثابتة">
+        <Code lang="text" code={"match /users/{userId}/notes/{noteId} {\n  allow get, list: if isOwner(path.userId);\n  allow create: if isOwner(path.userId)\n    && isType(incoming.author, 'ref')\n    && incoming.author.$v == auth.claims.profilePath;\n  allow update: if isOwner(path.userId)\n    && unchanged(['author']);\n}"} />
+        <P>{"يفترض المثال أن الرمز المتحقق منه يحمل profilePath موثوقة مثل profiles/alice. يتحقق النوع من مرجع موسوم، وتقارن $v مساره. لا يفحص وجود الهدف أو يقرأه أو يمنح صلاحية له أو ينشئ علاقة عكسية. يجب ألا يستطيع المستخدم تعيين profilePath لنفسه. تظل الأهداف المضمنة بحاجة لفحص get الخاص بها."}</P>
+        <P>{"تفحص unchanged القيمة الجديدة الكاملة؛ لذلك يمكن لتعديل جزئي لا يذكر author النجاح، بينما يفشل استبدال المستند دون author. استخدم فحص الحقول المطلوبة وأنواعها عند الإنشاء؛ ليست unchanged تحققًا كافيًا للإنشاء."}</P>
       </Section>
-
-      <Section id="diagnostics" title="التشخيصات — سطر وعمود مضبوطان">
-        <P>
-          المواقع تبدأ من 1. يُرمى <code>RulesDslSyntaxError</code> لأخطاء الترميز والتحليل والقواعد
-          والتعقيد، ويعرض <code>line</code> و<code>column</code> ومقتطف <code>snippet</code> مع مؤشر.
-          وتُعيد مصفوفة تشخيصات منفصلة (مع الشجرة) الأمور التي لا تمنع الترجمة: الدوال/المتغيرات
-          المجهولة، وقيد <code>onlyChanged</code>، وعناصر المصفوفة غير الحرفية، والإصدارات غير المدعومة.
-        </P>
-        <Code lang="json" title="خطأ ترجمة (HTTP 400)" code={diagnostic} />
-        <Callout tone="info" title="ترجمة ناجحة">
-          الترجمة الناجحة تُعيد <code>{"{ \"ast\": {...}, \"diagnostics\": [...] }"}</code>. قد تكون
-          التشخيصات غير فارغة رغم نجاح الترجمة.
-        </Callout>
+      <Section id="section-7" title="الدوال القابلة لإعادة الاستخدام">
+        <Code lang="text" code={"function mayRead(userId) {\n  return isOwner(userId) || hasAnyRole(['reviewer', 'support']);\n}\nmatch /users/{userId}/tickets/{ticketId} {\n  allow get, list: if mayRead(path.userId);\n}"} />
+        <P>{"تحتوي الدالة تعبير return واحدًا. تستبدل الوسائط قيمًا أو تعبيرات كاملة، وتعمل الإشارات لدوال معرفة لاحقًا. التعريفات في المستوى الأعلى وأسماؤها فريدة. يمكن لتعريف مستخدم أن يحجب دالة مدمجة، لذا لا تسم مساعدك isOwner أو isSignedIn. تُوسع الاستدعاءات عند التجميع؛ يمنع الاستدعاء الذاتي، وحد عمق التوسيع 16، ويبقى التعبير النهائي مقيدًا بعمق 10 و100 عقدة. لا تضيف المساعدات قدرات تشغيل جديدة."}</P>
       </Section>
-
-      <Section id="endpoints" title="واجهات الترجمة والتفكيك والمحاكاة">
-        <P>
-          النقاط الثلاث تحت <code>/v1/projects/:projectId/rules/*</code> وتقبل مفتاح API أو
-          جلسة Customer Console مُتحقَّقًا من مجالها. أدوات خالصة — لا تنشر أي مجموعة قواعد ولا تلمس
-          بيانات المستندات.
-        </P>
-        <Table
-          head={["الطريقة", "المسار", "الغرض"]}
-          rows={[
-            [<code>POST</code>, <code>…/rules/compile</code>, "مصدر DSL → شجرة v1 + تشخيصات"],
-            [<code>POST</code>, <code>…/rules/decompile</code>, "شجرة v1 → نص DSL"],
-            [<code>POST</code>, <code>…/rules/simulate</code>, "تجربة عملية مع سجل تقييم"],
-          ]}
-        />
-        <Api method="POST" path="/v1/projects/:projectId/rules/simulate">
-          <P>
-            الجسم: <code>operation</code> و<code>path</code> واختياريًا <code>rulesAst</code> و
-            <code>auth</code> و<code>resourceData</code> و<code>incomingData</code>. تُعيد{" "}
-            <code>allowed</code> و<code>matchedRule</code> و<code>evaluationTrace</code>. عند غياب{" "}
-            <code>rulesAst</code> تُستخدم القواعد الفعّالة.
-          </P>
-        </Api>
-        <Code lang="bash" title="cURL" code={endpoints} />
-        <P>
-          النشر منفصل: أرسل <code>rulesAst</code> المُترجَم إلى نقطة rulesets كـ{" "}
-          <code>{"{ \"rulesAst\": { \"version\": 1, \"rules\": [...] } }"}</code>. فقط الشجرة v1
-          المُتحقَّق منها يمكن أن تصبح فعّالة.
-        </P>
+      <Section id="section-8" title="التجميع والتحويل العكسي والمحاكاة">
+        <Table head={["الطريقة والمسار", "الطلب", "الاستجابة"]} rows={[["POST /v1/projects/:projectId/rules/compile", "source: نص DSL", "ast وdiagnostics"], ["POST /v1/projects/:projectId/rules/decompile", "rulesAst: AST إصدار 1", "dsl"], ["POST /v1/projects/:projectId/rules/simulate", "operation وpath واختياريًا rulesAst وauth وresourceData وincomingData", "allowed وmatchedRule وevaluationTrace"]]} />
+        <P>{"استخدم مفتاح المشروع في X-Project-Key. لا تكتب هذه الأدوات مستندات ولا تفعل قواعد. يختار auth في المحاكاة مدخل الاختبار فقط، ولا يصادق على طلب بيانات حقيقي. عند حذف rulesAst تستخدم المحاكاة القواعد النشطة إن وجدت. يحافظ التحويل العكسي على سلوك التعبيرات المدعومة لا التعليقات وأسماء المساعدات والتنسيق."}</P>
+        <Code lang="json" code={"{\n  \"operation\": \"get\",\n  \"path\": \"users/alice/notes/one\",\n  \"auth\": { \"uid\": \"alice\", \"claims\": {} },\n  \"resourceData\": { \"title\": \"Private note\" },\n  \"incomingData\": null,\n  \"rulesAst\": {\n    \"version\": 1,\n    \"rules\": [{\n      \"match\": \"users/{userId}/notes/{noteId}\",\n      \"allow\": { \"get\": {\n        \"op\": \"all\",\n        \"conditions\": [\n          { \"op\": \"!=\", \"left\": { \"var\": \"auth.uid\" }, \"right\": { \"val\": null } },\n          { \"op\": \"==\", \"left\": { \"var\": \"auth.uid\" }, \"right\": { \"var\": \"path.userId\" } }\n        ]\n      } }\n    }]\n  }\n}"} />
+        <P>{"كرر مع uid:bob وuid:null وتوقع الرفض. ثم اختبر طلبات مستندات حقيقية بمفتاح عام ورمز مستخدم مع القواعد النشطة. لا تثبت المحاكاة بوابات المجموعات أو ترشيح النتائج أو نطاقات المفاتيح أو مصادقة المشروع أو سلوك الوقت الفعلي."}</P>
       </Section>
-
-      <Section id="studio" title="استوديو القواعد في لوحة التحكم">
-        <P>
-          توفّر لوحة العميل وضعين متزامنين: <strong>وضع DSL</strong> (الافتراضي، مع قوالب إدراج سريعة
-          وترجمة مباشرة أثناء التحرير) و<strong>وضع JSON</strong> (تحرير شجرة v1 مباشرة للمستخدمين
-          المتقدمين). تظهر أخطاء الصياغة مع السطر والعمود والمقتطف في المحرر، وتُعرض التشخيصات غير
-          القاتلة بشكل منفصل. تتيح لوحة <strong>محاكي القواعد</strong> تجربة عملية مقابل المسودة أو
-          القواعد الفعّالة مع عرض القرار والقاعدة المطابقة وسجل التقييم الكامل. لا يُنشر شيء إلا عند
-          النشر الصريح.
-        </P>
+      <Section id="section-9" title="الملاحظات والأخطاء الشائعة">
+        <P>{"أخطاء الصياغة تحمل line وcolumn يبدأان من 1 ومقطعًا يحدد موضع الخطأ. قد تنتج AST ناجحة مع ملاحظات غير مانعة: دوال مجهولة أو جذور متغيرات مجهولة أو إصدارات غير مدعومة أو مصفوفات غير ثابتة أو onlyChanged. اشترط صفر ملاحظات ثم اختبر حالات الرفض؛ الخطأ الإملائي داخل جذر معروف قد لا ينتج ملاحظة أصلًا."}</P>
+        <P>{"تتحول الدالة المجهولة إلى false، لذا قد يصبح !unknownFunction() مساويًا true. تختلف المقارنات ذات الحقول الغائبة تحت النفي أيضًا. لا تعتبر تحذيرًا أو اسمًا مجهولًا ضمان رفض للسياسة. فضّل شروط وجود ونوع وهوية إيجابية."}</P>
+        <P>{"الحد الأقصى لطول المصدر 131072 وحدة نص JavaScript؛ تسميه رسالة الخطأ bytes لكن التنفيذ يقيس طول النص. الحد 16384 رمزًا، وعمق المحلل 64. اجعل القواعد قصيرة كيلا تتجاوز العضوية ميزانية 256 خطوة. لا توجد قائمة عامة للحقول المسموحة؛ ليست onlyChanged ولا hasKey كذلك، والتحقق داخل عميل غير موثوق لا يوفرها."}</P>
+        <P>{"تستخرج tests/integration/rules-guide-examples.test.ts الأمثلة الكاملة من الدليلين وتنفذها بالتفويض الحقيقي ومحرك المستندات المحلي. شغّل corepack pnpm exec vitest run tests/integration/rules-guide-examples.test.ts عند تعديلها."}</P>
       </Section>
-
-      <Section id="pitfalls" title="الأخطاء الشائعة">
-        <UL
-          items={[
-            <>افتراض أن <code>'2'</code> تُنتج شجرة v2 — إنها سكر نحوي؛ الناتج دائمًا بالإصدار 1.</>,
-            <>الاعتماد على <code>onlyChanged</code> لتقييد الكتابة بأكملها — فرض الباقي في منطق التطبيق.</>,
-            <>الثقة بحقل مالك يرسله العميل — قارن <code>auth.uid</code> ببديل المسار.</>,
-            <>السماح بالتحديث دون فحص البيانات المخزّنة — أضف <code>unchanged(['ownerId'])</code>.</>,
-            <>نسيان الرفض الافتراضي — عدم تطابق أي قاعدة يعني الرفض.</>,
-          ]}
-        />
-        <P>
-          تابع مع <PageLink slug="security-rules" lang="ar">قواعد الأمان</PageLink> لمعرفة مُقيِّم وقت
-          التشغيل ودلالات المتغيرات.
-        </P>
-      </Section>
+      </div>
     </Doc>
   );
 }
