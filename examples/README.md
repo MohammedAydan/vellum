@@ -7,7 +7,7 @@ be read in the language the reader actually uses:
 | --- | --- | --- | --- |
 | **JS/TS SDK** | `examples/ts/` | Runnable | `corepack pnpm exec tsx examples/ts/<id>.ts` |
 | **Raw REST** | `examples/rest/` | Runnable | `node examples/rest/<id>.mjs` |
-| **Flutter / Dart** | `examples/flutter/` | Reference-only | Not executed (no Flutter toolchain here) |
+| **Flutter / Dart** | `examples/flutter/` | Runnable | `cd examples/flutter && dart run <id>.dart` |
 
 In addition to these single-scenario examples, there are **two full live testbed apps** that exercise the SDKs end-to-end against the running API (each provisions its own isolated tenant and runs its real scenario suite):
 
@@ -55,7 +55,7 @@ All 13 scenarios are practical, real-world flows rather than API smoke tests:
 - A running API at `http://127.0.0.1:8080` (override with `VELLUM_API_BASE`).
 - **TS:** pnpm via Corepack (`corepack pnpm exec tsx`).
 - **REST:** Node 20+ (`fetch` is built in; no dependencies).
-- Both harnesses read `.env.phase5.local` from the repo root for optional
+- Set `VELLUM_EMAIL`, `VELLUM_PASSWORD` and `VELLUM_PROJECT_ID` for a disposable local test project. Both harnesses read `.env.phase5.local` from the repo root for optional
   `VELLUM_API_BASE` and `VELLUM_PROJECT_ID` overrides.
 
 ## Running the TypeScript examples
@@ -69,7 +69,7 @@ for id in quickstart crud field-transforms query pagination indexes \
 done
 ```
 
-Each example imports `examples/ts/_harness.ts`, which signs in with the local QA
+Each example imports `examples/ts/_harness.ts`, which signs in with the configured test
 account, mints a short-lived server API key, uses a unique per-run path prefix,
 and calls `cleanup()` in a `finally` block. Output is deterministic and fully
 redacted — `=== Title ===` followed by JSON lines. Secrets (keys, tokens,
@@ -98,14 +98,7 @@ stdout for every REST example lives in `examples/rest/output/<id>.txt`.
 
 ## Flutter / Dart examples
 
-`examples/flutter/<id>.dart` files are **reference-only** and are not executed
-here (no Flutter SDK available here). They use only APIs that exist in
-`sdks/flutter/lib/vellum_flutter.dart`, with credentials injected via
-`--dart-define` rather than hard-coded. Each begins with:
-
-```dart
-// Reference-only: not executed here (Flutter SDK unavailable).
-```
+The 13 `examples/flutter/<id>.dart` programs run with the pure Dart SDK (no Flutter engine required). Run `dart pub get` in `examples/flutter`, then set `VELLUM_API_BASE`, `VELLUM_PROJECT_ID` and `VELLUM_API_KEY` in the environment. The examples also accept compile-time defines. `scripts/run-dart-examples.mjs` runs them against disposable PostgreSQL-backed fixtures in CI and revokes temporary API keys.
 
 ## Safety notes
 
