@@ -1,3 +1,4 @@
+import { RelationshipCreation } from "../../relationship-creation";
 import {
   Api,
   Callout,
@@ -223,6 +224,7 @@ export default function Page() {
       description="علاقات $ref المحمّلة مسبقًا، والتجميع، ومجموعات OR، وعوامل النص، وupsert والحذف الجماعي ومدة صلاحية المستندات."
       eyebrow="المفاهيم الأساسية"
     >
+      <RelationshipCreation lang="ar" />
       <Section id="overview" title="نظرة عامة">
         <P>
           يضيف الإصدار V2 إمكانيات جديدة لمحرك الاستعلام: يمكنك تحميل المستندات المُشار إليها بـ{" "}
