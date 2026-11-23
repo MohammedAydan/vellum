@@ -108,6 +108,51 @@ function clearMfaFailures(key: string): void {
   mfaFailureCounts.delete(key);
 }
 
+/**
+ * Ephemeral per-project signup budget (Zero-Redis doctrine: throttle state, not
+ * durable state; per process instance). Enforces `maxSignupsPerHour`, which was
+ * previously stored and returned but never applied.
+ */
+export const SIGNUP_BUDGET_CACHE_POLICY: BoundedCachePolicy = Object.freeze({
+  name: "api.signup-budget",
+  scope: "process",
+  maxEntries: 10_000,
+  ttlMs: 60 * 60 * 1000,
+});
+const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
+const signupEvents = new Map<string, number[]>();
+
+function liveSignups(projectId: string, now: number): number[] {
+  const events = (signupEvents.get(projectId) ?? []).filter((ts) => ts > now - SIGNUP_WINDOW_MS);
+  if (events.length === 0) signupEvents.delete(projectId);
+  else signupEvents.set(projectId, events);
+  return events;
+}
+
+function assertSignupBudget(projectId: string, maxPerHour: number): void {
+  if (liveSignups(projectId, Date.now()).length >= maxPerHour) {
+    throw new VellumError("TOO_MANY_REQUESTS", "The hourly sign-up limit for this project has been reached", {
+      retryAfterSeconds: 300,
+    });
+  }
+}
+
+function recordSignup(projectId: string): void {
+  const now = Date.now();
+  const events = liveSignups(projectId, now);
+  events.push(now);
+  if (!signupEvents.has(projectId) && signupEvents.size >= SIGNUP_BUDGET_CACHE_POLICY.maxEntries) {
+    const oldest = signupEvents.keys().next().value;
+    if (oldest !== undefined) signupEvents.delete(oldest);
+  }
+  signupEvents.set(projectId, events);
+}
+
+/** Test helper: reset in-process signup budgets. */
+export function clearSignupBudgetState(): void {
+  signupEvents.clear();
+}
+
 export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   const routes = new Hono();
   const storage = platform.dataStore;
@@ -118,17 +163,28 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     masterKey: masterKey(),
   });
 
-  /** Gate shared by every registration/sign-in path. */
-  async function checkRegistrationGuards(tenant: AuthTenant, config: ProjectAuthConfig) {
+  /**
+   * Gate for every path that lets an EXISTING identity in (sign-in, refresh
+   * through a provider link, ...). Only an administrative suspension blocks it.
+   * Account-creation limits (global switch, user quota, signup budget) must not
+   * lock out users who already have an account.
+   */
+  function checkAccessGuards(config: ProjectAuthConfig): void {
     if (config.authServiceSuspended) {
       throw new VellumError("PERMISSION_DENIED", config.suspensionReason ?? "End-user auth is suspended for this project");
     }
+  }
+
+  /** Gate for every path that CREATES an end-user (sign-up, anonymous, first provider login). */
+  async function checkRegistrationGuards(tenant: AuthTenant, config: ProjectAuthConfig) {
+    checkAccessGuards(config);
     if (!platform.controlStore.getPlatformAuthSettings().globalSignupsEnabled) {
       throw new VellumError("PERMISSION_DENIED", "Global sign-ups are disabled by platform administration");
     }
     if ((await storage.countAuthUsers(tenant.ctx)) >= config.maxUsersQuota) {
       throw new VellumError("QUOTA_EXCEEDED", "The end-user quota for this project has been reached");
     }
+    assertSignupBudget(tenant.projectId, config.maxSignupsPerHour);
   }
 
   function assertPasswordPolicy(password: string, config: ProjectAuthConfig): void {
@@ -256,6 +312,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       lastSignInAt: now,
     });
     await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
+    recordSignup(tenant.projectId);
     await projectIfEnabled(tenant, config, user);
     return c.json(await issueSession(tenant, user, c), 201);
   });
@@ -266,7 +323,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const tenant = resolveAuthTenant(c, platform);
     requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
-    await checkRegistrationGuards(tenant, config);
+    checkAccessGuards(config);
     if (!config.enableEmailPassword) {
       throw new VellumError("PERMISSION_DENIED", "Email/password sign-in is disabled for this project");
     }
@@ -320,6 +377,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       displayName: body.displayName ?? null,
       ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
     });
+    recordSignup(tenant.projectId);
     return c.json(await issueSession(tenant, user, c), 201);
   });
 
@@ -327,7 +385,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const tenant = resolveAuthTenant(c, platform);
     requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
-    await checkRegistrationGuards(tenant, config);
+    checkAccessGuards(config);
 
     const body = parseOrThrow(SignInProviderRequestSchema, await c.req.json());
     const configured = config.oauthProviders[body.provider];
@@ -354,6 +412,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         user = { ...byEmail, lastSignInAt: now };
         await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
       } else {
+        await checkRegistrationGuards(tenant, config);
         user = await storage.createAuthUser(tenant.ctx, {
           email: body.email,
           emailVerified: body.emailVerified ?? false,
@@ -361,6 +420,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
           photoUrl: body.photoUrl ?? null,
           ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
         });
+        recordSignup(tenant.projectId);
         await projectIfEnabled(tenant, config, user);
       }
     }

@@ -12,6 +12,7 @@ import { getCookie } from "hono/cookie";
 import crypto from "node:crypto";
 import { promisify } from "node:util";
 import { VellumError } from "@vellum/core";
+import { getApiKeyHeader } from "../middleware/tenant-auth.js";
 import { constantTimeEqual, extractClientIp } from "../middleware/security.js";
 import { invalidateUserOrgMembershipsCache } from "../middleware/session.js";
 import { getQueryPool } from "./usage.js";
@@ -444,6 +445,15 @@ export function createCustomerAuthRoutes(
 
     if (!email || !email.includes("@")) {
       throw new VellumError("INVALID_ARGUMENT", "Please enter a valid email address");
+    }
+    if (!name && (typeof body.displayName === "string" || getApiKeyHeader(c))) {
+      // An end-user SDK request (displayName and/or a project API key) landed on
+      // the Customer Console tier. Say so instead of a misleading name error.
+      throw new VellumError(
+        "INVALID_ARGUMENT",
+        "This is the Customer Console sign-up endpoint, not the end-user one. End-user sign-up is POST /v1/projects/{projectId}/auth/sign-up/email. Check the SDK baseUrl/endpoint and projectId configuration.",
+        { guardCode: "WRONG_AUTH_TIER" }
+      );
     }
     if (!name || name.length < 2) {
       throw new VellumError("INVALID_ARGUMENT", "Name must be at least 2 characters");
