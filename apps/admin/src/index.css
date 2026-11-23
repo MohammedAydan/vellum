@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@source "../src";
+@source "../../../packages/ui/src";
+@source "../../packages/ui/src";
+@source "../packages/ui/src";
+@import "@vellum/ui/tokens";
+
+/* Admin-local layer fixes: Radix Select content is portalled to <body> with
+ * z-index 50, which sits BELOW the dialog/alert-dialog overlay (z-index 90).
+ * When a Select lives inside a Dialog (e.g. the Feature Flag registration
+ * form) its options render behind the overlay and cannot be clicked. Lift
+ * portalled select/menus above dialogs so their options stay interactive. */
+body > [data-radix-popper-content-wrapper] {
+  z-index: 120 !important;
+}
