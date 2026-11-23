@@ -11,7 +11,7 @@ describe('current displayed Rules examples', () => {
       const blocks = extractSnippets(resolve(import.meta.dirname, '../../../..'))
         .filter((snippet: { file: string }) => snippet.file.endsWith(`/pages/${lang}/security-rules-dsl.tsx`))
         .map((snippet: { code: string }) => snippet.code);
-      const examples = displayedRulesExamples(blocks);
+      const examples = displayedRulesExamples(blocks.map((code: string) => code.replaceAll(' ', '\u00a0')));
       expect(examples.source).toContain('function ownsNamespace()');
       expect(examples.simulation.auth.uid).toBe('alice');
       expect(examples.simulation.rulesAst.version).toBe(1);

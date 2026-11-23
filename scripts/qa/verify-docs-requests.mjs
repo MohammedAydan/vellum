@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 
 // Rendered documentation is data, never executable shell or JavaScript.
 export function displayedRulesExamples(blocks) {
+  blocks = blocks.map(text => text.replaceAll('\u00a0', ' '));
   const source = blocks.find(text => text.includes('match /users/{userId}/notes/{noteId}') && text.includes('function ownsNamespace()'));
   const simulation = blocks.map(text => {
     try { return JSON.parse(text); } catch { return null; }
