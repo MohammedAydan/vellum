@@ -1,0 +1,9 @@
+/* =============================================================================
+ * COMPATIBILITY SHIM
+ * -----------------------------------------------------------------------------
+ * The canonical theme is `packages/ui/src/theme.css`, which now contains the
+ * official shadcn/ui default theme verbatim. This file only re-exports it so
+ * historical `@vellum/ui/tokens/theme` imports keep resolving.
+ * ========================================================================== */
+
+@import "../theme.css";

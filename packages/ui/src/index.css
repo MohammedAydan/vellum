@@ -1,0 +1,29 @@
+/* =============================================================================
+ * @vellum/ui — Single CSS entry point
+ * -----------------------------------------------------------------------------
+ * Import this once per application (or per Storybook preview):
+ *
+ *   import "@vellum/ui/styles";
+ *
+ * It bundles:
+ *   1. the Tailwind 4 framework,
+ *   2. source globs so Tailwind can see every class used in this monorepo,
+ *   3. the canonical token layer (`@theme`, `:root`, `.dark`),
+ *   4. the base layer (preflight extensions, focus rings, reduced motion).
+ *
+ * Applications that already own a Tailwind entry should compose
+ * `@vellum/ui/tokens` instead — see packages/ui/README.md.
+ * ========================================================================== */
+
+@import "tailwindcss";
+
+/* Tailwind must be able to see every file that can emit a class name. */
+@source "../src";
+@source "../../../apps/dashboard/src";
+@source "../../../apps/admin/src";
+@source "../../../.storybook";
+
+@import "./theme.css";
+@import "./tokens/base.css";
+
+@import "./auth.css";

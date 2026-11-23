@@ -1,0 +1,16 @@
+/* =============================================================================
+ * DEPRECATED — `@vellum/ui/tokens/colors`
+ * -----------------------------------------------------------------------------
+ * Colour tokens are now defined once, in `./theme.css`, inside a Tailwind 4
+ * `@theme` block (plus `:root` / `.dark` runtime declarations).
+ *
+ * This shim exists only so that historical imports keep resolving. Prefer
+ * importing `@vellum/ui/tokens` (which pulls in theme + base).
+ *
+ * The old `hsl(var(--primary))` variables (`--primary: 221.2 83.2% 53.3%`) were
+ * removed in v2.0 because they produced *no* Tailwind utilities at all — which
+ * is why buttons rendered as bare text. Use the semantic utilities instead:
+ * `bg-primary`, `text-primary-foreground`, `border-border`, …
+ * ========================================================================== */
+
+@import "./theme.css";

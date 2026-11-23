@@ -1,0 +1,459 @@
+/* =============================================================================
+ * @vellum/ui — Base layer
+ * -----------------------------------------------------------------------------
+ * Global element defaults, a11y affordances and the reduced-motion contract.
+ * Only genuinely global concerns belong here; component styling lives in
+ * components via Tailwind utilities.
+ *
+ * Bundled webfonts (@fontsource). Imports must precede all other statements.
+ * Inter (EN UI), JetBrains Mono (code), IBM Plex Sans Arabic + Cairo (AR UI).
+ * ========================================================================== */
+
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
+@import "@fontsource/ibm-plex-sans-arabic/400.css";
+@import "@fontsource/ibm-plex-sans-arabic/500.css";
+@import "@fontsource/ibm-plex-sans-arabic/600.css";
+@import "@fontsource/ibm-plex-sans-arabic/700.css";
+@import "@fontsource/cairo/400.css";
+@import "@fontsource/cairo/600.css";
+@import "@fontsource/cairo/700.css";
+
+/* -----------------------------------------------------------------------------
+ * AA-safe syntax tokens (L-03)
+ * -----------------------------------------------------------------------------
+ * The muted-foreground and C-01 primary contrast fixes that used to be
+ * layered here are folded into `theme.css` directly (single definition site).
+ *
+ * The `--syntax-*` tokens are the AA replacements for CodeMirror's generated
+ * highlight colours (see the CodeMirror section at the bottom of this file).
+ * -------------------------------------------------------------------------- */
+:root {
+  --syntax-text: #334155;
+  --syntax-keyword: #6d28d9;
+  --syntax-key: #1d4ed8;
+  --syntax-string: #b91c1c;
+  --syntax-number: #047857;
+  --syntax-comment: #92400e;
+  --syntax-invalid: #b91c1c;
+}
+
+.dark {
+  --syntax-text: #e4e4e7;
+  --syntax-keyword: #c4b5fd;
+  --syntax-key: #fca5a5;
+  --syntax-string: #6ee7b7;
+  --syntax-number: #fbbf24;
+  --syntax-comment: #a1a1aa;
+  --syntax-invalid: #fca5a5;
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-synthesis-weight: none;
+    scrollbar-gutter: stable;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    /* P0 density: consoles run a 13px base (the docs app sets its own). */
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+  }
+
+  /* Arabic UI stack — applied via the `dir` attribute set by I18nProvider /
+     VellumDirectionProvider. Inherits down to every descendant. */
+  [dir="rtl"] {
+    font-family: "IBM Plex Sans Arabic", "Cairo", system-ui, sans-serif;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+    font-feature-settings: "zero" 1, "cv02" 1;
+  }
+
+  /* Visible, high-contrast focus for keyboard users on every focusable node. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--primary) 28%, transparent);
+    color: var(--foreground);
+  }
+
+  /* Disabled controls must never look interactive. */
+  :disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  /* Kill the native number-input spinners; they break dense form layouts. */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  /* Autofill must not repaint our inputs with a browser-yellow box. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: var(--foreground);
+    box-shadow: 0 0 0 1000px var(--surface) inset;
+    transition: background-color 9999s ease-in-out 0s;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Scrollbars — thin, themed, never jumpy.
+ * -------------------------------------------------------------------------- */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Numeric alignment — mandatory for metrics, tables, dates and amounts.
+ * -------------------------------------------------------------------------- */
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Reduced motion contract — global and non-negotiable.
+ * -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Keyframes shared by the system.
+ * -------------------------------------------------------------------------- */
+@keyframes ui-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ui-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ui-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ui-slide-in-end {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes ui-slide-out-end {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes ui-slide-in-start {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes ui-slide-out-start {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes ui-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ui-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ui-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--success) 45%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--success) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--success) 0%, transparent);
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Recharts theming — Recharts injects inline styles we cannot reach with
+ * utilities, so the few global overrides live here.
+ * -------------------------------------------------------------------------- */
+.recharts-cartesian-axis-tick-value {
+  font-size: 11px;
+  fill: var(--muted-foreground);
+}
+
+.recharts-cartesian-grid line {
+  stroke: var(--border);
+}
+
+.recharts-default-tooltip {
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--border) !important;
+  background-color: var(--surface-overlay) !important;
+  box-shadow: var(--shadow-lg);
+}
+
+.recharts-tooltip-wrapper {
+  outline: none;
+}
+
+/* -----------------------------------------------------------------------------
+ * CodeMirror — align the editor surface with the input tokens.
+ * -------------------------------------------------------------------------- */
+.cm-editor {
+  background-color: transparent;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.cm-editor .cm-scroller {
+  font-family: var(--font-mono);
+}
+
+.cm-editor .cm-gutters {
+  background-color: color-mix(in oklab, var(--muted) 60%, transparent);
+  border-inline-end: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+.cm-editor .cm-activeLineGutter {
+  background-color: color-mix(in oklab, var(--primary) 10%, transparent);
+  color: var(--foreground);
+}
+
+.cm-editor .cm-activeLine {
+  background-color: color-mix(in oklab, var(--primary) 6%, transparent);
+}
+
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground,
+.cm-editor ::selection {
+  background-color: color-mix(in oklab, var(--primary) 22%, transparent) !important;
+}
+
+.cm-editor .cm-cursor {
+  border-inline-start-color: var(--foreground);
+}
+
+/* CodeMirror emits syntax colours on generated span classes (`.ͼ…`). The stock
+ * palettes contain sub-AA colours — `@codemirror/language`'s
+ * `defaultHighlightStyle` uses #aa1111 for strings and #116644 for numbers in
+ * light mode, and `@codemirror/theme-one-dark` supplies the dark-mode palette.
+ * Remap those generated classes onto the AA-safe `--syntax-*` tokens above.
+ * The generic rule is a safety net: if CodeMirror ever renames its generated
+ * classes, every token still resolves to an AA-safe colour. Only `color` is
+ * overridden, so bold/italic/underline decorations and theme behaviour stay. */
+.cm-editor .cm-content [class*="ͼ"] {
+  color: var(--syntax-text) !important;
+}
+
+/* @codemirror/language · defaultHighlightStyle (light theme) */
+.cm-editor .cm-content span.ͼ5 { color: var(--syntax-comment) !important; }
+.cm-editor .cm-content span.ͼb { color: var(--syntax-keyword) !important; }
+.cm-editor .cm-content span.ͼc { color: var(--syntax-number) !important; }
+.cm-editor .cm-content span.ͼd { color: var(--syntax-number) !important; } /* #116644 */
+.cm-editor .cm-content span.ͼe { color: var(--syntax-string) !important; } /* #aa1111 */
+.cm-editor .cm-content span.ͼf { color: var(--syntax-string) !important; }
+.cm-editor .cm-content span.ͼg { color: var(--syntax-key) !important; }
+.cm-editor .cm-content span.ͼh { color: var(--syntax-key) !important; }
+.cm-editor .cm-content span.ͼi { color: var(--syntax-keyword) !important; }
+.cm-editor .cm-content span.ͼj { color: var(--syntax-keyword) !important; }
+.cm-editor .cm-content span.ͼk { color: var(--syntax-key) !important; }
+.cm-editor .cm-content span.ͼl { color: var(--syntax-key) !important; }
+.cm-editor .cm-content span.ͼm { color: var(--syntax-comment) !important; }
+.cm-editor .cm-content span.ͼn { color: var(--syntax-invalid) !important; }
+
+/* @codemirror/theme-one-dark · oneDarkHighlightStyle (dark theme) */
+.cm-editor .cm-content span.ͼp { color: var(--syntax-keyword) !important; }
+.cm-editor .cm-content span.ͼq { color: var(--syntax-key) !important; }
+.cm-editor .cm-content span.ͼr { color: var(--syntax-key) !important; }
+.cm-editor .cm-content span.ͼs { color: var(--syntax-number) !important; }
+.cm-editor .cm-content span.ͼt { color: var(--syntax-text) !important; }
+.cm-editor .cm-content span.ͼu { color: var(--syntax-number) !important; }
+.cm-editor .cm-content span.ͼv { color: var(--syntax-string) !important; }
+.cm-editor .cm-content span.ͼw { color: var(--syntax-comment) !important; }
+.cm-editor .cm-content span.ͼ12 { color: var(--syntax-number) !important; }
+.cm-editor .cm-content span.ͼ13 { color: var(--syntax-string) !important; }
+.cm-editor .cm-content span.ͼ14 { color: var(--syntax-invalid) !important; }
+
+/* -----------------------------------------------------------------------------
+ * react-day-picker v10 base styles (shadcn ships its own; we theme via
+ * `classNames`, this only guarantees layout correctness).
+ * -------------------------------------------------------------------------- */
+.rdp-root {
+  --rdp-cell-size: 2.25rem;
+  --rdp-accent-color: var(--primary);
+  --rdp-accent-background-color: var(--accent);
+  --rdp-day-height: 2.25rem;
+  --rdp-day-width: 2.25rem;
+  --rdp-day_button-height: 2.25rem;
+  --rdp-day_button-width: 2.25rem;
+  --rdp-day_button-border-radius: var(--radius-md);
+  --rdp-selected-border: 0;
+  --rdp-outside-opacity: 0.45;
+  --rdp-disabled-opacity: 0.35;
+  --rdp-nav-height: 2.25rem;
+  --rdp-weekday-opacity: 1;
+  --rdp-months-gap: 1.25rem;
+}
+
+/* -----------------------------------------------------------------------------
+ * Utility escape hatches used across the system.
+ * -------------------------------------------------------------------------- */
+.ui-grid-bg {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--border) 60%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--border) 60%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.ui-scroll-shadow {
+  background:
+    linear-gradient(to bottom, var(--surface), transparent) top / 100% 20px no-repeat local,
+    linear-gradient(to top, var(--surface), transparent) bottom / 100% 20px no-repeat local;
+}
+
+/* Focus ring helper for composite widgets that cannot use a utility class. */
+.ui-focus-ring:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

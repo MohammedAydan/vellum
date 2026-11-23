@@ -1,0 +1,17 @@
+/* =============================================================================
+ * @vellum/ui — Token entry point
+ * -----------------------------------------------------------------------------
+ * Composed into an existing Tailwind 4 entry to deliver the design system
+ * (theme tokens + base layer). The exact snippet lives in
+ * `packages/ui/README.md`; the short version is: import the Tailwind framework,
+ * add a `@source` glob for `packages/ui/src`, then import this file.
+ *
+ * Consumers without their own Tailwind entry should import `@vellum/ui/styles`
+ * (i.e. `src/index.css`) instead, which bundles the framework too.
+ *
+ * This file deliberately does NOT pull in the Tailwind framework so that it can
+ * be composed into an existing Tailwind 4 entry without duplicating it.
+ * ========================================================================== */
+
+@import "./theme.css";
+@import "./base.css";

@@ -1,0 +1,15 @@
+/* =============================================================================
+ * DEPRECATED — `@vellum/ui/tokens/typography`
+ * -----------------------------------------------------------------------------
+ * Typography tokens are now defined once, in `./theme.css`, inside the
+ * Tailwind 4 `@theme` block:
+ *
+ *   --font-sans / --font-mono / --font-display
+ *   --text-2xs … --text-4xl  (each with a paired line-height)
+ *   --font-weight-*, --tracking-*
+ *
+ * This shim exists only so that historical imports keep resolving. Prefer
+ * importing `@vellum/ui/tokens`.
+ * ========================================================================== */
+
+@import "./theme.css";

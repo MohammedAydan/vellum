@@ -1,0 +1,16 @@
+/* =============================================================================
+ * DEPRECATED — `@vellum/ui/tokens/spacing`
+ * -----------------------------------------------------------------------------
+ * Spacing is now locked to a 4px rhythm through Tailwind's `--spacing` base
+ * unit, declared in `./theme.css`:
+ *
+ *   --spacing: 0.25rem;
+ *
+ * so `p-1` = 4px, `p-2` = 8px, `p-3` = 12px … and every gap in the system is a
+ * multiple of 4. Container widths come from `max-w-*` utilities.
+ *
+ * This shim exists only so that historical imports keep resolving. Prefer
+ * importing `@vellum/ui/tokens`.
+ * ========================================================================== */
+
+@import "./theme.css";
