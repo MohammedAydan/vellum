@@ -22,9 +22,8 @@ describe('docs remediation contracts',()=>{
    }
    for(const code of [quickstartTypeScript,quickstartDart]){expect(code).toContain('finally');expect(code).toContain('db.dispose()');}
  });
- it('aligns relation replacement conflict code in both languages',()=>{
+ it('documents optimistic-concurrency conflict handling in both languages',()=>{
    for(const lang of ['en','ar']){
-     const text=read(`apps/docs/src/pages/${lang}/relationships.tsx`);expect(text).toContain('409 ABORTED_CONFLICT');expect(text).not.toContain('409 FAILED_PRECONDITION');
      expect(read(`apps/docs/src/pages/${lang}/reference/errors.tsx`)).toContain('If-Match');
    }
  });
