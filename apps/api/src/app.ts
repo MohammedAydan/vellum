@@ -6,7 +6,7 @@
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { compress } from "hono/compress";
-import { VellumError, SYSTEM_LIMITS, parseCollectionPath } from "@vellum/core";
+import { VellumError, SYSTEM_LIMITS, normalizeIndexFieldSpec, parseCollectionPath } from "@vellum/core";
 import type { IndexRecommendationRecorder } from "@vellum/database-control";
 import {
   CreateCollectionSchema,
@@ -713,10 +713,13 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
       throw new VellumError("INVALID_ARGUMENT", "Composite index requires a non-empty 'fields' array");
     }
 
+    // Normalize the accepted legacy field shape ({ path, direction }) to the
+    // canonical ({ path, dir }) so the query planner can match the index, same
+    // as the console route does.
     const created = await platform.dataStore.createCompositeIndex(
       { projectId },
       body.collectionPath as string,
-      body.fields
+      (body.fields as Array<Parameters<typeof normalizeIndexFieldSpec>[0]>).map(normalizeIndexFieldSpec)
     );
     invalidateProjectIndexCache(projectId);
     // The dashboard deep-link carries the advisor fingerprint. Mark it applied

@@ -22,6 +22,7 @@ import crypto from "node:crypto";
 import {
   VellumError,
   SYSTEM_LIMITS,
+  normalizeIndexFieldSpec,
   parseCollectionPath,
   validateFieldName,
   validateWireValue,
@@ -1092,12 +1093,16 @@ export function selectCompositeIndexForQuery(
     ) {
       continue;
     }
+    // Stored index rows may carry the legacy field shape ({ path, direction })
+    // from clients that bypass the console route's normalization; normalize here
+    // so direction comparisons below see a canonical `dir`.
+    const idxFields = idx.fields.map((f) => normalizeIndexFieldSpec(f));
 
     // 1. Leading equality prefix is commutative (any permutation of equalityFields is valid in B-Tree).
     let equalityOk = true;
     const matchedEq = new Set<string>();
     for (let i = 0; i < equalityFields.length; i++) {
-      const actual = idx.fields[i]!;
+      const actual = idxFields[i]!;
       if (!equalitySet.has(actual.path) || matchedEq.has(actual.path)) {
         equalityOk = false;
         break;
@@ -1115,7 +1120,7 @@ export function selectCompositeIndexForQuery(
     let suffixOk = true;
     for (let j = 0; j < suffixOrderBy.length; j++) {
       const desired = suffixOrderBy[j]!;
-      const actual = idx.fields[equalityFields.length + j]!;
+      const actual = idxFields[equalityFields.length + j]!;
       if (actual.path !== desired.path || (desired.enforceDir && actual.dir !== desired.dir)) {
         suffixOk = false;
         break;
