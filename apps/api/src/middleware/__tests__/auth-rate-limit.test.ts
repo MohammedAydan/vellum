@@ -115,6 +115,42 @@ describe("@vellum/api - auth rate limiting & secret serialization", () => {
     expect(body.error.details?.retryAfterSeconds).toBe(900);
   });
 
+  it("caps parallel attempts at the window size (counted while in flight)", async () => {
+    const app = new Hono();
+    app.onError(errorHandler);
+    app.use("/slow", authRateLimit({ max: 3, windowMs: 60_000, scope: "test-parallel", countAll: true }));
+    app.post("/slow", async (c) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return c.json({ ok: true });
+    });
+    const responses = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        Promise.resolve(app.request("http://localhost/slow", { method: "POST", headers: TEST_IP_HEADERS }))
+      )
+    );
+    const statuses = responses.map((r) => r.status);
+    expect(statuses.filter((status) => status === 200)).toHaveLength(3);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(7);
+  });
+
+  it("does not let parallel wrong guesses exceed the failure budget", async () => {
+    const app = new Hono();
+    app.onError(errorHandler);
+    app.use("/slow-login", authRateLimit({ max: 2, windowMs: 60_000, scope: "test-parallel-fail", keyFrom: () => "k" }));
+    app.post("/slow-login", async (c) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return c.json({ ok: false }, 401);
+    });
+    const responses = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        Promise.resolve(app.request("http://localhost/slow-login", { method: "POST", headers: TEST_IP_HEADERS }))
+      )
+    );
+    const statuses = responses.map((r) => r.status);
+    expect(statuses.filter((status) => status === 401)).toHaveLength(2);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(4);
+  });
+
   it("does not count successful logins toward the failure budget", async () => {
     const app = loginApp();
     for (let i = 0; i < 12; i += 1) {
