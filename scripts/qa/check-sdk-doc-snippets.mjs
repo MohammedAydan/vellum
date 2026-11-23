@@ -126,7 +126,10 @@ try {
   const errors = (analysis.stdout || "")
     .split("\n")
     .filter((l) => l.startsWith("ERROR|"));
-  if (errors.length || analysis.status === null)
+  const hasOnlyFragmentWarnings = (analysis.stdout || "")
+    .split("\n")
+    .some((line) => /^(WARNING|INFO)\|/.test(line));
+  if (errors.length || analysis.status === null || (analysis.status !== 0 && !hasOnlyFragmentWarnings))
     throw new Error(
       errors.join("\n") || analysis.stderr || "Dart analyzer did not finish",
     );
