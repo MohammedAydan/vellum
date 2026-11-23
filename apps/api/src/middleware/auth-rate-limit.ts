@@ -151,6 +151,16 @@ export function authRateLimit(options: AuthRateLimitOptions): MiddlewareHandler 
     // Prune events that have fallen out of the window (true sliding window).
     bucket.events = bucket.events.filter((ts) => ts > cutoff);
 
+    // Already locked out: refuse BEFORE running the handler. Checking only
+    // after the handler would let a correct guess (200) through once the
+    // bucket is full, defeating the throttle for brute-force attempts.
+    if (bucket.events.length >= max) {
+      c.header("Retry-After", String(retryAfterSeconds));
+      throw new VellumError("TOO_MANY_REQUESTS", "Too many attempts. Please try again later.", {
+        retryAfterSeconds,
+      });
+    }
+
     await next();
 
     const shouldCount = countAll || c.res.status >= 400;
