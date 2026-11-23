@@ -1,0 +1,24 @@
+{
+  "name": "@vellum/core",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run src/__tests__ && vitest run --root ../.. tests/unit",
+    "test:unit": "vitest run src/__tests__ && vitest run --root ../.. tests/unit",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "echo 'no integration tests in core'",
+    "test:security": "echo 'no security tests in core'"
+  }
+}
