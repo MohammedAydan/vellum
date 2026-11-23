@@ -1223,6 +1223,12 @@ export function createSqlTransactionHandle(
     ): Promise<IdempotencyResult | null> {
       assertOpen();
       const [key] = unwrapCtxArgs<[key: string]>(args, { projectId });
+      // Serialize the absent-ledger-row case too. Row locking alone cannot
+      // lock a key that does not exist yet, so racing retries could both write.
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+        [JSON.stringify([projectId, key])]
+      );
       const { rows } = await runPrepared<IdempotencyResult>(
         client,
         prepared,

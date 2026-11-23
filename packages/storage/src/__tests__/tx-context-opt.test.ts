@@ -166,3 +166,15 @@ describe("@vellum/storage V2 - TTL SQL surface", () => {
     expect(SQL_INSERT_DOCUMENTS_UNNEST).toContain("expires_at = EXCLUDED.expires_at");
   });
 });
+
+describe('idempotent mutation serialization', () => {
+  it('locks a tenant-scoped key before reading an absent replay row', async () => {
+    const client = new RecordingClient();
+    const tx = createSqlTransactionHandle(asPgClient(client), TENANT);
+    expect(await tx.getIdempotencyResult?.('first-use-key')).toBeNull();
+    expect(client.calls).toHaveLength(2);
+    expect(client.calls[0]?.text).toContain('pg_advisory_xact_lock');
+    expect(client.calls[0]?.params).toEqual([JSON.stringify([TENANT.projectId, 'first-use-key'])]);
+    expect(client.calls[1]?.text).toContain('FROM batch_idempotency_keys');
+  });
+});
