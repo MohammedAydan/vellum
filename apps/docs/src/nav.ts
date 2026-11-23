@@ -25,7 +25,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { slug: "index", title: t("Introduction", "مقدمة"), desc: t("What VELLUM is, how its two PostgreSQL data planes fit together, and where to begin.", "ما هو VELLUM، وكيف تتكامل قاعدتا البيانات الخاصتان بـ PostgreSQL، ومن أين تبدأ."), keywords: ["overview", "architecture", "postgres", "jsonb"] },
       { slug: "quickstart", title: t("Quickstart", "البدء السريع"), desc: t("Install the SDK, create a client and perform your first write, read and delete.", "ثبّت الحزمة البرمجية، أنشئ عميلًا، ونفّذ أول كتابة وقراءة وحذف."), keywords: ["install", "setup", "first write"] },
-      { slug: "authentication", title: t("Authentication", "المصادقة"), desc: t("API keys, console sessions, TOTP MFA, key rotation and least-privilege access.", "مفاتيح API، وجلسات Console، وMFA بتقنية TOTP، وتدوير المفاتيح، وأقل قدر من الامتيازات."), keywords: ["api key", "mfa", "session"] },
+      { slug: "authentication", title: t("Authentication", "المصادقة"), desc: t("API keys, end-user tokens, key rotation and least-privilege access.", "مفاتيح API، ورموز المستخدمين النهائيين، وتدوير المفاتيح، وأقل قدر من الامتيازات."), keywords: ["api key", "token", "session"] },
     ],
   },
   {
@@ -45,7 +45,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: t("Authentication", "المصادقة"),
     items: [
-      { slug: "end-user-auth", title: t("End users & the three realms", "المستخدمون النهائيون والمجالات الثلاثة"), desc: t("Three isolated auth realms, EdDSA-only end-user tokens, refresh rotation and MFA.", "ثلاثة مجالات مصادقة معزولة، رموز EdDSA للمستخدمين النهائيين، وتدوير الرموز وMFA."), keywords: ["realm", "EdDSA", "JWT", "refresh"] },
+      { slug: "end-user-auth", title: t("End-user authentication", "مصادقة المستخدمين النهائيين"), desc: t("EdDSA-only end-user tokens, refresh rotation, MFA and the exact auth REST paths.", "رموز EdDSA حصراً للمستخدمين النهائيين، وتدوير الرموز، وMFA، ومسارات المصادقة الدقيقة."), keywords: ["EdDSA", "JWT", "refresh", "mfa"] },
     ],
   },
   {
@@ -53,7 +53,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { slug: "security-rules", title: t("Security rules", "قواعد الأمان"), desc: t("The v1 JSON rules AST, deterministic deny-by-default evaluation, validation and publishing.", "شجرة قواعد v1 بصيغة JSON، والتقييم الحتمي بالرفض الافتراضي، والتحقق والنشر."), keywords: ["rules", "AST", "deny by default"] },
       { slug: "security-rules-dsl", title: t("Security Rules DSL", "لغة قواعد الأمان"), desc: t("The readable rules language: macros, functions, compile/decompile/simulate and exact diagnostics.", "لغة القواعد المقروءة: الماكروهات والدوال، والتجميع والتفكيك والمحاكاة والتشخيص الدقيق."), keywords: ["DSL", "macros", "rules_version", "simulate", "diagnostics"] },
-      { slug: "security-and-defense", title: t("Security & defense in depth", "الأمان والدفاع المتعدد الطبقات"), desc: t("Threat model, three-realm isolation, payload and query-cost guards, WS hardening, SSRF, key restrictions, hash-chained audit log, threat detector and verify-chain.", "نموذج التهديدات، وعزل المجالات الثلاثة، وحاجز الحمولة وتكلفة الاستعلام، وتأمين WebSocket، والحماية من SSRF، وقيود المفاتيح، وسجل التدقيق المتسلسل المشفّر، وكاشف التهديدات والتحقق من السلسلة."), keywords: ["threat model", "payload guard", "SSRF", "hash chain", "blocklist"] },
+      { slug: "security-and-defense", title: t("Security & defense in depth", "الأمان والدفاع المتعدد الطبقات"), desc: t("Threat model, payload and query-cost guards, WS hardening, SSRF and API-key restrictions.", "نموذج التهديدات، وحاجز الحمولة وتكلفة الاستعلام، وتأمين WebSocket، والحماية من SSRF، وقيود المفاتيح."), keywords: ["threat model", "payload guard", "SSRF", "blocklist"] },
     ],
   },
   {
@@ -68,7 +68,6 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { slug: "rest-api", title: t("REST API orientation", "نظرة عامة على REST API"), desc: t("A short map of the /v1 HTTP endpoint families, with links to the full reference.", "خريطة مختصرة لعائلات نقاط نهاية HTTP أسفل /v1، مع روابط إلى المرجع الكامل."), keywords: ["http", "endpoints"] },
       { slug: "reference/rest-data-plane", title: t("Data plane REST API", "واجهة REST لمستوى البيانات"), desc: t("API-key-only document CRUD, query, batchWrite, OCC transactions and indexes.", "عمليات مستندات بمفتاح API فقط: CRUD والاستعلام وbatchWrite والمعاملات والفهارس."), keywords: ["data plane", "http", "documents"] },
-      { slug: "reference/rest-control-plane", title: t("Control plane REST API", "واجهة REST لمستوى التحكم"), desc: t("Authentication, organizations, projects, keys, rulesets and metering.", "المصادقة والمؤسسات والمشاريع والمفاتيح ومجموعات القواعد والقياس."), keywords: ["control plane", "console", "admin"] },
       { slug: "reference/realtime-protocol", title: t("Realtime WebSocket protocol", "بروتوكول WebSocket للوقت الفعلي"), desc: t("Canonical frames, auth handshake, subscribe/resume, watermarks and gap detection.", "الإطارات المعيارية، ومصافحة المصادقة، والاشتراك والاستئناف، والعلامات المائية وكشف الفجوات."), keywords: ["frames", "ws", "protocol"] },
       { slug: "reference/wire-format", title: t("Wire format & paths", "تنسيق الإرسال والمسارات"), desc: t("Canonical $t/$v tagged types, $op transforms, path grammar and the locked v1 limits.", "الأنواع الموسومة $t/$v، وتحويلات $op، وقواعد المسارات والحدود الثابتة للإصدار 1."), keywords: ["wire", "tag", "path"] },
       { slug: "reference/errors", title: t("Error codes & retry guidance", "رموز الأخطاء وإرشادات إعادة المحاولة"), desc: t("Every canonical code, its HTTP status, when it occurs and whether retry is safe.", "كل رمز معياري، وحالته HTTP، ومتى يحدث، وما إذا كانت إعادة المحاولة آمنة."), keywords: ["errors", "retry", "status"] },
@@ -79,7 +78,6 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: t("Operations", "التشغيل"),
     items: [
-      { slug: "metering-and-billing", title: t("Metering & billing", "القياس والفوترة"), desc: t("O(1) in-memory metering with a 5 s flush, quota guard, locked plans, hard spend cap, integer-cent overages, immutable hash-chained ledger, invoices and Stripe webhooks.", "قياس في الذاكرة بزمن ثابت مع تفريغ كل ٥ ثوانٍ، وحاجز الحصص، وخطط ثابتة، وحد إنفاق صارم، وتكاليف زيادة بالسنتات، ودَفتر حسابات غير قابل للتعديل بسلسلة مشفّرة، وفواتير و Stripe."), keywords: ["metering", "quota", "billing", "ledger", "invoice", "Stripe"] },
       { slug: "production-checklist", title: t("Production checklist", "قائمة التحقق للإنتاج"), desc: t("Deployment, health probes, migrations, RLS, redaction, backups and known caveats.", "النشر، وفحوص الصحة، والترحيلات، وRLS، والإخفاء، والنسخ الاحتياطي والتحذيرات المعروفة."), keywords: ["production", "rls", "backup"] },
       { slug: "deployment", title: t("Deployment & hosting", "النشر والاستضافة"), desc: t("Unified single-origin frontend, local dev, Vercel, Cloudflare, Docker and Caddy.", "الواجهة الموحدة بمصدر واحد، والتطوير المحلي، وVercel وCloudflare وDocker وCaddy."), keywords: ["deploy", "hosting", "gateway"] },
     ],

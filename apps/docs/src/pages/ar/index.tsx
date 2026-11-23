@@ -60,7 +60,7 @@ console.log(snapshot.id, snapshot.version, snapshot.data());`}
             [
               "مستوى التحكم (Control Plane)",
               <code>control_db</code>,
-              "المستخدمون، المؤسسات، العضويات، المشاريع، بادئات وتجزئات مفاتيح API، قواعد الأمان المنسّخة، أسرار MFA، عدّادات القياس اليومية، وسجلات التدقيق المتسلسلة غير القابلة للتعديل.",
+              "المشاريع، بادئات وتجزئات مفاتيح API، قواعد الأمان المنسّخة، وإعدادات المنصة.",
             ],
             [
               "مستوى البيانات (Data Plane)",
@@ -93,11 +93,10 @@ console.log(snapshot.id, snapshot.version, snapshot.data());`}
             </>,
           ]}
         />
-        <Callout tone="info" title="ثلاثة مجالات مصادقة معزولة">
+        <Callout tone="info" title="بيانات اعتماد معزولة تماماً">
           يعتمد مستوى البيانات على مفتاح API (<code>pk_</code> أو <code>sk_</code>) مع رمز مستخدم نهائي
-          اختياري بتوقيع <code>EdDSA</code> فقط، بينما تستخدم لوحتا التحكم جلسات وملفات تعريف ارتباط منفصلة
-          تماماً لكل من <code>customer_console</code> و<code>super_admin</code>. لا يُقبل رمز أي مجال في
-          المجالين الآخرين — راجع <PageLink slug="authentication" lang="ar">المصادقة</PageLink>.
+          اختياري بتوقيع <code>EdDSA</code> فقط، وأي بيانات اعتماد أخرى مرفوضة عليه — راجع{" "}
+          <PageLink slug="authentication" lang="ar">المصادقة</PageLink>.
         </Callout>
       </Section>
 

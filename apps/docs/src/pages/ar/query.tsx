@@ -292,8 +292,8 @@ export default function Page() {
 }`}
         />
         <Callout tone="warning" title="أنشئ الفهرس المقترح ثم أعد المحاولة">
-          سجّل التعريف الوارد في <code>suggestedIndex</code> عبر مفتاح خادم <code>sk_</code> أو بنقرة واحدة
-          من لوحة التحكم، وانتظر حتى تصبح حالته <code>ready</code>. راجع{" "}
+          سجّل التعريف الوارد في <code>suggestedIndex</code> عبر مفتاح خادم <code>sk_</code>،
+          وانتظر حتى تصبح حالته <code>ready</code>. راجع{" "}
           <PageLink slug="indexes" lang="ar">الفهارس المركّبة</PageLink> و{" "}
           <PageLink slug="smart-indexing" lang="ar">الفهرسة الذكية والأداء</PageLink>.
         </Callout>

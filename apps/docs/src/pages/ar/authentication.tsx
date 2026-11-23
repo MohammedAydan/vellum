@@ -16,53 +16,27 @@ export default function Page() {
   return (
     <Doc
       title="المصادقة"
-      description="مفاتيح API، وجلسات Console، وMFA بتقنية TOTP، وتدوير المفاتيح، وأقل قدر من الامتيازات."
+      description="مفاتيح API، ورموز المستخدمين النهائيين، وتدوير المفاتيح، وأقل قدر من الامتيازات."
       eyebrow="البداية"
     >
       <Section id="overview" title="نظرة عامة">
         <P>
-          في VELLUM <strong>ثلاثة مجالات مصادقة معزولة</strong>:{" "}
-          <code>SUPER_ADMIN</code> و<code>CUSTOMER_CONSOLE</code> و
-          <code>PROJECT_END_USER</code>. تتشارك هذه المجالات في primitives
-          التشفير عديمة الحالة فقط؛ أمّا التخزين، وأسرار التوقيع، وقيم{" "}
-          <code>typ</code>/<code>iss</code>/<code>aud</code> في JWT، والClaims،
-          والبرمجيات الوسيطة فهي منفصلة تماماً — أي رمز صادر عن مجال يُرفض في
-          المجالين الآخرين.
+          في VELLUM <strong>بيانات اعتماد معزولة تماماً لكل سطح</strong>: تتشارك
+          الأسطح في primitives التشفير عديمة الحالة فقط؛ أمّا التخزين، وأسرار
+          التوقيع، وقيم <code>typ</code>/<code>iss</code>/<code>aud</code> في
+          JWT، والClaims، والبرمجيات الوسيطة فهي منفصلة تماماً — أي رمز صادر عن
+          سطح يُرفض في غيره.
         </P>
-        <OL
-          items={[
-            <>
-              <strong>مستوى المستندات</strong> (<code>/v1/projects/...</code>)
-              يستخدم مفاتيح API عبر <code>x-vellum-api-key</code> (والاسم القديم{" "}
-              <code>x-project-key</code>)، مع حامل اختياري للمستخدم النهائي
-              <strong> بتوقيع <code>EdDSA</code> فقط</strong>. لا يوجد بديل
-              <code>HS256</code>، ولا مسار مجهول، ولا مفتاح رئيسي ضمني.
-            </>,
-            <>
-              <strong>مستوى Console</strong> (<code>/v1/console/...</code>){" "}
-              و<strong>مستوى Admin</strong> (<code>/v1/admin/...</code>)
-              يستخدمان رموز جلسات <code>HS256</code> مرتبطة بالمجال، إضافة إلى
-              ملف تعريف ارتباط HttpOnly.
-            </>,
-          ]}
-        />
+        <P>
+          <strong>مستوى المستندات</strong> (<code>/v1/projects/...</code>)
+          يستخدم مفاتيح API عبر <code>x-vellum-api-key</code> (والاسم القديم{" "}
+          <code>x-project-key</code>)، مع حامل اختياري للمستخدم النهائي
+          <strong> بتوقيع <code>EdDSA</code> فقط</strong>. لا يوجد بديل
+          <code>HS256</code>، ولا مسار مجهول، ولا مفتاح رئيسي ضمني.
+        </P>
         <Table
           head={["المجال", "المسار", "ملف تعريف الارتباط", "الخوارزمية", "typ في الرمز"]}
           rows={[
-            [
-              <code>SUPER_ADMIN</code>,
-              <code>/v1/admin/**</code>,
-              <code>vellum_admin_rt</code>,
-              "HS256",
-              <code>vellum+superadmin+jwt</code>,
-            ],
-            [
-              <code>CUSTOMER_CONSOLE</code>,
-              <code>/v1/console/**</code>,
-              <code>vellum_console_rt</code>,
-              "HS256",
-              <code>vellum+console+jwt</code>,
-            ],
             [
               <code>PROJECT_END_USER</code>,
               <code>/v1/projects/:p/auth</code>,
@@ -214,113 +188,20 @@ await client.auth.signOut();`,
         <Callout tone="danger" title="لا يوجد بديل HS256">
           تُتحقَّق رموز المستخدمين النهائيين بتوقيع <code>EdDSA</code> فقط في
           كل من HTTP وWebSocket، بمفتاح Ed25519 الخاص بالمشروع. أي رمز
-          <code>HS256</code> — بما في ذلك رموز Console وAdmin — يُرفض في مستوى
-          المستندات حتى مع مفتاح API صالح. المفاتيح العامة متاحة على{" "}
+          <code>HS256</code> يُرفض في مستوى المستندات حتى مع مفتاح API صالح.
+          المفاتيح العامة متاحة على{" "}
           <code>GET /v1/projects/:projectId/auth/.well-known/jwks.json</code>
           .
         </Callout>
       </Section>
 
-      <Section id="console-sessions" title="جلسات Console والمصادقة بكلمة المرور">
-        <P>
-          تتصادق لوحة التحكم باسم المستخدم وكلمة المرور مقابل مستوى التحكم:
-        </P>
-        <Table
-          head={["نقطة النهاية", "الغرض"]}
-          rows={[
-            [
-              <code>POST /v1/auth/sign-up/email</code>,
-              "إنشاء مستخدم ومؤسسة افتراضية ومشروع ومفتاح تطوير.",
-            ],
-            [
-              <code>POST /v1/auth/sign-in/email</code>,
-              "التحقق من كلمة المرور بـ scrypt وإرجاع رمز جلسة.",
-            ],
-            [
-              <code>GET /v1/auth/session</code>,
-              "التحقق من الرمز المقدّم وإرجاع مطالباته.",
-            ],
-            [
-              <code>POST /v1/auth/sign-out</code>,
-              "إلغاء رمز تحديث الجلسة عند تقديمه.",
-            ],
-          ]}
-        />
-        <P>
-          رموز الوصول لجلسات Console قصيرة العمر، ويُحفظ رمز التحديث في ملف
-          تعريف ارتباط HttpOnly. يتحقق كل طلب Console من عضوية المؤسسة ويكتب
-          سجل تدقيق غير قابل للتعديل. للتفاصيل الكاملة عن المجالات الثلاثة
-          وتدوير التحديث، راجع{" "}
-          <PageLink slug="end-user-auth" lang="ar">
-            المستخدمين النهائيين والمجالات الثلاثة
-          </PageLink>
-          .
-        </P>
-
-        <H3 id="totp-mfa">MFA بتقنية TOTP لمستخدمي Console</H3>
-        <P>
-          المصادقة متعددة العوامل وفق <code>RFC 6238 TOTP</code> (خوارزمية{" "}
-          <code>SHA-1</code>، دورة 30 ثانية، ستة أرقام، وتسامح ± خطوة واحدة).
-          جميع مسارات MFA تتطلب جلسة صالحة:
-        </P>
-        <Table
-          head={["نقطة النهاية", "الغرض"]}
-          rows={[
-            [<code>GET /v1/auth/mfa/status</code>, <code>{`{ "enabled": boolean }`}</code>],
-            [
-              <code>POST /v1/auth/mfa/setup</code>,
-              <>إرجاع السر ومعرّف <code>otpauth://</code> ورموز الاسترداد.</>,
-            ],
-            [
-              <>
-                <code>POST /v1/auth/mfa/verify</code>{" "}
-                <code>{`{ "code": "123456" }`}</code>
-              </>,
-              "تفعيل MFA بعد رمز TOTP صالح.",
-            ],
-            [
-              <>
-                <code>POST /v1/auth/mfa/disable</code>{" "}
-                <code>{`{ "code": "..." }`}</code>
-              </>,
-              "تعطيل MFA باستخدام رمز TOTP أو رمز استرداد.",
-            ],
-          ]}
-        />
-        <P>
-          يُخزَّن سر TOTP مُشفَّراً في جدول <code>mfa_secrets</code> داخل مستوى
-          التحكم، وتُحفظ رموز الاسترداد كتجزئات بمفتاح. تُخنق محاولات التحقق
-          بنافذة منزلقة داخل العملية (خمس محاولات لكل 60 ثانية افتراضياً) —
-          دون أي <code>Redis</code>.
-        </P>
-        <Callout tone="success" title="التسجيل متكرر الحالة قبل التحقق">
-          استدعاء <code>setup</code> مجدداً قبل التحقق يُرجع السر والرموز نفسهما.
-          احفظ رموز الاسترداد في مكان آمن؛ فهي تُعرض مرة واحدة فقط عند الإعداد.
-        </Callout>
-      </Section>
 
       <Section id="rotation-and-least-privilege" title="التدوير والإلغاء وأقل الامتيازات">
         <H3 id="rotation">التدوير والإلغاء</H3>
         <P>
-          تُدار المفاتيح عبر واجهة Console المحمية بالجلسة ضمن{" "}
-          <code>/v1/projects/:projectId/api-keys</code>:
+          تُصدَر المفاتيح لكل مشروع. لا يظهر المفتاح الصريح إلا عند إنشائه؛
+          وبعدها تظهر البادئات والنطاقات والحالة وبيانات الاستخدام فقط.
         </P>
-        <UL
-          items={[
-            <>
-              <code>POST</code> — إنشاء مفتاح؛ لا يظهر المفتاح الصريح إلا في هذه
-              الاستجابة.
-            </>,
-            <>
-              <code>GET</code> — سرد المفاتيح (البادئات، والنطاقات، والحالة،
-              وبيانات الاستخدام).
-            </>,
-            <>
-              <code>DELETE /:keyId</code> — إلغاء مفتاح فوراً ونشر إبطال للتخزين
-              المؤقت.
-            </>,
-          ]}
-        />
         <OL
           items={[
             "أنشئ المفتاح الجديد.",
@@ -330,8 +211,8 @@ await client.auth.signOut();`,
           ]}
         />
         <P>
-          لأن الإلغاء يُفرَض أيضاً مقابل سجل مستوى التحكم، فلا يمكن استخدام
-          مفتاح مخزَّن مؤقتاً بعد ضبط <code>revokedAt</code> له.
+          لأن الإلغاء يُفرَض أيضاً مقابل سجل الخادم، فلا يمكن استخدام مفتاح
+          مخزَّن مؤقتاً بعد ضبط <code>revokedAt</code> له.
         </P>
 
         <H3 id="least-privilege">أقل قدر من الامتيازات</H3>
@@ -348,10 +229,7 @@ await client.auth.signOut();`,
               <code>documents:read</code>، وأدوات الفهارس تأخذ{" "}
               <code>indexes:manage</code>.
             </>,
-            <>
-              اضبط تاريخ انتهاء للمفاتيح المؤقتة، ودقّق كل حدث{" "}
-              <code>api_key.created</code> و<code>api_key.revoked</code>.
-            </>,
+            <>اضبط تاريخ انتهاء للمفاتيح المؤقتة، ودوّرها بانتظام.</>,
           ]}
         />
         <Callout tone="warning" title="نظافة السجلات">
@@ -366,8 +244,8 @@ await client.auth.signOut();`,
         <UL
           items={[
             <>
-              <strong>الخلط بين السطحين.</strong> رمز جلسة Console لا يُقبل في
-              مستوى المستندات، ومفتاح API لا يُقبل في مستوى Console.
+              <strong>الخلط بين الأسطح.</strong> أي رمز صادر خارج مستوى
+              المستندات يُرفض فيه، ومفتاح API لا يصرّح بأي شيء خارجه.
             </>,
             <>
               <strong>افتراض أن المفتاح العام مميّز.</strong> بدون مجموعة قواعد
@@ -391,10 +269,9 @@ await client.auth.signOut();`,
           items={[
             <>
               <PageLink slug="end-user-auth" lang="ar">
-                المستخدمون النهائيون والمجالات الثلاثة
+                مصادقة المستخدمين النهائيين
               </PageLink>{" "}
-              — عزل المجالات، وتدوير التحديث، وإسقاط الملف الشخصي، ومصادقة WS،
-              وتحديد المعدل.
+              — تدوير الرموز، وإسقاط الملف الشخصي، ومصادقة WS، وتحديد المعدل.
             </>,
             <>
               <PageLink slug="sdks/javascript" lang="ar">
