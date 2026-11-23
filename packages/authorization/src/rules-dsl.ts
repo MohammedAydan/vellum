@@ -796,9 +796,9 @@ class DslParser {
       this.next();
       return { val: null };
     }
-    if (t.type === "string" || t.type === "number") {
+    if (t.type === "number") {
       this.next();
-      return { val: t.type === "number" ? Number(t.value) : t.value };
+      return { val: Number(t.value) };
     }
     if (t.value === "-" || t.value === "+") {
       const signTok = this.next();
