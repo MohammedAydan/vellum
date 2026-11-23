@@ -142,3 +142,16 @@ Future<void> main() async {
 - [Realtime Subscriptions](./realtime.md)
 - [Batch Writes & Transactions](./batch-and-transactions.md)
 - [Production Checklist](./production-checklist.md)
+
+## Endpoint and account scope
+
+Pass the API origin as `endpoint` (for example `https://api.example.com`),
+without `/v1`, `/auth`, or a project suffix. The SDK adds the project route.
+Dart's optional `baseUrl` is a full REST-prefix override, such as
+`https://api.example.com/v1/projects/PROJECT_ID`; it is not interchangeable
+with `endpoint`. Do not pass both. Project `db.auth` signup accepts
+`displayName`; Console signup creates a different account and requires `name`.
+Do not add Console fields to fix a wrong project URL.
+
+Use `pk_` keys only with suitable security rules and end-user authentication.
+Never bundle an `sk_` key into browser or mobile code.

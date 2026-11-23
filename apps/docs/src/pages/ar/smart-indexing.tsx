@@ -19,7 +19,7 @@ const db = createClient({
   warnOnMissingIndexes: true, // الافتراضي؛ false تُوقف طباعة التحذير في console
   onIndexSuggestion: ({ url, suggestion }) => {
     // يُستدعى لكل توصية حتى لو كان warnOnMissingIndexes = false.
-    telemetry.track("slow_query", { url, suggestion });
+    console.log("slow_query", { url, suggestion });
   },
 });`;
 

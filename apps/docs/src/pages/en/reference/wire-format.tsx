@@ -70,8 +70,9 @@ export default function Page() {
             },
             {
               label: "Constructors",
-              lang: "ts",
-              code: `import { WireValue } from "@vellum/core";
+              lang: "text",
+              code: `// Backend source helper, not a published SDK export.
+import { WireValue } from "@vellum/core";
 
 const data = {
   big: WireValue.int64("9007199254740993"),
@@ -211,8 +212,8 @@ parseCollectionPath("users/u_123/orders");
 parseDocumentPath("users/u_123/orders/"); // INVALID_DOCUMENT_PATH
 parseCollectionPath("users//orders");     // INVALID_DOCUMENT_PATH
 parseCollectionPath("users/__meta__");    // INVALID_DOCUMENT_PATH`}
-          lang="ts"
-          title="Path parsing"
+          lang="text"
+          title="Backend path parsing reference"
         />
       </Section>
 

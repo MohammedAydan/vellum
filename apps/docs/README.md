@@ -24,7 +24,7 @@ src/
   main.tsx        React root
   App.tsx         shell: routing, sidebar, TOC, command-palette search, theme
   ui.tsx          shared blocks: Doc, Section, P, CodeTabs, Table, Callout, Api…
-  nav.ts          25 page slugs, EN/AR titles, descriptions, keywords
+  nav.ts          page slugs, EN/AR titles, descriptions, keywords
   registry.ts     lazy page imports
   styles.css      design tokens, light/dark themes, RTL, responsive rules
   pages/en/*.tsx  English content

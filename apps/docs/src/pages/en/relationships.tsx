@@ -84,9 +84,9 @@ const putRulesRest = `curl -s -X PUT \\
   }'
 # => 409 ABORTED_CONFLICT when the version is stale`;
 
-const referencedByJs = `let cursor;
+const referencedByJs = `let cursor: string | undefined;
 do {
-  const page = await db.doc("users/u1").referencedBy({
+  const page: import("@vellumdb/sdk-js").ReferencedByPage = await db.doc("users/u1").referencedBy({
     collection: "orders",
     field: "customerId",
     limit: 25,

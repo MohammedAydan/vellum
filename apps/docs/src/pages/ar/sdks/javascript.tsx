@@ -1,3 +1,4 @@
+import { SdkEndpointNote } from "../../../sdk-endpoint-note";
 import { betaJavaScriptInstall, betaDartInstall } from "../../../beta-install";
 import {
   Callout,
@@ -60,7 +61,8 @@ const ref = users.doc("u_123");
 
 await ref.set({ id: "u_123", name: "Ada", active: true });          // PUT (استبدال كامل)
 await ref.upsert({ id: "u_123", name: "Ada", active: true });       // INSERT ... ON CONFLICT DO UPDATE
-await ref.update({ active: false }, { ifVersion: 1 });              // PATCH مع فحص الإصدار
+const beforeUpdate = await ref.get();
+await ref.update({ active: false }, { ifVersion: beforeUpdate.version });              // PATCH مع فحص الإصدار
 
 const controller = new AbortController();
 const snap = await ref.get({ signal: controller.signal, bypassCache: false });
@@ -154,6 +156,7 @@ await db.batchWrite([
 ]);
 
 // تقسيم آلي للدفعات الضخمة مع تحكم بالتزامن وتقارير تقدّم
+const largeWritesArray = [{ type: "set", path: "users/u_4", data: { name: "Grace" } }];
 await db.batchWriteChunked(largeWritesArray, {
   chunkSize: 100,
   concurrency: 4,
@@ -233,8 +236,9 @@ export default function Page() {
       eyebrow="المجموعات البرمجية"
     >
 
+      <SdkEndpointNote arabic />
       <Section id="beta-install" title="تثبيت النسخة التجريبية">
-        <P>حزمتا npm وpub.dev لم تُنشرا بعد وفي انتظار الموافقة. استخدم نسخة Beta المثبتة أدناه أو اعتماد Git. يلزم الوصول إلى المستودع، ولا تنشر أي حزمة.</P>
+      <P>الإصدار 0.0.1 متاح على npm وpub.dev. ثبّت الحزم المنشورة أدناه، ولا تحتاج إلى نسخة من المستودع.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />
         <Code lang="yaml" title="Flutter / Dart 3.4+" code={betaDartInstall} />
       </Section>
@@ -350,6 +354,12 @@ export default function Page() {
         </P>
       </Section>
 
+      <Callout tone="warning" title="تغيير الحساب والاشتراكات الفورية">
+        أعد إنشاء الاشتراكات بعد تسجيل الدخول أو الخروج أو تبديل المستخدم.
+        في الإصدار المنشور 0.0.1، أغلق العميل القديم باستخدام dispose وأنشئ عميلاً جديداً
+        لكل حساب، ولا تشارك ذاكرة العميل بين المستخدمين. الإصلاح القادم ينهي الاشتراكات
+        القديمة عند تغيير الهوية. مع getAuthToken خارجي، أعد ضبط الاشتراكات عند تغيير الهوية.
+      </Callout>
       <Section id="modular-architecture" title="البنية المعيارية والحماية ضد التلاعب">
         <P>
           حزمة <code>@vellumdb/sdk-js</code> مقسّمة إلى مجلدات وملفات متخصصة داخل{" "}

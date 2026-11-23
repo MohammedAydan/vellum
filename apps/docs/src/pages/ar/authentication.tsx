@@ -153,7 +153,7 @@ const db = createClient({
   endpoint: "https://api.example.com",
   projectId: "<YOUR_PROJECT_ID>",
   apiKey: "<YOUR_API_KEY>", // يُرسَل في x-vellum-api-key
-  getAuthToken: async () => currentUserJwt(), // رمز مستخدم نهائي اختياري لـ auth.uid
+  // Optional: getAuthToken: async () => yourCurrentUserJwt(), // رمز مستخدم نهائي اختياري لـ auth.uid
 });`,
             },
             {
@@ -183,18 +183,26 @@ final client = VellumClient(
             {
               label: "TypeScript",
               lang: "ts",
-              code: `await db.auth.signUpWithEmailAndPassword({ email, password });
+              code: `const email = "ada@example.com";
+const password = "correct-horse-battery-staple";
+await db.auth.signUpWithEmailAndPassword({ email, password });
 await db.auth.signInWithEmailAndPassword({ email, password });
 
 const token = await db.auth.getIdToken(); // EdDSA، يُجدَّد تلقائياً قبل الانتهاء
-const me = await db.collection("users").doc(tokenUserId).get();
+const tokenUserId = db.auth.currentUser?.id;
+if (tokenUserId) {
+  const me = await db.collection("users").doc(tokenUserId).get();
+  console.log(me.data());
+}
 
 await db.auth.signOut();`,
             },
             {
               label: "Flutter / Dart",
               lang: "dart",
-              code: `await client.auth.signUpWithEmailAndPassword(email: email, password: password);
+              code: `const email = 'ada@example.com';
+const password = 'correct-horse-battery-staple';
+await client.auth.signUpWithEmailAndPassword(email: email, password: password);
 await client.auth.signInWithEmailAndPassword(email: email, password: password);
 
 final token = await client.auth.getIdToken(); // EdDSA مع تجديد صامت

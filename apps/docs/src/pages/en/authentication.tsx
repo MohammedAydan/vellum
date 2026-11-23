@@ -100,7 +100,7 @@ const db = createClient({
   projectId: "<YOUR_PROJECT_ID>",
   apiKey: "<YOUR_PUBLIC_KEY>",
   // Optional EdDSA end-user token for auth.uid / auth.claims in rules.
-  getAuthToken: async () => currentUserJwt(),
+  // Optional: getAuthToken: async () => yourCurrentUserJwt(),
 });`,
             },
           ]}

@@ -1,3 +1,4 @@
+import { SdkEndpointNote } from "../../../sdk-endpoint-note";
 import { betaJavaScriptInstall, betaDartInstall } from "../../../beta-install";
 import {
   Callout,
@@ -17,8 +18,9 @@ export default function Page() {
       description="Complete reference for @vellumdb/sdk-js—typed converters, streaming pagination, auto-chunked bulk writes, BoundedReadCache, single-flight read deduplication, AbortSignal, realtime connectionState, and dispose()."
     >
 
+      <SdkEndpointNote />
       <Section id="beta-install" title="Beta installation">
-        <P>Public npm and pub.dev packages are pending release approval. Use this pinned Beta checkout or Git dependency. Repository access is required; no package publication is needed.</P>
+        <P>Version 0.0.1 is available on npm and pub.dev. Install the published Beta packages below. Repository access is not required.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />
         <Code lang="yaml" title="Flutter / Dart 3.4+" code={betaDartInstall} />
       </Section>
@@ -33,7 +35,7 @@ export default function Page() {
         <Code
           lang="ts"
           title="Initialize a hardened @vellumdb/sdk-js client"
-          code={`import { createClient, BoundedReadCache } from "@vellumdb/sdk-js";
+          code={`import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",
@@ -42,11 +44,11 @@ const db = createClient({
   // Single-flight coalescing for concurrent identical GETs (default: false)
   dedupeReads: true,
   // Optional bounded LRU + TTL cache (defaults: ttlMs = 30_000, maxEntries = 1_000)
-  readCache: { ttlMs: 30_000, maxEntries: 1_000 },
+  cache: { enabled: true, ttlMs: 30_000, maxEntries: 1_000 },
   // Index advisor warnings & telemetry hook
   warnOnMissingIndexes: process.env.NODE_ENV !== "production",
   onIndexSuggestion(event) {
-    console.warn("Suggested index:", event.fingerprint, event.url);
+    console.warn("Suggested index:", event.suggestion, event.url);
   },
 });`}
         />
@@ -83,12 +85,13 @@ interface User {
 }
 
 const userConverter: DocDataConverter<User> = {
-  toVellum(user) {
+  toDoc(user) {
     return { email: user.email, role: user.role };
   },
-  fromVellum(data, id) {
+  fromDoc(snap) {
+    const data = snap.data();
     return {
-      id,
+      id: snap.id,
       email: String(data.email ?? ""),
       role: data.role === "admin" ? "admin" : "member",
     };
@@ -124,12 +127,13 @@ for await (const doc of db.collection("events").stream({ pageSize: 100, signal: 
   console.log(doc.id, doc.data());
 }
 
-// Auto-chunked bulk writes (default chunkSize: 500, concurrency: 4; pass 100 for server batch cap)
+// Auto-chunked bulk writes (published 0.0.1 defaults to 500; explicitly use the API cap of 100)
+const writes = [{ type: "set", path: "events/demo", data: { severity: "error" } }];
 const result = await db.batchWriteChunked(writes, {
   chunkSize: 100,
   concurrency: 4,
   signal: ac.signal,
-  onChunkComplete(progress) {
+  onProgress(progress) {
     console.log(\`\${progress.completedOperations}/\${progress.totalOperations} ops\`);
   },
 });`}
@@ -151,7 +155,7 @@ const unsub = db.collection("orders").onSnapshot((snap) => {
 });
 
 // Auth client (MemoryAuthStorage or BrowserLocalStorage)
-await db.auth.signInWithEmailAndPassword({ email: "ada@example.com", password: "secret" });
+await db.auth.signInWithEmailAndPassword({ email: "ada@example.com", password: "correct-horse-battery-staple" });
 
 // Clean teardown
 unsub();
@@ -169,6 +173,13 @@ db.dispose();`}
         </Callout>
       </Section>
 
+      <Callout tone="warning" title="Account changes and realtime">
+        Recreate realtime subscriptions after signing in, signing out, or switching users.
+        The next SDK fixes end old subscriptions at that boundary so one account cannot keep
+        another account's live data. For published 0.0.1, dispose the old client and create a
+        new client per account boundary; do not share cached clients between users. Custom
+        getAuthToken providers must reset subscriptions when their identity changes.
+      </Callout>
       <Section id="modular-architecture" title="Modular architecture &amp; tamper-proofing">
         <P>
           <code>@vellumdb/sdk-js</code> is structured into focused domain modules under{" "}

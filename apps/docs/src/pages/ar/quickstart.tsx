@@ -1,10 +1,12 @@
+import { SdkEndpointNote } from "../../sdk-endpoint-note";
 import { betaJavaScriptInstall, betaDartInstall } from "../../beta-install";
 import { quickstartTypeScript, quickstartDart } from "../../quickstart-examples";
 import { Callout, Code, CodeTabs, Doc, P, PageLink, Section, UL } from "../../ui";
 export default function Page() {
   return <Doc eyebrow="البداية" title="البدء السريع" description="تحقق من جاهزية API، وثبّت نسخة Beta، ثم اكتب واقرأ واستعلم واحذف مع تنظيف موارد العميل.">
-    <Section id="beta-install" title="تثبيت النسخة التجريبية">
-      <P>حزمتا npm وpub.dev في انتظار الموافقة على النشر. يلزم الوصول إلى المستودع. لا تستخدم تثبيت السجل العام حالياً.</P>
+    <SdkEndpointNote arabic />
+      <Section id="beta-install" title="تثبيت النسخة التجريبية">
+      <P>الإصدار 0.0.1 متاح على npm وpub.dev. ثبّت الحزم المنشورة أدناه، ولا تحتاج إلى نسخة من المستودع.</P>
       <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />
       <Code lang="yaml" title="Flutter / Dart 3.4+" code={betaDartInstall} />
     </Section>

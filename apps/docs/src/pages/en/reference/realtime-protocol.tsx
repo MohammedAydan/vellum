@@ -286,7 +286,7 @@ const stop = db.collection("orders").onSnapshot((snapshot) => {
   if (snapshot.watermarkSeqId != null) {
     localStorage.setItem("orders:watermark", snapshot.watermarkSeqId);
   }
-  render(snapshot.docs);
+  console.log(snapshot.docs);
 });
 
 // On a new session the SDK transport re-subscribes with resumeSeqId automatically.

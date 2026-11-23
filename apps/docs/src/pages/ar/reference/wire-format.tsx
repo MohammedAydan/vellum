@@ -77,8 +77,8 @@ export default function Page() {
 }`,
             },
             {
-              label: "منشئات @vellum/core",
-              lang: "ts",
+              label: "مرجع داخلي لـ @vellum/core، ليس ضمن SDK المنشور",
+              lang: "text",
               title: "WireValue",
               code: `import { WireValue } from "@vellum/core";
 
@@ -156,7 +156,7 @@ const data = {
           ]}
         />
         <Code
-          lang="ts"
+          lang="text"
           title="تحليل مسار إلى مكوّناته"
           code={`import { parseDocumentPath } from "@vellum/core";
 

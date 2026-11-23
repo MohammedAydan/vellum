@@ -1,3 +1,4 @@
+import { SdkEndpointNote } from "../../../sdk-endpoint-note";
 import { betaJavaScriptInstall, betaDartInstall } from "../../../beta-install";
 import {
   Callout,
@@ -102,7 +103,7 @@ for (final d in page.docs) {
 }
 
 // التصفح الانسيابي عبر التدفقات (Streams) بذاكرة محدودة:
-await for (final doc in q.streamDocuments(pageSize: 50, maxDocuments: 500)) {
+await for (final doc in q.streamDocuments(pageSize: 50, maxPages: 10)) {
   print('\${doc.id}: \${doc.data()}');
 }
 
@@ -187,8 +188,9 @@ export default function Page() {
       eyebrow="المجموعات البرمجية"
     >
 
+      <SdkEndpointNote arabic />
       <Section id="beta-install" title="تثبيت النسخة التجريبية">
-        <P>حزمتا npm وpub.dev لم تُنشرا بعد وفي انتظار الموافقة. استخدم نسخة Beta المثبتة أدناه أو اعتماد Git. يلزم الوصول إلى المستودع، ولا تنشر أي حزمة.</P>
+      <P>الإصدار 0.0.1 متاح على npm وpub.dev. ثبّت الحزم المنشورة أدناه، ولا تحتاج إلى نسخة من المستودع.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />
         <Code lang="yaml" title="Flutter / Dart 3.4+" code={betaDartInstall} />
       </Section>
@@ -286,6 +288,12 @@ export default function Page() {
         </P>
       </Section>
 
+      <Callout tone="warning" title="تغيير الحساب والاشتراكات الفورية">
+        أعد إنشاء الاشتراكات بعد تسجيل الدخول أو الخروج أو تبديل المستخدم.
+        في الإصدار المنشور 0.0.1، أغلق العميل القديم باستخدام dispose وأنشئ عميلاً جديداً
+        لكل حساب، ولا تشارك ذاكرة العميل بين المستخدمين. الإصلاح القادم ينهي الاشتراكات
+        القديمة عند تغيير الهوية. مع getAuthToken خارجي، أعد ضبط الاشتراكات عند تغيير الهوية.
+      </Callout>
       <Section id="modular-architecture" title="البنية المعيارية والحماية ضد التلاعب">
         <P>
           حزمة <code>vellum_flutter</code> مبنية كمكتبة Dart نقية متوافقة مع الويب والموبايل وسطح
