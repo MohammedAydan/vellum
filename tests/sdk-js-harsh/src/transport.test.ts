@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import http from "node:http";
-import { provision, uid, type Env } from "./harness.js";
+import { provision, uid, expectApiError, type Env } from "./harness.js";
 import { HttpTransport } from "@vellumdb/sdk-js";
 
 /**
@@ -82,7 +82,9 @@ beforeAll(async () => {
 });
 afterAll(() => { proxy.stop(); env.cleanup(); });
 
-const proxied = (cfg: any = {}) => env.secret({ endpoint: proxy.url, retryBaseDelayMs: 50, retryMaxDelayMs: 400, ...cfg });
+// The harness default is maxRetries: 0 (stress suites want raw behavior);
+// this suite tests the retry machinery, so it opts back in.
+const proxied = (cfg: any = {}) => env.secret({ endpoint: proxy.url, maxRetries: 3, retryBaseDelayMs: 50, retryMaxDelayMs: 400, ...cfg });
 
 describe("transport fault injection", () => {
   it("retries idempotent GET on 503 and succeeds", async () => {
@@ -113,8 +115,7 @@ describe("transport fault injection", () => {
     // Both injected plans were consumed by the SDK? No: only one request may
     // have been made. A retry would have consumed the second plan and then hit
     // the upstream, which would have created the doc.
-    const check = await env.secret().doc(`${c}/w1`).get();
-    expect(check.exists).toBe(false);
+    await expectApiError(env.secret().doc(`${c}/w1`).get(), {});
   });
 
   it("retries idempotent GET after a socket drop", async () => {

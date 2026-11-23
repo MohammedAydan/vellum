@@ -18,7 +18,10 @@ String _jwt(Duration ttl) {
   return '$header.$payload.signature';
 }
 
-String get _token => _jwt(const Duration(hours: 1));
+// A getter regenerating from DateTime.now() flaked across second boundaries
+// when a test compared a captured token against a fresh call. A lazy top-level
+// final is computed once and shared by every test in the file.
+final String _token = _jwt(const Duration(hours: 1));
 
 Map<String, dynamic> _user({
   String displayName = 'Alice',
@@ -393,6 +396,7 @@ void main() {
 
   group('Reactive 401 replay', () {
     test('forces exactly one refresh and replays the request once', () async {
+      final issued = _token;
       final refreshed = _jwt(const Duration(hours: 2));
       var refreshCalls = 0;
       var documentAttempts = 0;
@@ -402,7 +406,7 @@ void main() {
         projectId: 'p',
         apiKey: 'k',
         httpTransport: _transport((m, u, h, b) async {
-          if (u.endsWith('/auth/sign-up/email')) return _session(_token);
+          if (u.endsWith('/auth/sign-up/email')) return _session(issued);
           if (u.endsWith('/auth/token/refresh')) {
             refreshCalls++;
             return <String, dynamic>{
@@ -442,7 +446,7 @@ void main() {
       expect(snap.data()?['name'], equals('Ada'));
       expect(refreshCalls, equals(1));
       expect(documentAttempts, equals(2));
-      expect(headers[0]['Authorization'], equals('Bearer $_token'));
+      expect(headers[0]['Authorization'], equals('Bearer $issued'));
       expect(headers[1]['Authorization'], equals('Bearer $refreshed'));
       client.auth.dispose();
     });
