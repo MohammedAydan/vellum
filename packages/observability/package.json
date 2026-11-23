@@ -1,0 +1,27 @@
+{
+  "name": "@vellum/observability",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "echo 'no integration tests'",
+    "test:security": "echo 'no security tests'"
+  },
+  "dependencies": {
+    "@vellum/core": "workspace:*",
+    "pino": "^9.6.0"
+  }
+}
