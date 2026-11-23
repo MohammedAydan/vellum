@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quickstart · VELLUM Docs</title>
+<meta name="description" content="Install @vellum/sdk-js or vellum_flutter, initialize a hardened client, and run your first create, read, atomic update, and delete.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/quickstart.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Getting started <span>/</span> <strong>Quickstart</strong></div>
+    <article class="article"><h1 id="quickstart">Quickstart<a class="anchor" href="#quickstart" aria-label="Link to section">#</a></h1>
+<p>Get your first document into and out of VELLUM in under three minutes using either <strong>TypeScript/JavaScript (<code class="inline-code">@vellum/sdk-js</code>)</strong> or <strong>Flutter/Dart (<code class="inline-code">vellum_flutter</code>)</strong>.</p>
+<h2 id="prerequisites">Prerequisites<a class="anchor" href="#prerequisites" aria-label="Link to section">#</a></h2>
+<ul><li>A VELLUM project ID (<code class="inline-code">proj_...</code>) and API endpoint (<code class="inline-code">https://api.example.com</code> or <code class="inline-code">http://localhost:8080</code>).</li><li>An API key: use a <strong>publishable key (<code class="inline-code">pk_...</code>)</strong> in browsers and mobile apps, or a <strong>secret key (<code class="inline-code">sk_...</code>)</strong> in trusted backend services.</li></ul>
+<hr>
+<h2 id="typescript-javascript-vellum-sdk-js">TypeScript / JavaScript (<code class="inline-code">@vellum/sdk-js</code>)<a class="anchor" href="#typescript-javascript-vellum-sdk-js" aria-label="Link to section">#</a></h2>
+<h3 id="1-install">1. Install<a class="anchor" href="#1-install" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">BASH</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">npm install @vellum/sdk-js</code></pre>
+</div>
+<h3 id="2-initialize-write-read-update-clean-up">2. Initialize, Write, Read, Update &amp; Clean Up<a class="anchor" href="#2-initialize-write-read-update-clean-up" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> { createClient, fieldOp } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/sdk-js&quot;</span>;
+
+<span class="hl-keyword">const</span> db = <span class="hl-fn">createClient</span>({
+  projectId: process<span class="hl-property">.env</span><span class="hl-property">.VELLUM_PROJECT_ID</span>!,
+  apiKey: process<span class="hl-property">.env</span><span class="hl-property">.VELLUM_API_KEY</span>!,
+  endpoint: process<span class="hl-property">.env</span><span class="hl-property">.VELLUM_ENDPOINT</span> ?? <span class="hl-string">&quot;http://localhost:8080&quot;</span>,
+  timeoutMs: 15_000,
+  maxRetries: <span class="hl-number">3</span>,
+  cache: { enabled: <span class="hl-keyword">true</span>, ttlMs: 30_000, maxEntries: 1_000 },
+  dedupeReads: <span class="hl-keyword">true</span>,
+});
+
+<span class="hl-keyword">try</span> {
+  <span class="hl-keyword">const</span> userRef = db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;users&quot;</span>)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;usr_ada&quot;</span>);
+
+  <span class="hl-comment">// Create with atomic server timestamp and optional TTL</span>
+  <span class="hl-keyword">await</span> userRef<span class="hl-property">.create</span>(
+    {
+      name: <span class="hl-string">&quot;Ada Lovelace&quot;</span>,
+      role: <span class="hl-string">&quot;admin&quot;</span>,
+      loginCount: <span class="hl-number">1</span>,
+      tags: [<span class="hl-string">&quot;engineering&quot;</span>],
+      createdAt: fieldOp<span class="hl-property">.serverTimestamp</span>(),
+    },
+    { ttlSeconds: 86_400 }
+  );
+
+  <span class="hl-comment">// Read back with field projection</span>
+  <span class="hl-keyword">const</span> snap = <span class="hl-keyword">await</span> userRef<span class="hl-property">.get</span>({ select: [<span class="hl-string">&quot;name&quot;</span>, <span class="hl-string">&quot;role&quot;</span>, <span class="hl-string">&quot;loginCount&quot;</span>] });
+  console<span class="hl-property">.log</span>(<span class="hl-string">&quot;Created:&quot;</span>, snap<span class="hl-property">.id</span>, <span class="hl-string">&quot;v&quot;</span> + snap<span class="hl-property">.version</span>, snap<span class="hl-property">.data</span>());
+
+  <span class="hl-comment">// Atomic partial update with optimistic concurrency (ifVersion)</span>
+  <span class="hl-keyword">await</span> userRef<span class="hl-property">.update</span>(
+    {
+      loginCount: fieldOp<span class="hl-property">.increment</span>(<span class="hl-number">1</span>),
+      tags: fieldOp<span class="hl-property">.arrayUnion</span>(<span class="hl-string">&quot;founders&quot;</span>),
+    },
+    { ifVersion: snap<span class="hl-property">.version</span> }
+  );
+
+  <span class="hl-comment">// Delete with version guard</span>
+  <span class="hl-keyword">await</span> userRef<span class="hl-property">.delete</span>({ ifVersion: snap<span class="hl-property">.version</span> + <span class="hl-number">1</span> });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-comment">// Release auth timers, caches, and WebSocket connections</span>
+  db<span class="hl-property">.dispose</span>?.();
+}</code></pre>
+</div>
+<hr>
+<h2 id="flutter-dart-vellum-flutter">Flutter / Dart (<code class="inline-code">vellum_flutter</code>)<a class="anchor" href="#flutter-dart-vellum-flutter" aria-label="Link to section">#</a></h2>
+<h3 id="1-install">1. Install<a class="anchor" href="#1-install" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">YAML</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">dependencies:
+  vellum_flutter: ^<span class="hl-number">0.0</span>.<span class="hl-number">1</span></code></pre>
+</div>
+<h3 id="2-initialize-write-read-update-clean-up">2. Initialize, Write, Read, Update &amp; Clean Up<a class="anchor" href="#2-initialize-write-read-update-clean-up" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> client = <span class="hl-fn">VellumClient</span>(
+    endpoint: <span class="hl-string">'http://localhost:8080'</span>,
+    projectId: <span class="hl-string">'proj_01j9...'</span>,
+    apiKey: <span class="hl-string">'pk_live_...'</span>,
+    requestTimeout: <span class="hl-keyword">const</span> <span class="hl-fn">Duration</span>(seconds: <span class="hl-number">15</span>),
+    maxRetries: <span class="hl-number">3</span>,
+    coalesceInFlightGets: <span class="hl-keyword">true</span>,
+  );
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">final</span> userRef = client<span class="hl-property">.collection</span>(<span class="hl-string">'users'</span>)<span class="hl-property">.doc</span>(<span class="hl-string">'usr_ada'</span>);
+
+    <span class="hl-keyword">await</span> userRef<span class="hl-property">.create</span>(
+      {
+        <span class="hl-string">'name'</span>: <span class="hl-string">'Ada Lovelace'</span>,
+        <span class="hl-string">'role'</span>: <span class="hl-string">'admin'</span>,
+        <span class="hl-string">'loginCount'</span>: <span class="hl-number">1</span>,
+        <span class="hl-string">'tags'</span>: [<span class="hl-string">'engineering'</span>],
+        <span class="hl-string">'createdAt'</span>: <span class="hl-type">FieldValue</span><span class="hl-property">.serverTimestamp</span>(),
+      },
+      ttlSeconds: <span class="hl-number">86400</span>,
+    );
+
+    <span class="hl-keyword">final</span> snap = <span class="hl-keyword">await</span> userRef<span class="hl-property">.get</span>(select: [<span class="hl-string">'name'</span>, <span class="hl-string">'role'</span>, <span class="hl-string">'loginCount'</span>]);
+    <span class="hl-fn">print</span>(<span class="hl-string">'Created: ${snap.id} v${snap.version} ${snap.data()}'</span>);
+
+    <span class="hl-keyword">await</span> userRef<span class="hl-property">.update</span>(
+      {
+        <span class="hl-string">'loginCount'</span>: <span class="hl-type">FieldValue</span><span class="hl-property">.increment</span>(<span class="hl-number">1</span>),
+        <span class="hl-string">'tags'</span>: <span class="hl-type">FieldValue</span><span class="hl-property">.arrayUnion</span>([<span class="hl-string">'founders'</span>]),
+      },
+      ifVersion: snap<span class="hl-property">.version</span>,
+    );
+
+    <span class="hl-keyword">await</span> userRef<span class="hl-property">.delete</span>(ifVersion: snap<span class="hl-property">.version</span> + <span class="hl-number">1</span>);
+  } <span class="hl-keyword">finally</span> {
+    client<span class="hl-property">.dispose</span>();
+  }
+}</code></pre>
+</div>
+<hr>
+<h2 id="next-steps">Next Steps<a class="anchor" href="#next-steps" aria-label="Link to section">#</a></h2>
+<ul><li><a href="query.html">Querying, Relations &amp; Aggregations</a></li><li><a href="pagination.html">Cursor Pagination &amp; Streaming</a></li><li><a href="realtime.html">Realtime Subscriptions</a></li><li><a href="batch-and-transactions.html">Batch Writes &amp; Transactions</a></li><li><a href="production-checklist.html">Production Checklist</a></li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#prerequisites" class="toc-link toc-l2">Prerequisites</a><a href="#typescript-javascript-vellum-sdk-js" class="toc-link toc-l2">TypeScript / JavaScript (`@vellum/sdk-js`)</a><a href="#1-install" class="toc-link toc-l3">1. Install</a><a href="#2-initialize-write-read-update-clean-up" class="toc-link toc-l3">2. Initialize, Write, Read, Update &amp; Clean Up</a><a href="#flutter-dart-vellum-flutter" class="toc-link toc-l2">Flutter / Dart (`vellum_flutter`)</a><a href="#1-install" class="toc-link toc-l3">1. Install</a><a href="#2-initialize-write-read-update-clean-up" class="toc-link toc-l3">2. Initialize, Write, Read, Update &amp; Clean Up</a><a href="#next-steps" class="toc-link toc-l2">Next Steps</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

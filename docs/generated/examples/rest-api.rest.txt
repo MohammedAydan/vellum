@@ -1,0 +1,10 @@
+file:///tmp/vellum-new/examples/rest/_harness.mjs:84
+    throw new Error(`harness: sign-in failed with HTTP ${token.status}`);
+          ^
+
+Error: harness: sign-in failed with HTTP 404
+    at harness (file:///tmp/vellum-new/examples/rest/_harness.mjs:84:11)
+    at process.processTicksAndRejections (node:internal/process/task_<redacted>:103:5)
+    at async file:///tmp/vellum-new/examples/rest/rest-api.mjs:11:11
+
+Node.js v22.23.5

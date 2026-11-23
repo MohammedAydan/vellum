@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flutter SDK (vellum_flutter) · VELLUM Docs</title>
+<meta name="description" content="Practical Dart reference for vellum_flutter — client setup, CRUD, field ops, V2 queries, cursor streams, chunked batches, realtime, EdDSA auth, and hardening.">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-base="../">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="../index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="../ar/sdks/flutter.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="../index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="../quickstart.html" class="nav-link">Quickstart</a></li><li><a href="../authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="../reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="../reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="../reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="../reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="../reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="../reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="../errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="../rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="../crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="../field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="../query.html" class="nav-link">Query</a></li><li><a href="../pagination.html" class="nav-link">Pagination</a></li><li><a href="../indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="../realtime.html" class="nav-link">Realtime</a></li><li><a href="../batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="../end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="../security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="../production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="../deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">SDKs <span>/</span> <strong>Flutter SDK (vellum_flutter)</strong></div>
+    <article class="article"><h1 id="flutter-sdk-vellum-flutter">Flutter SDK (<code class="inline-code">vellum_flutter</code>)<a class="anchor" href="#flutter-sdk-vellum-flutter" aria-label="Link to section">#</a></h1>
+<p>Practical Dart API reference for <code class="inline-code">vellum_flutter</code> v0.0.1 derived from <code class="inline-code">sdks/flutter/lib/vellum_flutter.dart</code>. Pure Dart (<code class="inline-code">&gt;=3.4.0 &lt;4.0.0</code>), strictly null-safe, with zero Flutter engine binding required.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;</code></pre>
+</div>
+<hr>
+<h2 id="client-initialization-vellumclient">Client Initialization (<code class="inline-code">VellumClient</code>)<a class="anchor" href="#client-initialization-vellumclient" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'package:http/http.dart'</span> <span class="hl-keyword">as</span> http;
+
+<span class="hl-keyword">final</span> httpClient = http<span class="hl-property">.Client</span>();
+<span class="hl-keyword">final</span> client = <span class="hl-fn">VellumClient</span>(
+  endpoint: <span class="hl-string">'https://api.example.com'</span>,
+  projectId: <span class="hl-string">'proj_01j9...'</span>,
+  apiKey: <span class="hl-string">'pk_live_...'</span>,
+  httpClient: httpClient,
+  authStorage: <span class="hl-fn">SecureAuthTokenStorage</span>(),
+  requestTimeout: <span class="hl-keyword">const</span> <span class="hl-fn">Duration</span>(seconds: <span class="hl-number">30</span>),
+  maxRetries: <span class="hl-number">3</span>,
+  retryBaseDelay: <span class="hl-keyword">const</span> <span class="hl-fn">Duration</span>(milliseconds: <span class="hl-number">250</span>),
+  retryMaxDelay: <span class="hl-keyword">const</span> <span class="hl-fn">Duration</span>(seconds: <span class="hl-number">15</span>),
+  coalesceInFlightGets: <span class="hl-keyword">true</span>,
+);</code></pre>
+</div>
+<div class="table-wrap"><table><thead><tr><th>Parameter</th><th>Default</th><th>Notes</th></tr></thead><tbody><tr><td><code class="inline-code">projectId</code> / <code class="inline-code">apiKey</code></td><td>Required</td><td>Sent via <code class="inline-code">x-vellum-api-key</code> &amp; <code class="inline-code">X-Project-Key</code>. Redacted in <code class="inline-code">toString()</code>.</td></tr><tr><td><code class="inline-code">endpoint</code> / <code class="inline-code">baseUrl</code></td><td><code class="inline-code">''</code> / derived</td><td>Use <code class="inline-code">endpoint</code> (origin) or full <code class="inline-code">baseUrl</code> prefix.</td></tr><tr><td><code class="inline-code">httpClient</code> / <code class="inline-code">httpTransport</code></td><td>Short-lived <code class="inline-code">http.Client</code></td><td>Pass a shared <code class="inline-code">http.Client</code> for connection pooling or <code class="inline-code">MockClient</code>.</td></tr><tr><td><code class="inline-code">authStorage</code> / <code class="inline-code">authTokenStorage</code></td><td><code class="inline-code">InMemoryAuthTokenStorage()</code></td><td>Implement <code class="inline-code">AuthTokenStorage</code> with <code class="inline-code">flutter_secure_storage</code> in production.</td></tr><tr><td><code class="inline-code">requestTimeout</code></td><td><code class="inline-code">Duration(seconds: 30)</code></td><td>Throws <code class="inline-code">VellumException(code: 'REQUEST_TIMEOUT', statusCode: 408)</code>.</td></tr><tr><td><code class="inline-code">maxRetries</code></td><td><code class="inline-code">3</code></td><td>Retries 429/408/5xx/network on idempotent requests (<code class="inline-code">Retry-After</code> + full jitter).</td></tr><tr><td><code class="inline-code">coalesceInFlightGets</code></td><td><code class="inline-code">true</code></td><td>Deduplicates concurrent identical <code class="inline-code">GET</code> calls (skips transactional reads).</td></tr><tr><td><code class="inline-code">warnOnMissingIndexes</code> / <code class="inline-code">onIndexSuggestion</code></td><td><code class="inline-code">true</code> / <code class="inline-code">null</code></td><td>Handles <code class="inline-code">x-vellum-index-*</code> headers.</td></tr></tbody></table></div>
+<hr>
+<h2 id="crud-field-operations-withconverter-r">CRUD, Field Operations &amp; <code class="inline-code">withConverter&lt;R&gt;()</code><a class="anchor" href="#crud-field-operations-withconverter-r" aria-label="Link to section">#</a></h2>
+<ul><li>References: <code class="inline-code">client.collection(path)</code>, <code class="inline-code">client.doc(path)</code>, <code class="inline-code">col.doc(id)</code>, <code class="inline-code">doc.collection(subCol)</code>.</li><li>Shorthands on <code class="inline-code">VellumClient</code>: <code class="inline-code">getDoc(path)</code>, <code class="inline-code">setDoc(path, data, {merge, ifVersion, idempotencyKey})</code>, <code class="inline-code">updateDoc(path, data, {ifVersion, idempotencyKey})</code>, <code class="inline-code">deleteDoc(path, {ifVersion, idempotencyKey})</code>.</li><li>On <code class="inline-code">DocumentReference&lt;T&gt;</code>: <code class="inline-code">get({include, select})</code>, <code class="inline-code">create(value, {ttlSeconds, expiresAt, idempotencyKey})</code>, <code class="inline-code">set(value, {merge, ifVersion, ttlSeconds, expiresAt, upsert, idempotencyKey})</code>, <code class="inline-code">upsert(...)</code>, <code class="inline-code">update(data, {ifVersion, idempotencyKey})</code>, <code class="inline-code">delete({ifVersion, idempotencyKey})</code>.</li><li>Type-safe mapping: <code class="inline-code">client.collection('tasks').withConverter&lt;Task&gt;(fromVellum: ..., toVellum: ...)</code>.</li><li>Field ops (<code class="inline-code">FieldValue</code> / <code class="inline-code">FieldOp</code>): <code class="inline-code">serverTimestamp()</code>, <code class="inline-code">increment(by)</code>, <code class="inline-code">arrayUnion(elements)</code>, <code class="inline-code">arrayRemove(elements)</code>, <code class="inline-code">deleteField()</code> (and <code class="inline-code">FieldValue.delete()</code>).</li><li>Wire helpers (<code class="inline-code">VellumWire</code>): <code class="inline-code">int64</code>, <code class="inline-code">timestamp</code>, <code class="inline-code">reference</code>, <code class="inline-code">bytes</code>, <code class="inline-code">geopoint</code>, <code class="inline-code">escapeMap</code>, <code class="inline-code">decodeWireValue</code>.</li></ul>
+<hr>
+<h2 id="queries-aggregations-cursor-stream-pagination">Queries, Aggregations &amp; Cursor <code class="inline-code">Stream</code> Pagination<a class="anchor" href="#queries-aggregations-cursor-stream-pagination" aria-label="Link to section">#</a></h2>
+<p>Supports all 13 operators (<code class="inline-code">==</code>, <code class="inline-code">!=</code>, <code class="inline-code">&lt;</code>, <code class="inline-code">&lt;=</code>, <code class="inline-code">&gt;</code>, <code class="inline-code">&gt;=</code>, <code class="inline-code">in</code>, <code class="inline-code">not-in</code>, <code class="inline-code">array-contains</code>, <code class="inline-code">array-contains-any</code>, <code class="inline-code">contains_ci</code>, <code class="inline-code">starts_with_ci</code>, <code class="inline-code">text_search</code>), <code class="inline-code">or(groups)</code>, <code class="inline-code">include(relations)</code> (strings or <code class="inline-code">VellumInclude</code>), <code class="inline-code">select(fields)</code>, <code class="inline-code">orderBy(field, {dir})</code>, <code class="inline-code">limit(n)</code>, <code class="inline-code">startAfter(cursor)</code>.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">final</span> q = client
+    <span class="hl-property">.collection</span>(<span class="hl-string">'events'</span>)
+    <span class="hl-property">.where</span>(<span class="hl-string">'type'</span>, <span class="hl-string">'=='</span>, <span class="hl-string">'checkout'</span>)
+    <span class="hl-property">.orderBy</span>(<span class="hl-string">'createdAt'</span>, dir: <span class="hl-string">'desc'</span>);
+
+<span class="hl-comment">// Stream pages lazily</span>
+<span class="hl-keyword">await</span> <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> page <span class="hl-keyword">in</span> q<span class="hl-property">.streamPages</span>(pageSize: <span class="hl-number">100</span>, maxPages: <span class="hl-number">20</span>)) {
+  <span class="hl-fn">handlePage</span>(page<span class="hl-property">.docs</span>);
+}
+
+<span class="hl-comment">// Or stream individual documents</span>
+<span class="hl-keyword">await</span> <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> doc <span class="hl-keyword">in</span> q<span class="hl-property">.streamDocuments</span>(pageSize: <span class="hl-number">100</span>, maxPages: <span class="hl-number">20</span>)) {
+  <span class="hl-fn">handleDoc</span>(doc);
+}
+
+<span class="hl-comment">// Aggregations</span>
+<span class="hl-keyword">final</span> total = <span class="hl-keyword">await</span> q<span class="hl-property">.count</span>();
+<span class="hl-keyword">final</span> sum = <span class="hl-keyword">await</span> q<span class="hl-property">.sum</span>(<span class="hl-string">'amountCents'</span>);
+<span class="hl-keyword">final</span> avg = <span class="hl-keyword">await</span> q<span class="hl-property">.avg</span>(<span class="hl-string">'amountCents'</span>);
+<span class="hl-keyword">final</span> grouped = <span class="hl-keyword">await</span> q<span class="hl-property">.aggregate</span>(
+  groupBy: [<span class="hl-string">'region'</span>],
+  metrics: {<span class="hl-string">'total'</span>: <span class="hl-keyword">const</span> <span class="hl-type">AggregateMetric</span><span class="hl-property">.sum</span>(<span class="hl-string">'amountCents'</span>)},
+);</code></pre>
+</div>
+<hr>
+<h2 id="auto-chunked-bulk-writes-occ-transactions">Auto-Chunked Bulk Writes &amp; OCC Transactions<a class="anchor" href="#auto-chunked-bulk-writes-occ-transactions" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// Auto-chunked fluent batch (default 500 ops/chunk)</span>
+<span class="hl-keyword">final</span> batch = client<span class="hl-property">.batch</span>()
+  .<span class="hl-property">.set</span>(client<span class="hl-property">.doc</span>(<span class="hl-string">'items/1'</span>), {<span class="hl-string">'price'</span>: <span class="hl-number">10</span>}, merge: <span class="hl-keyword">true</span>)
+  .<span class="hl-property">.update</span>(client<span class="hl-property">.doc</span>(<span class="hl-string">'items/2'</span>), {<span class="hl-string">'stock'</span>: <span class="hl-type">FieldValue</span><span class="hl-property">.increment</span>(-<span class="hl-number">1</span>)})
+  .<span class="hl-property">.delete</span>(client<span class="hl-property">.doc</span>(<span class="hl-string">'items/3'</span>));
+
+<span class="hl-keyword">await</span> batch<span class="hl-property">.commitChunked</span>(chunkSize: <span class="hl-number">500</span>, idempotencyKeyPrefix: <span class="hl-string">'sync-batch'</span>);
+
+<span class="hl-comment">// Or direct chunked list API</span>
+<span class="hl-keyword">await</span> client<span class="hl-property">.writeBatchChunked</span>(writes, chunkSize: <span class="hl-number">500</span>, idempotencyKeyPrefix: <span class="hl-string">'import'</span>);
+
+<span class="hl-comment">// Interactive OCC transaction with automatic ABORTED_CONFLICT retry</span>
+<span class="hl-keyword">await</span> client<span class="hl-property">.runTransaction</span>&lt;<span class="hl-keyword">void</span>&gt;((tx) <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> ref = client<span class="hl-property">.doc</span>(<span class="hl-string">'accounts/a'</span>);
+  <span class="hl-keyword">final</span> snap = <span class="hl-keyword">await</span> tx<span class="hl-property">.get</span>(ref);
+  <span class="hl-keyword">final</span> bal = (snap<span class="hl-property">.data</span>()?[<span class="hl-string">'balance'</span>] <span class="hl-keyword">as</span> num?)?<span class="hl-property">.toInt</span>() ?? <span class="hl-number">0</span>;
+  tx<span class="hl-property">.update</span>(ref, {<span class="hl-string">'balance'</span>: bal - <span class="hl-number">10</span>});
+}, maxAttempts: <span class="hl-number">5</span>);</code></pre>
+</div>
+<hr>
+<h2 id="realtime-websocket-streams">Realtime WebSocket Streams<a class="anchor" href="#realtime-websocket-streams" aria-label="Link to section">#</a></h2>
+<ul><li><code class="inline-code">doc.snapshots()</code> / <code class="inline-code">client.watchDocument(path)</code> → <code class="inline-code">Stream&lt;DocumentSnapshot&lt;T&gt;&gt;</code></li><li><code class="inline-code">query.snapshots()</code> / <code class="inline-code">client.watchCollection(path, {where, orderBy, limit, cursor})</code> → <code class="inline-code">Stream&lt;QuerySnapshot&lt;T&gt;&gt;</code></li><li><code class="inline-code">VellumRealtimeTransport</code> provides decorrelated jitter reconnect (<code class="inline-code">500ms</code>–<code class="inline-code">30s</code>), per-subscription <code class="inline-code">resumeSeqId</code>, bounded outbound queue (<code class="inline-code">256</code> frames), and <code class="inline-code">25s</code>/<code class="inline-code">60s</code> heartbeat.</li></ul>
+<hr>
+<h2 id="eddsa-auth-security-hardening-lifecycle">EdDSA Auth, Security Hardening &amp; Lifecycle<a class="anchor" href="#eddsa-auth-security-hardening-lifecycle" aria-label="Link to section">#</a></h2>
+<ul><li><code class="inline-code">client.auth</code> (<code class="inline-code">VellumAuth</code>): <code class="inline-code">restore()</code>, <code class="inline-code">authStateChanges</code>, <code class="inline-code">currentUser</code>, <code class="inline-code">sessionEpoch</code>, <code class="inline-code">signUpWithEmailAndPassword</code>, <code class="inline-code">signInWithEmailAndPassword</code> (sealed <code class="inline-code">VellumSession</code> | <code class="inline-code">VellumMfaRequired</code>), <code class="inline-code">signInAnonymously</code>, <code class="inline-code">signInWithOAuth</code>, <code class="inline-code">verifyMfaChallenge</code>, <code class="inline-code">enrollTotpMfa</code>, <code class="inline-code">confirmTotpMfa</code>, <code class="inline-code">sendPasswordResetEmail</code>, <code class="inline-code">confirmPasswordReset</code>, <code class="inline-code">sendEmailVerification</code>, <code class="inline-code">confirmEmailVerification</code>, <code class="inline-code">getUser</code>, <code class="inline-code">updateProfile</code>, <code class="inline-code">getIdToken</code>, <code class="inline-code">signOut</code>.</li><li>Single-flight proactive (45s) and reactive 401 refresh (<code class="inline-code">refreshOnUnauthorized</code>) guarded by <code class="inline-code">sessionEpoch</code>.</li><li>Secret-redacted <code class="inline-code">toString()</code> on all sensitive models/exceptions and strict path-traversal validation (<code class="inline-code">validateVellumSegment</code>, <code class="inline-code">validateVellumPath</code>).</li><li>Call <code class="inline-code">client.dispose()</code> (or <code class="inline-code">client.close()</code>) on shutdown.</li></ul>
+<h2 id="modular-architecture-tamper-proofing">Modular Architecture &amp; Tamper-Proofing<a class="anchor" href="#modular-architecture-tamper-proofing" aria-label="Link to section">#</a></h2>
+<p><code class="inline-code">vellum_flutter</code> is split into 13 focused <code class="inline-code">part</code> modules under <code class="inline-code">lib/src/{core,models,auth,realtime,client}/</code> behind <code class="inline-code">lib/vellum_flutter.dart</code> (pure Dart, zero <code class="inline-code">dart:io</code>). Public model collections use <code class="inline-code">Map.unmodifiable</code>/<code class="inline-code">List.unmodifiable</code>, internal state is library-private, and <code class="inline-code">toString()</code> redacts secrets.</p></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#client-initialization-vellumclient" class="toc-link toc-l2">Client Initialization (`VellumClient`)</a><a href="#crud-field-operations-withconverter-r" class="toc-link toc-l2">CRUD, Field Operations &amp; `withConverter&lt;R&gt;()`</a><a href="#queries-aggregations-cursor-stream-pagination" class="toc-link toc-l2">Queries, Aggregations &amp; Cursor `Stream` Pagination</a><a href="#auto-chunked-bulk-writes-occ-transactions" class="toc-link toc-l2">Auto-Chunked Bulk Writes &amp; OCC Transactions</a><a href="#realtime-websocket-streams" class="toc-link toc-l2">Realtime WebSocket Streams</a><a href="#eddsa-auth-security-hardening-lifecycle" class="toc-link toc-l2">EdDSA Auth, Security Hardening &amp; Lifecycle</a><a href="#modular-architecture-tamper-proofing" class="toc-link toc-l2">Modular Architecture &amp; Tamper-Proofing</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="../assets/docs.js" defer></script>
+</body>
+</html>

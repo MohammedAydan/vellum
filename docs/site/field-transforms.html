@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Field Transforms · VELLUM Docs</title>
+<meta name="description" content="All atomic fieldOp sentinels, how they are applied, their ordering, and restrictions.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/field-transforms.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Core concepts <span>/</span> <strong>Field Transforms</strong></div>
+    <article class="article"><h1 id="field-transforms">Field Transforms<a class="anchor" href="#field-transforms" aria-label="Link to section">#</a></h1>
+<p>Field transforms let the server compute a field value atomically, avoiding a read-modify-write race. The SDK exposes five helpers under <code class="inline-code">fieldOp</code>; on the wire each becomes a sentinel object with a <code class="inline-code">$op</code> key.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> { fieldOp } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/sdk-js&quot;</span>;</code></pre>
+</div>
+<h2 id="scenario">Scenario<a class="anchor" href="#scenario" aria-label="Link to section">#</a></h2>
+<p>Several users can &quot;like&quot; a post at the same time, and you want an accurate <code class="inline-code">likeCount</code> without coordinating clients. You use <code class="inline-code">increment(1)</code> to bump the counter atomically and <code class="inline-code">arrayUnion</code> to record unique reactor ids — the server applies both in one transaction, so no update is lost.</p>
+<h2 id="the-five-operations">The five operations<a class="anchor" href="#the-five-operations" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>SDK helper</th><th>Wire sentinel</th><th>Behavior</th></tr></thead><tbody><tr><td><code class="inline-code">fieldOp.serverTimestamp()</code></td><td><code class="inline-code">{ &quot;$op&quot;: &quot;serverTimestamp&quot; }</code></td><td>Replaced with the transaction's UTC timestamp as <code class="inline-code">{ &quot;$t&quot;: &quot;ts&quot;, &quot;$v&quot;: &quot;...&quot;, &quot;$ms&quot;: ... }</code>.</td></tr><tr><td><code class="inline-code">fieldOp.increment(n = 1)</code></td><td><code class="inline-code">{ &quot;$op&quot;: &quot;inc&quot;, &quot;by&quot;: n }</code></td><td>Adds <code class="inline-code">n</code> to the current value. Missing field initializes to <code class="inline-code">n</code>.</td></tr><tr><td><code class="inline-code">fieldOp.arrayUnion(...items)</code></td><td><code class="inline-code">{ &quot;$op&quot;: &quot;arrayUnion&quot;, &quot;elements&quot;: [...] }</code></td><td>Appends items not already present (typed deep equality).</td></tr><tr><td><code class="inline-code">fieldOp.arrayRemove(...items)</code></td><td><code class="inline-code">{ &quot;$op&quot;: &quot;arrayRemove&quot;, &quot;elements&quot;: [...] }</code></td><td>Removes every occurrence matching any item.</td></tr><tr><td><code class="inline-code">fieldOp.deleteField()</code></td><td><code class="inline-code">{ &quot;$op&quot;: &quot;deleteField&quot; }</code></td><td>Removes the field from its parent map.</td></tr></tbody></table></div>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;users&quot;</span>)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;u_123&quot;</span>)<span class="hl-property">.set</span>(
+  {
+    loginCount: fieldOp<span class="hl-property">.increment</span>(<span class="hl-number">1</span>),
+    roles: fieldOp<span class="hl-property">.arrayUnion</span>([<span class="hl-string">&quot;developer&quot;</span>, <span class="hl-string">&quot;architect&quot;</span>]),
+    tags: fieldOp<span class="hl-property">.arrayRemove</span>([<span class="hl-string">&quot;trial&quot;</span>]),
+    lastLoginAt: fieldOp<span class="hl-property">.serverTimestamp</span>(),
+    legacyFlag: fieldOp<span class="hl-property">.deleteField</span>(),
+  },
+  { merge: <span class="hl-keyword">true</span> }
+);</code></pre>
+</div>
+<p><code class="inline-code">arrayUnion</code> and <code class="inline-code">arrayRemove</code> accept either variadic arguments or a single array argument (<code class="inline-code">fieldOp.arrayUnion([&quot;a&quot;, &quot;b&quot;])</code> and <code class="inline-code">fieldOp.arrayUnion(&quot;a&quot;, &quot;b&quot;)</code> are equivalent).</p>
+<p>On the wire the increment operation also accepts the alias <code class="inline-code">$op: &quot;increment&quot;</code> with <code class="inline-code">$v</code> / <code class="inline-code">value</code>; the canonical SDK helper emits <code class="inline-code">inc</code> with <code class="inline-code">by</code>.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// Two independent counters updated in a single write.</span>
+<span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;stats&quot;</span>)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;global&quot;</span>)<span class="hl-property">.update</span>({
+  posts: fieldOp<span class="hl-property">.increment</span>(<span class="hl-number">1</span>),
+  lastPostAt: fieldOp<span class="hl-property">.serverTimestamp</span>(),
+});</code></pre>
+</div>
+<h2 id="where-transforms-are-allowed">Where transforms are allowed<a class="anchor" href="#where-transforms-are-allowed" aria-label="Link to section">#</a></h2>
+<p>Transforms are accepted in write paths where the engine validates data with field operations enabled:</p>
+<ul><li><code class="inline-code">DocumentReference.set</code> with <code class="inline-code">{ merge: true }</code></li><li><code class="inline-code">DocumentReference.update</code> (HTTP <code class="inline-code">PATCH</code>)</li><li><code class="inline-code">batchWrite</code> mutations</li><li>transaction commits (<code class="inline-code">tx.set</code> / <code class="inline-code">tx.update</code>)</li></ul>
+<p>They are <strong>not</strong> valid in <code class="inline-code">create</code> payloads or in query values. A sentinel appearing where transforms are not allowed raises <code class="inline-code">INVALID_ARGUMENT</code>.</p>
+<h2 id="atomicity-and-ordering">Atomicity and ordering<a class="anchor" href="#atomicity-and-ordering" aria-label="Link to section">#</a></h2>
+<ul><li>All transforms in a single write are applied inside the same database transaction, using one shared transaction timestamp for <code class="inline-code">serverTimestamp</code>.</li><li>The patch is walked in object-key insertion order. Nested plain objects are merged recursively, so a transform can sit at any depth.</li><li><code class="inline-code">arrayUnion</code> and <code class="inline-code">arrayRemove</code> use wire-value equality, so tagged values (timestamps, references, int64) compare correctly rather than by JavaScript identity.</li><li>For <code class="inline-code">increment</code>, if the current value is a tagged <code class="inline-code">int64</code> (<code class="inline-code">$t: &quot;int&quot;</code>), the server computes in <code class="inline-code">BigInt</code> and stores a tagged int64 result; otherwise it uses IEEE-754 addition.</li></ul>
+<div class="admonition admonition-note"><div class="admonition-label">NOTE</div><p>Because transforms are evaluated server-side at commit time, two clients incrementing the same counter concurrently do not lose updates. If you also need preconditions across several documents, use a transaction.</p></div>
+<h2 id="restrictions-and-failure-modes">Restrictions and failure modes<a class="anchor" href="#restrictions-and-failure-modes" aria-label="Link to section">#</a></h2>
+<ul><li>Incrementing a field whose current value is not numeric (and not a tagged int64) throws <code class="inline-code">FAILED_PRECONDITION</code> (412).</li><li>A field named <code class="inline-code">__proto__</code>, <code class="inline-code">constructor</code>, or <code class="inline-code">prototype</code> is rejected at every merge level with <code class="inline-code">INVALID_FIELD_NAME</code> to prevent prototype-pollution gadgets.</li><li><code class="inline-code">inc</code> requires a finite numeric <code class="inline-code">by</code> value; <code class="inline-code">arrayUnion</code> / <code class="inline-code">arrayRemove</code> require an <code class="inline-code">elements</code> array.</li><li>An unknown <code class="inline-code">$op</code> value throws <code class="inline-code">INVALID_ARGUMENT</code>.</li><li>Transformed values still go through the normal wire-format validation: 20-level nesting cap, 256-character field names, and 1 MiB document size.</li></ul>
+<div class="admonition admonition-warning"><div class="admonition-label">WARNING</div><p>Do not mix a transform with a precondition that depends on the same field's post-transform value. <code class="inline-code">ifVersion</code> compares the document version <em>before</em> the write; it does not validate the transformed result.</p></div>
+<h2 id="common-pitfalls">Common pitfalls<a class="anchor" href="#common-pitfalls" aria-label="Link to section">#</a></h2>
+<ul><li><strong>Using a transform in <code class="inline-code">create</code> or a query value.</strong> Those paths reject <code class="inline-code">$op</code> sentinels with <code class="inline-code">INVALID_ARGUMENT</code>.</li><li><strong>Incrementing a non-numeric field.</strong> The first write must initialize the field to a number (or a tagged int64).</li><li><strong>Assuming read-your-writes inside a transform.</strong> Transforms are computed at commit time against the current stored value.</li><li><strong>Using <code class="inline-code">ifVersion</code> to protect a transformed field.</strong> The precondition checks the pre-write version, not the computed result.</li></ul>
+<h2 id="verified-example">Verified example<a class="anchor" href="#verified-example" aria-label="Link to section">#</a></h2>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">SDK / protocol</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed against the live PostgreSQL API by scripts/run-dart-examples.mjs.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// Atomic field transforms — update engagement counters without lost updates.</span>
+<span class="hl-comment">// What you'll build: a social post whose likes, tags and history change via</span>
+<span class="hl-comment">// `$op` sentinels, with a field removed and a server timestamp added.</span>
+<span class="hl-comment">// Real-world scenario: concurrent readers like and tag a post; sending field</span>
+<span class="hl-comment">// operations (not a client-side read/modify/write) keeps the counter correct.</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix =
+      <span class="hl-string">'ex_flutter_field_transforms_${DateTime.now().microsecondsSinceEpoch}'</span>;
+  <span class="hl-keyword">final</span> ref = client<span class="hl-property">.collection</span>(prefix)<span class="hl-property">.doc</span>(<span class="hl-string">'social-post'</span>);
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== Atomic Field Transforms (Flutter) ==='</span>);
+
+    <span class="hl-keyword">await</span> ref<span class="hl-property">.set</span>({
+      <span class="hl-string">'likes'</span>: <span class="hl-number">10</span>,
+      <span class="hl-string">'tags'</span>: [<span class="hl-string">'launch'</span>],
+      <span class="hl-string">'history'</span>: [<span class="hl-string">'featured'</span>],
+      <span class="hl-string">'scratch'</span>: <span class="hl-string">'temporary'</span>
+    });
+    <span class="hl-fn">print</span>(<span class="hl-string">'before: ${(await ref.get()).data()}'</span>);
+
+    <span class="hl-keyword">await</span> ref<span class="hl-property">.update</span>({
+      <span class="hl-string">'likes'</span>: <span class="hl-type">FieldOp</span><span class="hl-property">.increment</span>(<span class="hl-number">5</span>),
+      <span class="hl-string">'tags'</span>: <span class="hl-type">FieldOp</span><span class="hl-property">.arrayUnion</span>([<span class="hl-string">'release'</span>, <span class="hl-string">'news'</span>]),
+      <span class="hl-string">'history'</span>: <span class="hl-type">FieldOp</span><span class="hl-property">.arrayRemove</span>([<span class="hl-string">'featured'</span>]),
+      <span class="hl-string">'updatedAt'</span>: <span class="hl-type">FieldOp</span><span class="hl-property">.serverTimestamp</span>(),
+      <span class="hl-string">'scratch'</span>: <span class="hl-type">FieldOp</span><span class="hl-property">.deleteField</span>(),
+    });
+
+    <span class="hl-keyword">final</span> data = (<span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>())<span class="hl-property">.data</span>() ?? <span class="hl-keyword">const</span> &lt;<span class="hl-type">String</span>, dynamic&gt;{};
+    <span class="hl-keyword">final</span> stamp = data[<span class="hl-string">'updatedAt'</span>];
+    <span class="hl-fn">print</span>(<span class="hl-string">'likes=${data['</span>likes<span class="hl-string">']} tags=${data['</span>tags<span class="hl-string">']}'</span>);
+    <span class="hl-fn">print</span>(
+        <span class="hl-string">'scratchAbsent=${!data.containsKey('</span>scratch<span class="hl-string">')} updatedAtWire=${stamp is Map ? stamp['</span>\$t<span class="hl-string">'] : null}'</span>);
+  } <span class="hl-keyword">finally</span> {
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> ref<span class="hl-property">.delete</span>();
+    } <span class="hl-keyword">catch</span> (_) {
+      <span class="hl-comment">// Best effort cleanup.</span>
+    }
+    client<span class="hl-property">.dispose</span>();
+  }
+}</code></pre><div class="et-note">Reference only — not executed here (no Dart toolchain).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Atomic field transforms — apply engagement updates in one server-side PATCH.
+ *
+ * What you'll build: a social post whose likes, tags, moderation history and
+ * last-modified stamp are updated atomically, with a scratch field removed.
+ * Real-world scenario: two readers &quot;like&quot; and tag a post at the same time.
+ * Sending $op sentinels (instead of client-side read/modify/write) avoids lost
+ * updates. The serverTimestamp value is logged by its wire type, never its clock.
+ */</span>
+<span class="hl-keyword">import</span> { fieldOp } <span class="hl-keyword">from</span> <span class="hl-string">&quot;../../packages/sdk-js/src/index.js&quot;</span>;
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;field-transforms&quot;</span>);
+<span class="hl-keyword">const</span> ref = h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(h<span class="hl-property">.prefix</span>)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;social-post&quot;</span>);
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Atomic Field Transforms ===&quot;</span>);
+
+  <span class="hl-keyword">await</span> ref<span class="hl-property">.set</span>({ likes: <span class="hl-number">10</span>, tags: [<span class="hl-string">&quot;launch&quot;</span>], history: [<span class="hl-string">&quot;featured&quot;</span>], scratch: <span class="hl-string">&quot;temporary&quot;</span> });
+  <span class="hl-keyword">const</span> before = <span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>();
+  h<span class="hl-property">.log</span>({ before: before<span class="hl-property">.data</span>() });
+
+  <span class="hl-keyword">await</span> ref<span class="hl-property">.update</span>({
+    likes: fieldOp<span class="hl-property">.increment</span>(<span class="hl-number">5</span>),
+    tags: fieldOp<span class="hl-property">.arrayUnion</span>(<span class="hl-string">&quot;release&quot;</span>, <span class="hl-string">&quot;news&quot;</span>),
+    history: fieldOp<span class="hl-property">.arrayRemove</span>(<span class="hl-string">&quot;featured&quot;</span>),
+    updatedAt: fieldOp<span class="hl-property">.serverTimestamp</span>(),
+    scratch: fieldOp<span class="hl-property">.deleteField</span>(),
+  });
+
+  <span class="hl-keyword">const</span> after = (<span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>())<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> <span class="hl-type">Record</span>&lt;string, unknown&gt;;
+  <span class="hl-fn">check</span>(after<span class="hl-property">.likes</span> === <span class="hl-number">15</span>, <span class="hl-string">&quot;increment applied&quot;</span>);
+  <span class="hl-fn">check</span>(<span class="hl-type">Array</span><span class="hl-property">.isArray</span>(after<span class="hl-property">.tags</span>) &amp;&amp; after<span class="hl-property">.tags</span><span class="hl-property">.length</span> === <span class="hl-number">3</span>, <span class="hl-string">&quot;arrayUnion appended two tags&quot;</span>);
+  <span class="hl-fn">check</span>(!(<span class="hl-string">&quot;scratch&quot;</span> <span class="hl-keyword">in</span> after), <span class="hl-string">&quot;deleteField removed the scratch key&quot;</span>);
+  <span class="hl-keyword">const</span> stamp = after<span class="hl-property">.updatedAt</span> <span class="hl-keyword">as</span> { $t?: string };
+  <span class="hl-fn">check</span>(stamp?<span class="hl-property">.$t</span> === <span class="hl-string">&quot;ts&quot;</span>, <span class="hl-string">&quot;serverTimestamp uses the tagged ts wire type&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    likes: after<span class="hl-property">.likes</span>,
+    tags: after<span class="hl-property">.tags</span>,
+    removedFieldAbsent: !(<span class="hl-string">&quot;scratch&quot;</span> <span class="hl-keyword">in</span> after),
+    serverTimestampWireType: stamp<span class="hl-property">.$t</span>,
+  });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Atomic Field Transforms ===
+{&quot;before&quot;:{&quot;tags&quot;:[&quot;launch&quot;],&quot;likes&quot;:10,&quot;history&quot;:[&quot;featured&quot;],&quot;scratch&quot;:&quot;temporary&quot;}}
+{&quot;likes&quot;:15,&quot;tags&quot;:[&quot;launch&quot;,&quot;release&quot;,&quot;news&quot;],&quot;removedFieldAbsent&quot;:true,&quot;serverTimestampWireType&quot;:&quot;ts&quot;}</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Atomic field transforms (REST) — apply engagement updates in one PATCH.
+ *
+ * What you'll build: a social post whose likes, tags and moderation history
+ * change via $op sentinels, with one field removed and a server stamp added.
+ * Real-world scenario: concurrent readers update a counter without a
+ * client-side read/modify/write race. The timestamp is logged by wire type.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;field-transforms&quot;</span>);
+<span class="hl-keyword">const</span> docPath = <span class="hl-string">`${h.prefix}/social-post`</span>;
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Atomic Field Transforms ===&quot;</span>);
+
+  <span class="hl-keyword">const</span> seeded = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>, {
+    data: { likes: <span class="hl-number">10</span>, tags: [<span class="hl-string">&quot;launch&quot;</span>], history: [<span class="hl-string">&quot;featured&quot;</span>], scratch: <span class="hl-string">&quot;temporary&quot;</span> },
+  });
+  <span class="hl-fn">check</span>(seeded<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">&quot;seed post&quot;</span>);
+  <span class="hl-keyword">const</span> before = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>);
+  h<span class="hl-property">.log</span>({ before: before<span class="hl-property">.body</span><span class="hl-property">.data</span> });
+
+  <span class="hl-keyword">const</span> patched = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;PATCH&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>, {
+    data: {
+      likes: { $op: <span class="hl-string">&quot;inc&quot;</span>, by: <span class="hl-number">5</span> },
+      tags: { $op: <span class="hl-string">&quot;arrayUnion&quot;</span>, elements: [<span class="hl-string">&quot;release&quot;</span>, <span class="hl-string">&quot;news&quot;</span>] },
+      history: { $op: <span class="hl-string">&quot;arrayRemove&quot;</span>, elements: [<span class="hl-string">&quot;featured&quot;</span>] },
+      updatedAt: { $op: <span class="hl-string">&quot;serverTimestamp&quot;</span> },
+      scratch: { $op: <span class="hl-string">&quot;deleteField&quot;</span> },
+    },
+  });
+  <span class="hl-fn">check</span>(patched<span class="hl-property">.ok</span>, <span class="hl-string">&quot;transform patch applied&quot;</span>);
+
+  <span class="hl-keyword">const</span> after = (<span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>))<span class="hl-property">.body</span><span class="hl-property">.data</span>;
+  <span class="hl-fn">check</span>(after<span class="hl-property">.likes</span> === <span class="hl-number">15</span>, <span class="hl-string">&quot;increment applied&quot;</span>);
+  <span class="hl-fn">check</span>(<span class="hl-type">Array</span><span class="hl-property">.isArray</span>(after<span class="hl-property">.tags</span>) &amp;&amp; after<span class="hl-property">.tags</span><span class="hl-property">.length</span> === <span class="hl-number">3</span>, <span class="hl-string">&quot;arrayUnion appended two tags&quot;</span>);
+  <span class="hl-fn">check</span>(!(<span class="hl-string">&quot;scratch&quot;</span> <span class="hl-keyword">in</span> after), <span class="hl-string">&quot;deleteField removed the scratch key&quot;</span>);
+  <span class="hl-fn">check</span>(after<span class="hl-property">.updatedAt</span>?<span class="hl-property">.$t</span> === <span class="hl-string">&quot;ts&quot;</span>, <span class="hl-string">&quot;serverTimestamp uses the ts wire type&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    likes: after<span class="hl-property">.likes</span>,
+    tags: after<span class="hl-property">.tags</span>,
+    removedFieldAbsent: !(<span class="hl-string">&quot;scratch&quot;</span> <span class="hl-keyword">in</span> after),
+    serverTimestampWireType: after<span class="hl-property">.updatedAt</span><span class="hl-property">.$t</span>,
+  });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Atomic Field Transforms ===
+{&quot;before&quot;:{&quot;tags&quot;:[&quot;launch&quot;],&quot;likes&quot;:10,&quot;history&quot;:[&quot;featured&quot;],&quot;scratch&quot;:&quot;temporary&quot;}}
+{&quot;likes&quot;:15,&quot;tags&quot;:[&quot;launch&quot;,&quot;release&quot;,&quot;news&quot;],&quot;removedFieldAbsent&quot;:true,&quot;serverTimestampWireType&quot;:&quot;ts&quot;}</code></pre>
+</div></div></div>
+</div>
+<h2 id="what-to-read-next">What to read next<a class="anchor" href="#what-to-read-next" aria-label="Link to section">#</a></h2>
+<ul><li><a href="crud.html">CRUD</a> — document paths and wire-format details.</li><li><a href="batch-and-transactions.html">Batch &amp; transactions</a> — atomic multi-document writes.</li><li><a href="errors-and-limits.html">Errors &amp; limits</a> — canonical error codes and statuses.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#scenario" class="toc-link toc-l2">Scenario</a><a href="#the-five-operations" class="toc-link toc-l2">The five operations</a><a href="#where-transforms-are-allowed" class="toc-link toc-l2">Where transforms are allowed</a><a href="#atomicity-and-ordering" class="toc-link toc-l2">Atomicity and ordering</a><a href="#restrictions-and-failure-modes" class="toc-link toc-l2">Restrictions and failure modes</a><a href="#common-pitfalls" class="toc-link toc-l2">Common pitfalls</a><a href="#verified-example" class="toc-link toc-l2">Verified example</a><a href="#what-to-read-next" class="toc-link toc-l2">What to read next</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

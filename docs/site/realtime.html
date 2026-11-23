@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Realtime · VELLUM Docs</title>
+<meta name="description" content="Multiplexed RFC 6455 WebSocket sync, resumeSeqId gapless replay, decorrelated jitter reconnect, heartbeat, connectionState observability, and onSnapshot/snapshots().">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/realtime.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Core concepts <span>/</span> <strong>Realtime</strong></div>
+    <article class="article"><h1 id="realtime">Realtime<a class="anchor" href="#realtime" aria-label="Link to section">#</a></h1>
+<p>VELLUM delivers low-latency document and query updates over a <strong>single multiplexed RFC 6455 WebSocket</strong> backed by PostgreSQL <code class="inline-code">LISTEN</code>/<code class="inline-code">NOTIFY</code> and a durable outbox sequence log.</p>
+<hr>
+<h2 id="protocol-transport-guarantees">Protocol &amp; Transport Guarantees<a class="anchor" href="#protocol-transport-guarantees" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Capability</th><th><code class="inline-code">@vellum/sdk-js</code></th><th><code class="inline-code">vellum_flutter</code></th></tr></thead><tbody><tr><td>Connection multiplexing</td><td>Single <code class="inline-code">RealtimeTransport</code> shared across all <code class="inline-code">onSnapshot</code> subscriptions</td><td>Single <code class="inline-code">VellumRealtimeTransport</code> managed by <code class="inline-code">VellumRealtimeManager</code></td></tr><tr><td>Reconnect backoff</td><td>Decorrelated jitter (<code class="inline-code">500ms</code> base, <code class="inline-code">30_000ms</code> cap)</td><td>Decorrelated jitter (<code class="inline-code">500ms</code> base, <code class="inline-code">30_000ms</code> cap)</td></tr><tr><td>Gapless resume</td><td>Tracks <code class="inline-code">lastSeqId</code> per subscription and sends <code class="inline-code">resumeSeqId</code> on reconnect</td><td>Tracks <code class="inline-code">lastSeqId</code> per subscription and sends <code class="inline-code">resumeSeqId</code> on reconnect</td></tr><tr><td>Heartbeat / dead-socket detection</td><td><code class="inline-code">25s</code> ping, <code class="inline-code">60s</code> pong timeout, <code class="inline-code">10s</code> connect timeout</td><td><code class="inline-code">25s</code> ping, <code class="inline-code">60s</code> pong timeout, <code class="inline-code">10s</code> connect timeout</td></tr><tr><td>Bounded offline queue</td><td><code class="inline-code">1_000</code> frames max (configurable via <code class="inline-code">realtimeTransportOptions</code>)</td><td><code class="inline-code">256</code> frames max (drops oldest when full)</td></tr><tr><td>Auth token rotation</td><td>Automatically sends fresh <code class="inline-code">auth</code> frame on live socket (<code class="inline-code">reauthenticateRealtime</code>)</td><td>Re-resolves bearer token on every reconnect handshake</td></tr></tbody></table></div>
+<hr>
+<h2 id="subscribing-in-typescript-vellum-sdk-js">Subscribing in TypeScript (<code class="inline-code">@vellum/sdk-js</code>)<a class="anchor" href="#subscribing-in-typescript-vellum-sdk-js" aria-label="Link to section">#</a></h2>
+<h3 id="connection-state-observability">Connection State Observability<a class="anchor" href="#connection-state-observability" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">console<span class="hl-property">.log</span>(db<span class="hl-property">.connectionState</span>); <span class="hl-comment">// &quot;disconnected&quot; | &quot;connecting&quot; | &quot;connected&quot; | &quot;reconnecting&quot;</span>
+
+<span class="hl-keyword">const</span> offState = db<span class="hl-property">.onConnectionStateChange</span>((next, prev) =&gt; {
+  <span class="hl-fn">updateConnectionBanner</span>(next);
+  console<span class="hl-property">.log</span>(<span class="hl-string">`Realtime transition: ${prev} -&gt; ${next}`</span>);
+});</code></pre>
+</div>
+<h3 id="document-query-onsnapshot">Document &amp; Query <code class="inline-code">onSnapshot</code><a class="anchor" href="#document-query-onsnapshot" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// Single document subscription</span>
+<span class="hl-keyword">const</span> offDoc = db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;orders/ord_101&quot;</span>)<span class="hl-property">.onSnapshot</span>(
+  (snapshot) =&gt; {
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">const</span> change <span class="hl-keyword">of</span> snapshot<span class="hl-property">.changes</span>) {
+      console<span class="hl-property">.log</span>(change<span class="hl-property">.type</span>, change<span class="hl-property">.seqId</span>, change<span class="hl-property">.doc</span><span class="hl-property">.data</span>());
+    }
+  },
+  (err) =&gt; console<span class="hl-property">.error</span>(<span class="hl-string">&quot;Document realtime error:&quot;</span>, err)
+);
+
+<span class="hl-comment">// Query subscription (maintains materialized docs + incremental changes)</span>
+<span class="hl-keyword">const</span> offQuery = db
+  <span class="hl-property">.collection</span>(<span class="hl-string">&quot;messages&quot;</span>)
+  <span class="hl-property">.where</span>(<span class="hl-string">&quot;roomId&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;general&quot;</span>)
+  <span class="hl-property">.orderBy</span>(<span class="hl-string">&quot;createdAt&quot;</span>, <span class="hl-string">&quot;desc&quot;</span>)
+  <span class="hl-property">.limit</span>(<span class="hl-number">50</span>)
+  <span class="hl-property">.onSnapshot</span>(
+    (snapshot) =&gt; {
+      console<span class="hl-property">.log</span>(<span class="hl-string">&quot;Watermark:&quot;</span>, snapshot<span class="hl-property">.watermarkSeqId</span>);
+      <span class="hl-fn">renderMessages</span>(snapshot<span class="hl-property">.docs</span>);
+    },
+    (err) =&gt; console<span class="hl-property">.error</span>(<span class="hl-string">&quot;Query realtime error:&quot;</span>, err)
+  );
+
+<span class="hl-comment">// Unsubscribe when component unmounts; closing the last subscription closes the socket</span>
+<span class="hl-fn">offDoc</span>();
+<span class="hl-fn">offQuery</span>();
+<span class="hl-fn">offState</span>();</code></pre>
+</div>
+<blockquote><p><strong>Cache Consistency</strong>: Incoming realtime <code class="inline-code">initial_sync</code> and <code class="inline-code">mutation</code> frames automatically invalidate the matching path in <code class="inline-code">BoundedReadCache</code>.</p></blockquote>
+<hr>
+<h2 id="subscribing-in-flutter-dart-vellum-flutter">Subscribing in Flutter / Dart (<code class="inline-code">vellum_flutter</code>)<a class="anchor" href="#subscribing-in-flutter-dart-vellum-flutter" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// Document stream (emits cached snapshot immediately when present, then live frames)</span>
+<span class="hl-keyword">final</span> docSub = client<span class="hl-property">.doc</span>(<span class="hl-string">'orders/ord_101'</span>)<span class="hl-property">.snapshots</span>()<span class="hl-property">.listen</span>(
+  (<span class="hl-type">DocumentSnapshot</span>&lt;<span class="hl-type">Map</span>&lt;<span class="hl-type">String</span>, dynamic&gt;&gt; snap) {
+    <span class="hl-fn">print</span>(<span class="hl-string">'Order v${snap.version}: ${snap.data()}'</span>);
+  },
+  onError: (<span class="hl-type">Object</span> err) =&gt; <span class="hl-fn">print</span>(<span class="hl-string">'Doc realtime error: $err'</span>),
+);
+
+<span class="hl-comment">// Query stream via builder or watchCollection() shorthand</span>
+<span class="hl-keyword">final</span> querySub = client
+    <span class="hl-property">.collection</span>(<span class="hl-string">'messages'</span>)
+    <span class="hl-property">.where</span>(<span class="hl-string">'roomId'</span>, <span class="hl-string">'=='</span>, <span class="hl-string">'general'</span>)
+    <span class="hl-property">.orderBy</span>(<span class="hl-string">'createdAt'</span>, dir: <span class="hl-string">'desc'</span>)
+    <span class="hl-property">.limit</span>(<span class="hl-number">50</span>)
+    <span class="hl-property">.snapshots</span>()
+    <span class="hl-property">.listen</span>(
+      (<span class="hl-type">QuerySnapshot</span>&lt;<span class="hl-type">Map</span>&lt;<span class="hl-type">String</span>, dynamic&gt;&gt; snapshot) {
+        <span class="hl-fn">print</span>(<span class="hl-string">'Watermark: ${snapshot.watermarkSeqId}, docs: ${snapshot.docs.length}'</span>);
+      },
+      onError: (<span class="hl-type">Object</span> err) =&gt; <span class="hl-fn">print</span>(<span class="hl-string">'Query realtime error: $err'</span>),
+    );
+
+<span class="hl-comment">// Always cancel subscriptions when the widget or controller disposes</span>
+<span class="hl-keyword">await</span> docSub<span class="hl-property">.cancel</span>();
+<span class="hl-keyword">await</span> querySub<span class="hl-property">.cancel</span>();</code></pre>
+</div>
+<hr>
+<h2 id="operational-notes">Operational Notes<a class="anchor" href="#operational-notes" aria-label="Link to section">#</a></h2>
+<ul><li><strong>Cursors are excluded from live subscriptions</strong>: Both SDKs automatically strip <code class="inline-code">startAt</code>/<code class="inline-code">startAfter</code> before sending a WebSocket <code class="inline-code">subscribe</code> frame. Use <code class="inline-code">limit()</code> + <code class="inline-code">orderBy()</code> for bounded live windows.</li><li><strong>Always unsubscribe &amp; dispose</strong>: Call the returned unsubscribe function (JS) or <code class="inline-code">StreamSubscription.cancel()</code> (Dart), and invoke <code class="inline-code">dispose()</code> on client teardown.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#protocol-transport-guarantees" class="toc-link toc-l2">Protocol &amp; Transport Guarantees</a><a href="#subscribing-in-typescript-vellum-sdk-js" class="toc-link toc-l2">Subscribing in TypeScript (`@vellum/sdk-js`)</a><a href="#connection-state-observability" class="toc-link toc-l3">Connection State Observability</a><a href="#document-query-onsnapshot" class="toc-link toc-l3">Document &amp; Query `onSnapshot`</a><a href="#subscribing-in-flutter-dart-vellum-flutter" class="toc-link toc-l2">Subscribing in Flutter / Dart (`vellum_flutter`)</a><a href="#operational-notes" class="toc-link toc-l2">Operational Notes</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

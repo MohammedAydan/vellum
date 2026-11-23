@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>الأخطاء والحدود · VELLUM Docs</title>
+<meta name="description" content="رموز الأخطاء القياسية مع حالات HTTP، والحصص الثابتة للإصدار 1 التي يفرضها @vellum/core.">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-base="../">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="../ar/index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ التوثيق</span></span></a>
+  <span class="top-badge">أمثلة مُتحقَّق منها · ثابتة</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">ابحث في التوثيق <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="../errors-and-limits.html" title="English">EN</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">البداية</div><ul><li><a href="index.html" class="nav-link nav-home">الصفحة الرئيسية للتوثيق</a></li><li><a href="quickstart.html" class="nav-link">البدء السريع</a></li><li><a href="authentication.html" class="nav-link">المصادقة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المجموعات البرمجية</div><ul><li><a href="sdks/flutter.html" class="nav-link">مجموعة Flutter البرمجية (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المرجع</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">واجهة REST لمستوى التحكم والكونسول</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">واجهة REST العامة لمستوى البيانات</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">بروتوكول WebSocket للوقت الفعلي</a></li><li><a href="reference/wire-format.html" class="nav-link">تنسيق الإرسال الموسوم وقواعد المسارات</a></li><li><a href="reference/errors.html" class="nav-link">الرموز المعيارية للأخطاء وإرشادات إعادة المحاولة</a></li><li><a href="reference/packages.html" class="nav-link">واجهات الحزم البرمجية</a></li><li><a href="errors-and-limits.html" class="nav-link">الأخطاء والحدود</a></li><li><a href="rest-api.html" class="nav-link">نظرة عامة على REST API</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المفاهيم الأساسية</div><ul><li><a href="crud.html" class="nav-link">CRUD ومسارات المستندات</a></li><li><a href="field-transforms.html" class="nav-link">تحويلات الحقول</a></li><li><a href="query.html" class="nav-link">الاستعلام</a></li><li><a href="pagination.html" class="nav-link">الترقيم الصفحي</a></li><li><a href="indexes.html" class="nav-link">الفهارس المركّبة</a></li><li><a href="realtime.html" class="nav-link">الوقت الفعلي</a></li><li><a href="batch-and-transactions.html" class="nav-link">الكتابات الدفعية والمعاملات</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المصادقة</div><ul><li><a href="end-user-auth.html" class="nav-link">مصادقة المستخدمين النهائيين والمجالات الثلاثة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">الأمان</div><ul><li><a href="security-rules.html" class="nav-link">قواعد الأمان</a></li></ul></div><div class="nav-group"><div class="nav-group-title">التشغيل</div><ul><li><a href="production-checklist.html" class="nav-link">قائمة التحقق للإنتاج</a></li><li><a href="deployment.html" class="nav-link">النشر والاستضافة</a></li></ul></div></div>
+    <div class="sidebar-foot">تُنفَّذ الأمثلة على الـ API الحي وتُعرض كنص خامل. لا يُنفَّذ أي كود داخل هذا الموقع.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">المرجع <span>/</span> <strong>الأخطاء والحدود</strong></div>
+    <article class="article"><h1 id="الأخطاء-والحدود">الأخطاء والحدود<a class="anchor" href="#الأخطاء-والحدود" aria-label="Link to section">#</a></h1>
+<p>تستخدم كل الإخفاقات غلافًا قياسيًا واحدًا ومجموعة واحدة من رموز الأخطاء، المعرّفة في <code class="inline-code">@vellum/core</code> (<code class="inline-code">SYSTEM_LIMITS</code> و<code class="inline-code">VellumError</code>). كل استجابة HTTP تحمل أيضًا الترويسة <code class="inline-code">X-Request-Id</code>.</p>
+<h2 id="السيناريو">السيناريو<a class="anchor" href="#السيناريو" aria-label="Link to section">#</a></h2>
+<p>أنت تربط معالجة الأخطاء في العميل وتريد إعادة المحاولة فقط للإخفاقات العابرة: تعارض الإصدار يجب أن يُعيد القراءة والمحاولة، وحد المعدل يجب أن يتراجع باستخدام <code class="inline-code">Retry-After</code>، أما خطأ الصلاحيات فيجب أن يظهر للمستخدم. تُفرّع على الحقل <code class="inline-code">code</code> القياسي من غلاف الخطأ.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> { <span class="hl-type">VellumError</span> } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/core&quot;</span>;
+
+<span class="hl-keyword">try</span> {
+  <span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;users&quot;</span>)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;u_123&quot;</span>)<span class="hl-property">.update</span>({ name: <span class="hl-string">&quot;Ada&quot;</span> }, { ifVersion: <span class="hl-number">4</span> });
+} <span class="hl-keyword">catch</span> (err) {
+  <span class="hl-keyword">const</span> e = err <span class="hl-keyword">as</span> { code?: string; status?: number; details?: <span class="hl-type">Record</span>&lt;string, unknown&gt; };
+  <span class="hl-keyword">switch</span> (e<span class="hl-property">.code</span>) {
+    <span class="hl-keyword">case</span> <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>: <span class="hl-comment">// أعد القراءة وأعد المحاولة بالإصدار الحالي</span>
+      <span class="hl-keyword">break</span>;
+    <span class="hl-keyword">case</span> <span class="hl-string">&quot;ABORTED_CONFLICT&quot;</span>: <span class="hl-comment">// أعد تشغيل المعاملة كاملة</span>
+      <span class="hl-keyword">break</span>;
+    <span class="hl-keyword">case</span> <span class="hl-string">&quot;PERMISSION_DENIED&quot;</span>: <span class="hl-comment">// تحقق من النطاقات أو القواعد</span>
+      <span class="hl-keyword">break</span>;
+    <span class="hl-keyword">default</span>:
+      <span class="hl-keyword">throw</span> err;
+  }
+}</code></pre>
+</div>
+<h2 id="غلاف-الخطأ">غلاف الخطأ<a class="anchor" href="#غلاف-الخطأ" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">JSON</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code">{
+  <span class="hl-string">&quot;error&quot;</span>: {
+    <span class="hl-string">&quot;code&quot;</span>: <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>,
+    <span class="hl-string">&quot;message&quot;</span>: <span class="hl-string">&quot;Version precondition failed on 'users/u_123' (expected 4, actual 5)&quot;</span>,
+    <span class="hl-string">&quot;requestId&quot;</span>: <span class="hl-string">&quot;req_01JCK9X2P8...&quot;</span>,
+    <span class="hl-string">&quot;details&quot;</span>: {
+      <span class="hl-string">&quot;path&quot;</span>: <span class="hl-string">&quot;users/u_123&quot;</span>,
+      <span class="hl-string">&quot;expectedVersion&quot;</span>: <span class="hl-number">4</span>,
+      <span class="hl-string">&quot;actualVersion&quot;</span>: <span class="hl-number">5</span>
+    }
+  }
+}</code></pre>
+</div>
+<p>في SDK، تُثير الطلبات الفاشلة خطأ <code class="inline-code">Error</code> يحمل <code class="inline-code">code</code> و<code class="inline-code">status</code> و<code class="inline-code">details</code> و<code class="inline-code">requestId</code> المنسوخة من الغلاف. الكائن <code class="inline-code">details</code> مكتوب كسجل (record) وتختلف مفاتيحه حسب الرمز؛ لا تعتمد على شكل ثابت.</p>
+<h2 id="رموز-الأخطاء-القياسية">رموز الأخطاء القياسية<a class="anchor" href="#رموز-الأخطاء-القياسية" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>الرمز</th><th>HTTP</th><th>السبب المعتاد</th></tr></thead><tbody><tr><td><code class="inline-code">INVALID_ARGUMENT</code></td><td>400</td><td>طلب مشوّه، أو رمز غير مسموح، أو قيمة تهيئة خاطئة.</td></tr><tr><td><code class="inline-code">INVALID_DOCUMENT_PATH</code></td><td>400</td><td>عمق مسار خاطئ، أو مقطع طويل جدًا أو محجوز.</td></tr><tr><td><code class="inline-code">INVALID_FIELD_NAME</code></td><td>400</td><td>اسم حقل فارغ أو طويل جدًا أو يحتوي أحرف تحكم أو يحاكي تلوث النموذج الأولي.</td></tr><tr><td><code class="inline-code">MAX_NESTING_EXCEEDED</code></td><td>400</td><td>تداخل مستند أعمق من 20 مستوى.</td></tr><tr><td><code class="inline-code">BATCH_SIZE_EXCEEDED</code></td><td>400</td><td>أكثر من 100 عملية دفعة.</td></tr><tr><td><code class="inline-code">INVALID_CURSOR</code></td><td>400</td><td>مؤشر ترقيم صفحي مُتلاعب به أو مشوّه أو من شكل خاطئ.</td></tr><tr><td><code class="inline-code">QUERY_TOO_COMPLEX</code></td><td>400</td><td>عدد كبير جدًا من المرشحات/حقول الترتيب، أو تجاوز شجرة القواعد لحدود العمق/العقد.</td></tr><tr><td><code class="inline-code">LIMIT_EXCEEDED</code></td><td>400</td><td><code class="inline-code">limit</code> في الاستعلام أكبر من 500.</td></tr><tr><td><code class="inline-code">SUBSCRIPTION_LIMIT_EXCEEDED</code></td><td>400</td><td>أكثر من 50 اشتراكًا WebSocket على اتصال واحد.</td></tr><tr><td><code class="inline-code">UNAUTHENTICATED</code></td><td>401</td><td>مفتاح API أو رمز مفقود أو مشوّه أو غير صالح أو منتهي أو مُلغى.</td></tr><tr><td><code class="inline-code">PERMISSION_DENIED</code></td><td>403</td><td>نطاق مفتاح خادم مفقود، أو قواعد الأمان رفضت العملية.</td></tr><tr><td><code class="inline-code">NOT_FOUND</code></td><td>404</td><td>قراءة أو حذف مستند غير موجود.</td></tr><tr><td><code class="inline-code">TRANSACTION_TIMEOUT</code></td><td>408</td><td>تجاوزت المعاملة 5 ثوانٍ.</td></tr><tr><td><code class="inline-code">ALREADY_EXISTS</code></td><td>409</td><td><code class="inline-code">create</code> على مسار مشغول، أو فهرس مركّب مكرر.</td></tr><tr><td><code class="inline-code">ABORTED_CONFLICT</code></td><td>409</td><td>تغيّر إصدار من مجموعة القراءات قبل الإتمام.</td></tr><tr><td><code class="inline-code">FAILED_PRECONDITION</code></td><td>412</td><td>عدم تطابق <code class="inline-code">ifVersion</code> / <code class="inline-code">exists</code>، أو هدف زيادة غير صالح، أو فهرس مطلوب مفقود.</td></tr><tr><td><code class="inline-code">DOCUMENT_TOO_LARGE</code></td><td>413</td><td>المستند المتسلسل يتجاوز 1 MiB.</td></tr><tr><td><code class="inline-code">PAYLOAD_TOO_LARGE</code></td><td>413</td><td>حمولة الدفعة تتجاوز 5 MiB.</td></tr><tr><td><code class="inline-code">RESPONSE_TOO_LARGE</code></td><td>413</td><td>استجابة الاستعلام تتجاوز 4 MiB.</td></tr><tr><td><code class="inline-code">RATE_LIMITED</code></td><td>429</td><td>تجاوز حد RPS لكل مفتاح؛ تُضبط الترويسة <code class="inline-code">Retry-After</code>.</td></tr><tr><td><code class="inline-code">QUOTA_EXCEEDED</code></td><td>429</td><td>تجاوز حصة الخطة.</td></tr><tr><td><code class="inline-code">SLOW_CONSUMER_DISCONNECT</code></td><td>429</td><td>تجاوز المخزن الصادر لـ WebSocket 1 MiB.</td></tr><tr><td><code class="inline-code">INTERNAL_ERROR</code></td><td>500</td><td>عطل غير متوقع في الخادم.</td></tr><tr><td><code class="inline-code">SERVICE_UNAVAILABLE</code></td><td>503</td><td>اعتماد أو مستوى غير متاح.</td></tr><tr><td><code class="inline-code">QUERY_DEADLINE_EXCEEDED</code></td><td>504</td><td>تجاوز الاستعلام ميزانية تنفيذه البالغة 5 ثوانٍ.</td></tr></tbody></table></div>
+<div class="admonition admonition-note"><div class="admonition-label">NOTE</div><p>تظهر أسماء قديمة مثل <code class="inline-code">ABORTED</code> وبعض الأسماء الأخرى في تعداد api-contract، لكن تسلسل أخطاء وقت التشغيل أعلاه هو المجموعة المعتمدة. يجب أن يفرّع كود العميل على الرموز في هذا الجدول.</p></div>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// حدود المعدل تحمل تلميح Retry-After؛ تراجع قبل إعادة المحاولة.</span>
+<span class="hl-keyword">if</span> (e<span class="hl-property">.code</span> === <span class="hl-string">&quot;RATE_LIMITED&quot;</span>) {
+  <span class="hl-keyword">const</span> retryAfterMs = <span class="hl-fn">Number</span>((e<span class="hl-property">.details</span> <span class="hl-keyword">as</span> <span class="hl-type">Record</span>&lt;string, unknown&gt;)?<span class="hl-property">.retryAfterMs</span> ?? <span class="hl-number">1000</span>);
+  <span class="hl-keyword">await</span> <span class="hl-keyword">new</span> <span class="hl-fn">Promise</span>((r) =&gt; <span class="hl-fn">setTimeout</span>(r, retryAfterMs));
+}</code></pre>
+</div>
+<h2 id="حصص-الإصدار-1-الثابتة">حصص الإصدار 1 الثابتة<a class="anchor" href="#حصص-الإصدار-1-الثابتة" aria-label="Link to section">#</a></h2>
+<p>تأتي هذه الثوابت من <code class="inline-code">@vellum/coreSYSTEM_LIMITS</code> وتُفرض عند حدود المحرك.</p>
+<div class="table-wrap"><table><thead><tr><th>الحد</th><th>القيمة</th><th>خطأ التجاوز</th></tr></thead><tbody><tr><td><code class="inline-code">MAX_DOCUMENT_BYTES</code></td><td>1,048,576 (1 MiB)</td><td><code class="inline-code">DOCUMENT_TOO_LARGE</code> (413)</td></tr><tr><td><code class="inline-code">MAX_PATH_DEPTH</code></td><td>10 مقاطع (5 مجموعات متداخلة)</td><td><code class="inline-code">INVALID_DOCUMENT_PATH</code> (400)</td></tr><tr><td><code class="inline-code">MAX_PATH_SEGMENT_BYTES</code></td><td>1,500 بايت</td><td><code class="inline-code">INVALID_DOCUMENT_PATH</code> (400)</td></tr><tr><td><code class="inline-code">MAX_OBJECT_NESTING_DEPTH</code></td><td>20 مستوى</td><td><code class="inline-code">MAX_NESTING_EXCEEDED</code> (400)</td></tr><tr><td><code class="inline-code">MAX_FIELD_NAME_LENGTH</code></td><td>256 حرفًا</td><td><code class="inline-code">INVALID_FIELD_NAME</code> (400)</td></tr><tr><td><code class="inline-code">MAX_BATCH_OPERATIONS</code></td><td>100 عملية</td><td><code class="inline-code">BATCH_SIZE_EXCEEDED</code> (400)</td></tr><tr><td><code class="inline-code">MAX_BATCH_PAYLOAD_BYTES</code></td><td>5,242,880 (5 MiB)</td><td><code class="inline-code">PAYLOAD_TOO_LARGE</code> (413)</td></tr><tr><td><code class="inline-code">MAX_TRANSACTION_DURATION_MS</code></td><td>5,000 ms</td><td><code class="inline-code">TRANSACTION_TIMEOUT</code> (408)</td></tr><tr><td><code class="inline-code">MAX_WHERE_CLAUSES</code></td><td>10 مرشحات</td><td><code class="inline-code">QUERY_TOO_COMPLEX</code> (400)</td></tr><tr><td><code class="inline-code">MAX_DISJUNCTIVE_VALUES</code></td><td>30 عنصرًا</td><td><code class="inline-code">QUERY_TOO_COMPLEX</code> (400)</td></tr><tr><td><code class="inline-code">MAX_ORDER_BY_FIELDS</code></td><td>3 حقول</td><td><code class="inline-code">QUERY_TOO_COMPLEX</code> (400)</td></tr><tr><td><code class="inline-code">DEFAULT_QUERY_LIMIT</code></td><td>50</td><td>—</td></tr><tr><td><code class="inline-code">MAX_QUERY_LIMIT</code></td><td>500</td><td><code class="inline-code">LIMIT_EXCEEDED</code> (400)</td></tr><tr><td><code class="inline-code">MAX_QUERY_RESPONSE_BYTES</code></td><td>4,194,304 (4 MiB)</td><td><code class="inline-code">RESPONSE_TOO_LARGE</code> (413)</td></tr><tr><td><code class="inline-code">MAX_QUERY_EXECUTION_MS</code></td><td>5,000 ms</td><td><code class="inline-code">QUERY_DEADLINE_EXCEEDED</code> (504)</td></tr><tr><td><code class="inline-code">MAX_WS_SUBSCRIPTIONS_PER_CONN</code></td><td>50</td><td><code class="inline-code">SUBSCRIPTION_LIMIT_EXCEEDED</code> (400)</td></tr><tr><td><code class="inline-code">MAX_WS_OUTBOUND_BUFFER_BYTES</code></td><td>1,048,576 (1 MiB)</td><td><code class="inline-code">SLOW_CONSUMER_DISCONNECT</code> (429)</td></tr><tr><td><code class="inline-code">RULES_AST_MAX_DEPTH</code></td><td>10</td><td><code class="inline-code">QUERY_TOO_COMPLEX</code> (400)</td></tr><tr><td><code class="inline-code">RULES_AST_MAX_NODES</code></td><td>100 لكل قاعدة</td><td><code class="inline-code">QUERY_TOO_COMPLEX</code> (400)</td></tr><tr><td>الفهارس المركّبة لكل خطة مجاني/احترافي</td><td>50 / 200</td><td><code class="inline-code">QUOTA_EXCEEDED</code> (429)</td></tr><tr><td>الاحتفاظ بعلامات الحذف</td><td>7 أيام (افتراضي)</td><td>—</td></tr><tr><td>الاحتفاظ بصندوق البريد</td><td>24 ساعة</td><td>—</td></tr></tbody></table></div>
+<h2 id="معالجة-الأخطاء">معالجة الأخطاء<a class="anchor" href="#معالجة-الأخطاء" aria-label="Link to section">#</a></h2>
+<p>يُظهر المثال في بداية هذا الدليل التفريع على <code class="inline-code">e.code</code>. أما في عملاء HTTP الخام، فاقرأ حقل <code class="inline-code">error.code</code> من غلاف JSON والترويسة <code class="inline-code">X-Request-Id</code>.</p>
+<div class="admonition admonition-tip"><div class="admonition-label">TIP</div><p>أدرج <code class="inline-code">X-Request-Id</code> (أو <code class="inline-code">error.requestId</code>) دائمًا في تقارير الأخطاء. السجلات مُخفاة، لذا معرّف الطلب هو الطريقة الآمنة لربط حادثة ما دون مشاركة أسرار.</p></div>
+<h2 id="الأخطاء-الشائعة">الأخطاء الشائعة<a class="anchor" href="#الأخطاء-الشائعة" aria-label="Link to section">#</a></h2>
+<ul><li><strong>التفريع على حالة HTTP وحدها.</strong> رموز متعددة تشترك في الحالة نفسها (مثل 400)؛ فَرِّع على <code class="inline-code">code</code> القياسي.</li><li><strong>إعادة محاولة كل خطأ.</strong> فقط الرموز العابرة مثل <code class="inline-code">ABORTED_CONFLICT</code> و<code class="inline-code">RATE_LIMITED</code> آمنة لإعادة المحاولة؛ خطأ الصلاحيات لن يُصلح نفسه.</li><li><strong>افتراض شكل ثابت لـ <code class="inline-code">details</code>.</strong> مفاتيحه تختلف حسب الرمز — عاملها كسجل.</li><li><strong>تجاهل معرّف الطلب.</strong> بدونه لا يمكن للدعم ربط حادثة مُخفاة بطلبك.</li></ul>
+<h2 id="مثال-موثّق">مثال موثّق<a class="anchor" href="#مثال-موثّق" aria-label="Link to section">#</a></h2>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">المجموعة / البروتوكول</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed against the live PostgreSQL API by scripts/run-dart-examples.mjs.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// Errors &amp; limits — probe the canonical VELLUM error codes.</span>
+<span class="hl-comment">// What you'll build: a tour of quota/complexity/size/conflict errors, printing</span>
+<span class="hl-comment">// only stable code + status pairs.</span>
+<span class="hl-comment">// Real-world scenario: clients must handle these boundary failures gracefully.</span>
+<span class="hl-comment">// `VellumException` carries `code` and `statusCode` for every &gt;=400 response.</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix = <span class="hl-string">'ex_flutter_errors_${DateTime.now().microsecondsSinceEpoch}'</span>;
+
+  <span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">probe</span>(<span class="hl-type">String</span> label, <span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">Function</span>() action) <span class="hl-keyword">async</span> {
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> <span class="hl-fn">action</span>();
+      <span class="hl-fn">print</span>(<span class="hl-string">'$label: unexpected success'</span>);
+    } on <span class="hl-type">VellumException</span> <span class="hl-keyword">catch</span> (e) {
+      <span class="hl-fn">print</span>(<span class="hl-string">'$label: code=${e.code} status=${e.statusCode}'</span>);
+    }
+  }
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== Errors &amp; Limits (Flutter) ==='</span>);
+
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(<span class="hl-string">'limit'</span>, () =&gt; client<span class="hl-property">.collection</span>(prefix)<span class="hl-property">.limit</span>(<span class="hl-number">501</span>)<span class="hl-property">.get</span>());
+
+    <span class="hl-type">Query</span>&lt;<span class="hl-type">Map</span>&lt;<span class="hl-type">String</span>, dynamic&gt;&gt; complex = client<span class="hl-property">.collection</span>(prefix);
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">var</span> i = <span class="hl-number">0</span>; i &lt; <span class="hl-number">11</span>; i++) {
+      complex = complex<span class="hl-property">.where</span>(<span class="hl-string">'f$i'</span>, <span class="hl-string">'=='</span>, i);
+    }
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(<span class="hl-string">'whereClauses=11'</span>, () =&gt; complex<span class="hl-property">.get</span>());
+
+    <span class="hl-keyword">final</span> writes = <span class="hl-type">List</span><span class="hl-property">.generate</span>(
+        <span class="hl-number">101</span>,
+        (i) =&gt; {
+              <span class="hl-string">'type'</span>: <span class="hl-string">'create'</span>,
+              <span class="hl-string">'path'</span>: <span class="hl-string">'$prefix/bulk-$i'</span>,
+              <span class="hl-string">'data'</span>: {<span class="hl-string">'i'</span>: i},
+            });
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(<span class="hl-string">'batchOperations=101'</span>,
+        () =&gt; client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/batchWrite'</span>, body: {<span class="hl-string">'writes'</span>: writes}));
+
+    <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/indexes'</span>, body: {
+      <span class="hl-string">'collectionPath'</span>: prefix,
+      <span class="hl-string">'fields'</span>: [
+        {<span class="hl-string">'path'</span>: <span class="hl-string">'onlyField'</span>, <span class="hl-string">'dir'</span>: <span class="hl-string">'asc'</span>},
+      ]
+    });
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(
+        <span class="hl-string">'duplicateIndex'</span>,
+        () =&gt; client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/indexes'</span>, body: {
+              <span class="hl-string">'collectionPath'</span>: prefix,
+              <span class="hl-string">'fields'</span>: [
+                {<span class="hl-string">'path'</span>: <span class="hl-string">'onlyField'</span>, <span class="hl-string">'dir'</span>: <span class="hl-string">'asc'</span>},
+              ],
+            }));
+
+    <span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-string">'$prefix/stale'</span>)<span class="hl-property">.set</span>({<span class="hl-string">'n'</span>: <span class="hl-number">0</span>});
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(<span class="hl-string">'staleVersion'</span>,
+        () =&gt; client<span class="hl-property">.doc</span>(<span class="hl-string">'$prefix/stale'</span>)<span class="hl-property">.update</span>({<span class="hl-string">'n'</span>: <span class="hl-number">2</span>}, ifVersion: <span class="hl-number">0</span>));
+
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(
+        <span class="hl-string">'documentTooLarge'</span>,
+        () =&gt; client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/documents/$prefix/too-large'</span>, body: {
+              <span class="hl-string">'data'</span>: {<span class="hl-string">'blob'</span>: <span class="hl-string">'x'</span> * <span class="hl-number">1048577</span>},
+            }));
+
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(<span class="hl-string">'notFound'</span>, () =&gt; client<span class="hl-property">.doc</span>(<span class="hl-string">'$prefix/does-not-exist'</span>)<span class="hl-property">.get</span>());
+  } <span class="hl-keyword">finally</span> {
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-string">'$prefix/stale'</span>)<span class="hl-property">.delete</span>();
+    } <span class="hl-keyword">catch</span> (_) {}
+    client<span class="hl-property">.dispose</span>();
+  }
+}</code></pre><div class="et-note">للمرجعية فقط — لم يُنفَّذ هنا (لا توجد أداة Dart).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="تم تشغيل المصدر على الـ API الحي">✓ مصدر مُتحقَّق منه</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Errors &amp; limits — probe the API's guardrails.
+ *
+ * What you'll build: a tour of the canonical Vellum error codes by deliberately
+ * violating each documented quota.
+ * Real-world scenario: when a client sends an over-limit query or an oversized
+ * document, the app should show a useful message instead of crashing. This
+ * example proves each boundary returns a stable `code` + HTTP `status` pair.
+ * Only codes and statuses are printed — no secrets or request IDs.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;errors&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+
+<span class="hl-keyword">function</span> <span class="hl-fn">codeOf</span>(error: unknown): string {
+  <span class="hl-keyword">return</span> (error <span class="hl-keyword">as</span> { code?: string })<span class="hl-property">.code</span> ?? <span class="hl-string">&quot;UNKNOWN&quot;</span>;
+}
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Errors &amp; Limits ===&quot;</span>);
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.limit</span>(<span class="hl-number">501</span>)<span class="hl-property">.get</span>();
+    <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;limit above 500 should fail&quot;</span>);
+  } <span class="hl-keyword">catch</span> (error: unknown) {
+    <span class="hl-fn">check</span>(<span class="hl-fn">codeOf</span>(error) === <span class="hl-string">&quot;LIMIT_EXCEEDED&quot;</span>, <span class="hl-string">&quot;MAX_QUERY_LIMIT returns LIMIT_EXCEEDED&quot;</span>);
+    h<span class="hl-property">.log</span>({ limit: <span class="hl-fn">codeOf</span>(error), status: (error <span class="hl-keyword">as</span> { status?: number })<span class="hl-property">.status</span> });
+  }
+
+  <span class="hl-keyword">let</span> complex = h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col);
+  <span class="hl-keyword">for</span> (<span class="hl-keyword">let</span> i = <span class="hl-number">0</span>; i &lt; <span class="hl-number">11</span>; i += <span class="hl-number">1</span>) complex = complex<span class="hl-property">.where</span>(<span class="hl-string">`f${i}`</span>, <span class="hl-string">&quot;==&quot;</span>, i);
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> complex<span class="hl-property">.get</span>();
+    <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;more than 10 where clauses should fail&quot;</span>);
+  } <span class="hl-keyword">catch</span> (error: unknown) {
+    <span class="hl-fn">check</span>(<span class="hl-fn">codeOf</span>(error) === <span class="hl-string">&quot;QUERY_TOO_COMPLEX&quot;</span>, <span class="hl-string">&quot;MAX_WHERE_CLAUSES returns QUERY_TOO_COMPLEX&quot;</span>);
+    h<span class="hl-property">.log</span>({ whereClauses: <span class="hl-number">11</span>, code: <span class="hl-fn">codeOf</span>(error) });
+  }
+
+  <span class="hl-keyword">const</span> oversizedBatch = <span class="hl-type">Array</span><span class="hl-property">.from</span>({ length: <span class="hl-number">101</span> }, (_, i) =&gt; ({
+    <span class="hl-keyword">type</span>: <span class="hl-string">&quot;create&quot;</span>,
+    path: <span class="hl-string">`${col}/bulk-${i}`</span>,
+    data: { i },
+  }));
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.batchWrite</span>(oversizedBatch);
+    <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;more than 100 batch operations should fail&quot;</span>);
+  } <span class="hl-keyword">catch</span> (error: unknown) {
+    <span class="hl-fn">check</span>(<span class="hl-fn">codeOf</span>(error) === <span class="hl-string">&quot;BATCH_SIZE_EXCEEDED&quot;</span>, <span class="hl-string">&quot;MAX_BATCH_OPERATIONS returns BATCH_SIZE_EXCEEDED&quot;</span>);
+    h<span class="hl-property">.log</span>({ batchOperations: <span class="hl-number">101</span>, code: <span class="hl-fn">codeOf</span>(error) });
+  }
+
+  <span class="hl-keyword">const</span> firstIndex = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>, {
+    collectionPath: col,
+    fields: [{ path: <span class="hl-string">&quot;onlyField&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> }],
+  });
+  <span class="hl-keyword">const</span> duplicateIndex = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>, {
+    collectionPath: col,
+    fields: [{ path: <span class="hl-string">&quot;onlyField&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> }],
+  });
+  <span class="hl-keyword">const</span> duplicateCode = (duplicateIndex<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { error?: { code?: string } })?<span class="hl-property">.error</span>?<span class="hl-property">.code</span>;
+  <span class="hl-fn">check</span>(firstIndex<span class="hl-property">.status</span> === <span class="hl-number">201</span> &amp;&amp; duplicateIndex<span class="hl-property">.status</span> === <span class="hl-number">409</span>, <span class="hl-string">&quot;duplicate index returns 409&quot;</span>);
+  <span class="hl-fn">check</span>(duplicateCode === <span class="hl-string">&quot;ALREADY_EXISTS&quot;</span>, <span class="hl-string">&quot;duplicate index code is ALREADY_EXISTS&quot;</span>);
+  h<span class="hl-property">.log</span>({ duplicateIndex: { status: duplicateIndex<span class="hl-property">.status</span>, code: duplicateCode } });
+
+  <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;stale&quot;</span>)<span class="hl-property">.set</span>({ n: <span class="hl-number">0</span> });
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;stale&quot;</span>)<span class="hl-property">.update</span>({ n: <span class="hl-number">2</span> }, { ifVersion: <span class="hl-number">0</span> });
+    <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;stale version should fail&quot;</span>);
+  } <span class="hl-keyword">catch</span> (error: unknown) {
+    <span class="hl-fn">check</span>(<span class="hl-fn">codeOf</span>(error) === <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>, <span class="hl-string">&quot;stale version returns FAILED_PRECONDITION&quot;</span>);
+    h<span class="hl-property">.log</span>({ staleVersion: { code: <span class="hl-fn">codeOf</span>(error), status: (error <span class="hl-keyword">as</span> { status?: number })<span class="hl-property">.status</span> } });
+  }
+
+  <span class="hl-keyword">const</span> tooLarge = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${col}/too-large`</span>, {
+    data: { blob: <span class="hl-string">&quot;x&quot;</span><span class="hl-property">.repeat</span>(1_048_577) },
+  });
+  <span class="hl-keyword">const</span> tooLargeCode = (tooLarge<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { error?: { code?: string } })?<span class="hl-property">.error</span>?<span class="hl-property">.code</span>;
+  <span class="hl-fn">check</span>(tooLarge<span class="hl-property">.status</span> === <span class="hl-number">413</span> &amp;&amp; tooLargeCode === <span class="hl-string">&quot;DOCUMENT_TOO_LARGE&quot;</span>, <span class="hl-string">&quot;1 MiB+ doc returns DOCUMENT_TOO_LARGE&quot;</span>);
+  h<span class="hl-property">.log</span>({ documentTooLarge: { status: tooLarge<span class="hl-property">.status</span>, code: tooLargeCode } });
+
+  <span class="hl-keyword">const</span> missing = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${col}/does-not-exist`</span>);
+  <span class="hl-fn">check</span>(missing<span class="hl-property">.status</span> === <span class="hl-number">404</span>, <span class="hl-string">&quot;missing document returns 404&quot;</span>);
+  h<span class="hl-property">.log</span>({ notFound: { status: missing<span class="hl-property">.status</span>, code: (missing<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { error?: { code?: string } })?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> } });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">النتيجة · مُلتقطة من تشغيل فعلي</span><button class="cb-copy" type="button">نسخ</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Errors &amp; Limits ===
+{&quot;limit&quot;:&quot;LIMIT_EXCEEDED&quot;,&quot;status&quot;:400}
+{&quot;whereClauses&quot;:11,&quot;code&quot;:&quot;QUERY_TOO_COMPLEX&quot;}
+{&quot;batchOperations&quot;:101,&quot;code&quot;:&quot;BATCH_SIZE_EXCEEDED&quot;}
+{&quot;duplicateIndex&quot;:{&quot;status&quot;:409,&quot;code&quot;:&quot;ALREADY_EXISTS&quot;}}
+{&quot;staleVersion&quot;:{&quot;code&quot;:&quot;FAILED_PRECONDITION&quot;,&quot;status&quot;:412}}
+{&quot;documentTooLarge&quot;:{&quot;status&quot;:413,&quot;code&quot;:&quot;DOCUMENT_TOO_LARGE&quot;}}
+{&quot;notFound&quot;:{&quot;status&quot;:404,&quot;code&quot;:&quot;NOT_FOUND&quot;}}</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="تم تشغيل المصدر على الـ API الحي">✓ مصدر مُتحقَّق منه</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Errors &amp; limits (REST) — probe the API's guardrails with fetch.
+ *
+ * What you'll build: a tour of canonical error codes by deliberately breaking
+ * documented quotas, printing only stable code + status pairs.
+ * Real-world scenario: clients must handle limit, complexity, size and conflict
+ * errors gracefully; this example proves each boundary's exact canonical code.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;errors&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> codeOf = (reply) =&gt; reply<span class="hl-property">.body</span>?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> ?? <span class="hl-string">&quot;UNKNOWN&quot;</span>;
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Errors &amp; Limits ===&quot;</span>);
+
+  <span class="hl-keyword">const</span> overLimit = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/query&quot;</span>, {
+    collectionPath: col,
+    where: [],
+    orderBy: [],
+    limit: <span class="hl-number">501</span>,
+    select: <span class="hl-keyword">null</span>,
+    startAt: <span class="hl-keyword">null</span>,
+    startAfter: <span class="hl-keyword">null</span>,
+  });
+  <span class="hl-fn">check</span>(overLimit<span class="hl-property">.status</span> === <span class="hl-number">400</span> &amp;&amp; <span class="hl-fn">codeOf</span>(overLimit) === <span class="hl-string">&quot;LIMIT_EXCEEDED&quot;</span>, <span class="hl-string">&quot;limit above 500 rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ limit: <span class="hl-fn">codeOf</span>(overLimit), status: overLimit<span class="hl-property">.status</span> });
+
+  <span class="hl-keyword">const</span> where = <span class="hl-type">Array</span><span class="hl-property">.from</span>({ length: <span class="hl-number">11</span> }, (_, i) =&gt; ({ field: <span class="hl-string">`f${i}`</span>, op: <span class="hl-string">&quot;==&quot;</span>, value: i }));
+  <span class="hl-keyword">const</span> complex = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/query&quot;</span>, {
+    collectionPath: col,
+    where,
+    orderBy: [],
+    limit: <span class="hl-number">50</span>,
+    select: <span class="hl-keyword">null</span>,
+    startAt: <span class="hl-keyword">null</span>,
+    startAfter: <span class="hl-keyword">null</span>,
+  });
+  <span class="hl-fn">check</span>(complex<span class="hl-property">.status</span> === <span class="hl-number">400</span> &amp;&amp; <span class="hl-fn">codeOf</span>(complex) === <span class="hl-string">&quot;QUERY_TOO_COMPLEX&quot;</span>, <span class="hl-string">&quot;11 where clauses rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ whereClauses: <span class="hl-number">11</span>, code: <span class="hl-fn">codeOf</span>(complex) });
+
+  <span class="hl-keyword">const</span> writes = <span class="hl-type">Array</span><span class="hl-property">.from</span>({ length: <span class="hl-number">101</span> }, (_, i) =&gt; ({
+    <span class="hl-keyword">type</span>: <span class="hl-string">&quot;create&quot;</span>,
+    path: <span class="hl-string">`${col}/bulk-${i}`</span>,
+    data: { i },
+  }));
+  <span class="hl-keyword">const</span> oversizedBatch = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/batchWrite&quot;</span>, { writes });
+  <span class="hl-fn">check</span>(oversizedBatch<span class="hl-property">.status</span> === <span class="hl-number">400</span> &amp;&amp; <span class="hl-fn">codeOf</span>(oversizedBatch) === <span class="hl-string">&quot;BATCH_SIZE_EXCEEDED&quot;</span>, <span class="hl-string">&quot;101 writes rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ batchOperations: <span class="hl-number">101</span>, code: <span class="hl-fn">codeOf</span>(oversizedBatch) });
+
+  <span class="hl-keyword">const</span> firstIndex = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>, {
+    collectionPath: col,
+    fields: [{ path: <span class="hl-string">&quot;onlyField&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> }],
+  });
+  <span class="hl-keyword">const</span> duplicateIndex = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>, {
+    collectionPath: col,
+    fields: [{ path: <span class="hl-string">&quot;onlyField&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> }],
+  });
+  <span class="hl-fn">check</span>(firstIndex<span class="hl-property">.status</span> === <span class="hl-number">201</span> &amp;&amp; duplicateIndex<span class="hl-property">.status</span> === <span class="hl-number">409</span>, <span class="hl-string">&quot;duplicate index returns 409&quot;</span>);
+  <span class="hl-fn">check</span>(<span class="hl-fn">codeOf</span>(duplicateIndex) === <span class="hl-string">&quot;ALREADY_EXISTS&quot;</span>, <span class="hl-string">&quot;duplicate index code is ALREADY_EXISTS&quot;</span>);
+  h<span class="hl-property">.log</span>({ duplicateIndex: { status: duplicateIndex<span class="hl-property">.status</span>, code: <span class="hl-fn">codeOf</span>(duplicateIndex) } });
+
+  <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${col}/stale`</span>, { data: { n: <span class="hl-number">0</span> } });
+  <span class="hl-keyword">const</span> stale = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;PATCH&quot;</span>, <span class="hl-string">`/documents/${col}/stale`</span>, { data: { n: <span class="hl-number">2</span> }, ifVersion: <span class="hl-number">0</span> });
+  <span class="hl-fn">check</span>(stale<span class="hl-property">.status</span> === <span class="hl-number">412</span> &amp;&amp; <span class="hl-fn">codeOf</span>(stale) === <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>, <span class="hl-string">&quot;stale version rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ staleVersion: { code: <span class="hl-fn">codeOf</span>(stale), status: stale<span class="hl-property">.status</span> } });
+
+  <span class="hl-keyword">const</span> tooLarge = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${col}/too-large`</span>, {
+    data: { blob: <span class="hl-string">&quot;x&quot;</span><span class="hl-property">.repeat</span>(1_048_577) },
+  });
+  <span class="hl-fn">check</span>(tooLarge<span class="hl-property">.status</span> === <span class="hl-number">413</span> &amp;&amp; <span class="hl-fn">codeOf</span>(tooLarge) === <span class="hl-string">&quot;DOCUMENT_TOO_LARGE&quot;</span>, <span class="hl-string">&quot;oversized doc rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ documentTooLarge: { status: tooLarge<span class="hl-property">.status</span>, code: <span class="hl-fn">codeOf</span>(tooLarge) } });
+
+  <span class="hl-keyword">const</span> missing = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${col}/does-not-exist`</span>);
+  <span class="hl-fn">check</span>(missing<span class="hl-property">.status</span> === <span class="hl-number">404</span>, <span class="hl-string">&quot;missing document returns 404&quot;</span>);
+  h<span class="hl-property">.log</span>({ notFound: { status: missing<span class="hl-property">.status</span>, code: <span class="hl-fn">codeOf</span>(missing) } });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">النتيجة · مُلتقطة من تشغيل فعلي</span><button class="cb-copy" type="button">نسخ</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Errors &amp; Limits ===
+{&quot;limit&quot;:&quot;LIMIT_EXCEEDED&quot;,&quot;status&quot;:400}
+{&quot;whereClauses&quot;:11,&quot;code&quot;:&quot;QUERY_TOO_COMPLEX&quot;}
+{&quot;batchOperations&quot;:101,&quot;code&quot;:&quot;BATCH_SIZE_EXCEEDED&quot;}
+{&quot;duplicateIndex&quot;:{&quot;status&quot;:409,&quot;code&quot;:&quot;ALREADY_EXISTS&quot;}}
+{&quot;staleVersion&quot;:{&quot;code&quot;:&quot;FAILED_PRECONDITION&quot;,&quot;status&quot;:412}}
+{&quot;documentTooLarge&quot;:{&quot;status&quot;:413,&quot;code&quot;:&quot;DOCUMENT_TOO_LARGE&quot;}}
+{&quot;notFound&quot;:{&quot;status&quot;:404,&quot;code&quot;:&quot;NOT_FOUND&quot;}}</code></pre>
+</div></div></div>
+</div>
+<h2 id="ماذا-تقرأ-بعد-ذلك">ماذا تقرأ بعد ذلك<a class="anchor" href="#ماذا-تقرأ-بعد-ذلك" aria-label="Link to section">#</a></h2>
+<ul><li><a href="query.html">الاستعلام</a> — أخطاء الاستعلامات واقتراحات الفهارس.</li><li><a href="batch-and-transactions.html">الكتابات الدفعية والمعاملات</a> — سلوك التعارض والمهلة.</li><li><a href="production-checklist.html">قائمة التحقق للإنتاج</a> — تحديد المعدل والإخفاء وفحوص الجاهزية.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · التصميم الافتراضي الرسمي لـ shadcn/ui</span><span>مولَّد من docs/guides — لا تعدّل HTML مباشرة.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">في هذه الصفحة</div><a href="#السيناريو" class="toc-link toc-l2">السيناريو</a><a href="#غلاف-الخطأ" class="toc-link toc-l2">غلاف الخطأ</a><a href="#رموز-الأخطاء-القياسية" class="toc-link toc-l2">رموز الأخطاء القياسية</a><a href="#حصص-الإصدار-1-الثابتة" class="toc-link toc-l2">حصص الإصدار 1 الثابتة</a><a href="#معالجة-الأخطاء" class="toc-link toc-l2">معالجة الأخطاء</a><a href="#الأخطاء-الشائعة" class="toc-link toc-l2">الأخطاء الشائعة</a><a href="#مثال-موثّق" class="toc-link toc-l2">مثال موثّق</a><a href="#ماذا-تقرأ-بعد-ذلك" class="toc-link toc-l2">ماذا تقرأ بعد ذلك</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="ابحث في الأدلة والواجهات والأمثلة…" autocomplete="off"><button id="searchClose" type="button">إغلاق</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="../assets/docs.js" defer></script>
+</body>
+</html>

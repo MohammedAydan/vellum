@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>الكتابات الدفعية والمعاملات · VELLUM Docs</title>
+<meta name="description" content="حدود batchWrite ودلالات الفشل، وrunTransaction مع OCC وقفل FOR UPDATE وإعادة المحاولة والمهلة.">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-base="../">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="../ar/index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ التوثيق</span></span></a>
+  <span class="top-badge">أمثلة مُتحقَّق منها · ثابتة</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">ابحث في التوثيق <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="../batch-and-transactions.html" title="English">EN</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">البداية</div><ul><li><a href="index.html" class="nav-link nav-home">الصفحة الرئيسية للتوثيق</a></li><li><a href="quickstart.html" class="nav-link">البدء السريع</a></li><li><a href="authentication.html" class="nav-link">المصادقة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المجموعات البرمجية</div><ul><li><a href="sdks/flutter.html" class="nav-link">مجموعة Flutter البرمجية (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المرجع</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">واجهة REST لمستوى التحكم والكونسول</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">واجهة REST العامة لمستوى البيانات</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">بروتوكول WebSocket للوقت الفعلي</a></li><li><a href="reference/wire-format.html" class="nav-link">تنسيق الإرسال الموسوم وقواعد المسارات</a></li><li><a href="reference/errors.html" class="nav-link">الرموز المعيارية للأخطاء وإرشادات إعادة المحاولة</a></li><li><a href="reference/packages.html" class="nav-link">واجهات الحزم البرمجية</a></li><li><a href="errors-and-limits.html" class="nav-link">الأخطاء والحدود</a></li><li><a href="rest-api.html" class="nav-link">نظرة عامة على REST API</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المفاهيم الأساسية</div><ul><li><a href="crud.html" class="nav-link">CRUD ومسارات المستندات</a></li><li><a href="field-transforms.html" class="nav-link">تحويلات الحقول</a></li><li><a href="query.html" class="nav-link">الاستعلام</a></li><li><a href="pagination.html" class="nav-link">الترقيم الصفحي</a></li><li><a href="indexes.html" class="nav-link">الفهارس المركّبة</a></li><li><a href="realtime.html" class="nav-link">الوقت الفعلي</a></li><li><a href="batch-and-transactions.html" class="nav-link">الكتابات الدفعية والمعاملات</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المصادقة</div><ul><li><a href="end-user-auth.html" class="nav-link">مصادقة المستخدمين النهائيين والمجالات الثلاثة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">الأمان</div><ul><li><a href="security-rules.html" class="nav-link">قواعد الأمان</a></li></ul></div><div class="nav-group"><div class="nav-group-title">التشغيل</div><ul><li><a href="production-checklist.html" class="nav-link">قائمة التحقق للإنتاج</a></li><li><a href="deployment.html" class="nav-link">النشر والاستضافة</a></li></ul></div></div>
+    <div class="sidebar-foot">تُنفَّذ الأمثلة على الـ API الحي وتُعرض كنص خامل. لا يُنفَّذ أي كود داخل هذا الموقع.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">المفاهيم الأساسية <span>/</span> <strong>الكتابات الدفعية والمعاملات</strong></div>
+    <article class="article"><h1 id="الكتابات-الدفعية-والمعاملات">الكتابات الدفعية والمعاملات<a class="anchor" href="#الكتابات-الدفعية-والمعاملات" aria-label="Link to section">#</a></h1>
+<p>يوفّر VELLUM طريقتين لتجميع الكتابات: <code class="inline-code">batchWrite</code> لمجموعة ذرية واحدة من التعديلات، و<code class="inline-code">runTransaction</code> لمنطق القراءة ثم الكتابة مع تحكم متفائل في التزامن (OCC).</p>
+<h2 id="السيناريو">السيناريو<a class="anchor" href="#السيناريو" aria-label="Link to section">#</a></h2>
+<p>أنت تُهيّئ مستأجرًا جديدًا بمجموعة ثابتة معروفة من المستندات — كتابات يجب أن تنجح كلها أو لا شيء — لذا تستخدم <code class="inline-code">batchWrite</code>. ثم، عند تنفيذ تحويل بين حسابين تعتمد فيه الأرصدة الجديدة على قيم قرأتها أولًا، تستخدم <code class="inline-code">runTransaction</code> لتجنب فقدان التحديث.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">const</span> result = <span class="hl-keyword">await</span> db<span class="hl-property">.batchWrite</span>([
+  { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;create&quot;</span>, path: <span class="hl-string">&quot;users/u_123&quot;</span>, data: { name: <span class="hl-string">&quot;Ada&quot;</span>, credits: <span class="hl-number">0</span> } },
+  { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;set&quot;</span>, path: <span class="hl-string">&quot;users/u_123/stats&quot;</span>, data: { logins: <span class="hl-number">0</span> }, merge: <span class="hl-keyword">false</span> },
+  { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;update&quot;</span>, path: <span class="hl-string">&quot;counters/users&quot;</span>, data: { total: fieldOp<span class="hl-property">.increment</span>(<span class="hl-number">1</span>) } },
+  { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;delete&quot;</span>, path: <span class="hl-string">&quot;sessions/old_session&quot;</span> },
+]);</code></pre>
+</div>
+<h2 id="batchwrite">batchWrite<a class="anchor" href="#batchwrite" aria-label="Link to section">#</a></h2>
+<p>الحدود والدلالات:</p>
+<div class="table-wrap"><table><thead><tr><th>القيد</th><th>القيمة</th><th>الخطأ عند التجاوز</th></tr></thead><tbody><tr><td>العمليات لكل دفعة</td><td>100</td><td><code class="inline-code">BATCH_SIZE_EXCEEDED</code> (400)</td></tr><tr><td>الحمولة المتسلسلة</td><td>5 MiB</td><td><code class="inline-code">PAYLOAD_TOO_LARGE</code> (413)</td></tr></tbody></table></div>
+<ul><li>يجب أن تكون الدفعة غير فارغة؛ مصفوفة <code class="inline-code">writes</code> الفارغة تُثير <code class="inline-code">INVALID_ARGUMENT</code>.</li><li>تُنفَّذ كل التعديلات داخل <strong>معاملة قاعدة بيانات واحدة</strong>. أي فشل يُلغي الدفعة بأكملها — لا يوجد نجاح جزئي.</li><li>تُتحقق التعديلات بالترتيب. فشل شرط <code class="inline-code">ifVersion</code> / <code class="inline-code">exists</code> يُثير <code class="inline-code">FAILED_PRECONDITION</code> (412)؛ وحذف مستند غير موجود يُثير <code class="inline-code">NOT_FOUND</code> (404)؛ وإنشاء مستند موجود يُثير <code class="inline-code">ALREADY_EXISTS</code> (409).</li><li>الكتابات مرتين إلى المسار نفسه في دفعة واحدة تحافظ على دلالة القراءة بعد الكتابة عبر طبقة داخل الدفعة.</li><li>كل تعديل ناجح يكتب حدث صندوق بريد في المعاملة نفسها، لذا يرى المشتركون الفعليون رؤية متسقة.</li></ul>
+<p>تحتوي النتيجة على نتيجة لكل تعديل بنفس ترتيب الكتابات المدخلة.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// مصفوفة النتيجة تُطابق الكتابات المدخلة حسب الفهرس.</span>
+<span class="hl-keyword">for</span> (<span class="hl-keyword">const</span> r <span class="hl-keyword">of</span> (result <span class="hl-keyword">as</span> { results: <span class="hl-type">Array</span>&lt;{ path: string }&gt; })<span class="hl-property">.results</span>) {
+  console<span class="hl-property">.log</span>(r<span class="hl-property">.path</span>);
+}</code></pre>
+</div>
+<div class="admonition admonition-warning"><div class="admonition-label">WARNING</div><p>الدفعة ذرية لكنها ليست دورة قراءة-تعديل-كتابة: لا يمكنك فحص القيمة الحالية لمستند في منتصف الدفعة. استخدم معاملة لذلك.</p></div>
+<h2 id="runtransaction-occ">runTransaction (OCC)<a class="anchor" href="#runtransaction-occ" aria-label="Link to section">#</a></h2>
+<p>تسمح المعاملة بقراءة المستندات وحساب قيم جديدة وإتمامها — مع ضمان عدم قيام كاتب آخر بتغيير مجموعة قراءتك في الفترة الفاصلة.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">const</span> { result, commit } = <span class="hl-keyword">await</span> db<span class="hl-property">.runTransaction</span>(
+  <span class="hl-keyword">async</span> (tx) =&gt; {
+    <span class="hl-keyword">const</span> <span class="hl-keyword">from</span> = <span class="hl-keyword">await</span> tx<span class="hl-property">.get</span>(<span class="hl-string">&quot;accounts/a&quot;</span>);
+    <span class="hl-keyword">const</span> to = <span class="hl-keyword">await</span> tx<span class="hl-property">.get</span>(<span class="hl-string">&quot;accounts/b&quot;</span>);
+    <span class="hl-keyword">const</span> amount = <span class="hl-number">50</span>;
+    tx<span class="hl-property">.update</span>(<span class="hl-string">&quot;accounts/a&quot;</span>, { balance: <span class="hl-keyword">from</span><span class="hl-property">.data</span>()<span class="hl-property">.balance</span> - amount });
+    tx<span class="hl-property">.update</span>(<span class="hl-string">&quot;accounts/b&quot;</span>, { balance: to<span class="hl-property">.data</span>()<span class="hl-property">.balance</span> + amount });
+    <span class="hl-keyword">return</span> { moved: amount };
+  },
+  { maxAttempts: <span class="hl-number">5</span> }
+);</code></pre>
+</div>
+<p>كيف تعمل:</p>
+<ol><li><code class="inline-code">POST .../transactions:begin</code> يُصدر <code class="inline-code">transactionToken</code> موقّعًا ويبدأ صفًا في جدول <code class="inline-code">transactions</code> بمستوى البيانات.</li><li><code class="inline-code">tx.get()</code> يقرأ عبر الرمز؛ وتُسجَّل كل قراءة في مجموعة قراءات المعاملة مع الإصدار الملاحظ.</li><li>يُرتب استدعاؤك الكتابات (<code class="inline-code">create</code>, <code class="inline-code">set</code>, <code class="inline-code">update</code>, <code class="inline-code">delete</code>) دون إرسالها بعد.</li><li><code class="inline-code">POST .../transactions:commit</code> يتحقق من صف المعاملة ويقفله و<strong>كل مستند في مجموعة القراءات بترتيب <code class="inline-code">path ASC</code> الحتمي</strong> باستخدام <code class="inline-code">SELECT ... FOR UPDATE</code>، ويقارن الإصدارات الملاحظة، ثم يطبّق كل الكتابات المُرتَّبة وأحداث صندوق البريد في معاملة PostgreSQL أصلية واحدة (<code class="inline-code">BEGIN</code> / <code class="inline-code">COMMIT</code> / <code class="inline-code">ROLLBACK</code>).</li></ol>
+<p>وبما أن حالة القفل تعيش في PostgreSQL، تتشارك عدة حالات من المحرك في حالة OCC — لا يوجد <code class="inline-code">Map</code> داخل العملية ولا خدمة قفل خارجية.</p>
+<h3 id="إعادة-المحاولة-والتعارضات">إعادة المحاولة والتعارضات<a class="anchor" href="#إعادة-المحاولة-والتعارضات" aria-label="Link to section">#</a></h3>
+<p>إذا تغيّر مستند في مجموعة القراءات، يُرفض الإتمام بـ <code class="inline-code">ABORTED_CONFLICT</code> (409). يلتقط <code class="inline-code">runTransaction</code> هذا الخطأ تحديدًا ويعيد تشغيل الاستدعاء كاملًا مع تراجع أُسّي قصير (25–500 ms)، حتى <code class="inline-code">maxAttempts</code> (الافتراضي 5). أي خطأ آخر يُثار فورًا.</p>
+<div class="admonition admonition-tip"><div class="admonition-label">TIP</div><p>أبقِ استدعاءات المعاملة صغيرة وخالية من التأثيرات الجانبية (لا استدعاءات شبكة، ولا إرسال رسائل بريد). قد يُشغَّل الاستدعاء أكثر من مرة عند حدوث تعارض.</p></div>
+<h3 id="المهلة">المهلة<a class="anchor" href="#المهلة" aria-label="Link to section">#</a></h3>
+<p>يجب أن تكتمل المعاملات خلال <strong>5 ثوانٍ</strong> (<code class="inline-code">MAX_TRANSACTION_DURATION_MS</code>). تجاوزها يُنتج <code class="inline-code">TRANSACTION_TIMEOUT</code> (408). العمل طويل الأمد لا مكان له في معاملة تفاعلية — احسب النتائج مسبقًا خارجها وأبقِ المعاملة قصيرة.</p>
+<div class="table-wrap"><table><thead><tr><th>الحد</th><th>القيمة</th><th>الخطأ</th></tr></thead><tbody><tr><td>مدة المعاملة</td><td>5,000 ms</td><td><code class="inline-code">TRANSACTION_TIMEOUT</code> (408)</td></tr><tr><td>تعارض عند الإتمام</td><td>—</td><td><code class="inline-code">ABORTED_CONFLICT</code> (409)، تُعاد محاولتها بواسطة SDK</td></tr></tbody></table></div>
+<h2 id="الاختيار-بينهما">الاختيار بينهما<a class="anchor" href="#الاختيار-بينهما" aria-label="Link to section">#</a></h2>
+<ul><li>استخدم <strong>batchWrite</strong> عندما تعرف كل الكتابات مسبقًا ولا تعتمد على القيم الحالية.</li><li>استخدم <strong>runTransaction</strong> عندما تعتمد القيم الجديدة على مستندات قرأتها (عدّادات، أرصدة، فحوص تفرد).</li><li>استخدم <code class="inline-code">ifVersion</code> على كتابات <a href="crud.html">CRUD</a> الفردية عندما يكفي شرط مسبق لمستند واحد.</li></ul>
+<h2 id="الأخطاء-الشائعة">الأخطاء الشائعة<a class="anchor" href="#الأخطاء-الشائعة" aria-label="Link to section">#</a></h2>
+<ul><li><strong>القراءة في منتصف الدفعة.</strong> لا يمكن لـ <code class="inline-code">batchWrite</code> فحص القيم الحالية؛ استخدم معاملة عندما تعتمد الكتابات على القراءات.</li><li><strong>تأثيرات جانبية داخل استدعاء المعاملة.</strong> قد يُشغَّل الاستدعاء عدة مرات عند التعارض؛ أبقِه نقيًا وخالًا من التأثيرات.</li><li><strong>عمل طويل داخل معاملة.</strong> الميزانية 5 ثوانٍ تُنتج <code class="inline-code">TRANSACTION_TIMEOUT</code>؛ احسب مسبقًا خارجها.</li><li><strong>تجاوز حدود الدفعة.</strong> أكثر من 100 عملية أو 5 MiB يُلغي الدفعة بأكملها دون نجاح جزئي.</li></ul>
+<h2 id="أمثلة-موثّقة">أمثلة موثّقة<a class="anchor" href="#أمثلة-موثّقة" aria-label="Link to section">#</a></h2>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">المجموعة / البروتوكول</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed against the live PostgreSQL API by scripts/run-dart-examples.mjs.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// Batch write — onboard two users atomically.</span>
+<span class="hl-comment">// What you'll build: one batch that creates two users, patches one and deletes a</span>
+<span class="hl-comment">// stale user; a second batch with a stale ifVersion fails the whole request.</span>
+<span class="hl-comment">// Real-world scenario: provisioning a profile and settings row together so a</span>
+<span class="hl-comment">// partial signup can never be observed. `vellum_flutter` has no `batchWrite`</span>
+<span class="hl-comment">// helper, so `client.request('POST', '/batchWrite', body: ...)` is used.</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix =
+      <span class="hl-string">'ex_flutter_batch_write_${DateTime.now().microsecondsSinceEpoch}'</span>;
+  <span class="hl-keyword">final</span> docPath = (<span class="hl-type">String</span> id) =&gt; <span class="hl-string">'$prefix/$id'</span>;
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== Batch Write (Flutter) ==='</span>);
+    <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/documents/${docPath('</span>stale-user<span class="hl-string">')}'</span>, body: {
+      <span class="hl-string">'data'</span>: {<span class="hl-string">'seats'</span>: <span class="hl-number">0</span>}
+    });
+
+    <span class="hl-keyword">final</span> result = <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/batchWrite'</span>, body: {
+      <span class="hl-string">'writes'</span>: [
+        {
+          <span class="hl-string">'type'</span>: <span class="hl-string">'create'</span>,
+          <span class="hl-string">'path'</span>: <span class="hl-fn">docPath</span>(<span class="hl-string">'u1'</span>),
+          <span class="hl-string">'data'</span>: {<span class="hl-string">'seats'</span>: <span class="hl-number">1</span>, <span class="hl-string">'group'</span>: <span class="hl-string">'onboarding'</span>}
+        },
+        {
+          <span class="hl-string">'type'</span>: <span class="hl-string">'set'</span>,
+          <span class="hl-string">'path'</span>: <span class="hl-fn">docPath</span>(<span class="hl-string">'u2'</span>),
+          <span class="hl-string">'data'</span>: {<span class="hl-string">'seats'</span>: <span class="hl-number">2</span>, <span class="hl-string">'group'</span>: <span class="hl-string">'onboarding'</span>}
+        },
+        {
+          <span class="hl-string">'type'</span>: <span class="hl-string">'update'</span>,
+          <span class="hl-string">'path'</span>: <span class="hl-fn">docPath</span>(<span class="hl-string">'u1'</span>),
+          <span class="hl-string">'data'</span>: {<span class="hl-string">'seats'</span>: <span class="hl-number">10</span>}
+        },
+        {<span class="hl-string">'type'</span>: <span class="hl-string">'delete'</span>, <span class="hl-string">'path'</span>: <span class="hl-fn">docPath</span>(<span class="hl-string">'stale-user'</span>)},
+      ],
+    });
+    <span class="hl-fn">print</span>(<span class="hl-string">'batch responseKeys=${result.keys.toList()}'</span>);
+
+    <span class="hl-keyword">final</span> u1 = <span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-fn">docPath</span>(<span class="hl-string">'u1'</span>))<span class="hl-property">.get</span>();
+    <span class="hl-keyword">final</span> u2 = <span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-fn">docPath</span>(<span class="hl-string">'u2'</span>))<span class="hl-property">.get</span>();
+    <span class="hl-fn">print</span>(<span class="hl-string">'u1 seats=${u1.data()?['</span>seats<span class="hl-string">']} u2 seats=${u2.data()?['</span>seats<span class="hl-string">']}'</span>);
+
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/batchWrite'</span>, body: {
+        <span class="hl-string">'writes'</span>: [
+          {
+            <span class="hl-string">'type'</span>: <span class="hl-string">'update'</span>,
+            <span class="hl-string">'path'</span>: <span class="hl-fn">docPath</span>(<span class="hl-string">'u1'</span>),
+            <span class="hl-string">'data'</span>: {<span class="hl-string">'seats'</span>: <span class="hl-number">999</span>},
+            <span class="hl-string">'ifVersion'</span>: <span class="hl-number">1</span>
+          },
+          {
+            <span class="hl-string">'type'</span>: <span class="hl-string">'create'</span>,
+            <span class="hl-string">'path'</span>: <span class="hl-fn">docPath</span>(<span class="hl-string">'should-not-exist'</span>),
+            <span class="hl-string">'data'</span>: {<span class="hl-string">'seats'</span>: <span class="hl-number">0</span>}
+          },
+        ],
+      });
+    } on <span class="hl-type">VellumException</span> <span class="hl-keyword">catch</span> (e) {
+      <span class="hl-fn">print</span>(<span class="hl-string">'preconditionBatchCode=${e.code} status=${e.statusCode}'</span>);
+    }
+  } <span class="hl-keyword">finally</span> {
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> id <span class="hl-keyword">in</span> [<span class="hl-string">'u1'</span>, <span class="hl-string">'u2'</span>, <span class="hl-string">'stale-user'</span>, <span class="hl-string">'should-not-exist'</span>]) {
+      <span class="hl-keyword">try</span> {
+        <span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-fn">docPath</span>(id))<span class="hl-property">.delete</span>();
+      } <span class="hl-keyword">catch</span> (_) {}
+    }
+    client<span class="hl-property">.dispose</span>();
+  }
+}</code></pre><div class="et-note">للمرجعية فقط — لم يُنفَّذ هنا (لا توجد أداة Dart).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="تم تشغيل المصدر على الـ API الحي">✓ مصدر مُتحقَّق منه</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Batch write — onboard two users in one atomic request.
+ *
+ * What you'll build: a single batch that creates two user records, patches one
+ * of them, and deletes a stale record — all or nothing.
+ * Real-world scenario: a signup flow provisions a profile and a settings row
+ * together. A second batch carries a stale ifVersion precondition; the whole
+ * batch fails and a &quot;should-not-exist&quot; doc is never partially committed.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;batch-write&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> docPath = (id: string): string =&gt; <span class="hl-string">`${col}/${id}`</span>;
+
+<span class="hl-keyword">function</span> <span class="hl-fn">errorCode</span>(error: unknown): string {
+  <span class="hl-keyword">return</span> (error <span class="hl-keyword">as</span> { code?: string })<span class="hl-property">.code</span> ?? <span class="hl-string">&quot;UNKNOWN&quot;</span>;
+}
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Batch Write ===&quot;</span>);
+  <span class="hl-comment">// A delete mutation must target an existing document.</span>
+  <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;stale-user&quot;</span>)<span class="hl-property">.set</span>({ seats: <span class="hl-number">0</span> });
+
+  <span class="hl-keyword">const</span> result = <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.batchWrite</span>([
+    { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;create&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;u1&quot;</span>), data: { seats: <span class="hl-number">1</span>, group: <span class="hl-string">&quot;onboarding&quot;</span> } },
+    { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;set&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;u2&quot;</span>), data: { seats: <span class="hl-number">2</span>, group: <span class="hl-string">&quot;onboarding&quot;</span> } },
+    { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;update&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;u1&quot;</span>), data: { seats: <span class="hl-number">10</span> } },
+    { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;delete&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;stale-user&quot;</span>) },
+  ]);
+  h<span class="hl-property">.log</span>({
+    batchStatus: <span class="hl-string">&quot;ok&quot;</span>,
+    writesSubmitted: <span class="hl-number">4</span>,
+    responseKeys: <span class="hl-type">Object</span><span class="hl-property">.keys</span>(result <span class="hl-keyword">as</span> object),
+  });
+
+  <span class="hl-keyword">const</span> u1 = <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;u1&quot;</span>)<span class="hl-property">.get</span>();
+  <span class="hl-keyword">const</span> u2 = <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;u2&quot;</span>)<span class="hl-property">.get</span>();
+  <span class="hl-keyword">const</span> removed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${col}/stale-user`</span>);
+  <span class="hl-fn">check</span>((u1<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { seats: number })<span class="hl-property">.seats</span> === <span class="hl-number">10</span>, <span class="hl-string">&quot;create then update in one batch applied&quot;</span>);
+  <span class="hl-fn">check</span>((u2<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { seats: number })<span class="hl-property">.seats</span> === <span class="hl-number">2</span>, <span class="hl-string">&quot;set in batch applied&quot;</span>);
+  <span class="hl-fn">check</span>(removed<span class="hl-property">.status</span> === <span class="hl-number">404</span>, <span class="hl-string">&quot;delete in batch applied&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    u1: u1<span class="hl-property">.data</span>(),
+    u2: u2<span class="hl-property">.data</span>(),
+    deletedStatus: removed<span class="hl-property">.status</span>,
+  });
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.batchWrite</span>([
+      { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;update&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;u1&quot;</span>), data: { seats: <span class="hl-number">999</span> }, ifVersion: <span class="hl-number">1</span> },
+      { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;create&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;should-not-exist&quot;</span>), data: { seats: <span class="hl-number">0</span> } },
+    ]);
+    <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;batch with stale precondition should have failed&quot;</span>);
+  } <span class="hl-keyword">catch</span> (error: unknown) {
+    <span class="hl-fn">check</span>(<span class="hl-fn">errorCode</span>(error) === <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>, <span class="hl-string">&quot;stale batch returns FAILED_PRECONDITION&quot;</span>);
+    h<span class="hl-property">.log</span>({ preconditionBatchCode: <span class="hl-fn">errorCode</span>(error) });
+  }
+  <span class="hl-keyword">const</span> rolledBack = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${col}/should-not-exist`</span>);
+  <span class="hl-fn">check</span>(rolledBack<span class="hl-property">.status</span> === <span class="hl-number">404</span>, <span class="hl-string">&quot;failed batch did not partially commit&quot;</span>);
+  h<span class="hl-property">.log</span>({ atomicRollback: rolledBack<span class="hl-property">.status</span> === <span class="hl-number">404</span> });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">النتيجة · مُلتقطة من تشغيل فعلي</span><button class="cb-copy" type="button">نسخ</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Batch Write ===
+{&quot;batchStatus&quot;:&quot;ok&quot;,&quot;writesSubmitted&quot;:4,&quot;responseKeys&quot;:[&quot;results&quot;,&quot;committedAt&quot;]}
+{&quot;u1&quot;:{&quot;group&quot;:&quot;onboarding&quot;,&quot;seats&quot;:10},&quot;u2&quot;:{&quot;group&quot;:&quot;onboarding&quot;,&quot;seats&quot;:2},&quot;deletedStatus&quot;:404}
+{&quot;preconditionBatchCode&quot;:&quot;FAILED_PRECONDITION&quot;}
+{&quot;atomicRollback&quot;:true}</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="تم تشغيل المصدر على الـ API الحي">✓ مصدر مُتحقَّق منه</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Batch write (REST) — onboard two users atomically via /batchWrite.
+ *
+ * What you'll build: one batch that creates two users, patches one, and deletes
+ * a stale user — all or nothing. A second batch with a stale ifVersion fails
+ * the whole request.
+ * Real-world scenario: provisioning a profile and settings row together so a
+ * partial signup can never be observed.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;batch-write&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> docPath = (id) =&gt; <span class="hl-string">`${col}/${id}`</span>;
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Batch Write ===&quot;</span>);
+  <span class="hl-keyword">const</span> seed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${docPath(&quot;stale-user&quot;)}`</span>, { data: { seats: <span class="hl-number">0</span> } });
+  <span class="hl-fn">check</span>(seed<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">&quot;seed user to delete&quot;</span>);
+
+  <span class="hl-keyword">const</span> result = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/batchWrite&quot;</span>, {
+    writes: [
+      { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;create&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;u1&quot;</span>), data: { seats: <span class="hl-number">1</span>, group: <span class="hl-string">&quot;onboarding&quot;</span> } },
+      { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;set&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;u2&quot;</span>), data: { seats: <span class="hl-number">2</span>, group: <span class="hl-string">&quot;onboarding&quot;</span> } },
+      { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;update&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;u1&quot;</span>), data: { seats: <span class="hl-number">10</span> } },
+      { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;delete&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;stale-user&quot;</span>) },
+    ],
+  });
+  <span class="hl-fn">check</span>(result<span class="hl-property">.ok</span>, <span class="hl-string">&quot;batch succeeded&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    batchStatus: <span class="hl-string">&quot;ok&quot;</span>,
+    writesSubmitted: <span class="hl-number">4</span>,
+    responseKeys: <span class="hl-type">Object</span><span class="hl-property">.keys</span>(result<span class="hl-property">.body</span>),
+  });
+
+  <span class="hl-keyword">const</span> u1 = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath(&quot;u1&quot;)}`</span>);
+  <span class="hl-keyword">const</span> u2 = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath(&quot;u2&quot;)}`</span>);
+  <span class="hl-keyword">const</span> removed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath(&quot;stale-user&quot;)}`</span>);
+  <span class="hl-fn">check</span>(u1<span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.seats</span> === <span class="hl-number">10</span>, <span class="hl-string">&quot;create then update in one batch applied&quot;</span>);
+  <span class="hl-fn">check</span>(u2<span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.seats</span> === <span class="hl-number">2</span>, <span class="hl-string">&quot;set in batch applied&quot;</span>);
+  <span class="hl-fn">check</span>(removed<span class="hl-property">.status</span> === <span class="hl-number">404</span>, <span class="hl-string">&quot;delete in batch applied&quot;</span>);
+  h<span class="hl-property">.log</span>({ u1: u1<span class="hl-property">.body</span><span class="hl-property">.data</span>, u2: u2<span class="hl-property">.body</span><span class="hl-property">.data</span>, deletedStatus: removed<span class="hl-property">.status</span> });
+
+  <span class="hl-keyword">const</span> failed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/batchWrite&quot;</span>, {
+    writes: [
+      { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;update&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;u1&quot;</span>), data: { seats: <span class="hl-number">999</span> }, ifVersion: <span class="hl-number">1</span> },
+      { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;create&quot;</span>, path: <span class="hl-fn">docPath</span>(<span class="hl-string">&quot;should-not-exist&quot;</span>), data: { seats: <span class="hl-number">0</span> } },
+    ],
+  });
+  <span class="hl-fn">check</span>(failed<span class="hl-property">.status</span> === <span class="hl-number">412</span> &amp;&amp; failed<span class="hl-property">.body</span>?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> === <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>, <span class="hl-string">&quot;stale batch rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ preconditionBatchCode: failed<span class="hl-property">.body</span><span class="hl-property">.error</span><span class="hl-property">.code</span> });
+
+  <span class="hl-keyword">const</span> rolledBack = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath(&quot;should-not-exist&quot;)}`</span>);
+  <span class="hl-fn">check</span>(rolledBack<span class="hl-property">.status</span> === <span class="hl-number">404</span>, <span class="hl-string">&quot;failed batch did not partially commit&quot;</span>);
+  h<span class="hl-property">.log</span>({ atomicRollback: rolledBack<span class="hl-property">.status</span> === <span class="hl-number">404</span> });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">النتيجة · مُلتقطة من تشغيل فعلي</span><button class="cb-copy" type="button">نسخ</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Batch Write ===
+{&quot;batchStatus&quot;:&quot;ok&quot;,&quot;writesSubmitted&quot;:4,&quot;responseKeys&quot;:[&quot;results&quot;,&quot;committedAt&quot;]}
+{&quot;u1&quot;:{&quot;group&quot;:&quot;onboarding&quot;,&quot;seats&quot;:10},&quot;u2&quot;:{&quot;group&quot;:&quot;onboarding&quot;,&quot;seats&quot;:2},&quot;deletedStatus&quot;:404}
+{&quot;preconditionBatchCode&quot;:&quot;FAILED_PRECONDITION&quot;}
+{&quot;atomicRollback&quot;:true}</code></pre>
+</div></div></div>
+</div>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">المجموعة / البروتوكول</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed against the live PostgreSQL API by scripts/run-dart-examples.mjs.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// OCC transactions — transfer funds between two accounts atomically.</span>
+<span class="hl-comment">// What you'll build: a debit + credit staged in one `runTransaction`, plus a</span>
+<span class="hl-comment">// forced conflict and a stale-version precondition.</span>
+<span class="hl-comment">// Real-world scenario: a payments service reads both balances and commits both</span>
+<span class="hl-comment">// writes together; a competing write before commit aborts the transaction.</span>
+<span class="hl-comment">// Note: Dart's `runTransaction` returns the callback result directly (unlike</span>
+<span class="hl-comment">// the JS SDK, which returns `{ result, commit }`).</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix =
+      <span class="hl-string">'ex_flutter_transactions_${DateTime.now().microsecondsSinceEpoch}'</span>;
+  <span class="hl-keyword">final</span> col = client<span class="hl-property">.collection</span>(prefix);
+  <span class="hl-keyword">final</span> fromRef = col<span class="hl-property">.doc</span>(<span class="hl-string">'account-a'</span>);
+  <span class="hl-keyword">final</span> toRef = col<span class="hl-property">.doc</span>(<span class="hl-string">'account-b'</span>);
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== OCC Transactions (Flutter) ==='</span>);
+    <span class="hl-keyword">await</span> fromRef<span class="hl-property">.set</span>({<span class="hl-string">'owner'</span>: <span class="hl-string">'ada'</span>, <span class="hl-string">'balance'</span>: <span class="hl-number">100</span>});
+    <span class="hl-keyword">await</span> toRef<span class="hl-property">.set</span>({<span class="hl-string">'owner'</span>: <span class="hl-string">'ben'</span>, <span class="hl-string">'balance'</span>: <span class="hl-number">50</span>});
+
+    <span class="hl-keyword">final</span> transfer = <span class="hl-keyword">await</span> client<span class="hl-property">.runTransaction</span>((tx) <span class="hl-keyword">async</span> {
+      <span class="hl-keyword">final</span> <span class="hl-keyword">from</span> = <span class="hl-keyword">await</span> tx<span class="hl-property">.get</span>(fromRef);
+      <span class="hl-keyword">final</span> to = <span class="hl-keyword">await</span> tx<span class="hl-property">.get</span>(toRef);
+      <span class="hl-keyword">final</span> fromBefore = (<span class="hl-keyword">from</span><span class="hl-property">.data</span>()?[<span class="hl-string">'balance'</span>] <span class="hl-keyword">as</span> num)<span class="hl-property">.toInt</span>();
+      <span class="hl-keyword">final</span> toBefore = (to<span class="hl-property">.data</span>()?[<span class="hl-string">'balance'</span>] <span class="hl-keyword">as</span> num)<span class="hl-property">.toInt</span>();
+      <span class="hl-keyword">const</span> amount = <span class="hl-number">50</span>;
+      <span class="hl-keyword">final</span> fromAfter = fromBefore - amount;
+      <span class="hl-keyword">final</span> toAfter = toBefore + amount;
+      tx<span class="hl-property">.update</span>(fromRef, {<span class="hl-string">'balance'</span>: fromAfter});
+      tx<span class="hl-property">.update</span>(toRef, {<span class="hl-string">'balance'</span>: toAfter});
+      <span class="hl-keyword">return</span> {
+        <span class="hl-string">'amount'</span>: amount,
+        <span class="hl-string">'fromBefore'</span>: fromBefore,
+        <span class="hl-string">'toBefore'</span>: toBefore,
+        <span class="hl-string">'fromAfter'</span>: fromAfter,
+        <span class="hl-string">'toAfter'</span>: toAfter
+      };
+    });
+    <span class="hl-fn">print</span>(<span class="hl-string">'transfer=$transfer'</span>);
+
+    <span class="hl-keyword">final</span> finalFrom = <span class="hl-keyword">await</span> fromRef<span class="hl-property">.get</span>();
+    <span class="hl-keyword">final</span> finalTo = <span class="hl-keyword">await</span> toRef<span class="hl-property">.get</span>();
+    <span class="hl-fn">print</span>(
+        <span class="hl-string">'fromBalance=${finalFrom.data()?['</span>balance<span class="hl-string">']} toBalance=${finalTo.data()?['</span>balance<span class="hl-string">']}'</span>);
+
+    <span class="hl-comment">// Forced conflict: change a read doc before committing a held transaction.</span>
+    <span class="hl-keyword">final</span> begin = <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/transactions:begin'</span>, body: {});
+    <span class="hl-keyword">final</span> token = begin[<span class="hl-string">'transactionToken'</span>] <span class="hl-keyword">as</span> <span class="hl-type">String</span>;
+    <span class="hl-keyword">final</span> held = <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(
+      <span class="hl-string">'GET'</span>,
+      <span class="hl-string">'/documents/${fromRef.path}?transactionToken=${Uri.encodeQueryComponent(token)}'</span>,
+    );
+    <span class="hl-keyword">final</span> heldVersion = held[<span class="hl-string">'version'</span>];
+    <span class="hl-keyword">await</span> fromRef<span class="hl-property">.update</span>({<span class="hl-string">'balance'</span>: <span class="hl-number">51</span>});
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/transactions:commit'</span>, body: {
+        <span class="hl-string">'transactionToken'</span>: token,
+        <span class="hl-string">'writes'</span>: [
+          {
+            <span class="hl-string">'type'</span>: <span class="hl-string">'update'</span>,
+            <span class="hl-string">'path'</span>: fromRef<span class="hl-property">.path</span>,
+            <span class="hl-string">'data'</span>: {<span class="hl-string">'balance'</span>: <span class="hl-number">200</span>},
+            <span class="hl-string">'ifVersion'</span>: heldVersion
+          },
+        ],
+      });
+    } on <span class="hl-type">VellumException</span> <span class="hl-keyword">catch</span> (e) {
+      <span class="hl-fn">print</span>(<span class="hl-string">'forced conflict: code=${e.code} status=${e.statusCode}'</span>);
+    }
+
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> fromRef<span class="hl-property">.update</span>({<span class="hl-string">'balance'</span>: <span class="hl-number">300</span>}, ifVersion: <span class="hl-number">1</span>);
+    } on <span class="hl-type">VellumException</span> <span class="hl-keyword">catch</span> (e) {
+      <span class="hl-fn">print</span>(<span class="hl-string">'stale precondition: code=${e.code} status=${e.statusCode}'</span>);
+    }
+  } <span class="hl-keyword">finally</span> {
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> ref <span class="hl-keyword">in</span> [fromRef, toRef]) {
+      <span class="hl-keyword">try</span> {
+        <span class="hl-keyword">await</span> ref<span class="hl-property">.delete</span>();
+      } <span class="hl-keyword">catch</span> (_) {}
+    }
+    client<span class="hl-property">.dispose</span>();
+  }
+}</code></pre><div class="et-note">للمرجعية فقط — لم يُنفَّذ هنا (لا توجد أداة Dart).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="تم تشغيل المصدر على الـ API الحي">✓ مصدر مُتحقَّق منه</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * OCC transactions — transfer funds between two accounts atomically.
+ *
+ * What you'll build: a balance transfer that debits one account and credits
+ * another inside a single interactive OCC transaction.
+ * Real-world scenario: a payments service reads both balances, stages the two
+ * writes, and commits them together. A competing write that changes a read
+ * balance before commit forces ABORTED_CONFLICT (409); a stale plain update
+ * yields FAILED_PRECONDITION (412). The two are reported with distinct labels.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;transactions&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> fromPath = <span class="hl-string">`${col}/account-a`</span>;
+<span class="hl-keyword">const</span> toPath = <span class="hl-string">`${col}/account-b`</span>;
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== OCC Transactions ===&quot;</span>);
+
+  <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;account-a&quot;</span>)<span class="hl-property">.set</span>({ owner: <span class="hl-string">&quot;ada&quot;</span>, balance: <span class="hl-number">100</span> });
+  <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;account-b&quot;</span>)<span class="hl-property">.set</span>({ owner: <span class="hl-string">&quot;ben&quot;</span>, balance: <span class="hl-number">50</span> });
+
+  <span class="hl-keyword">const</span> tx = <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.runTransaction</span>(<span class="hl-keyword">async</span> (t) =&gt; {
+    <span class="hl-keyword">const</span> <span class="hl-keyword">from</span> = <span class="hl-keyword">await</span> t<span class="hl-property">.get</span>&lt;{ owner: string; balance: number }&gt;(fromPath);
+    <span class="hl-keyword">const</span> to = <span class="hl-keyword">await</span> t<span class="hl-property">.get</span>&lt;{ owner: string; balance: number }&gt;(toPath);
+    <span class="hl-keyword">const</span> fromBefore = <span class="hl-keyword">from</span><span class="hl-property">.data</span>()<span class="hl-property">.balance</span>;
+    <span class="hl-keyword">const</span> toBefore = to<span class="hl-property">.data</span>()<span class="hl-property">.balance</span>;
+    <span class="hl-keyword">const</span> amount = <span class="hl-number">50</span>;
+    t<span class="hl-property">.update</span>(fromPath, { balance: fromBefore - amount });
+    t<span class="hl-property">.update</span>(toPath, { balance: toBefore + amount });
+    <span class="hl-keyword">return</span> { amount, fromBefore, toBefore, fromAfter: fromBefore - amount, toAfter: toBefore + amount };
+  });
+  <span class="hl-fn">check</span>(tx<span class="hl-property">.result</span><span class="hl-property">.fromAfter</span> === <span class="hl-number">50</span> &amp;&amp; tx<span class="hl-property">.result</span><span class="hl-property">.toAfter</span> === <span class="hl-number">100</span>, <span class="hl-string">&quot;transaction staged both balances&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    commit: <span class="hl-string">&quot;ok&quot;</span>,
+    transfer: tx<span class="hl-property">.result</span>,
+    commitResponseKeys: <span class="hl-type">Object</span><span class="hl-property">.keys</span>(tx<span class="hl-property">.commit</span> <span class="hl-keyword">as</span> object),
+  });
+
+  <span class="hl-keyword">const</span> fromFinal = <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;account-a&quot;</span>)<span class="hl-property">.get</span>();
+  <span class="hl-keyword">const</span> toFinal = <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;account-b&quot;</span>)<span class="hl-property">.get</span>();
+  <span class="hl-fn">check</span>((fromFinal<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { balance: number })<span class="hl-property">.balance</span> === <span class="hl-number">50</span>, <span class="hl-string">&quot;sender balance is debited&quot;</span>);
+  <span class="hl-fn">check</span>((toFinal<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { balance: number })<span class="hl-property">.balance</span> === <span class="hl-number">100</span>, <span class="hl-string">&quot;receiver balance is credited&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    fromBalance: (fromFinal<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { balance: number })<span class="hl-property">.balance</span>,
+    toBalance: (toFinal<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { balance: number })<span class="hl-property">.balance</span>,
+    version: fromFinal<span class="hl-property">.version</span>,
+  });
+
+  <span class="hl-comment">// Forced conflict: hold a transaction that read version N, mutate the sender</span>
+  <span class="hl-comment">// outside it, then commit with a stale ifVersion.</span>
+  <span class="hl-keyword">const</span> begin = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>&lt;{ transactionToken: string }&gt;(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/transactions:begin&quot;</span>, {});
+  <span class="hl-keyword">const</span> token = begin<span class="hl-property">.body</span><span class="hl-property">.transactionToken</span>;
+  <span class="hl-fn">check</span>(<span class="hl-fn">Boolean</span>(token), <span class="hl-string">&quot;transaction token was issued&quot;</span>);
+  <span class="hl-keyword">const</span> held = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>&lt;{ version: number }&gt;(
+    <span class="hl-string">&quot;GET&quot;</span>,
+    <span class="hl-string">`/documents/${fromPath}?transactionToken=${encodeURIComponent(token)}`</span>
+  );
+  <span class="hl-keyword">const</span> heldVersion = held<span class="hl-property">.body</span><span class="hl-property">.version</span>;
+  <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;account-a&quot;</span>)<span class="hl-property">.update</span>({ balance: <span class="hl-number">51</span> });
+  <span class="hl-keyword">const</span> conflict = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/transactions:commit&quot;</span>, {
+    transactionToken: token,
+    writes: [{ <span class="hl-keyword">type</span>: <span class="hl-string">&quot;update&quot;</span>, path: fromPath, data: { balance: <span class="hl-number">200</span> }, ifVersion: heldVersion }],
+  });
+  <span class="hl-fn">check</span>(conflict<span class="hl-property">.status</span> === <span class="hl-number">409</span>, <span class="hl-string">&quot;forced conflict returns HTTP 409&quot;</span>);
+  <span class="hl-keyword">const</span> conflictCode = (conflict<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { error?: { code?: string } })?<span class="hl-property">.error</span>?<span class="hl-property">.code</span>;
+  <span class="hl-fn">check</span>(conflictCode === <span class="hl-string">&quot;ABORTED_CONFLICT&quot;</span>, <span class="hl-string">&quot;forced conflict code is ABORTED_CONFLICT&quot;</span>);
+  h<span class="hl-property">.log</span>({ scenario: <span class="hl-string">&quot;forced write/write conflict&quot;</span>, status: conflict<span class="hl-property">.status</span>, code: conflictCode });
+
+  <span class="hl-comment">// Deliberate stale-version precondition on an ordinary update.</span>
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;account-a&quot;</span>)<span class="hl-property">.update</span>({ balance: <span class="hl-number">300</span> }, { ifVersion: <span class="hl-number">1</span> });
+    <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;stale update should have failed&quot;</span>);
+  } <span class="hl-keyword">catch</span> (error: unknown) {
+    <span class="hl-keyword">const</span> code = (error <span class="hl-keyword">as</span> { code?: string })<span class="hl-property">.code</span>;
+    <span class="hl-fn">check</span>(code === <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>, <span class="hl-string">&quot;stale ifVersion code is FAILED_PRECONDITION&quot;</span>);
+    h<span class="hl-property">.log</span>({ scenario: <span class="hl-string">&quot;stale-version precondition&quot;</span>, code, status: (error <span class="hl-keyword">as</span> { status?: number })<span class="hl-property">.status</span> });
+  }
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">النتيجة · مُلتقطة من تشغيل فعلي</span><button class="cb-copy" type="button">نسخ</button></div>
+       <pre class="cb-out"><code class="hl-text">=== OCC Transactions ===
+{&quot;commit&quot;:&quot;ok&quot;,&quot;transfer&quot;:{&quot;amount&quot;:50,&quot;fromBefore&quot;:100,&quot;toBefore&quot;:50,&quot;fromAfter&quot;:50,&quot;toAfter&quot;:100},&quot;commitResponseKeys&quot;:[&quot;results&quot;,&quot;committedAt&quot;]}
+{&quot;fromBalance&quot;:50,&quot;toBalance&quot;:100,&quot;version&quot;:2}
+{&quot;scenario&quot;:&quot;forced write/write conflict&quot;,&quot;status&quot;:409,&quot;code&quot;:&quot;ABORTED_CONFLICT&quot;}
+{&quot;scenario&quot;:&quot;stale-version precondition&quot;,&quot;code&quot;:&quot;FAILED_PRECONDITION&quot;,&quot;status&quot;:412}</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="تم تشغيل المصدر على الـ API الحي">✓ مصدر مُتحقَّق منه</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * OCC transactions (REST) — transfer funds between two accounts atomically.
+ *
+ * What you'll build: a balance transfer staged inside /transactions:begin and
+ * committed with /transactions:commit, plus a forced write/write conflict and a
+ * stale-version precondition.
+ * Real-world scenario: a payments service debits one account and credits
+ * another in one transaction; a competing write before commit aborts it.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;transactions&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> fromPath = <span class="hl-string">`${col}/account-a`</span>;
+<span class="hl-keyword">const</span> toPath = <span class="hl-string">`${col}/account-b`</span>;
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== OCC Transactions ===&quot;</span>);
+  <span class="hl-fn">check</span>((<span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${fromPath}`</span>, { data: { owner: <span class="hl-string">&quot;ada&quot;</span>, balance: <span class="hl-number">100</span> } }))<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">&quot;seed sender&quot;</span>);
+  <span class="hl-fn">check</span>((<span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${toPath}`</span>, { data: { owner: <span class="hl-string">&quot;ben&quot;</span>, balance: <span class="hl-number">50</span> } }))<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">&quot;seed receiver&quot;</span>);
+
+  <span class="hl-comment">// --- Happy path: read both balances, stage two writes, commit together. ----</span>
+  <span class="hl-keyword">const</span> begin = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/transactions:begin&quot;</span>, {});
+  <span class="hl-keyword">const</span> token = begin<span class="hl-property">.body</span><span class="hl-property">.transactionToken</span>;
+  <span class="hl-fn">check</span>(<span class="hl-fn">Boolean</span>(token), <span class="hl-string">&quot;transaction token issued&quot;</span>);
+  <span class="hl-keyword">const</span> <span class="hl-keyword">from</span> = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${fromPath}?transactionToken=${encodeURIComponent(token)}`</span>);
+  <span class="hl-keyword">const</span> to = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${toPath}?transactionToken=${encodeURIComponent(token)}`</span>);
+  <span class="hl-keyword">const</span> fromBefore = <span class="hl-keyword">from</span><span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.balance</span>;
+  <span class="hl-keyword">const</span> toBefore = to<span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.balance</span>;
+  <span class="hl-keyword">const</span> amount = <span class="hl-number">50</span>;
+  <span class="hl-keyword">const</span> transfer = { amount, fromBefore, toBefore, fromAfter: fromBefore - amount, toAfter: toBefore + amount };
+  <span class="hl-keyword">const</span> commit = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/transactions:commit&quot;</span>, {
+    transactionToken: token,
+    writes: [
+      { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;update&quot;</span>, path: fromPath, data: { balance: transfer<span class="hl-property">.fromAfter</span> } },
+      { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;update&quot;</span>, path: toPath, data: { balance: transfer<span class="hl-property">.toAfter</span> } },
+    ],
+  });
+  <span class="hl-fn">check</span>(commit<span class="hl-property">.ok</span>, <span class="hl-string">&quot;transaction committed&quot;</span>);
+  h<span class="hl-property">.log</span>({ commit: <span class="hl-string">&quot;ok&quot;</span>, transfer, commitResponseKeys: <span class="hl-type">Object</span><span class="hl-property">.keys</span>(commit<span class="hl-property">.body</span>) });
+
+  <span class="hl-keyword">const</span> fromFinal = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${fromPath}`</span>);
+  <span class="hl-keyword">const</span> toFinal = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${toPath}`</span>);
+  <span class="hl-fn">check</span>(fromFinal<span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.balance</span> === <span class="hl-number">50</span>, <span class="hl-string">&quot;sender debited&quot;</span>);
+  <span class="hl-fn">check</span>(toFinal<span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.balance</span> === <span class="hl-number">100</span>, <span class="hl-string">&quot;receiver credited&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    fromBalance: fromFinal<span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.balance</span>,
+    toBalance: toFinal<span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.balance</span>,
+    version: fromFinal<span class="hl-property">.body</span><span class="hl-property">.version</span>,
+  });
+
+  <span class="hl-comment">// --- Forced conflict: mutate a read doc before commit. --------------------</span>
+  <span class="hl-keyword">const</span> begin2 = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/transactions:begin&quot;</span>, {});
+  <span class="hl-keyword">const</span> token2 = begin2<span class="hl-property">.body</span><span class="hl-property">.transactionToken</span>;
+  <span class="hl-keyword">const</span> held = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${fromPath}?transactionToken=${encodeURIComponent(token2)}`</span>);
+  <span class="hl-keyword">const</span> heldVersion = held<span class="hl-property">.body</span><span class="hl-property">.version</span>;
+  <span class="hl-keyword">const</span> outside = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;PATCH&quot;</span>, <span class="hl-string">`/documents/${fromPath}`</span>, { data: { balance: <span class="hl-number">51</span> } });
+  <span class="hl-fn">check</span>(outside<span class="hl-property">.ok</span>, <span class="hl-string">&quot;outside write applied&quot;</span>);
+  <span class="hl-keyword">const</span> conflict = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/transactions:commit&quot;</span>, {
+    transactionToken: token2,
+    writes: [{ <span class="hl-keyword">type</span>: <span class="hl-string">&quot;update&quot;</span>, path: fromPath, data: { balance: <span class="hl-number">200</span> }, ifVersion: heldVersion }],
+  });
+  <span class="hl-fn">check</span>(conflict<span class="hl-property">.status</span> === <span class="hl-number">409</span>, <span class="hl-string">&quot;forced conflict returns HTTP 409&quot;</span>);
+  <span class="hl-fn">check</span>(conflict<span class="hl-property">.body</span>?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> === <span class="hl-string">&quot;ABORTED_CONFLICT&quot;</span>, <span class="hl-string">&quot;conflict code is ABORTED_CONFLICT&quot;</span>);
+  h<span class="hl-property">.log</span>({ scenario: <span class="hl-string">&quot;forced write/write conflict&quot;</span>, status: conflict<span class="hl-property">.status</span>, code: conflict<span class="hl-property">.body</span><span class="hl-property">.error</span><span class="hl-property">.code</span> });
+
+  <span class="hl-comment">// --- Stale-version precondition on an ordinary PATCH. ---------------------</span>
+  <span class="hl-keyword">const</span> stale = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;PATCH&quot;</span>, <span class="hl-string">`/documents/${fromPath}`</span>, { data: { balance: <span class="hl-number">300</span> }, ifVersion: <span class="hl-number">1</span> });
+  <span class="hl-fn">check</span>(stale<span class="hl-property">.status</span> === <span class="hl-number">412</span> &amp;&amp; stale<span class="hl-property">.body</span>?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> === <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>, <span class="hl-string">&quot;stale patch rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ scenario: <span class="hl-string">&quot;stale-version precondition&quot;</span>, code: stale<span class="hl-property">.body</span><span class="hl-property">.error</span><span class="hl-property">.code</span>, status: stale<span class="hl-property">.status</span> });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">النتيجة · مُلتقطة من تشغيل فعلي</span><button class="cb-copy" type="button">نسخ</button></div>
+       <pre class="cb-out"><code class="hl-text">=== OCC Transactions ===
+{&quot;commit&quot;:&quot;ok&quot;,&quot;transfer&quot;:{&quot;amount&quot;:50,&quot;fromBefore&quot;:100,&quot;toBefore&quot;:50,&quot;fromAfter&quot;:50,&quot;toAfter&quot;:100},&quot;commitResponseKeys&quot;:[&quot;results&quot;,&quot;committedAt&quot;]}
+{&quot;fromBalance&quot;:50,&quot;toBalance&quot;:100,&quot;version&quot;:2}
+{&quot;scenario&quot;:&quot;forced write/write conflict&quot;,&quot;status&quot;:409,&quot;code&quot;:&quot;ABORTED_CONFLICT&quot;}
+{&quot;scenario&quot;:&quot;stale-version precondition&quot;,&quot;code&quot;:&quot;FAILED_PRECONDITION&quot;,&quot;status&quot;:412}</code></pre>
+</div></div></div>
+</div>
+<h2 id="ماذا-تقرأ-بعد-ذلك">ماذا تقرأ بعد ذلك<a class="anchor" href="#ماذا-تقرأ-بعد-ذلك" aria-label="Link to section">#</a></h2>
+<ul><li><a href="field-transforms.html">تحويلات الحقول</a> — عمليات لكل حقل ذرية قابلة للاستخدام في الآليتين.</li><li><a href="realtime.html">الوقت الفعلي</a> — كيف تظهر الكتابات المجمّعة للمشتركين.</li><li><a href="errors-and-limits.html">الأخطاء والحدود</a> — الجداول الكاملة لرموز الأخطاء والحصص.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · التصميم الافتراضي الرسمي لـ shadcn/ui</span><span>مولَّد من docs/guides — لا تعدّل HTML مباشرة.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">في هذه الصفحة</div><a href="#السيناريو" class="toc-link toc-l2">السيناريو</a><a href="#batchwrite" class="toc-link toc-l2">batchWrite</a><a href="#runtransaction-occ" class="toc-link toc-l2">runTransaction (OCC)</a><a href="#إعادة-المحاولة-والتعارضات" class="toc-link toc-l3">إعادة المحاولة والتعارضات</a><a href="#المهلة" class="toc-link toc-l3">المهلة</a><a href="#الاختيار-بينهما" class="toc-link toc-l2">الاختيار بينهما</a><a href="#الأخطاء-الشائعة" class="toc-link toc-l2">الأخطاء الشائعة</a><a href="#أمثلة-موثّقة" class="toc-link toc-l2">أمثلة موثّقة</a><a href="#ماذا-تقرأ-بعد-ذلك" class="toc-link toc-l2">ماذا تقرأ بعد ذلك</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="ابحث في الأدلة والواجهات والأمثلة…" autocomplete="off"><button id="searchClose" type="button">إغلاق</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="../assets/docs.js" defer></script>
+</body>
+</html>

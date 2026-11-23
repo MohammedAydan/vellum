@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Query · VELLUM Docs</title>
+<meta name="description" content="All 13 filter operators, disjunctive or() groups, eager include() relations, dot-path select() projections, server-side aggregate(), and index advisor hooks.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/query.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Core concepts <span>/</span> <strong>Query</strong></div>
+    <article class="article"><h1 id="query">Query<a class="anchor" href="#query" aria-label="Link to section">#</a></h1>
+<p>VELLUM compiles declarative queries into parameterized PostgreSQL queries over <code class="inline-code">JSONB</code> with composite index validation and automatic index-advisor feedback. Both <code class="inline-code">@vellum/sdk-js</code> and <code class="inline-code">vellum_flutter</code> expose an immutable, chainable query builder.</p>
+<hr>
+<h2 id="all-13-filter-operators">All 13 Filter Operators<a class="anchor" href="#all-13-filter-operators" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Category</th><th>Operators</th><th>Notes</th></tr></thead><tbody><tr><td>Equality &amp; Comparison</td><td><code class="inline-code">==</code>, <code class="inline-code">!=</code>, <code class="inline-code">&lt;</code>, <code class="inline-code">&lt;=</code>, <code class="inline-code">&gt;</code>, <code class="inline-code">&gt;=</code></td><td>Type-preserving comparison on scalar fields.</td></tr><tr><td>Membership</td><td><code class="inline-code">in</code>, <code class="inline-code">not-in</code></td><td>Accepts up to 30 values per clause.</td></tr><tr><td>Array Membership</td><td><code class="inline-code">array-contains</code>, <code class="inline-code">array-contains-any</code></td><td>Matches array elements (<code class="inline-code">array-contains-any</code> up to 30 values).</td></tr><tr><td>V2 Text &amp; Full-Text</td><td><code class="inline-code">contains_ci</code>, <code class="inline-code">starts_with_ci</code>, <code class="inline-code">text_search</code></td><td>Case-insensitive substring/prefix match and full-text search.</td></tr></tbody></table></div>
+<hr>
+<h2 id="filters-disjunctive-or-include-select">Filters, Disjunctive <code class="inline-code">or()</code>, <code class="inline-code">include()</code> &amp; <code class="inline-code">select()</code><a class="anchor" href="#filters-disjunctive-or-include-select" aria-label="Link to section">#</a></h2>
+<h3 id="typescript-vellum-sdk-js">TypeScript (<code class="inline-code">@vellum/sdk-js</code>)<a class="anchor" href="#typescript-vellum-sdk-js" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">const</span> snapshot = <span class="hl-keyword">await</span> db
+  <span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)
+  <span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;in&quot;</span>, [<span class="hl-string">&quot;paid&quot;</span>, <span class="hl-string">&quot;shipped&quot;</span>])
+  <span class="hl-property">.where</span>(<span class="hl-string">&quot;notes&quot;</span>, <span class="hl-string">&quot;contains_ci&quot;</span>, <span class="hl-string">&quot;priority&quot;</span>)
+  <span class="hl-property">.or</span>([
+    [{ field: <span class="hl-string">&quot;tier&quot;</span>, op: <span class="hl-string">&quot;==&quot;</span>, value: <span class="hl-string">&quot;enterprise&quot;</span> }],
+    [{ field: <span class="hl-string">&quot;totalCents&quot;</span>, op: <span class="hl-string">&quot;&gt;=&quot;</span>, value: 50_000 }],
+  ])
+  <span class="hl-property">.include</span>([
+    <span class="hl-string">&quot;customerId&quot;</span>,
+    {
+      field: <span class="hl-string">&quot;assigneeId&quot;</span>,
+      collection: <span class="hl-string">&quot;users&quot;</span>,
+      <span class="hl-keyword">as</span>: <span class="hl-string">&quot;assignee&quot;</span>,
+      select: [<span class="hl-string">&quot;name&quot;</span>, <span class="hl-string">&quot;email&quot;</span>],
+    },
+  ])
+  <span class="hl-property">.select</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;totalCents&quot;</span>, <span class="hl-string">&quot;customerId&quot;</span>, <span class="hl-string">&quot;shipping.country&quot;</span>)
+  <span class="hl-property">.orderBy</span>(<span class="hl-string">&quot;createdAt&quot;</span>, <span class="hl-string">&quot;desc&quot;</span>)
+  <span class="hl-property">.limit</span>(<span class="hl-number">25</span>)
+  <span class="hl-property">.get</span>();
+
+<span class="hl-keyword">for</span> (<span class="hl-keyword">const</span> doc <span class="hl-keyword">of</span> snapshot<span class="hl-property">.docs</span>) {
+  console<span class="hl-property">.log</span>(doc<span class="hl-property">.id</span>, doc<span class="hl-property">.data</span>(), doc<span class="hl-property">.included</span>, doc<span class="hl-property">.redactedRefs</span>);
+}</code></pre>
+</div>
+<h3 id="flutter-dart-vellum-flutter">Flutter / Dart (<code class="inline-code">vellum_flutter</code>)<a class="anchor" href="#flutter-dart-vellum-flutter" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">final</span> snapshot = <span class="hl-keyword">await</span> client
+    <span class="hl-property">.collection</span>(<span class="hl-string">'orders'</span>)
+    <span class="hl-property">.where</span>(<span class="hl-string">'status'</span>, <span class="hl-string">'in'</span>, [<span class="hl-string">'paid'</span>, <span class="hl-string">'shipped'</span>])
+    <span class="hl-property">.where</span>(<span class="hl-string">'notes'</span>, <span class="hl-string">'contains_ci'</span>, <span class="hl-string">'priority'</span>)
+    <span class="hl-property">.or</span>([
+      [
+        {<span class="hl-string">'field'</span>: <span class="hl-string">'tier'</span>, <span class="hl-string">'op'</span>: <span class="hl-string">'=='</span>, <span class="hl-string">'value'</span>: <span class="hl-string">'enterprise'</span>},
+      ],
+      [
+        {<span class="hl-string">'field'</span>: <span class="hl-string">'totalCents'</span>, <span class="hl-string">'op'</span>: <span class="hl-string">'&gt;='</span>, <span class="hl-string">'value'</span>: <span class="hl-number">50000</span>},
+      ],
+    ])
+    <span class="hl-property">.include</span>([
+      <span class="hl-string">'customerId'</span>,
+      <span class="hl-keyword">const</span> <span class="hl-fn">VellumInclude</span>(
+        field: <span class="hl-string">'assigneeId'</span>,
+        collection: <span class="hl-string">'users'</span>,
+        <span class="hl-keyword">as</span>: <span class="hl-string">'assignee'</span>,
+        select: [<span class="hl-string">'name'</span>, <span class="hl-string">'email'</span>],
+      ),
+    ])
+    <span class="hl-property">.select</span>([<span class="hl-string">'status'</span>, <span class="hl-string">'totalCents'</span>, <span class="hl-string">'customerId'</span>, <span class="hl-string">'shipping.country'</span>])
+    <span class="hl-property">.orderBy</span>(<span class="hl-string">'createdAt'</span>, dir: <span class="hl-string">'desc'</span>)
+    <span class="hl-property">.limit</span>(<span class="hl-number">25</span>)
+    <span class="hl-property">.get</span>();
+
+<span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> doc <span class="hl-keyword">in</span> snapshot<span class="hl-property">.docs</span>) {
+  <span class="hl-fn">print</span>(<span class="hl-string">'${doc.id}: ${doc.data()} included=${doc.included}'</span>);
+}</code></pre>
+</div>
+<ul><li><strong>Disjunctive <code class="inline-code">or()</code></strong>: Clauses inside each inner array are <code class="inline-code">AND</code>ed together; outer groups are <code class="inline-code">OR</code>ed.</li><li><strong>Eager <code class="inline-code">include()</code></strong>: Pass a bare field name (<code class="inline-code">&quot;customerId&quot;</code>) or an explicit <code class="inline-code">IncludeSpecInput</code> / <code class="inline-code">VellumInclude</code> with <code class="inline-code">collection</code>, <code class="inline-code">as</code>, <code class="inline-code">select</code>, and nested <code class="inline-code">include</code>. Any relation denied by Security Rules appears in <code class="inline-code">doc.redactedRefs</code> rather than failing the parent query.</li></ul>
+<hr>
+<h2 id="server-side-aggregations-aggregate">Server-Side Aggregations (<code class="inline-code">aggregate()</code>)<a class="anchor" href="#server-side-aggregations-aggregate" aria-label="Link to section">#</a></h2>
+<p>Run <code class="inline-code">count</code>, <code class="inline-code">sum</code>, <code class="inline-code">avg</code>, <code class="inline-code">min</code>, and <code class="inline-code">max</code> directly in PostgreSQL without transferring raw documents over the wire.</p>
+<h3 id="typescript-vellum-sdk-js">TypeScript (<code class="inline-code">@vellum/sdk-js</code>)<a class="anchor" href="#typescript-vellum-sdk-js" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// Scalar shortcuts</span>
+<span class="hl-keyword">const</span> openCount = <span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)<span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;open&quot;</span>)<span class="hl-property">.count</span>();
+<span class="hl-keyword">const</span> totalRevenue = <span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)<span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;paid&quot;</span>)<span class="hl-property">.sum</span>(<span class="hl-string">&quot;totalCents&quot;</span>);
+<span class="hl-keyword">const</span> avgTicket = <span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)<span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;paid&quot;</span>)<span class="hl-property">.avg</span>(<span class="hl-string">&quot;totalCents&quot;</span>);
+<span class="hl-keyword">const</span> minTicket = <span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)<span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;paid&quot;</span>)<span class="hl-property">.min</span>(<span class="hl-string">&quot;totalCents&quot;</span>);
+<span class="hl-keyword">const</span> maxTicket = <span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)<span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;paid&quot;</span>)<span class="hl-property">.max</span>(<span class="hl-string">&quot;totalCents&quot;</span>);
+
+<span class="hl-comment">// Grouped aggregation (returns AggregateRow[])</span>
+<span class="hl-keyword">const</span> byCurrency = <span class="hl-keyword">await</span> db
+  <span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)
+  <span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;paid&quot;</span>)
+  <span class="hl-property">.aggregate</span>({
+    groupBy: [<span class="hl-string">&quot;currency&quot;</span>],
+    metrics: {
+      orders: { op: <span class="hl-string">&quot;count&quot;</span> },
+      grossCents: { op: <span class="hl-string">&quot;sum&quot;</span>, field: <span class="hl-string">&quot;totalCents&quot;</span> },
+      avgCents: { op: <span class="hl-string">&quot;avg&quot;</span>, field: <span class="hl-string">&quot;totalCents&quot;</span> },
+    },
+  });</code></pre>
+</div>
+<h3 id="flutter-dart-vellum-flutter">Flutter / Dart (<code class="inline-code">vellum_flutter</code>)<a class="anchor" href="#flutter-dart-vellum-flutter" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">final</span> openCount = <span class="hl-keyword">await</span> client<span class="hl-property">.collection</span>(<span class="hl-string">'orders'</span>)<span class="hl-property">.where</span>(<span class="hl-string">'status'</span>, <span class="hl-string">'=='</span>, <span class="hl-string">'open'</span>)<span class="hl-property">.count</span>();
+<span class="hl-keyword">final</span> totalRevenue = <span class="hl-keyword">await</span> client<span class="hl-property">.collection</span>(<span class="hl-string">'orders'</span>)<span class="hl-property">.where</span>(<span class="hl-string">'status'</span>, <span class="hl-string">'=='</span>, <span class="hl-string">'paid'</span>)<span class="hl-property">.sum</span>(<span class="hl-string">'totalCents'</span>);
+<span class="hl-keyword">final</span> avgTicket = <span class="hl-keyword">await</span> client<span class="hl-property">.collection</span>(<span class="hl-string">'orders'</span>)<span class="hl-property">.where</span>(<span class="hl-string">'status'</span>, <span class="hl-string">'=='</span>, <span class="hl-string">'paid'</span>)<span class="hl-property">.avg</span>(<span class="hl-string">'totalCents'</span>);
+
+<span class="hl-keyword">final</span> grouped = <span class="hl-keyword">await</span> client<span class="hl-property">.collection</span>(<span class="hl-string">'orders'</span>)<span class="hl-property">.where</span>(<span class="hl-string">'status'</span>, <span class="hl-string">'=='</span>, <span class="hl-string">'paid'</span>)<span class="hl-property">.aggregate</span>(
+  groupBy: [<span class="hl-string">'currency'</span>],
+  metrics: {
+    <span class="hl-string">'orders'</span>: <span class="hl-keyword">const</span> <span class="hl-type">AggregateMetric</span><span class="hl-property">.count</span>(),
+    <span class="hl-string">'grossCents'</span>: <span class="hl-keyword">const</span> <span class="hl-type">AggregateMetric</span><span class="hl-property">.sum</span>(<span class="hl-string">'totalCents'</span>),
+    <span class="hl-string">'minCents'</span>: <span class="hl-keyword">const</span> <span class="hl-type">AggregateMetric</span><span class="hl-property">.min</span>(<span class="hl-string">'totalCents'</span>),
+    <span class="hl-string">'maxCents'</span>: <span class="hl-keyword">const</span> <span class="hl-type">AggregateMetric</span><span class="hl-property">.max</span>(<span class="hl-string">'totalCents'</span>),
+  },
+);</code></pre>
+</div>
+<hr>
+<h2 id="filtered-bulk-delete-deletewhere">Filtered Bulk Delete (<code class="inline-code">deleteWhere()</code>)<a class="anchor" href="#filtered-bulk-delete-deletewhere" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// TypeScript</span>
+<span class="hl-keyword">const</span> { deletedCount } = <span class="hl-keyword">await</span> db
+  <span class="hl-property">.collection</span>(<span class="hl-string">&quot;sessions&quot;</span>)
+  <span class="hl-property">.where</span>(<span class="hl-string">&quot;expired&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-keyword">true</span>)
+  <span class="hl-property">.deleteWhere</span>({ limit: <span class="hl-number">500</span> });</code></pre>
+</div>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// Dart</span>
+<span class="hl-keyword">final</span> deletedCount = <span class="hl-keyword">await</span> client
+    <span class="hl-property">.collection</span>(<span class="hl-string">'sessions'</span>)
+    <span class="hl-property">.where</span>(<span class="hl-string">'expired'</span>, <span class="hl-string">'=='</span>, <span class="hl-keyword">true</span>)
+    <span class="hl-property">.deleteWhere</span>(limit: <span class="hl-number">500</span>);</code></pre>
+</div>
+<hr>
+<h2 id="automatic-index-advisor">Automatic Index Advisor<a class="anchor" href="#automatic-index-advisor" aria-label="Link to section">#</a></h2>
+<p>When the server detects a slow or unindexed query, it returns <code class="inline-code">x-vellum-index-url</code> and <code class="inline-code">x-vellum-index-suggestion</code> headers. Both SDKs deduplicate warnings by fingerprint, print a one-click creation link in development (<code class="inline-code">warnOnMissingIndexes: true</code>), and expose an <code class="inline-code">onIndexSuggestion</code> callback for structured telemetry.</p></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#all-13-filter-operators" class="toc-link toc-l2">All 13 Filter Operators</a><a href="#filters-disjunctive-or-include-select" class="toc-link toc-l2">Filters, Disjunctive `or()`, `include()` &amp; `select()`</a><a href="#typescript-vellum-sdk-js" class="toc-link toc-l3">TypeScript (`@vellum/sdk-js`)</a><a href="#flutter-dart-vellum-flutter" class="toc-link toc-l3">Flutter / Dart (`vellum_flutter`)</a><a href="#server-side-aggregations-aggregate" class="toc-link toc-l2">Server-Side Aggregations (`aggregate()`)</a><a href="#typescript-vellum-sdk-js" class="toc-link toc-l3">TypeScript (`@vellum/sdk-js`)</a><a href="#flutter-dart-vellum-flutter" class="toc-link toc-l3">Flutter / Dart (`vellum_flutter`)</a><a href="#filtered-bulk-delete-deletewhere" class="toc-link toc-l2">Filtered Bulk Delete (`deleteWhere()`)</a><a href="#automatic-index-advisor" class="toc-link toc-l2">Automatic Index Advisor</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

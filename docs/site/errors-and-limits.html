@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Errors &amp; Limits · VELLUM Docs</title>
+<meta name="description" content="Canonical error codes with HTTP statuses, and the locked v1 quotas enforced by @vellum/core.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/errors-and-limits.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Reference <span>/</span> <strong>Errors &amp; Limits</strong></div>
+    <article class="article"><h1 id="errors-limits">Errors &amp; Limits<a class="anchor" href="#errors-limits" aria-label="Link to section">#</a></h1>
+<p>All failures use one canonical envelope and one set of error codes, defined in <code class="inline-code">@vellum/core</code> (<code class="inline-code">SYSTEM_LIMITS</code> and <code class="inline-code">VellumError</code>). Every HTTP response also carries an <code class="inline-code">X-Request-Id</code> header.</p>
+<h2 id="scenario">Scenario<a class="anchor" href="#scenario" aria-label="Link to section">#</a></h2>
+<p>You are wiring up client-side error handling and want retries only for transient failures: a version conflict should re-read and retry, a rate limit should back off using <code class="inline-code">Retry-After</code>, while a permissions error should surface to the user. You branch on the canonical <code class="inline-code">code</code> from the error envelope.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> { <span class="hl-type">VellumError</span> } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/core&quot;</span>;
+
+<span class="hl-keyword">try</span> {
+  <span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;users&quot;</span>)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;u_123&quot;</span>)<span class="hl-property">.update</span>({ name: <span class="hl-string">&quot;Ada&quot;</span> }, { ifVersion: <span class="hl-number">4</span> });
+} <span class="hl-keyword">catch</span> (err) {
+  <span class="hl-keyword">const</span> e = err <span class="hl-keyword">as</span> { code?: string; status?: number; details?: <span class="hl-type">Record</span>&lt;string, unknown&gt; };
+  <span class="hl-keyword">switch</span> (e<span class="hl-property">.code</span>) {
+    <span class="hl-keyword">case</span> <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>: <span class="hl-comment">// re-read and retry with the current version</span>
+      <span class="hl-keyword">break</span>;
+    <span class="hl-keyword">case</span> <span class="hl-string">&quot;ABORTED_CONFLICT&quot;</span>: <span class="hl-comment">// retry the whole transaction</span>
+      <span class="hl-keyword">break</span>;
+    <span class="hl-keyword">case</span> <span class="hl-string">&quot;PERMISSION_DENIED&quot;</span>: <span class="hl-comment">// check scopes or rules</span>
+      <span class="hl-keyword">break</span>;
+    <span class="hl-keyword">default</span>:
+      <span class="hl-keyword">throw</span> err;
+  }
+}</code></pre>
+</div>
+<h2 id="error-envelope">Error envelope<a class="anchor" href="#error-envelope" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">JSON</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">{
+  <span class="hl-string">&quot;error&quot;</span>: {
+    <span class="hl-string">&quot;code&quot;</span>: <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>,
+    <span class="hl-string">&quot;message&quot;</span>: <span class="hl-string">&quot;Version precondition failed on 'users/u_123' (expected 4, actual 5)&quot;</span>,
+    <span class="hl-string">&quot;requestId&quot;</span>: <span class="hl-string">&quot;req_01JCK9X2P8...&quot;</span>,
+    <span class="hl-string">&quot;details&quot;</span>: {
+      <span class="hl-string">&quot;path&quot;</span>: <span class="hl-string">&quot;users/u_123&quot;</span>,
+      <span class="hl-string">&quot;expectedVersion&quot;</span>: <span class="hl-number">4</span>,
+      <span class="hl-string">&quot;actualVersion&quot;</span>: <span class="hl-number">5</span>
+    }
+  }
+}</code></pre>
+</div>
+<p>In the SDK, failed requests throw an <code class="inline-code">Error</code> with <code class="inline-code">code</code>, <code class="inline-code">status</code>, <code class="inline-code">details</code>, and <code class="inline-code">requestId</code> copied from the envelope. The <code class="inline-code">details</code> object is typed as a record and its keys vary by code; do not rely on a fixed shape.</p>
+<h2 id="canonical-error-codes">Canonical error codes<a class="anchor" href="#canonical-error-codes" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Code</th><th>HTTP</th><th>Typical cause</th></tr></thead><tbody><tr><td><code class="inline-code">INVALID_ARGUMENT</code></td><td>400</td><td>Malformed request, disallowed sentinel, bad config value.</td></tr><tr><td><code class="inline-code">INVALID_DOCUMENT_PATH</code></td><td>400</td><td>Bad path depth, over-long or reserved segment.</td></tr><tr><td><code class="inline-code">INVALID_FIELD_NAME</code></td><td>400</td><td>Empty, over-long, control-character, or prototype-pollution field name.</td></tr><tr><td><code class="inline-code">MAX_NESTING_EXCEEDED</code></td><td>400</td><td>Document nesting deeper than 20 levels.</td></tr><tr><td><code class="inline-code">BATCH_SIZE_EXCEEDED</code></td><td>400</td><td>More than 100 batch operations.</td></tr><tr><td><code class="inline-code">INVALID_CURSOR</code></td><td>400</td><td>Tampered, malformed, or wrong-shape pagination cursor.</td></tr><tr><td><code class="inline-code">QUERY_TOO_COMPLEX</code></td><td>400</td><td>Too many filters/order fields, or rules AST over depth/node bounds.</td></tr><tr><td><code class="inline-code">LIMIT_EXCEEDED</code></td><td>400</td><td>Query <code class="inline-code">limit</code> above 500.</td></tr><tr><td><code class="inline-code">SUBSCRIPTION_LIMIT_EXCEEDED</code></td><td>400</td><td>More than 50 WebSocket subscriptions on one connection.</td></tr><tr><td><code class="inline-code">UNAUTHENTICATED</code></td><td>401</td><td>Missing, malformed, invalid, expired, or revoked API key / token.</td></tr><tr><td><code class="inline-code">PERMISSION_DENIED</code></td><td>403</td><td>Missing server-key scope, or security rules denied the operation.</td></tr><tr><td><code class="inline-code">NOT_FOUND</code></td><td>404</td><td>Reading or deleting a document that does not exist.</td></tr><tr><td><code class="inline-code">TRANSACTION_TIMEOUT</code></td><td>408</td><td>Transaction exceeded 5 seconds.</td></tr><tr><td><code class="inline-code">ALREADY_EXISTS</code></td><td>409</td><td><code class="inline-code">create</code> on an occupied path, or duplicate composite index.</td></tr><tr><td><code class="inline-code">ABORTED_CONFLICT</code></td><td>409</td><td>OCC read-set version changed before commit.</td></tr><tr><td><code class="inline-code">FAILED_PRECONDITION</code></td><td>412</td><td><code class="inline-code">ifVersion</code> / <code class="inline-code">exists</code> mismatch, invalid increment target, or missing required index.</td></tr><tr><td><code class="inline-code">DOCUMENT_TOO_LARGE</code></td><td>413</td><td>Serialized document exceeds 1 MiB.</td></tr><tr><td><code class="inline-code">PAYLOAD_TOO_LARGE</code></td><td>413</td><td>Batch payload exceeds 5 MiB.</td></tr><tr><td><code class="inline-code">RESPONSE_TOO_LARGE</code></td><td>413</td><td>Query response exceeds 4 MiB.</td></tr><tr><td><code class="inline-code">RATE_LIMITED</code></td><td>429</td><td>Per-key RPS limit exceeded; <code class="inline-code">Retry-After</code> header is set.</td></tr><tr><td><code class="inline-code">QUOTA_EXCEEDED</code></td><td>429</td><td>Plan quota exceeded.</td></tr><tr><td><code class="inline-code">SLOW_CONSUMER_DISCONNECT</code></td><td>429</td><td>WebSocket outbound buffer exceeded 1 MiB.</td></tr><tr><td><code class="inline-code">INTERNAL_ERROR</code></td><td>500</td><td>Unexpected server failure.</td></tr><tr><td><code class="inline-code">SERVICE_UNAVAILABLE</code></td><td>503</td><td>Dependency or plane unavailable.</td></tr><tr><td><code class="inline-code">QUERY_DEADLINE_EXCEEDED</code></td><td>504</td><td>Query exceeded its 5-second execution budget.</td></tr></tbody></table></div>
+<div class="admonition admonition-note"><div class="admonition-label">NOTE</div><p><code class="inline-code">ABORTED</code> and a few other  appear in the api-contract enum, but the runtime error hierarchy above is the authoritative set. Client code should branch on the codes in this table.</p></div>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// Rate limits carry a Retry-After hint; back off before retrying.</span>
+<span class="hl-keyword">if</span> (e<span class="hl-property">.code</span> === <span class="hl-string">&quot;RATE_LIMITED&quot;</span>) {
+  <span class="hl-keyword">const</span> retryAfterMs = <span class="hl-fn">Number</span>((e<span class="hl-property">.details</span> <span class="hl-keyword">as</span> <span class="hl-type">Record</span>&lt;string, unknown&gt;)?<span class="hl-property">.retryAfterMs</span> ?? <span class="hl-number">1000</span>);
+  <span class="hl-keyword">await</span> <span class="hl-keyword">new</span> <span class="hl-fn">Promise</span>((r) =&gt; <span class="hl-fn">setTimeout</span>(r, retryAfterMs));
+}</code></pre>
+</div>
+<h2 id="locked-v1-quotas">Locked v1 quotas<a class="anchor" href="#locked-v1-quotas" aria-label="Link to section">#</a></h2>
+<p>These constants come from <code class="inline-code">@vellum/coreSYSTEM_LIMITS</code> and are enforced at the engine boundaries.</p>
+<div class="table-wrap"><table><thead><tr><th>Limit</th><th>Value</th><th>Exceeded error</th></tr></thead><tbody><tr><td><code class="inline-code">MAX_DOCUMENT_BYTES</code></td><td>1,048,576 (1 MiB)</td><td><code class="inline-code">DOCUMENT_TOO_LARGE</code> (413)</td></tr><tr><td><code class="inline-code">MAX_PATH_DEPTH</code></td><td>10 segments (5 nested collections)</td><td><code class="inline-code">INVALID_DOCUMENT_PATH</code> (400)</td></tr><tr><td><code class="inline-code">MAX_PATH_SEGMENT_BYTES</code></td><td>1,500 bytes</td><td><code class="inline-code">INVALID_DOCUMENT_PATH</code> (400)</td></tr><tr><td><code class="inline-code">MAX_OBJECT_NESTING_DEPTH</code></td><td>20 levels</td><td><code class="inline-code">MAX_NESTING_EXCEEDED</code> (400)</td></tr><tr><td><code class="inline-code">MAX_FIELD_NAME_LENGTH</code></td><td>256 characters</td><td><code class="inline-code">INVALID_FIELD_NAME</code> (400)</td></tr><tr><td><code class="inline-code">MAX_BATCH_OPERATIONS</code></td><td>100 operations</td><td><code class="inline-code">BATCH_SIZE_EXCEEDED</code> (400)</td></tr><tr><td><code class="inline-code">MAX_BATCH_PAYLOAD_BYTES</code></td><td>5,242,880 (5 MiB)</td><td><code class="inline-code">PAYLOAD_TOO_LARGE</code> (413)</td></tr><tr><td><code class="inline-code">MAX_TRANSACTION_DURATION_MS</code></td><td>5,000 ms</td><td><code class="inline-code">TRANSACTION_TIMEOUT</code> (408)</td></tr><tr><td><code class="inline-code">MAX_WHERE_CLAUSES</code></td><td>10 filters</td><td><code class="inline-code">QUERY_TOO_COMPLEX</code> (400)</td></tr><tr><td><code class="inline-code">MAX_DISJUNCTIVE_VALUES</code></td><td>30 elements</td><td><code class="inline-code">QUERY_TOO_COMPLEX</code> (400)</td></tr><tr><td><code class="inline-code">MAX_ORDER_BY_FIELDS</code></td><td>3 fields</td><td><code class="inline-code">QUERY_TOO_COMPLEX</code> (400)</td></tr><tr><td><code class="inline-code">DEFAULT_QUERY_LIMIT</code></td><td>50</td><td>—</td></tr><tr><td><code class="inline-code">MAX_QUERY_LIMIT</code></td><td>500</td><td><code class="inline-code">LIMIT_EXCEEDED</code> (400)</td></tr><tr><td><code class="inline-code">MAX_QUERY_RESPONSE_BYTES</code></td><td>4,194,304 (4 MiB)</td><td><code class="inline-code">RESPONSE_TOO_LARGE</code> (413)</td></tr><tr><td><code class="inline-code">MAX_QUERY_EXECUTION_MS</code></td><td>5,000 ms</td><td><code class="inline-code">QUERY_DEADLINE_EXCEEDED</code> (504)</td></tr><tr><td><code class="inline-code">MAX_WS_SUBSCRIPTIONS_PER_CONN</code></td><td>50</td><td><code class="inline-code">SUBSCRIPTION_LIMIT_EXCEEDED</code> (400)</td></tr><tr><td><code class="inline-code">MAX_WS_OUTBOUND_BUFFER_BYTES</code></td><td>1,048,576 (1 MiB)</td><td><code class="inline-code">SLOW_CONSUMER_DISCONNECT</code> (429)</td></tr><tr><td><code class="inline-code">RULES_AST_MAX_DEPTH</code></td><td>10</td><td><code class="inline-code">QUERY_TOO_COMPLEX</code> (400)</td></tr><tr><td><code class="inline-code">RULES_AST_MAX_NODES</code></td><td>100 per rule</td><td><code class="inline-code">QUERY_TOO_COMPLEX</code> (400)</td></tr><tr><td>Composite indexes per free / pro plan</td><td>50 / 200</td><td><code class="inline-code">QUOTA_EXCEEDED</code> (429)</td></tr><tr><td>Tombstone retention</td><td>7 days (default)</td><td>—</td></tr><tr><td>Outbox retention</td><td>24 hours</td><td>—</td></tr></tbody></table></div>
+<h2 id="handling-errors">Handling errors<a class="anchor" href="#handling-errors" aria-label="Link to section">#</a></h2>
+<p>The example at the top of this guide shows branching on <code class="inline-code">e.code</code>. In raw HTTP clients, read the <code class="inline-code">error.code</code> field from the JSON envelope and the <code class="inline-code">X-Request-Id</code> header.</p>
+<div class="admonition admonition-tip"><div class="admonition-label">TIP</div><p>Always include <code class="inline-code">X-Request-Id</code> (or <code class="inline-code">error.requestId</code>) in bug reports. Logs are redacted, so the request id is the safe way to correlate an incident without sharing secrets.</p></div>
+<h2 id="common-pitfalls">Common pitfalls<a class="anchor" href="#common-pitfalls" aria-label="Link to section">#</a></h2>
+<ul><li><strong>Branching on HTTP status alone.</strong> Multiple codes share a status (e.g. 400); branch on the canonical <code class="inline-code">code</code>.</li><li><strong>Retrying every error.</strong> Only transient codes such as <code class="inline-code">ABORTED_CONFLICT</code> and <code class="inline-code">RATE_LIMITED</code> are safe to retry; a permissions error will not fix itself.</li><li><strong>Assuming a fixed <code class="inline-code">details</code> shape.</strong> Its keys vary by code — treat it as a record.</li><li><strong>Ignoring the request id.</strong> Without it, support cannot correlate a redacted incident to your request.</li></ul>
+<h2 id="verified-example">Verified example<a class="anchor" href="#verified-example" aria-label="Link to section">#</a></h2>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">SDK / protocol</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed against the live PostgreSQL API by scripts/run-dart-examples.mjs.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// Errors &amp; limits — probe the canonical VELLUM error codes.</span>
+<span class="hl-comment">// What you'll build: a tour of quota/complexity/size/conflict errors, printing</span>
+<span class="hl-comment">// only stable code + status pairs.</span>
+<span class="hl-comment">// Real-world scenario: clients must handle these boundary failures gracefully.</span>
+<span class="hl-comment">// `VellumException` carries `code` and `statusCode` for every &gt;=400 response.</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix = <span class="hl-string">'ex_flutter_errors_${DateTime.now().microsecondsSinceEpoch}'</span>;
+
+  <span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">probe</span>(<span class="hl-type">String</span> label, <span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">Function</span>() action) <span class="hl-keyword">async</span> {
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> <span class="hl-fn">action</span>();
+      <span class="hl-fn">print</span>(<span class="hl-string">'$label: unexpected success'</span>);
+    } on <span class="hl-type">VellumException</span> <span class="hl-keyword">catch</span> (e) {
+      <span class="hl-fn">print</span>(<span class="hl-string">'$label: code=${e.code} status=${e.statusCode}'</span>);
+    }
+  }
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== Errors &amp; Limits (Flutter) ==='</span>);
+
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(<span class="hl-string">'limit'</span>, () =&gt; client<span class="hl-property">.collection</span>(prefix)<span class="hl-property">.limit</span>(<span class="hl-number">501</span>)<span class="hl-property">.get</span>());
+
+    <span class="hl-type">Query</span>&lt;<span class="hl-type">Map</span>&lt;<span class="hl-type">String</span>, dynamic&gt;&gt; complex = client<span class="hl-property">.collection</span>(prefix);
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">var</span> i = <span class="hl-number">0</span>; i &lt; <span class="hl-number">11</span>; i++) {
+      complex = complex<span class="hl-property">.where</span>(<span class="hl-string">'f$i'</span>, <span class="hl-string">'=='</span>, i);
+    }
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(<span class="hl-string">'whereClauses=11'</span>, () =&gt; complex<span class="hl-property">.get</span>());
+
+    <span class="hl-keyword">final</span> writes = <span class="hl-type">List</span><span class="hl-property">.generate</span>(
+        <span class="hl-number">101</span>,
+        (i) =&gt; {
+              <span class="hl-string">'type'</span>: <span class="hl-string">'create'</span>,
+              <span class="hl-string">'path'</span>: <span class="hl-string">'$prefix/bulk-$i'</span>,
+              <span class="hl-string">'data'</span>: {<span class="hl-string">'i'</span>: i},
+            });
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(<span class="hl-string">'batchOperations=101'</span>,
+        () =&gt; client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/batchWrite'</span>, body: {<span class="hl-string">'writes'</span>: writes}));
+
+    <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/indexes'</span>, body: {
+      <span class="hl-string">'collectionPath'</span>: prefix,
+      <span class="hl-string">'fields'</span>: [
+        {<span class="hl-string">'path'</span>: <span class="hl-string">'onlyField'</span>, <span class="hl-string">'dir'</span>: <span class="hl-string">'asc'</span>},
+      ]
+    });
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(
+        <span class="hl-string">'duplicateIndex'</span>,
+        () =&gt; client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/indexes'</span>, body: {
+              <span class="hl-string">'collectionPath'</span>: prefix,
+              <span class="hl-string">'fields'</span>: [
+                {<span class="hl-string">'path'</span>: <span class="hl-string">'onlyField'</span>, <span class="hl-string">'dir'</span>: <span class="hl-string">'asc'</span>},
+              ],
+            }));
+
+    <span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-string">'$prefix/stale'</span>)<span class="hl-property">.set</span>({<span class="hl-string">'n'</span>: <span class="hl-number">0</span>});
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(<span class="hl-string">'staleVersion'</span>,
+        () =&gt; client<span class="hl-property">.doc</span>(<span class="hl-string">'$prefix/stale'</span>)<span class="hl-property">.update</span>({<span class="hl-string">'n'</span>: <span class="hl-number">2</span>}, ifVersion: <span class="hl-number">0</span>));
+
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(
+        <span class="hl-string">'documentTooLarge'</span>,
+        () =&gt; client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/documents/$prefix/too-large'</span>, body: {
+              <span class="hl-string">'data'</span>: {<span class="hl-string">'blob'</span>: <span class="hl-string">'x'</span> * <span class="hl-number">1048577</span>},
+            }));
+
+    <span class="hl-keyword">await</span> <span class="hl-fn">probe</span>(<span class="hl-string">'notFound'</span>, () =&gt; client<span class="hl-property">.doc</span>(<span class="hl-string">'$prefix/does-not-exist'</span>)<span class="hl-property">.get</span>());
+  } <span class="hl-keyword">finally</span> {
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-string">'$prefix/stale'</span>)<span class="hl-property">.delete</span>();
+    } <span class="hl-keyword">catch</span> (_) {}
+    client<span class="hl-property">.dispose</span>();
+  }
+}</code></pre><div class="et-note">Reference only — not executed here (no Dart toolchain).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Errors &amp; limits — probe the API's guardrails.
+ *
+ * What you'll build: a tour of the canonical Vellum error codes by deliberately
+ * violating each documented quota.
+ * Real-world scenario: when a client sends an over-limit query or an oversized
+ * document, the app should show a useful message instead of crashing. This
+ * example proves each boundary returns a stable `code` + HTTP `status` pair.
+ * Only codes and statuses are printed — no secrets or request IDs.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;errors&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+
+<span class="hl-keyword">function</span> <span class="hl-fn">codeOf</span>(error: unknown): string {
+  <span class="hl-keyword">return</span> (error <span class="hl-keyword">as</span> { code?: string })<span class="hl-property">.code</span> ?? <span class="hl-string">&quot;UNKNOWN&quot;</span>;
+}
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Errors &amp; Limits ===&quot;</span>);
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.limit</span>(<span class="hl-number">501</span>)<span class="hl-property">.get</span>();
+    <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;limit above 500 should fail&quot;</span>);
+  } <span class="hl-keyword">catch</span> (error: unknown) {
+    <span class="hl-fn">check</span>(<span class="hl-fn">codeOf</span>(error) === <span class="hl-string">&quot;LIMIT_EXCEEDED&quot;</span>, <span class="hl-string">&quot;MAX_QUERY_LIMIT returns LIMIT_EXCEEDED&quot;</span>);
+    h<span class="hl-property">.log</span>({ limit: <span class="hl-fn">codeOf</span>(error), status: (error <span class="hl-keyword">as</span> { status?: number })<span class="hl-property">.status</span> });
+  }
+
+  <span class="hl-keyword">let</span> complex = h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col);
+  <span class="hl-keyword">for</span> (<span class="hl-keyword">let</span> i = <span class="hl-number">0</span>; i &lt; <span class="hl-number">11</span>; i += <span class="hl-number">1</span>) complex = complex<span class="hl-property">.where</span>(<span class="hl-string">`f${i}`</span>, <span class="hl-string">&quot;==&quot;</span>, i);
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> complex<span class="hl-property">.get</span>();
+    <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;more than 10 where clauses should fail&quot;</span>);
+  } <span class="hl-keyword">catch</span> (error: unknown) {
+    <span class="hl-fn">check</span>(<span class="hl-fn">codeOf</span>(error) === <span class="hl-string">&quot;QUERY_TOO_COMPLEX&quot;</span>, <span class="hl-string">&quot;MAX_WHERE_CLAUSES returns QUERY_TOO_COMPLEX&quot;</span>);
+    h<span class="hl-property">.log</span>({ whereClauses: <span class="hl-number">11</span>, code: <span class="hl-fn">codeOf</span>(error) });
+  }
+
+  <span class="hl-keyword">const</span> oversizedBatch = <span class="hl-type">Array</span><span class="hl-property">.from</span>({ length: <span class="hl-number">101</span> }, (_, i) =&gt; ({
+    <span class="hl-keyword">type</span>: <span class="hl-string">&quot;create&quot;</span>,
+    path: <span class="hl-string">`${col}/bulk-${i}`</span>,
+    data: { i },
+  }));
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.batchWrite</span>(oversizedBatch);
+    <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;more than 100 batch operations should fail&quot;</span>);
+  } <span class="hl-keyword">catch</span> (error: unknown) {
+    <span class="hl-fn">check</span>(<span class="hl-fn">codeOf</span>(error) === <span class="hl-string">&quot;BATCH_SIZE_EXCEEDED&quot;</span>, <span class="hl-string">&quot;MAX_BATCH_OPERATIONS returns BATCH_SIZE_EXCEEDED&quot;</span>);
+    h<span class="hl-property">.log</span>({ batchOperations: <span class="hl-number">101</span>, code: <span class="hl-fn">codeOf</span>(error) });
+  }
+
+  <span class="hl-keyword">const</span> firstIndex = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>, {
+    collectionPath: col,
+    fields: [{ path: <span class="hl-string">&quot;onlyField&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> }],
+  });
+  <span class="hl-keyword">const</span> duplicateIndex = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>, {
+    collectionPath: col,
+    fields: [{ path: <span class="hl-string">&quot;onlyField&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> }],
+  });
+  <span class="hl-keyword">const</span> duplicateCode = (duplicateIndex<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { error?: { code?: string } })?<span class="hl-property">.error</span>?<span class="hl-property">.code</span>;
+  <span class="hl-fn">check</span>(firstIndex<span class="hl-property">.status</span> === <span class="hl-number">201</span> &amp;&amp; duplicateIndex<span class="hl-property">.status</span> === <span class="hl-number">409</span>, <span class="hl-string">&quot;duplicate index returns 409&quot;</span>);
+  <span class="hl-fn">check</span>(duplicateCode === <span class="hl-string">&quot;ALREADY_EXISTS&quot;</span>, <span class="hl-string">&quot;duplicate index code is ALREADY_EXISTS&quot;</span>);
+  h<span class="hl-property">.log</span>({ duplicateIndex: { status: duplicateIndex<span class="hl-property">.status</span>, code: duplicateCode } });
+
+  <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;stale&quot;</span>)<span class="hl-property">.set</span>({ n: <span class="hl-number">0</span> });
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;stale&quot;</span>)<span class="hl-property">.update</span>({ n: <span class="hl-number">2</span> }, { ifVersion: <span class="hl-number">0</span> });
+    <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;stale version should fail&quot;</span>);
+  } <span class="hl-keyword">catch</span> (error: unknown) {
+    <span class="hl-fn">check</span>(<span class="hl-fn">codeOf</span>(error) === <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>, <span class="hl-string">&quot;stale version returns FAILED_PRECONDITION&quot;</span>);
+    h<span class="hl-property">.log</span>({ staleVersion: { code: <span class="hl-fn">codeOf</span>(error), status: (error <span class="hl-keyword">as</span> { status?: number })<span class="hl-property">.status</span> } });
+  }
+
+  <span class="hl-keyword">const</span> tooLarge = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${col}/too-large`</span>, {
+    data: { blob: <span class="hl-string">&quot;x&quot;</span><span class="hl-property">.repeat</span>(1_048_577) },
+  });
+  <span class="hl-keyword">const</span> tooLargeCode = (tooLarge<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { error?: { code?: string } })?<span class="hl-property">.error</span>?<span class="hl-property">.code</span>;
+  <span class="hl-fn">check</span>(tooLarge<span class="hl-property">.status</span> === <span class="hl-number">413</span> &amp;&amp; tooLargeCode === <span class="hl-string">&quot;DOCUMENT_TOO_LARGE&quot;</span>, <span class="hl-string">&quot;1 MiB+ doc returns DOCUMENT_TOO_LARGE&quot;</span>);
+  h<span class="hl-property">.log</span>({ documentTooLarge: { status: tooLarge<span class="hl-property">.status</span>, code: tooLargeCode } });
+
+  <span class="hl-keyword">const</span> missing = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${col}/does-not-exist`</span>);
+  <span class="hl-fn">check</span>(missing<span class="hl-property">.status</span> === <span class="hl-number">404</span>, <span class="hl-string">&quot;missing document returns 404&quot;</span>);
+  h<span class="hl-property">.log</span>({ notFound: { status: missing<span class="hl-property">.status</span>, code: (missing<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { error?: { code?: string } })?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> } });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Errors &amp; Limits ===
+{&quot;limit&quot;:&quot;LIMIT_EXCEEDED&quot;,&quot;status&quot;:400}
+{&quot;whereClauses&quot;:11,&quot;code&quot;:&quot;QUERY_TOO_COMPLEX&quot;}
+{&quot;batchOperations&quot;:101,&quot;code&quot;:&quot;BATCH_SIZE_EXCEEDED&quot;}
+{&quot;duplicateIndex&quot;:{&quot;status&quot;:409,&quot;code&quot;:&quot;ALREADY_EXISTS&quot;}}
+{&quot;staleVersion&quot;:{&quot;code&quot;:&quot;FAILED_PRECONDITION&quot;,&quot;status&quot;:412}}
+{&quot;documentTooLarge&quot;:{&quot;status&quot;:413,&quot;code&quot;:&quot;DOCUMENT_TOO_LARGE&quot;}}
+{&quot;notFound&quot;:{&quot;status&quot;:404,&quot;code&quot;:&quot;NOT_FOUND&quot;}}</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Errors &amp; limits (REST) — probe the API's guardrails with fetch.
+ *
+ * What you'll build: a tour of canonical error codes by deliberately breaking
+ * documented quotas, printing only stable code + status pairs.
+ * Real-world scenario: clients must handle limit, complexity, size and conflict
+ * errors gracefully; this example proves each boundary's exact canonical code.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;errors&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> codeOf = (reply) =&gt; reply<span class="hl-property">.body</span>?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> ?? <span class="hl-string">&quot;UNKNOWN&quot;</span>;
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Errors &amp; Limits ===&quot;</span>);
+
+  <span class="hl-keyword">const</span> overLimit = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/query&quot;</span>, {
+    collectionPath: col,
+    where: [],
+    orderBy: [],
+    limit: <span class="hl-number">501</span>,
+    select: <span class="hl-keyword">null</span>,
+    startAt: <span class="hl-keyword">null</span>,
+    startAfter: <span class="hl-keyword">null</span>,
+  });
+  <span class="hl-fn">check</span>(overLimit<span class="hl-property">.status</span> === <span class="hl-number">400</span> &amp;&amp; <span class="hl-fn">codeOf</span>(overLimit) === <span class="hl-string">&quot;LIMIT_EXCEEDED&quot;</span>, <span class="hl-string">&quot;limit above 500 rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ limit: <span class="hl-fn">codeOf</span>(overLimit), status: overLimit<span class="hl-property">.status</span> });
+
+  <span class="hl-keyword">const</span> where = <span class="hl-type">Array</span><span class="hl-property">.from</span>({ length: <span class="hl-number">11</span> }, (_, i) =&gt; ({ field: <span class="hl-string">`f${i}`</span>, op: <span class="hl-string">&quot;==&quot;</span>, value: i }));
+  <span class="hl-keyword">const</span> complex = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/query&quot;</span>, {
+    collectionPath: col,
+    where,
+    orderBy: [],
+    limit: <span class="hl-number">50</span>,
+    select: <span class="hl-keyword">null</span>,
+    startAt: <span class="hl-keyword">null</span>,
+    startAfter: <span class="hl-keyword">null</span>,
+  });
+  <span class="hl-fn">check</span>(complex<span class="hl-property">.status</span> === <span class="hl-number">400</span> &amp;&amp; <span class="hl-fn">codeOf</span>(complex) === <span class="hl-string">&quot;QUERY_TOO_COMPLEX&quot;</span>, <span class="hl-string">&quot;11 where clauses rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ whereClauses: <span class="hl-number">11</span>, code: <span class="hl-fn">codeOf</span>(complex) });
+
+  <span class="hl-keyword">const</span> writes = <span class="hl-type">Array</span><span class="hl-property">.from</span>({ length: <span class="hl-number">101</span> }, (_, i) =&gt; ({
+    <span class="hl-keyword">type</span>: <span class="hl-string">&quot;create&quot;</span>,
+    path: <span class="hl-string">`${col}/bulk-${i}`</span>,
+    data: { i },
+  }));
+  <span class="hl-keyword">const</span> oversizedBatch = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/batchWrite&quot;</span>, { writes });
+  <span class="hl-fn">check</span>(oversizedBatch<span class="hl-property">.status</span> === <span class="hl-number">400</span> &amp;&amp; <span class="hl-fn">codeOf</span>(oversizedBatch) === <span class="hl-string">&quot;BATCH_SIZE_EXCEEDED&quot;</span>, <span class="hl-string">&quot;101 writes rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ batchOperations: <span class="hl-number">101</span>, code: <span class="hl-fn">codeOf</span>(oversizedBatch) });
+
+  <span class="hl-keyword">const</span> firstIndex = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>, {
+    collectionPath: col,
+    fields: [{ path: <span class="hl-string">&quot;onlyField&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> }],
+  });
+  <span class="hl-keyword">const</span> duplicateIndex = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>, {
+    collectionPath: col,
+    fields: [{ path: <span class="hl-string">&quot;onlyField&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> }],
+  });
+  <span class="hl-fn">check</span>(firstIndex<span class="hl-property">.status</span> === <span class="hl-number">201</span> &amp;&amp; duplicateIndex<span class="hl-property">.status</span> === <span class="hl-number">409</span>, <span class="hl-string">&quot;duplicate index returns 409&quot;</span>);
+  <span class="hl-fn">check</span>(<span class="hl-fn">codeOf</span>(duplicateIndex) === <span class="hl-string">&quot;ALREADY_EXISTS&quot;</span>, <span class="hl-string">&quot;duplicate index code is ALREADY_EXISTS&quot;</span>);
+  h<span class="hl-property">.log</span>({ duplicateIndex: { status: duplicateIndex<span class="hl-property">.status</span>, code: <span class="hl-fn">codeOf</span>(duplicateIndex) } });
+
+  <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${col}/stale`</span>, { data: { n: <span class="hl-number">0</span> } });
+  <span class="hl-keyword">const</span> stale = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;PATCH&quot;</span>, <span class="hl-string">`/documents/${col}/stale`</span>, { data: { n: <span class="hl-number">2</span> }, ifVersion: <span class="hl-number">0</span> });
+  <span class="hl-fn">check</span>(stale<span class="hl-property">.status</span> === <span class="hl-number">412</span> &amp;&amp; <span class="hl-fn">codeOf</span>(stale) === <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>, <span class="hl-string">&quot;stale version rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ staleVersion: { code: <span class="hl-fn">codeOf</span>(stale), status: stale<span class="hl-property">.status</span> } });
+
+  <span class="hl-keyword">const</span> tooLarge = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${col}/too-large`</span>, {
+    data: { blob: <span class="hl-string">&quot;x&quot;</span><span class="hl-property">.repeat</span>(1_048_577) },
+  });
+  <span class="hl-fn">check</span>(tooLarge<span class="hl-property">.status</span> === <span class="hl-number">413</span> &amp;&amp; <span class="hl-fn">codeOf</span>(tooLarge) === <span class="hl-string">&quot;DOCUMENT_TOO_LARGE&quot;</span>, <span class="hl-string">&quot;oversized doc rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ documentTooLarge: { status: tooLarge<span class="hl-property">.status</span>, code: <span class="hl-fn">codeOf</span>(tooLarge) } });
+
+  <span class="hl-keyword">const</span> missing = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${col}/does-not-exist`</span>);
+  <span class="hl-fn">check</span>(missing<span class="hl-property">.status</span> === <span class="hl-number">404</span>, <span class="hl-string">&quot;missing document returns 404&quot;</span>);
+  h<span class="hl-property">.log</span>({ notFound: { status: missing<span class="hl-property">.status</span>, code: <span class="hl-fn">codeOf</span>(missing) } });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Errors &amp; Limits ===
+{&quot;limit&quot;:&quot;LIMIT_EXCEEDED&quot;,&quot;status&quot;:400}
+{&quot;whereClauses&quot;:11,&quot;code&quot;:&quot;QUERY_TOO_COMPLEX&quot;}
+{&quot;batchOperations&quot;:101,&quot;code&quot;:&quot;BATCH_SIZE_EXCEEDED&quot;}
+{&quot;duplicateIndex&quot;:{&quot;status&quot;:409,&quot;code&quot;:&quot;ALREADY_EXISTS&quot;}}
+{&quot;staleVersion&quot;:{&quot;code&quot;:&quot;FAILED_PRECONDITION&quot;,&quot;status&quot;:412}}
+{&quot;documentTooLarge&quot;:{&quot;status&quot;:413,&quot;code&quot;:&quot;DOCUMENT_TOO_LARGE&quot;}}
+{&quot;notFound&quot;:{&quot;status&quot;:404,&quot;code&quot;:&quot;NOT_FOUND&quot;}}</code></pre>
+</div></div></div>
+</div>
+<h2 id="what-to-read-next">What to read next<a class="anchor" href="#what-to-read-next" aria-label="Link to section">#</a></h2>
+<ul><li><a href="query.html">Query</a> — query-specific errors and index suggestions.</li><li><a href="batch-and-transactions.html">Batch &amp; transactions</a> — conflict and timeout behavior.</li><li><a href="production-checklist.html">Production checklist</a> — rate limiting, redaction, and health probes.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#scenario" class="toc-link toc-l2">Scenario</a><a href="#error-envelope" class="toc-link toc-l2">Error envelope</a><a href="#canonical-error-codes" class="toc-link toc-l2">Canonical error codes</a><a href="#locked-v1-quotas" class="toc-link toc-l2">Locked v1 quotas</a><a href="#handling-errors" class="toc-link toc-l2">Handling errors</a><a href="#common-pitfalls" class="toc-link toc-l2">Common pitfalls</a><a href="#verified-example" class="toc-link toc-l2">Verified example</a><a href="#what-to-read-next" class="toc-link toc-l2">What to read next</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

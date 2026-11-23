@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JavaScript SDK (@vellum/sdk-js) · VELLUM Docs</title>
+<meta name="description" content="مرجع تقني شامل لحزمة @vellum/sdk-js — إعداد العميل، CRUD، الاستعلامات والتجميعات، التدفق بالمؤشر، الدفعات المقسّمة، التخزين المؤقت، الوقت الفعلي ومصادقة EdDSA.">
+<link rel="stylesheet" href="../../assets/docs.css">
+</head>
+<body data-base="../../">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="../../ar/index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ التوثيق</span></span></a>
+  <span class="top-badge">أمثلة مُتحقَّق منها · ثابتة</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">ابحث في التوثيق <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="../../sdks/javascript.html" title="English">EN</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">البداية</div><ul><li><a href="../index.html" class="nav-link nav-home">الصفحة الرئيسية للتوثيق</a></li><li><a href="../quickstart.html" class="nav-link">البدء السريع</a></li><li><a href="../authentication.html" class="nav-link">المصادقة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المجموعات البرمجية</div><ul><li><a href="flutter.html" class="nav-link">مجموعة Flutter البرمجية (vellum_flutter)</a></li><li><a href="javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المرجع</div><ul><li><a href="../reference/rest-control-plane.html" class="nav-link">واجهة REST لمستوى التحكم والكونسول</a></li><li><a href="../reference/rest-data-plane.html" class="nav-link">واجهة REST العامة لمستوى البيانات</a></li><li><a href="../reference/realtime-protocol.html" class="nav-link">بروتوكول WebSocket للوقت الفعلي</a></li><li><a href="../reference/wire-format.html" class="nav-link">تنسيق الإرسال الموسوم وقواعد المسارات</a></li><li><a href="../reference/errors.html" class="nav-link">الرموز المعيارية للأخطاء وإرشادات إعادة المحاولة</a></li><li><a href="../reference/packages.html" class="nav-link">واجهات الحزم البرمجية</a></li><li><a href="../errors-and-limits.html" class="nav-link">الأخطاء والحدود</a></li><li><a href="../rest-api.html" class="nav-link">نظرة عامة على REST API</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المفاهيم الأساسية</div><ul><li><a href="../crud.html" class="nav-link">CRUD ومسارات المستندات</a></li><li><a href="../field-transforms.html" class="nav-link">تحويلات الحقول</a></li><li><a href="../query.html" class="nav-link">الاستعلام</a></li><li><a href="../pagination.html" class="nav-link">الترقيم الصفحي</a></li><li><a href="../indexes.html" class="nav-link">الفهارس المركّبة</a></li><li><a href="../realtime.html" class="nav-link">الوقت الفعلي</a></li><li><a href="../batch-and-transactions.html" class="nav-link">الكتابات الدفعية والمعاملات</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المصادقة</div><ul><li><a href="../end-user-auth.html" class="nav-link">مصادقة المستخدمين النهائيين والمجالات الثلاثة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">الأمان</div><ul><li><a href="../security-rules.html" class="nav-link">قواعد الأمان</a></li></ul></div><div class="nav-group"><div class="nav-group-title">التشغيل</div><ul><li><a href="../production-checklist.html" class="nav-link">قائمة التحقق للإنتاج</a></li><li><a href="../deployment.html" class="nav-link">النشر والاستضافة</a></li></ul></div></div>
+    <div class="sidebar-foot">تُنفَّذ الأمثلة على الـ API الحي وتُعرض كنص خامل. لا يُنفَّذ أي كود داخل هذا الموقع.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">المجموعات البرمجية <span>/</span> <strong>JavaScript SDK (@vellum/sdk-js)</strong></div>
+    <article class="article"><h1 id="javascript-sdk-vellum-sdk-js">JavaScript SDK (<code class="inline-code">@vellum/sdk-js</code>)<a class="anchor" href="#javascript-sdk-vellum-sdk-js" aria-label="Link to section">#</a></h1>
+<p>المرجع التقني الشامل لحزمة <code class="inline-code">@vellum/sdk-js</code> الإصدار <code class="inline-code">0.0.1</code>، المستند بالكامل إلى الواجهات الفعلية في <code class="inline-code">packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts</code>.</p>
+<p>تعمل الحزمة على <strong>Node.js 18+</strong> والمتصفحات الحديثة وبيئات Edge، مع دعم كامل لـ TypeScript الصارم.</p>
+<hr>
+<h2 id="التثبيت-وتهيئة-العميل-createclient">التثبيت وتهيئة العميل (<code class="inline-code">createClient</code>)<a class="anchor" href="#التثبيت-وتهيئة-العميل-createclient" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">BASH</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code">npm install @vellum/sdk-js
+<span class="hl-comment"># أو</span>
+pnpm add @vellum/sdk-js</code></pre>
+</div>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> {
+  createClient,
+  fieldOp,
+  <span class="hl-type">BrowserLocalStorage</span>,
+  <span class="hl-type">MemoryAuthStorage</span>,
+} <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/sdk-js&quot;</span>;
+<span class="hl-keyword">import</span> <span class="hl-keyword">type</span> { <span class="hl-type">VellumClient</span>, <span class="hl-type">DocDataConverter</span> } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/sdk-js&quot;</span>;
+
+<span class="hl-keyword">const</span> db: <span class="hl-type">VellumClient</span> = <span class="hl-fn">createClient</span>({
+  projectId: <span class="hl-string">&quot;proj_01j9...&quot;</span>,
+  apiKey: process<span class="hl-property">.env</span><span class="hl-property">.VELLUM_API_KEY</span>!, <span class="hl-comment">// استخدم pk_... في المتصفح و sk_... في الخادم فقط</span>
+  endpoint: <span class="hl-string">&quot;https://api.example.com&quot;</span>,
+  timeoutMs: 15_000,
+  maxRetries: <span class="hl-number">3</span>,
+  retryBaseDelayMs: <span class="hl-number">250</span>,
+  retryMaxDelayMs: 10_000,
+  cache: { enabled: <span class="hl-keyword">true</span>, ttlMs: 30_000, maxEntries: 1_000 },
+  dedupeReads: <span class="hl-keyword">true</span>,
+  warnOnMissingIndexes: <span class="hl-keyword">true</span>,
+});</code></pre>
+</div>
+<h3 id="خيارات-clientconfig-الأساسية">خيارات <code class="inline-code">ClientConfig</code> الأساسية<a class="anchor" href="#خيارات-clientconfig-الأساسية" aria-label="Link to section">#</a></h3>
+<div class="table-wrap"><table><thead><tr><th>الخيار</th><th>القيمة الافتراضية</th><th>الوصف</th></tr></thead><tbody><tr><td><code class="inline-code">projectId</code> / <code class="inline-code">apiKey</code></td><td><strong>إلزامي</strong></td><td>معرّف المشروع ومفتاح API (يُرسل عبر <code class="inline-code">x-vellum-api-key</code> و<code class="inline-code">x-project-key</code>).</td></tr><tr><td><code class="inline-code">endpoint</code></td><td><code class="inline-code">&quot;http://localhost:8080&quot;</code></td><td>عنوان الخادم الأساسي HTTP(S).</td></tr><tr><td><code class="inline-code">realtimeUrl</code></td><td><code class="inline-code">&lt;endpoint&gt;/v1/realtime</code></td><td>تجاوز صريح لعنوان WebSocket (<code class="inline-code">ws://</code> أو <code class="inline-code">wss://</code>).</td></tr><tr><td><code class="inline-code">getAuthToken</code></td><td><code class="inline-code">null</code></td><td>دالة مخصصة لتوفير رمز Bearer (تتجاوز جلسة <code class="inline-code">db.auth</code>).</td></tr><tr><td><code class="inline-code">authStorage</code></td><td><code class="inline-code">BrowserLocalStorage</code> أو <code class="inline-code">MemoryAuthStorage</code></td><td>تخزين جلسة المصادقة القابل للتبديل.</td></tr><tr><td><code class="inline-code">timeoutMs</code></td><td><code class="inline-code">30_000</code></td><td>مهلة الطلب عبر <code class="inline-code">AbortController</code> (يرمي خطأً بالرمز <code class="inline-code">REQUEST_TIMEOUT</code>).</td></tr><tr><td><code class="inline-code">maxRetries</code></td><td><code class="inline-code">3</code></td><td>إعادة المحاولة للطلبات القابلة للتكرار (<code class="inline-code">GET</code> و<code class="inline-code">/query</code> و<code class="inline-code">/documents:aggregate</code> أو عند وجود <code class="inline-code">Idempotency-Key</code>) مع احترام ترويسة <code class="inline-code">Retry-After</code> وتراجع full-jitter.</td></tr><tr><td><code class="inline-code">cache</code></td><td><code class="inline-code">{ enabled: false, ttlMs: 30_000, maxEntries: 1_000 }</code></td><td>تفعيل <code class="inline-code">BoundedReadCache</code> (LRU + TTL) لقراءات <code class="inline-code">doc.get()</code>.</td></tr><tr><td><code class="inline-code">dedupeReads</code></td><td><code class="inline-code">false</code></td><td>دمج طلبات <code class="inline-code">doc.get()</code> المتزامنة المتطابقة في طلب HTTP واحد مع إرجاع نسخ مستقلة محمية لكل مستدعٍ.</td></tr></tbody></table></div>
+<hr>
+<h2 id="عمليات-crud-وتحويلات-الحقول-الذرية-و-withconverter-t">عمليات CRUD وتحويلات الحقول الذرية و<code class="inline-code">withConverter&lt;T&gt;()</code><a class="anchor" href="#عمليات-crud-وتحويلات-الحقول-الذرية-و-withconverter-t" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">const</span> userRef = db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;users&quot;</span>)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;usr_ada&quot;</span>);
+
+<span class="hl-comment">// إنشاء مستند جديد مع TTL ووقت الخادم الذري</span>
+<span class="hl-keyword">await</span> userRef<span class="hl-property">.create</span>(
+  {
+    name: <span class="hl-string">&quot;Ada Lovelace&quot;</span>,
+    credits: <span class="hl-number">100</span>,
+    tags: [<span class="hl-string">&quot;engineering&quot;</span>],
+    createdAt: fieldOp<span class="hl-property">.serverTimestamp</span>(),
+  },
+  { ttlSeconds: 86_400 }
+);
+
+<span class="hl-comment">// قراءة مع إسقاط الحقول وتحميل العلاقات</span>
+<span class="hl-keyword">const</span> snap = <span class="hl-keyword">await</span> userRef<span class="hl-property">.get</span>({
+  select: [<span class="hl-string">&quot;name&quot;</span>, <span class="hl-string">&quot;credits&quot;</span>, <span class="hl-string">&quot;tags&quot;</span>],
+  include: [<span class="hl-string">&quot;organizationId&quot;</span>],
+});
+
+<span class="hl-comment">// إدراج أو تحديث (UPSERT)</span>
+<span class="hl-keyword">await</span> userRef<span class="hl-property">.upsert</span>({ name: <span class="hl-string">&quot;Ada Lovelace&quot;</span>, credits: <span class="hl-number">150</span> }, { merge: <span class="hl-keyword">true</span> });
+
+<span class="hl-comment">// تحديث جزئي ذري مع التحقق من الإصدار (OCC)</span>
+<span class="hl-keyword">await</span> userRef<span class="hl-property">.update</span>(
+  {
+    credits: fieldOp<span class="hl-property">.increment</span>(-<span class="hl-number">20</span>),
+    tags: fieldOp<span class="hl-property">.arrayUnion</span>(<span class="hl-string">&quot;founders&quot;</span>),
+    oldField: fieldOp<span class="hl-property">.deleteField</span>(),
+  },
+  { ifVersion: snap<span class="hl-property">.version</span> }
+);
+
+<span class="hl-comment">// حذف مشروط بالإصدار</span>
+<span class="hl-keyword">await</span> userRef<span class="hl-property">.delete</span>({ ifVersion: snap<span class="hl-property">.version</span> + <span class="hl-number">1</span> });</code></pre>
+</div>
+<h3 id="محوّلات-الأنواع-withconverter-t">محوّلات الأنواع <code class="inline-code">withConverter&lt;T&gt;()</code><a class="anchor" href="#محوّلات-الأنواع-withconverter-t" aria-label="Link to section">#</a></h3>
+<p>اربط <code class="inline-code">DocDataConverter&lt;T&gt;</code> (<code class="inline-code">toDoc</code> / <code class="inline-code">fromDoc</code>) مع <code class="inline-code">CollectionRef</code> أو <code class="inline-code">DocumentRef</code> أو <code class="inline-code">QueryBuilder</code> لضمان أمان الأنواع من طرف إلى طرف في القراءة والكتابة والتدفق والوقت الفعلي:</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">interface</span> <span class="hl-type">Order</span> {
+  id: string;
+  totalCents: number;
+  status: string;
+}
+
+<span class="hl-keyword">const</span> orderConverter: <span class="hl-type">DocDataConverter</span>&lt;<span class="hl-type">Order</span>&gt; = {
+  toDoc: (o) =&gt; ({ totalCents: o<span class="hl-property">.totalCents</span>, status: o<span class="hl-property">.status</span> }),
+  fromDoc: (snap) =&gt; {
+    <span class="hl-keyword">const</span> d = snap<span class="hl-property">.data</span>();
+    <span class="hl-keyword">return</span> { id: snap<span class="hl-property">.id</span>, totalCents: <span class="hl-fn">Number</span>(d[<span class="hl-string">&quot;totalCents&quot;</span>] ?? <span class="hl-number">0</span>), status: <span class="hl-fn">String</span>(d[<span class="hl-string">&quot;status&quot;</span>] ?? <span class="hl-string">&quot;&quot;</span>) };
+  },
+};
+
+<span class="hl-keyword">const</span> orders = db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)<span class="hl-property">.withConverter</span>(orderConverter);
+<span class="hl-keyword">const</span> snap = <span class="hl-keyword">await</span> orders<span class="hl-property">.doc</span>(<span class="hl-string">&quot;ord_1&quot;</span>)<span class="hl-property">.get</span>();
+<span class="hl-keyword">const</span> order: <span class="hl-type">Order</span> = snap<span class="hl-property">.data</span>();</code></pre>
+</div>
+<hr>
+<h2 id="الاستعلامات،-العلاقات،-التجميعات-والتدفق-بالمؤشر">الاستعلامات، العلاقات، التجميعات والتدفق بالمؤشر<a class="anchor" href="#الاستعلامات،-العلاقات،-التجميعات-والتدفق-بالمؤشر" aria-label="Link to section">#</a></h2>
+<p>يدعم باني الاستعلام جميع <strong>المعاملات الـ 13</strong>: <code class="inline-code">==</code>, <code class="inline-code">!=</code>, <code class="inline-code">&lt;</code>, <code class="inline-code">&lt;=</code>, <code class="inline-code">&gt;</code>, <code class="inline-code">&gt;=</code>, <code class="inline-code">in</code>, <code class="inline-code">not-in</code>, <code class="inline-code">array-contains</code>, <code class="inline-code">array-contains-any</code>, <code class="inline-code">contains_ci</code>, <code class="inline-code">starts_with_ci</code>, <code class="inline-code">text_search</code>.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">const</span> ac = <span class="hl-keyword">new</span> <span class="hl-fn">AbortController</span>();
+
+<span class="hl-comment">// تدفق المستندات بذاكرة محدودة وحدود أمان صريحة (بدون SQL OFFSET)</span>
+<span class="hl-keyword">for</span> <span class="hl-keyword">await</span> (<span class="hl-keyword">const</span> doc <span class="hl-keyword">of</span> db
+  <span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)
+  <span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;in&quot;</span>, [<span class="hl-string">&quot;paid&quot;</span>, <span class="hl-string">&quot;shipped&quot;</span>])
+  <span class="hl-property">.or</span>([
+    [{ field: <span class="hl-string">&quot;priority&quot;</span>, op: <span class="hl-string">&quot;==&quot;</span>, value: <span class="hl-string">&quot;urgent&quot;</span> }],
+    [{ field: <span class="hl-string">&quot;totalCents&quot;</span>, op: <span class="hl-string">&quot;&gt;=&quot;</span>, value: 50_000 }],
+  ])
+  <span class="hl-property">.include</span>([
+    <span class="hl-string">&quot;customerId&quot;</span>,
+    { field: <span class="hl-string">&quot;assigneeId&quot;</span>, collection: <span class="hl-string">&quot;users&quot;</span>, <span class="hl-keyword">as</span>: <span class="hl-string">&quot;assignee&quot;</span>, select: [<span class="hl-string">&quot;name&quot;</span>] },
+  ])
+  <span class="hl-property">.orderBy</span>(<span class="hl-string">&quot;createdAt&quot;</span>, <span class="hl-string">&quot;desc&quot;</span>)
+  <span class="hl-property">.stream</span>({ pageSize: <span class="hl-number">100</span>, maxPages: <span class="hl-number">20</span>, maxDocs: 1_500, signal: ac<span class="hl-property">.signal</span> })) {
+  console<span class="hl-property">.log</span>(doc<span class="hl-property">.id</span>, doc<span class="hl-property">.data</span>(), doc<span class="hl-property">.included</span>);
+}
+
+<span class="hl-comment">// التجميعات على الخادم</span>
+<span class="hl-keyword">const</span> openCount = <span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)<span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;open&quot;</span>)<span class="hl-property">.count</span>();
+<span class="hl-keyword">const</span> byRegion = <span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)<span class="hl-property">.aggregate</span>({
+  groupBy: [<span class="hl-string">&quot;region&quot;</span>],
+  metrics: {
+    orders: { op: <span class="hl-string">&quot;count&quot;</span> },
+    revenue: { op: <span class="hl-string">&quot;sum&quot;</span>, field: <span class="hl-string">&quot;totalCents&quot;</span> },
+  },
+});</code></pre>
+</div>
+<p>يمكنك أيضًا استخدام <code class="inline-code">pages({ pageSize, maxPages, maxDocs, signal })</code> لاستلام كل صفحة <code class="inline-code">QuerySnapshot&lt;T&gt;</code> على حدة، و<code class="inline-code">startAfter(cursor)</code> / <code class="inline-code">startAt(cursor)</code> للتحكم اليدوي بالمؤشرات الموقّعة بـ HMAC.</p>
+<hr>
+<h2 id="الكتابة-المجمّعة-المقسّمة-batchwritechunked-والمعاملات-runtransaction">الكتابة المجمّعة المقسّمة (<code class="inline-code">batchWriteChunked</code>) والمعاملات (<code class="inline-code">runTransaction</code>)<a class="anchor" href="#الكتابة-المجمّعة-المقسّمة-batchwritechunked-والمعاملات-runtransaction" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// تقسيم تلقائي إلى دفعات آمنة (500 عملية افتراضيًا) مع تزامن محدود (4 افتراضيًا)</span>
+<span class="hl-keyword">const</span> summary = <span class="hl-keyword">await</span> db<span class="hl-property">.batchWriteChunked</span>(operations, {
+  chunkSize: <span class="hl-number">500</span>,
+  concurrency: <span class="hl-number">4</span>,
+  signal: ac<span class="hl-property">.signal</span>,
+  onProgress: ({ completedOperations, totalOperations }) =&gt; {
+    console<span class="hl-property">.log</span>(<span class="hl-string">`${completedOperations}/${totalOperations}`</span>);
+  },
+});
+
+<span class="hl-comment">// معاملة OCC مع إعادة محاولة تلقائية عند ABORTED_CONFLICT</span>
+<span class="hl-keyword">const</span> { result } = <span class="hl-keyword">await</span> db<span class="hl-property">.runTransaction</span>(
+  <span class="hl-keyword">async</span> (tx) =&gt; {
+    <span class="hl-keyword">const</span> snap = <span class="hl-keyword">await</span> tx<span class="hl-property">.get</span>(db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;accounts/acc_1&quot;</span>));
+    <span class="hl-keyword">const</span> balance = <span class="hl-fn">Number</span>(snap<span class="hl-property">.data</span>()[<span class="hl-string">&quot;balance&quot;</span>]);
+    <span class="hl-keyword">if</span> (balance &lt; <span class="hl-number">100</span>) <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;Insufficient balance&quot;</span>);
+    tx<span class="hl-property">.update</span>(<span class="hl-string">&quot;accounts/acc_1&quot;</span>, { balance: balance - <span class="hl-number">100</span> });
+    <span class="hl-keyword">return</span> balance - <span class="hl-number">100</span>;
+  },
+  { maxAttempts: <span class="hl-number">5</span>, signal: ac<span class="hl-property">.signal</span> }
+);</code></pre>
+</div>
+<hr>
+<h2 id="الوقت-الفعلي-realtime-ومراقبة-الاتصال">الوقت الفعلي (Realtime) ومراقبة الاتصال<a class="anchor" href="#الوقت-الفعلي-realtime-ومراقبة-الاتصال" aria-label="Link to section">#</a></h2>
+<p>تعمل جميع اشتراكات <code class="inline-code">onSnapshot</code> عبر اتصال WebSocket واحد متعدد الإرسال مع استئناف <code class="inline-code">resumeSeqId</code> وتراجع decorrelated jitter ومراقبة نبض Heartbeat.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">const</span> offState = db<span class="hl-property">.onConnectionStateChange</span>((next, prev) =&gt; {
+  console<span class="hl-property">.log</span>(<span class="hl-string">`Connection: ${prev} -&gt; ${next}`</span>); <span class="hl-comment">// disconnected | connecting | connected | reconnecting</span>
+});
+
+<span class="hl-keyword">const</span> unsub = db
+  <span class="hl-property">.collection</span>(<span class="hl-string">&quot;messages&quot;</span>)
+  <span class="hl-property">.where</span>(<span class="hl-string">&quot;roomId&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;general&quot;</span>)
+  <span class="hl-property">.orderBy</span>(<span class="hl-string">&quot;createdAt&quot;</span>, <span class="hl-string">&quot;desc&quot;</span>)
+  <span class="hl-property">.limit</span>(<span class="hl-number">50</span>)
+  <span class="hl-property">.onSnapshot</span>(
+    (snapshot) =&gt; {
+      console<span class="hl-property">.log</span>(<span class="hl-string">&quot;Watermark:&quot;</span>, snapshot<span class="hl-property">.watermarkSeqId</span>, <span class="hl-string">&quot;Docs:&quot;</span>, snapshot<span class="hl-property">.docs</span><span class="hl-property">.length</span>);
+    },
+    (err) =&gt; console<span class="hl-property">.error</span>(err)
+  );
+
+<span class="hl-comment">// تنظيف الاشتراكات</span>
+<span class="hl-fn">unsub</span>();
+<span class="hl-fn">offState</span>();</code></pre>
+</div>
+<hr>
+<h2 id="مصادقة-المستخدم-النهائي-eddsa-وإدارة-دورة-الحياة">مصادقة المستخدم النهائي (EdDSA) وإدارة دورة الحياة<a class="anchor" href="#مصادقة-المستخدم-النهائي-eddsa-وإدارة-دورة-الحياة" aria-label="Link to section">#</a></h2>
+<ul><li>يدعم <code class="inline-code">db.auth</code> (والدوال المماثلة على <code class="inline-code">db</code>) التسجيل والدخول بالبريد/كلمة المرور، الدخول المجهول، OAuth، التحقق الثنائي TOTP MFA، وإعادة تعيين كلمة المرور.</li><li>يتم تجديد رمز الوصول استباقيًا قبل 45 ثانية من انتهائه، كما تُدمج أخطاء <code class="inline-code">401</code> المتزامنة في طلب تجديد واحد (single-flight) ثم يُعاد إرسال الطلب تلقائيًا وتُعاد مصادقة اتصال WebSocket الحي.</li><li>استدعِ <code class="inline-code">db.clearCache()</code> لمسح الذاكرة المؤقتة عند الحاجة، و<strong>استدعِ <code class="inline-code">db.dispose?.()</code> دائمًا</strong> عند إيقاف التطبيق لإغلاق WebSocket ومؤقتات التجديد وتحرير المستمعين.</li></ul>
+<h2 id="البنية-المعيارية-والحماية-ضد-التلاعب">البنية المعيارية والحماية ضد التلاعب<a class="anchor" href="#البنية-المعيارية-والحماية-ضد-التلاعب" aria-label="Link to section">#</a></h2>
+<p>حزمة <code class="inline-code">@vellum/sdk-js</code> مقسّمة إلى مجلدات متخصصة (<code class="inline-code">src/core/</code>، <code class="inline-code">src/cache/</code>، <code class="inline-code">src/auth/</code>، <code class="inline-code">src/realtime/</code>، <code class="inline-code">src/references/</code>، <code class="inline-code">src/batch/</code>، <code class="inline-code">src/client/</code>) مع تجميد الواجهات العامة و<code class="inline-code">fieldOp</code> واللقطات بـ <code class="inline-code">Object.freeze</code> وإخفاء الأسرار في <code class="inline-code">toJSON()</code> و<code class="inline-code">toString()</code>.</p></article>
+    <footer class="article-foot"><span>VELLUM v1 · التصميم الافتراضي الرسمي لـ shadcn/ui</span><span>مولَّد من docs/guides — لا تعدّل HTML مباشرة.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">في هذه الصفحة</div><a href="#التثبيت-وتهيئة-العميل-createclient" class="toc-link toc-l2">التثبيت وتهيئة العميل (`createClient`)</a><a href="#خيارات-clientconfig-الأساسية" class="toc-link toc-l3">خيارات `ClientConfig` الأساسية</a><a href="#عمليات-crud-وتحويلات-الحقول-الذرية-و-withconverter-t" class="toc-link toc-l2">عمليات CRUD وتحويلات الحقول الذرية و`withConverter&lt;T&gt;()`</a><a href="#محوّلات-الأنواع-withconverter-t" class="toc-link toc-l3">محوّلات الأنواع `withConverter&lt;T&gt;()`</a><a href="#الاستعلامات،-العلاقات،-التجميعات-والتدفق-بالمؤشر" class="toc-link toc-l2">الاستعلامات، العلاقات، التجميعات والتدفق بالمؤشر</a><a href="#الكتابة-المجمّعة-المقسّمة-batchwritechunked-والمعاملات-runtransaction" class="toc-link toc-l2">الكتابة المجمّعة المقسّمة (`batchWriteChunked`) والمعاملات (`runTransaction`)</a><a href="#الوقت-الفعلي-realtime-ومراقبة-الاتصال" class="toc-link toc-l2">الوقت الفعلي (Realtime) ومراقبة الاتصال</a><a href="#مصادقة-المستخدم-النهائي-eddsa-وإدارة-دورة-الحياة" class="toc-link toc-l2">مصادقة المستخدم النهائي (EdDSA) وإدارة دورة الحياة</a><a href="#البنية-المعيارية-والحماية-ضد-التلاعب" class="toc-link toc-l2">البنية المعيارية والحماية ضد التلاعب</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="ابحث في الأدلة والواجهات والأمثلة…" autocomplete="off"><button id="searchClose" type="button">إغلاق</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="../../assets/docs.js" defer></script>
+</body>
+</html>

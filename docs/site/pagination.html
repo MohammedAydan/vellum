@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pagination · VELLUM Docs</title>
+<meta name="description" content="HMAC-signed opaque cursors, startAfter vs startAt, bounded-memory streaming with pages()/stream() in JS and streamPages()/streamDocuments() in Flutter.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/pagination.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Core concepts <span>/</span> <strong>Pagination</strong></div>
+    <article class="article"><h1 id="pagination">Pagination<a class="anchor" href="#pagination" aria-label="Link to section">#</a></h1>
+<p>VELLUM uses <strong>keyset cursor pagination</strong> backed by HMAC-signed opaque cursors and a deterministic <code class="inline-code">document_id</code> tie-breaker. SQL <code class="inline-code">OFFSET</code> is never used, so deep pages stay O(log N) and never skip or duplicate rows under concurrent inserts.</p>
+<hr>
+<h2 id="manual-cursor-pagination-startafter-startat">Manual Cursor Pagination (<code class="inline-code">startAfter</code> / <code class="inline-code">startAt</code>)<a class="anchor" href="#manual-cursor-pagination-startafter-startat" aria-label="Link to section">#</a></h2>
+<p>Every <code class="inline-code">QuerySnapshot</code> returns <code class="inline-code">nextCursor: string | null</code>. Pass it to <code class="inline-code">startAfter(cursor)</code> for the next exclusive page (or <code class="inline-code">startAt(cursor)</code> in <code class="inline-code">@vellum/sdk-js</code> for an inclusive boundary):</p>
+<h3 id="typescript-vellum-sdk-js">TypeScript (<code class="inline-code">@vellum/sdk-js</code>)<a class="anchor" href="#typescript-vellum-sdk-js" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">let</span> cursor: string | <span class="hl-keyword">null</span> = <span class="hl-keyword">null</span>;
+
+<span class="hl-keyword">do</span> {
+  <span class="hl-keyword">let</span> q = db
+    <span class="hl-property">.collection</span>(<span class="hl-string">&quot;invoices&quot;</span>)
+    <span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;paid&quot;</span>)
+    <span class="hl-property">.orderBy</span>(<span class="hl-string">&quot;createdAt&quot;</span>, <span class="hl-string">&quot;desc&quot;</span>)
+    <span class="hl-property">.limit</span>(<span class="hl-number">50</span>);
+
+  <span class="hl-keyword">if</span> (cursor) q = q<span class="hl-property">.startAfter</span>(cursor);
+
+  <span class="hl-keyword">const</span> page = <span class="hl-keyword">await</span> q<span class="hl-property">.get</span>();
+  <span class="hl-fn">renderInvoices</span>(page<span class="hl-property">.docs</span>);
+  cursor = page<span class="hl-property">.nextCursor</span>;
+} <span class="hl-keyword">while</span> (cursor);</code></pre>
+</div>
+<h3 id="flutter-dart-vellum-flutter">Flutter / Dart (<code class="inline-code">vellum_flutter</code>)<a class="anchor" href="#flutter-dart-vellum-flutter" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-type">String</span>? cursor;
+
+<span class="hl-keyword">do</span> {
+  <span class="hl-keyword">var</span> q = client
+      <span class="hl-property">.collection</span>(<span class="hl-string">'invoices'</span>)
+      <span class="hl-property">.where</span>(<span class="hl-string">'status'</span>, <span class="hl-string">'=='</span>, <span class="hl-string">'paid'</span>)
+      <span class="hl-property">.orderBy</span>(<span class="hl-string">'createdAt'</span>, dir: <span class="hl-string">'desc'</span>)
+      <span class="hl-property">.limit</span>(<span class="hl-number">50</span>);
+
+  <span class="hl-keyword">if</span> (cursor != <span class="hl-keyword">null</span>) q = q<span class="hl-property">.startAfter</span>(cursor);
+
+  <span class="hl-keyword">final</span> page = <span class="hl-keyword">await</span> q<span class="hl-property">.get</span>();
+  <span class="hl-fn">renderInvoices</span>(page<span class="hl-property">.docs</span>);
+  cursor = page<span class="hl-property">.nextCursor</span>;
+} <span class="hl-keyword">while</span> (cursor != <span class="hl-keyword">null</span>);</code></pre>
+</div>
+<hr>
+<h2 id="enterprise-bounded-memory-streaming">Enterprise Bounded-Memory Streaming<a class="anchor" href="#enterprise-bounded-memory-streaming" aria-label="Link to section">#</a></h2>
+<p>For ETL pipelines, exports, backfills, or infinite scroll feeds, prefer the built-in streaming iterators instead of hand-rolled cursor loops. Both SDKs guard against empty pages and stuck cursors automatically.</p>
+<h3 id="typescript-pages-and-stream">TypeScript: <code class="inline-code">pages()</code> and <code class="inline-code">stream()</code><a class="anchor" href="#typescript-pages-and-stream" aria-label="Link to section">#</a></h3>
+<p>Supports <code class="inline-code">pageSize</code>, <code class="inline-code">maxPages</code>, <code class="inline-code">maxDocs</code>, and cooperative cancellation via <code class="inline-code">AbortSignal</code>:</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">const</span> controller = <span class="hl-keyword">new</span> <span class="hl-fn">AbortController</span>();
+
+<span class="hl-comment">// 1. Stream individual DocumentSnapshots with hard safety caps</span>
+<span class="hl-keyword">for</span> <span class="hl-keyword">await</span> (<span class="hl-keyword">const</span> doc <span class="hl-keyword">of</span> db
+  <span class="hl-property">.collection</span>(<span class="hl-string">&quot;events&quot;</span>)
+  <span class="hl-property">.where</span>(<span class="hl-string">&quot;type&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;purchase&quot;</span>)
+  <span class="hl-property">.orderBy</span>(<span class="hl-string">&quot;createdAt&quot;</span>, <span class="hl-string">&quot;desc&quot;</span>)
+  <span class="hl-property">.stream</span>({
+    pageSize: <span class="hl-number">200</span>,
+    maxPages: <span class="hl-number">50</span>,
+    maxDocs: 5_000,
+    signal: controller<span class="hl-property">.signal</span>,
+  })) {
+  <span class="hl-keyword">await</span> <span class="hl-fn">processEvent</span>(doc<span class="hl-property">.id</span>, doc<span class="hl-property">.data</span>());
+}
+
+<span class="hl-comment">// 2. Stream one QuerySnapshot page at a time</span>
+<span class="hl-keyword">for</span> <span class="hl-keyword">await</span> (<span class="hl-keyword">const</span> page <span class="hl-keyword">of</span> db
+  <span class="hl-property">.collection</span>(<span class="hl-string">&quot;events&quot;</span>)
+  <span class="hl-property">.orderBy</span>(<span class="hl-string">&quot;createdAt&quot;</span>, <span class="hl-string">&quot;desc&quot;</span>)
+  <span class="hl-property">.pages</span>({ pageSize: <span class="hl-number">200</span>, signal: controller<span class="hl-property">.signal</span> })) {
+  <span class="hl-keyword">await</span> <span class="hl-fn">writeWarehouseBatch</span>(page<span class="hl-property">.docs</span>);
+}</code></pre>
+</div>
+<h3 id="flutter-dart-streampages-and-streamdocuments">Flutter / Dart: <code class="inline-code">streamPages()</code> and <code class="inline-code">streamDocuments()</code><a class="anchor" href="#flutter-dart-streampages-and-streamdocuments" aria-label="Link to section">#</a></h3>
+<p>Standard Dart <code class="inline-code">Stream</code>s that pause automatically on backpressure and stop immediately when the <code class="inline-code">StreamSubscription</code> is cancelled:</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">final</span> query = client
+    <span class="hl-property">.collection</span>(<span class="hl-string">'events'</span>)
+    <span class="hl-property">.where</span>(<span class="hl-string">'type'</span>, <span class="hl-string">'=='</span>, <span class="hl-string">'purchase'</span>)
+    <span class="hl-property">.orderBy</span>(<span class="hl-string">'createdAt'</span>, dir: <span class="hl-string">'desc'</span>);
+
+<span class="hl-comment">// 1. Stream individual DocumentSnapshots lazily</span>
+<span class="hl-keyword">await</span> <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> doc <span class="hl-keyword">in</span> query<span class="hl-property">.streamDocuments</span>(pageSize: <span class="hl-number">200</span>, maxPages: <span class="hl-number">50</span>)) {
+  <span class="hl-keyword">await</span> <span class="hl-fn">processEvent</span>(doc<span class="hl-property">.id</span>, doc<span class="hl-property">.data</span>());
+}
+
+<span class="hl-comment">// 2. Stream one QuerySnapshot page at a time</span>
+<span class="hl-keyword">await</span> <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> page <span class="hl-keyword">in</span> query<span class="hl-property">.streamPages</span>(pageSize: <span class="hl-number">200</span>, maxPages: <span class="hl-number">50</span>)) {
+  <span class="hl-keyword">await</span> <span class="hl-fn">writeWarehouseBatch</span>(page<span class="hl-property">.docs</span>);
+}</code></pre>
+</div>
+<hr>
+<h2 id="best-practices">Best Practices<a class="anchor" href="#best-practices" aria-label="Link to section">#</a></h2>
+<ol><li><strong>Always set an explicit <code class="inline-code">orderBy</code></strong>: Combine <code class="inline-code">orderBy</code> with matching composite indexes for deterministic cursor order.</li><li><strong>Use <code class="inline-code">maxPages</code> / <code class="inline-code">maxDocs</code> and <code class="inline-code">AbortSignal</code> on unbounded collections</strong>: Prevent runaway background jobs from scanning millions of records unexpectedly.</li><li><strong>Never parse or modify <code class="inline-code">nextCursor</code></strong>: Cursors are HMAC-signed by the server; tampering results in an <code class="inline-code">INVALID_ARGUMENT</code> error.</li></ol></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#manual-cursor-pagination-startafter-startat" class="toc-link toc-l2">Manual Cursor Pagination (`startAfter` / `startAt`)</a><a href="#typescript-vellum-sdk-js" class="toc-link toc-l3">TypeScript (`@vellum/sdk-js`)</a><a href="#flutter-dart-vellum-flutter" class="toc-link toc-l3">Flutter / Dart (`vellum_flutter`)</a><a href="#enterprise-bounded-memory-streaming" class="toc-link toc-l2">Enterprise Bounded-Memory Streaming</a><a href="#typescript-pages-and-stream" class="toc-link toc-l3">TypeScript: `pages()` and `stream()`</a><a href="#flutter-dart-streampages-and-streamdocuments" class="toc-link toc-l3">Flutter / Dart: `streamPages()` and `streamDocuments()`</a><a href="#best-practices" class="toc-link toc-l2">Best Practices</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

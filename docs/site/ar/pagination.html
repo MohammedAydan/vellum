@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>الترقيم الصفحي · VELLUM Docs</title>
+<meta name="description" content="مؤشرات معتمة موقّعة بـ HMAC، وstartAt مقابل startAfter، وفاصل حسم بمعرّف المستند، ولماذا لا يُستخدم OFFSET أبدًا.">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-base="../">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="../ar/index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ التوثيق</span></span></a>
+  <span class="top-badge">أمثلة مُتحقَّق منها · ثابتة</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">ابحث في التوثيق <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="../pagination.html" title="English">EN</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">البداية</div><ul><li><a href="index.html" class="nav-link nav-home">الصفحة الرئيسية للتوثيق</a></li><li><a href="quickstart.html" class="nav-link">البدء السريع</a></li><li><a href="authentication.html" class="nav-link">المصادقة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المجموعات البرمجية</div><ul><li><a href="sdks/flutter.html" class="nav-link">مجموعة Flutter البرمجية (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المرجع</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">واجهة REST لمستوى التحكم والكونسول</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">واجهة REST العامة لمستوى البيانات</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">بروتوكول WebSocket للوقت الفعلي</a></li><li><a href="reference/wire-format.html" class="nav-link">تنسيق الإرسال الموسوم وقواعد المسارات</a></li><li><a href="reference/errors.html" class="nav-link">الرموز المعيارية للأخطاء وإرشادات إعادة المحاولة</a></li><li><a href="reference/packages.html" class="nav-link">واجهات الحزم البرمجية</a></li><li><a href="errors-and-limits.html" class="nav-link">الأخطاء والحدود</a></li><li><a href="rest-api.html" class="nav-link">نظرة عامة على REST API</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المفاهيم الأساسية</div><ul><li><a href="crud.html" class="nav-link">CRUD ومسارات المستندات</a></li><li><a href="field-transforms.html" class="nav-link">تحويلات الحقول</a></li><li><a href="query.html" class="nav-link">الاستعلام</a></li><li><a href="pagination.html" class="nav-link">الترقيم الصفحي</a></li><li><a href="indexes.html" class="nav-link">الفهارس المركّبة</a></li><li><a href="realtime.html" class="nav-link">الوقت الفعلي</a></li><li><a href="batch-and-transactions.html" class="nav-link">الكتابات الدفعية والمعاملات</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المصادقة</div><ul><li><a href="end-user-auth.html" class="nav-link">مصادقة المستخدمين النهائيين والمجالات الثلاثة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">الأمان</div><ul><li><a href="security-rules.html" class="nav-link">قواعد الأمان</a></li></ul></div><div class="nav-group"><div class="nav-group-title">التشغيل</div><ul><li><a href="production-checklist.html" class="nav-link">قائمة التحقق للإنتاج</a></li><li><a href="deployment.html" class="nav-link">النشر والاستضافة</a></li></ul></div></div>
+    <div class="sidebar-foot">تُنفَّذ الأمثلة على الـ API الحي وتُعرض كنص خامل. لا يُنفَّذ أي كود داخل هذا الموقع.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">المفاهيم الأساسية <span>/</span> <strong>الترقيم الصفحي</strong></div>
+    <article class="article"><h1 id="الترقيم-الصفحي">الترقيم الصفحي<a class="anchor" href="#الترقيم-الصفحي" aria-label="Link to section">#</a></h1>
+<p>يُرقّم VELLUM الصفوف بـ <strong>مؤشرات معتمة موقّعة</strong> — ولا يستخدم <code class="inline-code">OFFSET</code> في SQL مطلقًا. ترقيم الإزاحة (offset) ينزلق عند إدراج مستندات أو حذفها بين الصفحات، ويصير أبطأ كلما كبرت الإزاحة. أما الترقيم بالمفتاح (keyset) فيبدأ من صف الحد بالضبط في الصفحة السابقة.</p>
+<h2 id="السيناريو">السيناريو<a class="anchor" href="#السيناريو" aria-label="Link to section">#</a></h2>
+<p>أنت تعرض خلاصة تمرير لا نهائية للطلبات مرتبة حسب المبلغ الإجمالي. تجلب 20 في كل مرة، وتحتفظ بـ <code class="inline-code">nextCursor</code> المُعاد، وتطلب الصفحة التالية بـ <code class="inline-code">startAfter</code> حتى لا يتكرر آخر صف من الصفحة السابقة — حتى لو أُدرجت طلبات جديدة أثناء تمرير المستخدم.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">const</span> q = db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)<span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;paid&quot;</span>)<span class="hl-property">.orderBy</span>(<span class="hl-string">&quot;total&quot;</span>, <span class="hl-string">&quot;desc&quot;</span>)<span class="hl-property">.limit</span>(<span class="hl-number">20</span>);
+
+<span class="hl-keyword">let</span> cursor: string | <span class="hl-keyword">null</span> = <span class="hl-keyword">null</span>;
+<span class="hl-keyword">do</span> {
+  <span class="hl-keyword">const</span> page = <span class="hl-keyword">await</span> (cursor ? q<span class="hl-property">.startAfter</span>(cursor) : q)<span class="hl-property">.get</span>();
+  <span class="hl-keyword">for</span> (<span class="hl-keyword">const</span> doc <span class="hl-keyword">of</span> page<span class="hl-property">.docs</span>) console<span class="hl-property">.log</span>(doc<span class="hl-property">.id</span>, doc<span class="hl-property">.data</span>());
+  cursor = page<span class="hl-property">.nextCursor</span>; <span class="hl-comment">// null تعني أنه لا توجد نتائج أخرى</span>
+} <span class="hl-keyword">while</span> (cursor);</code></pre>
+</div>
+<ul><li>يجعل <code class="inline-code">startAt(cursor)</code> مستند الحد <strong>مشمولًا</strong> (يظهر مجددًا في الصفحة التالية).</li><li>يجعل <code class="inline-code">startAfter(cursor)</code> مستند الحد <strong>مستبعدًا</strong> (الاختيار المعتاد للصفحة التالية).</li></ul>
+<p>يكون <code class="inline-code">nextCursor</code> مساويًا <code class="inline-code">null</code> عندما لا يجلب الخادم صفًا إضافيًا بعد الصفحة، لذا تنتهي حلقة <code class="inline-code">while (cursor)</code> بسلاسة.</p>
+<h2 id="ما-الذي-بداخل-المؤشر">ما الذي بداخل المؤشر<a class="anchor" href="#ما-الذي-بداخل-المؤشر" aria-label="Link to section">#</a></h2>
+<p>المؤشر هو جسم JSON مُرمّز بـ base64url مع توقيع HMAC-SHA256:</p>
+<div class="table-wrap"><table><thead><tr><th>الحقل</th><th>المعنى</th></tr></thead><tbody><tr><td><code class="inline-code">qHash</code></td><td>تجزئة SHA-256 لـ <code class="inline-code">(projectId, projectId, collectionPath, where, orderBy)</code>.</td></tr><tr><td><code class="inline-code">vals</code></td><td>قيم حقول الترتيب من مستند الحد.</td></tr><tr><td><code class="inline-code">docId</code></td><td>معرّف <code class="inline-code">document_id</code> لمستند الحد.</td></tr><tr><td><code class="inline-code">sortKey</code></td><td>مفتاح فرز مركّب مُرمّز بالنظام الست عشري عندما جاءت الصفحة من فهرس مركّب.</td></tr><tr><td><code class="inline-code">sig</code></td><td><code class="inline-code">HMAC-SHA256(CURSOR_HMAC_SECRET, canonicalBody)</code>.</td></tr></tbody></table></div>
+<p>تُقارن التوقيعة بزمن ثابت. وتُتحقق تجزئة شكل الاستعلام في كل استخدام:</p>
+<ul><li>التلاعب بأي حقل يُبطل التوقيعة → <code class="inline-code">INVALID_CURSOR</code> (400).</li><li>إعادة استخدام مؤشر مع مرشحات أو ترتيب أو مشروع أو بيئة مختلفة يُبطل <code class="inline-code">qHash</code> → <code class="inline-code">INVALID_CURSOR</code>.</li><li>مؤشر استعلام مفهرس دون مفتاح الفرز الموقّع لا يمكنه الاستئناف → <code class="inline-code">INVALID_CURSOR</code>.</li></ul>
+<div class="admonition admonition-warning"><div class="admonition-label">WARNING</div><p>المؤشرات معتمة: لا تفكّ ترميزها أو تعدّلها أو أنشئها بنفسك. عاملها كرموز قصيرة العمر. المؤشر ذو معنى فقط للاستعلام الذي أنتجه بالضبط.</p></div>
+<h2 id="فاصل-الحسم-الحتمي">فاصل الحسم الحتمي<a class="anchor" href="#فاصل-الحسم-الحتمي" aria-label="Link to section">#</a></h2>
+<p>الترقيم بالمفتاح لا يكون حتميًا إلا إذا كان ترتيب الفرز كاملًا. يُلحق VELLUM <code class="inline-code">document_id ASC</code> كفاصل حسم أخير بكل قائمة <code class="inline-code">orderBy</code>، لذا تُعاد المستندات المتطابقة في قيم الترتيب دائمًا بالترتيب نفسه، ويمكن للمؤشر تحديد صف الحد بلا لبس.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// حتى لو اشتركت صفوف كثيرة في createdAt، يجعل document_id ASC الترتيب كاملًا.</span>
+<span class="hl-keyword">const</span> page = <span class="hl-keyword">await</span> db
+  <span class="hl-property">.collection</span>(<span class="hl-string">&quot;events&quot;</span>)
+  <span class="hl-property">.orderBy</span>(<span class="hl-string">&quot;createdAt&quot;</span>, <span class="hl-string">&quot;desc&quot;</span>) <span class="hl-comment">// يُلحق document_id ASC تلقائيًا</span>
+  <span class="hl-property">.limit</span>(<span class="hl-number">25</span>)
+  <span class="hl-property">.get</span>();</code></pre>
+</div>
+<p>بالنسبة للاستعلامات المدعومة بالفهارس المركّبة، يُحدد الحد أيضًا بمفتاح <code class="inline-code">sortKey</code> المُرمّز، مما يسمح بشرط keyset واحد على شجرة B (<code class="inline-code">sort_key &gt; &lt;cursor sort key&gt;</code>) بدلًا من إعادة المسح.</p>
+<h2 id="لا-يوجد-offset">لا يوجد OFFSET<a class="anchor" href="#لا-يوجد-offset" aria-label="Link to section">#</a></h2>
+<p>لا توجد معلمة <code class="inline-code">offset</code> في الواجهة العامة. داخليًا يجلب المحرك <code class="inline-code">limit + 1</code> صفًا ليقرر وجود صفحة تالية، ثم يبني المؤشر من آخر صف أُعيد. عمليات المسح الاحتياطية غير المفهرسة محددة بسقف أمان ولا تُقتطع من النتائج بصمت؛ أما الاستعلام الذي يتطلب فهرسًا مركّبًا فيفشل صراحةً. راجع <a href="query.html">الاستعلام</a> و<a href="indexes.html">الفهارس المركّبة</a>.</p>
+<h2 id="إعداد-البيئة">إعداد البيئة<a class="anchor" href="#إعداد-البيئة" aria-label="Link to section">#</a></h2>
+<p>تُفتاح توقيعات المؤشرات بـ <code class="inline-code">CURSOR_HMAC_SECRET</code>. تدوير هذا السر يُبطل جميع المؤشرات القائمة. استخدم قيمة قوية وفريدة في الإنتاج، واحتفظ بها ثابتة عبر كل الحالات التي تخدم النشر.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">BASH</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-type">CURSOR_HMAC_SECRET</span>=<span class="hl-string">&quot;&lt;a-long-random-value&gt;&quot;</span></code></pre>
+</div>
+<h2 id="الأخطاء-الشائعة">الأخطاء الشائعة<a class="anchor" href="#الأخطاء-الشائعة" aria-label="Link to section">#</a></h2>
+<ul><li><strong>استخدام <code class="inline-code">startAt</code> للصفحة التالية.</strong> يُعيد صف الحد؛ استخدم <code class="inline-code">startAfter</code> للترقيم الحصري.</li><li><strong>تعديل المؤشرات أو فك ترميزها.</strong> هي موقّعة ومعتمة؛ أي تغيير يُنتج <code class="inline-code">INVALID_CURSOR</code>.</li><li><strong>إعادة استخدام مؤشر مع استعلام مختلف.</strong> تجزئة شكل الاستعلام لن تطابق.</li><li><strong>تدوير <code class="inline-code">CURSOR_HMAC_SECRET</code> أثناء تصفح العملاء.</strong> تصبح كل المؤشرات النشطة باطلة ويجب على العملاء البدء من الصفحة الأولى.</li></ul>
+<h2 id="مثال-موثّق">مثال موثّق<a class="anchor" href="#مثال-موثّق" aria-label="Link to section">#</a></h2>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">المجموعة / البروتوكول</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed against the live PostgreSQL API by scripts/run-dart-examples.mjs.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// Cursor pagination — list users two at a time via opaque cursors.</span>
+<span class="hl-comment">// What you'll build: a paged user directory that follows `nextCursor` into</span>
+<span class="hl-comment">// `startAfter` until no cursor is returned.</span>
+<span class="hl-comment">// Real-world scenario: an admin list avoids SQL OFFSET; each page is anchored</span>
+<span class="hl-comment">// to the last row of the previous page. `vellum_flutter` exposes `startAfter`</span>
+<span class="hl-comment">// only (no `startAt`).</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix =
+      <span class="hl-string">'ex_flutter_pagination_${DateTime.now().microsecondsSinceEpoch}'</span>;
+  <span class="hl-keyword">final</span> col = client<span class="hl-property">.collection</span>(prefix);
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== Cursor Pagination (Flutter) ==='</span>);
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">var</span> i = <span class="hl-number">0</span>; i &lt; <span class="hl-number">6</span>; i++) {
+      <span class="hl-keyword">await</span> col
+          <span class="hl-property">.doc</span>(<span class="hl-string">'u$i'</span>)
+          <span class="hl-property">.set</span>({<span class="hl-string">'seq'</span>: i, <span class="hl-string">'status'</span>: <span class="hl-string">'active'</span>, <span class="hl-string">'name'</span>: <span class="hl-string">'user-$i'</span>});
+    }
+
+    <span class="hl-keyword">final</span> base = col<span class="hl-property">.where</span>(<span class="hl-string">'status'</span>, <span class="hl-string">'=='</span>, <span class="hl-string">'active'</span>)<span class="hl-property">.orderBy</span>(<span class="hl-string">'seq'</span>)<span class="hl-property">.limit</span>(<span class="hl-number">2</span>);
+    <span class="hl-type">Query</span>&lt;<span class="hl-type">Map</span>&lt;<span class="hl-type">String</span>, dynamic&gt;&gt; query = base;
+    <span class="hl-keyword">final</span> seen = &lt;<span class="hl-type">String</span>&gt;[];
+    <span class="hl-keyword">var</span> pageNumber = <span class="hl-number">0</span>;
+
+    <span class="hl-keyword">while</span> (<span class="hl-keyword">true</span>) {
+      <span class="hl-keyword">final</span> page = <span class="hl-keyword">await</span> query<span class="hl-property">.get</span>();
+      pageNumber++;
+      <span class="hl-keyword">final</span> ids = page<span class="hl-property">.docs</span><span class="hl-property">.map</span>((d) =&gt; d<span class="hl-property">.id</span>)<span class="hl-property">.toList</span>();
+      seen<span class="hl-property">.addAll</span>(ids);
+      <span class="hl-keyword">final</span> next = page<span class="hl-property">.nextCursor</span>;
+      <span class="hl-fn">print</span>(<span class="hl-string">'page=$pageNumber ids=$ids cursorReturned=${next != null}'</span>);
+      <span class="hl-keyword">if</span> (next == <span class="hl-keyword">null</span>) <span class="hl-keyword">break</span>;
+      query = base<span class="hl-property">.startAfter</span>(next);
+      <span class="hl-keyword">if</span> (pageNumber &gt;= <span class="hl-number">10</span>) <span class="hl-keyword">break</span>;
+    }
+    <span class="hl-fn">print</span>(
+        <span class="hl-string">'pages=$pageNumber total=${seen.length} unique=${seen.toSet().length}'</span>);
+  } <span class="hl-keyword">finally</span> {
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">var</span> i = <span class="hl-number">0</span>; i &lt; <span class="hl-number">6</span>; i++) {
+      <span class="hl-keyword">try</span> {
+        <span class="hl-keyword">await</span> col<span class="hl-property">.doc</span>(<span class="hl-string">'u$i'</span>)<span class="hl-property">.delete</span>();
+      } <span class="hl-keyword">catch</span> (_) {}
+    }
+    client<span class="hl-property">.dispose</span>();
+  }
+}</code></pre><div class="et-note">للمرجعية فقط — لم يُنفَّذ هنا (لا توجد أداة Dart).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="تم تشغيل المصدر على الـ API الحي">✓ مصدر مُتحقَّق منه</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Cursor-only pagination — walk a user directory two records at a time.
+ *
+ * What you'll build: a paged &quot;list users&quot; screen that follows the opaque
+ * HMAC cursor returned as nextCursor.
+ * Real-world scenario: an admin UI pages through a large, ordered directory.
+ * No SQL OFFSET is used or exposed — each page is anchored to the last row of
+ * the previous page via startAfter, with document_id as the final tie-breaker.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;pagination&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Cursor Pagination ===&quot;</span>);
+  <span class="hl-keyword">for</span> (<span class="hl-keyword">let</span> i = <span class="hl-number">0</span>; i &lt; <span class="hl-number">6</span>; i += <span class="hl-number">1</span>) {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">`u${i}`</span>)<span class="hl-property">.set</span>({ seq: i, status: <span class="hl-string">&quot;active&quot;</span>, name: <span class="hl-string">`user-${i}`</span> });
+  }
+
+  <span class="hl-keyword">const</span> base = h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.where</span>(<span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;active&quot;</span>)<span class="hl-property">.orderBy</span>(<span class="hl-string">&quot;seq&quot;</span>, <span class="hl-string">&quot;asc&quot;</span>)<span class="hl-property">.limit</span>(<span class="hl-number">2</span>);
+  <span class="hl-keyword">const</span> seen: string[] = [];
+  <span class="hl-keyword">let</span> cursor: string | <span class="hl-keyword">null</span> = <span class="hl-keyword">null</span>;
+  <span class="hl-keyword">let</span> pageNumber = <span class="hl-number">0</span>;
+
+  <span class="hl-keyword">while</span> (<span class="hl-keyword">true</span>) {
+    <span class="hl-keyword">const</span> query = cursor ? base<span class="hl-property">.startAfter</span>(cursor) : base;
+    <span class="hl-keyword">const</span> page = <span class="hl-keyword">await</span> query<span class="hl-property">.get</span>();
+    pageNumber += <span class="hl-number">1</span>;
+    <span class="hl-keyword">const</span> ids = page<span class="hl-property">.docs</span><span class="hl-property">.map</span>((doc) =&gt; doc<span class="hl-property">.id</span> <span class="hl-keyword">as</span> string);
+    seen<span class="hl-property">.push</span>(..<span class="hl-property">.ids</span>);
+    h<span class="hl-property">.log</span>({ page: pageNumber, ids, cursorReturned: page<span class="hl-property">.nextCursor</span> !== <span class="hl-keyword">null</span> });
+    <span class="hl-keyword">if</span> (page<span class="hl-property">.nextCursor</span> === <span class="hl-keyword">null</span>) <span class="hl-keyword">break</span>;
+    cursor = page<span class="hl-property">.nextCursor</span>;
+    <span class="hl-fn">check</span>(pageNumber &lt; <span class="hl-number">10</span>, <span class="hl-string">&quot;pagination should terminate&quot;</span>);
+  }
+
+  <span class="hl-fn">check</span>(seen<span class="hl-property">.length</span> === <span class="hl-number">6</span>, <span class="hl-string">&quot;all six users were visited exactly once&quot;</span>);
+  <span class="hl-fn">check</span>(<span class="hl-keyword">new</span> <span class="hl-fn">Set</span>(seen)<span class="hl-property">.size</span> === <span class="hl-number">6</span>, <span class="hl-string">&quot;no user was returned twice&quot;</span>);
+  h<span class="hl-property">.log</span>({ pages: pageNumber, total: seen<span class="hl-property">.length</span>, unique: <span class="hl-keyword">new</span> <span class="hl-fn">Set</span>(seen)<span class="hl-property">.size</span>, nextCursor: <span class="hl-keyword">null</span> });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">النتيجة · مُلتقطة من تشغيل فعلي</span><button class="cb-copy" type="button">نسخ</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Cursor Pagination ===
+{&quot;page&quot;:1,&quot;ids&quot;:[&quot;u0&quot;,&quot;u1&quot;],&quot;cursorReturned&quot;:true}
+{&quot;page&quot;:2,&quot;ids&quot;:[&quot;u2&quot;,&quot;u3&quot;],&quot;cursorReturned&quot;:true}
+{&quot;page&quot;:3,&quot;ids&quot;:[&quot;u4&quot;,&quot;u5&quot;],&quot;cursorReturned&quot;:false}
+{&quot;pages&quot;:3,&quot;total&quot;:6,&quot;unique&quot;:6,&quot;nextCursor&quot;:null}
+[VELLUM Index Advisor] Slow/unindexed query detected on &quot;ex_pagination_mwo4fcdxw3m7&quot;.
+Reason: Composite index needed for equality filter on [status] + sort on [seq ASC, documentId ASC]
+Create this index in 1 click: http://localhost:3000/orgs/d29c31e0-e93f-402c-8499-74909e9bfb0a/projects/1382468e-5dc0-44a8-9b68-5427a5b6ea5c/envs/development/indexes?suggest=eyJvcmdJZCI6ImQyOWMzMWUwLWU5M2YtNDAyYy04NDk5LTc0OTA5ZTliZmIwYSIsInByb2plY3RJZCI6IjEzODI0NjhlLTVkYzAtNDRhOC05YjY4LTU0MjdhNWI2ZWE1YyIsImVudmlyb25tZW50SWQiOiIxYWMyN2Q4OS0zNWJhLTQwMmUtODc0Ny0zMjBhMTA5MjY0M2QiLCJlbnYiOiJkZXZlbG9wbWVudCIsImNvbGxlY3Rpb25QYXRoIjoiZXhfcGFnaW5hdGlvbl9td280ZmNkeHczbTciLCJmaWVsZHMiOlt7InBhdGgiOiJzdGF0dXMiLCJkaXIiOiJhc2MifSx7InBhdGgiOiJzZXEiLCJkaXIiOiJhc2MifSx7InBhdGgiOiJkb2N1bWVudElkIiwiZGlyIjoiYXNjIn1dLCJmaW5nZXJwcmludCI6ImQ1YzJkYjUwNDk5OGMzNGM5ODE4NDZkOTUwMDgwYjBmODllMjkwNzA4M2E0YWEyZDZjYmJlNjIxOTU4OTAwM2EiLCJyZWFzb24iOiJDb21wb3NpdGUgaW5kZXggbmVlZGVkIGZvciBlcXVhbGl0eSBmaWx0ZXIgb24gW3N0YXR1c10gKyBzb3J0IG9uIFtzZXEgQVNDLCBkb2N1bWVudElkIEFTQ10ifQ</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="تم تشغيل المصدر على الـ API الحي">✓ مصدر مُتحقَّق منه</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Cursor pagination (REST) — list users two at a time via opaque cursors.
+ *
+ * What you'll build: a paged user directory that follows `nextCursor` from the
+ * /query response into `startAfter` on the next request.
+ * Real-world scenario: a large admin list must avoid SQL OFFSET; each page is
+ * anchored to the last row of the previous page and stops when nextCursor is null.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;pagination&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Cursor Pagination ===&quot;</span>);
+  <span class="hl-keyword">for</span> (<span class="hl-keyword">let</span> i = <span class="hl-number">0</span>; i &lt; <span class="hl-number">6</span>; i += <span class="hl-number">1</span>) {
+    <span class="hl-keyword">const</span> res = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${col}/u${i}`</span>, {
+      data: { seq: i, status: <span class="hl-string">&quot;active&quot;</span>, name: <span class="hl-string">`user-${i}`</span> },
+    });
+    <span class="hl-fn">check</span>(res<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">`seed user ${i}`</span>);
+  }
+
+  <span class="hl-keyword">const</span> base = {
+    collectionPath: col,
+    where: [{ field: <span class="hl-string">&quot;status&quot;</span>, op: <span class="hl-string">&quot;==&quot;</span>, value: <span class="hl-string">&quot;active&quot;</span> }],
+    orderBy: [{ field: <span class="hl-string">&quot;seq&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> }],
+    limit: <span class="hl-number">2</span>,
+    select: <span class="hl-keyword">null</span>,
+    startAt: <span class="hl-keyword">null</span>,
+    startAfter: <span class="hl-keyword">null</span>,
+  };
+  <span class="hl-keyword">const</span> seen = [];
+  <span class="hl-keyword">let</span> cursor = <span class="hl-keyword">null</span>;
+  <span class="hl-keyword">let</span> pageNumber = <span class="hl-number">0</span>;
+
+  <span class="hl-keyword">while</span> (<span class="hl-keyword">true</span>) {
+    <span class="hl-keyword">const</span> reply = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/query&quot;</span>, { ..<span class="hl-property">.base</span>, startAfter: cursor });
+    <span class="hl-fn">check</span>(reply<span class="hl-property">.ok</span>, <span class="hl-string">`page ${pageNumber + 1} query succeeded`</span>);
+    pageNumber += <span class="hl-number">1</span>;
+    <span class="hl-keyword">const</span> ids = reply<span class="hl-property">.body</span><span class="hl-property">.documents</span><span class="hl-property">.map</span>((d) =&gt; d<span class="hl-property">.documentId</span>);
+    seen<span class="hl-property">.push</span>(..<span class="hl-property">.ids</span>);
+    <span class="hl-keyword">const</span> nextCursor = reply<span class="hl-property">.body</span><span class="hl-property">.nextCursor</span> ?? <span class="hl-keyword">null</span>;
+    h<span class="hl-property">.log</span>({ page: pageNumber, ids, cursorReturned: nextCursor !== <span class="hl-keyword">null</span> });
+    <span class="hl-keyword">if</span> (nextCursor === <span class="hl-keyword">null</span>) <span class="hl-keyword">break</span>;
+    cursor = nextCursor;
+    <span class="hl-fn">check</span>(pageNumber &lt; <span class="hl-number">10</span>, <span class="hl-string">&quot;pagination should terminate&quot;</span>);
+  }
+
+  <span class="hl-fn">check</span>(seen<span class="hl-property">.length</span> === <span class="hl-number">6</span>, <span class="hl-string">&quot;all six users visited exactly once&quot;</span>);
+  <span class="hl-fn">check</span>(<span class="hl-keyword">new</span> <span class="hl-fn">Set</span>(seen)<span class="hl-property">.size</span> === <span class="hl-number">6</span>, <span class="hl-string">&quot;no user returned twice&quot;</span>);
+  h<span class="hl-property">.log</span>({ pages: pageNumber, total: seen<span class="hl-property">.length</span>, unique: <span class="hl-keyword">new</span> <span class="hl-fn">Set</span>(seen)<span class="hl-property">.size</span>, nextCursor: <span class="hl-keyword">null</span> });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">النتيجة · مُلتقطة من تشغيل فعلي</span><button class="cb-copy" type="button">نسخ</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Cursor Pagination ===
+{&quot;page&quot;:1,&quot;ids&quot;:[&quot;u0&quot;,&quot;u1&quot;],&quot;cursorReturned&quot;:true}
+{&quot;page&quot;:2,&quot;ids&quot;:[&quot;u2&quot;,&quot;u3&quot;],&quot;cursorReturned&quot;:true}
+{&quot;page&quot;:3,&quot;ids&quot;:[&quot;u4&quot;,&quot;u5&quot;],&quot;cursorReturned&quot;:false}
+{&quot;pages&quot;:3,&quot;total&quot;:6,&quot;unique&quot;:6,&quot;nextCursor&quot;:null}</code></pre>
+</div></div></div>
+</div>
+<h2 id="ماذا-تقرأ-بعد-ذلك">ماذا تقرأ بعد ذلك<a class="anchor" href="#ماذا-تقرأ-بعد-ذلك" aria-label="Link to section">#</a></h2>
+<ul><li><a href="query.html">الاستعلام</a> — خيارات التصفية والترتيب التي تحدد شكل استعلام المؤشر.</li><li><a href="indexes.html">الفهارس المركّبة</a> — الفهارس المستخدمة في عمليات keyset المفهرسة.</li><li><a href="errors-and-limits.html">الأخطاء والحدود</a> — <code class="inline-code">INVALID_CURSOR</code> والرموز ذات الصلة.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · التصميم الافتراضي الرسمي لـ shadcn/ui</span><span>مولَّد من docs/guides — لا تعدّل HTML مباشرة.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">في هذه الصفحة</div><a href="#السيناريو" class="toc-link toc-l2">السيناريو</a><a href="#ما-الذي-بداخل-المؤشر" class="toc-link toc-l2">ما الذي بداخل المؤشر</a><a href="#فاصل-الحسم-الحتمي" class="toc-link toc-l2">فاصل الحسم الحتمي</a><a href="#لا-يوجد-offset" class="toc-link toc-l2">لا يوجد OFFSET</a><a href="#إعداد-البيئة" class="toc-link toc-l2">إعداد البيئة</a><a href="#الأخطاء-الشائعة" class="toc-link toc-l2">الأخطاء الشائعة</a><a href="#مثال-موثّق" class="toc-link toc-l2">مثال موثّق</a><a href="#ماذا-تقرأ-بعد-ذلك" class="toc-link toc-l2">ماذا تقرأ بعد ذلك</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="ابحث في الأدلة والواجهات والأمثلة…" autocomplete="off"><button id="searchClose" type="button">إغلاق</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="../assets/docs.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>الصفحة الرئيسية للتوثيق · VELLUM Docs</title>
+<meta name="description" content="ما هو VELLUM، وكيف تتكامل قاعدتا البيانات الخاصتان بـ PostgreSQL، ومن أين تبدأ.">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-base="../">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="../ar/index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ التوثيق</span></span></a>
+  <span class="top-badge">أمثلة مُتحقَّق منها · ثابتة</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">ابحث في التوثيق <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="../index.html" title="English">EN</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">البداية</div><ul><li><a href="index.html" class="nav-link nav-home">الصفحة الرئيسية للتوثيق</a></li><li><a href="quickstart.html" class="nav-link">البدء السريع</a></li><li><a href="authentication.html" class="nav-link">المصادقة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المجموعات البرمجية</div><ul><li><a href="sdks/flutter.html" class="nav-link">مجموعة Flutter البرمجية (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المرجع</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">واجهة REST لمستوى التحكم والكونسول</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">واجهة REST العامة لمستوى البيانات</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">بروتوكول WebSocket للوقت الفعلي</a></li><li><a href="reference/wire-format.html" class="nav-link">تنسيق الإرسال الموسوم وقواعد المسارات</a></li><li><a href="reference/errors.html" class="nav-link">الرموز المعيارية للأخطاء وإرشادات إعادة المحاولة</a></li><li><a href="reference/packages.html" class="nav-link">واجهات الحزم البرمجية</a></li><li><a href="errors-and-limits.html" class="nav-link">الأخطاء والحدود</a></li><li><a href="rest-api.html" class="nav-link">نظرة عامة على REST API</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المفاهيم الأساسية</div><ul><li><a href="crud.html" class="nav-link">CRUD ومسارات المستندات</a></li><li><a href="field-transforms.html" class="nav-link">تحويلات الحقول</a></li><li><a href="query.html" class="nav-link">الاستعلام</a></li><li><a href="pagination.html" class="nav-link">الترقيم الصفحي</a></li><li><a href="indexes.html" class="nav-link">الفهارس المركّبة</a></li><li><a href="realtime.html" class="nav-link">الوقت الفعلي</a></li><li><a href="batch-and-transactions.html" class="nav-link">الكتابات الدفعية والمعاملات</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المصادقة</div><ul><li><a href="end-user-auth.html" class="nav-link">مصادقة المستخدمين النهائيين والمجالات الثلاثة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">الأمان</div><ul><li><a href="security-rules.html" class="nav-link">قواعد الأمان</a></li></ul></div><div class="nav-group"><div class="nav-group-title">التشغيل</div><ul><li><a href="production-checklist.html" class="nav-link">قائمة التحقق للإنتاج</a></li><li><a href="deployment.html" class="nav-link">النشر والاستضافة</a></li></ul></div></div>
+    <div class="sidebar-foot">تُنفَّذ الأمثلة على الـ API الحي وتُعرض كنص خامل. لا يُنفَّذ أي كود داخل هذا الموقع.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">البداية <span>/</span> <strong>الصفحة الرئيسية للتوثيق</strong></div>
+    <article class="article"><h1 id="الصفحة-الرئيسية-للتوثيق">الصفحة الرئيسية للتوثيق<a class="anchor" href="#الصفحة-الرئيسية-للتوثيق" aria-label="Link to section">#</a></h1>
+<p>VELLUM هي قاعدة بيانات مستندات متعددة المستأجرين مبنية بالكامل على PostgreSQL/JSONB. تحصل على مجموعات هرمية، ومستندات JSON مكتوبة، واستعلامات منظمة مع ترقيم صفحي عبر المؤشرات، وتحويلات حقول ذرية، ومعاملات تحكم متفائل في التزامن، وتدفقات WebSocket المباشرة — كل ذلك عبر SDK صغير بلغة TypeScript/JavaScript (<code class="inline-code">@vellum/sdk-js</code>) أو عبر HTTP مباشر.</p>
+<p>يوجد <strong>اعتماد حالة واحد فقط وقت التشغيل: PostgreSQL</strong>. لا يوجد Redis، ولا وسيط رسائل، ولا خدمة تخزين مؤقت منفصلة. يُبنى الوقت الفعلي على <code class="inline-code">LISTEN/NOTIFY</code> الخاص بـ PostgreSQL إضافةً إلى صندوق بريد دائم (outbox)؛ ويستخدم التخزين المؤقت وتحديد المعدل حالات قصيرة العمر داخل العملية مع دعم من PostgreSQL حيث يلزم الديمومة؛ أما المعاملات فهي معاملات PostgreSQL أصلية.</p>
+<div class="admonition admonition-note"><div class="admonition-label">NOTE</div><p>واجهة المستندات العامة في VELLUM محددة بمفتاح API مع رمز مستخدم نهائي اختياري بخوارزمية EdDSA. أما لوحات التحكم فتستخدم رموز جلسة Console/Admin خاصة بكل مجال (<code class="inline-code">/v1/console/...</code>، <code class="inline-code">/v1/admin/...</code>). المجالات الثلاثة المعزولة تشترك في عناصر التشفير فقط — راجع <a href="end-user-auth.html">مصادقة المستخدمين والمجالات الثلاثة</a>.</p></div>
+<h2 id="السيناريو">السيناريو<a class="anchor" href="#السيناريو" aria-label="Link to section">#</a></h2>
+<p>تخيل أنك تبني تطبيق إدارة مهام متعدد المستأجرين. يحصل كل عميل (مستأجر) على مشروعه الخاص، وتحتاج إلى تخزين المهام، والاستعلام عن المهام المفتوحة، والتفاعل مع التغييرات لحظيًا، والاحتفاظ بسجل تدقيق صارم — كل ذلك دون تشغيل خدمة تخزين مؤقت أو وسيط رسائل منفصل. يمنحك VELLUM واجهة مستندات واحدة مدعومة بـ PostgreSQL تعالج هذه الجوانب وتحدد نطاق كل طلب إلى زوج <code class="inline-code">(projectId)</code>.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// عميل واحد، نطاق مستأجر واحد: كل طلب يحمل projectId.</span>
+<span class="hl-keyword">import</span> { createClient } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/sdk-js&quot;</span>;
+
+<span class="hl-keyword">const</span> db = <span class="hl-fn">createClient</span>({
+  projectId: <span class="hl-string">&quot;&lt;YOUR_PROJECT_ID&gt;&quot;</span>,
+  apiKey: <span class="hl-string">&quot;&lt;YOUR_API_KEY&gt;&quot;</span>, <span class="hl-comment">// pk_ للمتصفح/الجوال، sk_ على خادم موثوق</span>
+});
+
+<span class="hl-comment">// قراءات وكتابات مستوى البيانات محددة دائمًا بـ (project).</span>
+<span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;tasks&quot;</span>)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;task_123&quot;</span>)<span class="hl-property">.set</span>({ title: <span class="hl-string">&quot;Ship v1&quot;</span>, done: <span class="hl-keyword">false</span> });
+<span class="hl-keyword">const</span> snap = <span class="hl-keyword">await</span> db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;tasks&quot;</span>)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;task_123&quot;</span>)<span class="hl-property">.get</span>();
+console<span class="hl-property">.log</span>(snap<span class="hl-property">.data</span>());</code></pre>
+</div>
+<h2 id="البنية-في-60-ثانية">البنية في 60 ثانية<a class="anchor" href="#البنية-في-60-ثانية" aria-label="Link to section">#</a></h2>
+<p>تقسم المنصة تخزينها إلى قاعدتي بيانات منفصلتين فيزيائيًا ومنطقيًا:</p>
+<div class="table-wrap"><table><thead><tr><th>المستوى</th><th>قاعدة البيانات</th><th>ما الذي يوجد هناك</th></tr></thead><tbody><tr><td><strong>مستوى التحكم</strong></td><td><code class="inline-code">control_db</code></td><td>المستخدمون، والمؤسسات، والعضويات، والمشاريع، ومفاتيح API بادئاتها <code class="inline-code">pk_</code>/<code class="inline-code">sk_</code> وتجزئاتها (hashes)، ومجموعات قواعد الأمان المرجّلة، وأسرار MFA، وعدادات الاستخدام اليومية، وسجلات التدقيق غير القابلة للتعديل.</td></tr><tr><td><strong>مستوى البيانات</strong></td><td><code class="inline-code">data_db</code></td><td>مستندات العملاء، وتعريفات الفهارس المركّبة وإدخالاتها، و<code class="inline-code">realtime_outbox</code> للمعاملات، وجدول <code class="inline-code">transactions</code> الخاص بـ OCC.</td></tr></tbody></table></div>
+<p>ينتج عن هذا التقسيم ثلاث ثوابت:</p>
+<ol><li><strong>التهيئة الأولية لا تعتمد أبدًا على بيانات العملاء.</strong> تشغيل الخدمة، ومصادقة المشغّلين، والتحقق من مفاتيح API، والتعافي من الانقطاع تقرأ فقط من <code class="inline-code">control_db</code>. لا يوجد اعتماد دائري على واجهة المستندات العامة.</li><li><strong>كل عملية في مستوى البيانات محددة بالمستأجر.</strong> يحمل كل طلب <code class="inline-code">(projectId)</code>، وتربط كل معاملة <code class="inline-code">SET LOCAL app.current_project_id</code> و<code class="inline-code">statement_timeout = '5000ms'</code>. تفشل سياسات PostgreSQL Row-Level Security تلقائيًا (fail closed) إذا غاب هذا السياق. المشروع هو المستأجر الوحيد.</li><li><strong>فهارس المستأجر لا تأخذ أقفال DDL أبدًا.</strong> الفهارس المركّبة هي صفوف في <code class="inline-code">document_indexes</code> بمفاتيح فرز ثنائية تحافظ على الترتيب في <code class="inline-code">document_index_entries</code> — ولا يُنفَّذ <code class="inline-code">CREATE INDEX</code> على جدول <code class="inline-code">documents</code> المشترك مطلقًا.</li></ol>
+<h3 id="مبدأ-صفر-redis">مبدأ «صفر Redis»<a class="anchor" href="#مبدأ-صفر-redis" aria-label="Link to section">#</a></h3>
+<p>سمّى التصميم الأصلي 2.0 خدمة Redis كوسيط إلزامي للوقت الفعلي. تم <strong>إلغاء</strong> هذا الشرط. في التصميم الحالي:</p>
+<ul><li>كل تعديل يكتب صفًا في <code class="inline-code">realtime_outbox</code> <strong>في نفس معاملة قاعدة البيانات</strong> التي تعدّل المستند.</li><li>يُصدر مُحفّز <code class="inline-code">AFTER INSERT</code> إشعار <code class="inline-code">NOTIFY</code> صغيرًا يحتوي فقط على رقم التسلسل ومعرّفات المستأجر — ولا يحتوي أبدًا على بيانات المستند.</li><li>عميل PostgreSQL واحد مخصص لـ <code class="inline-code">LISTEN</code> يستقبل الإشعار ويوقظ مستطلع صندوق البريد الذي يكتشف الفجوات، والذي يجلب الصفوف الكاملة عبر المهايئ المحدد للمستأجر ثم يوزّعها عبر WebSockets.</li><li>مخابئ المفاتيح المتحقق منها، وإلغاء الجلسات، ونوافذ تحديد المعدل هي هياكل TTL داخل العملية؛ ويتم الإبطال عبر الحالات باستخدام <code class="inline-code">NOTIFY vellum_cache_invalidate</code>.</li></ul>
+<p>راجع <a href="realtime.html">الوقت الفعلي</a> و<a href="production-checklist.html">قائمة التحقق للإنتاج</a> للتفاصيل التشغيلية.</p>
+<h2 id="من-أين-تبدأ">من أين تبدأ<a class="anchor" href="#من-أين-تبدأ" aria-label="Link to section">#</a></h2>
+<ul><li><strong>استخدام SDK لأول مرة:</strong> <a href="quickstart.html">البدء السريع</a> → <a href="crud.html">CRUD</a> → <a href="query.html">الاستعلام</a>.</li><li><strong>تأمين بيئة:</strong> <a href="authentication.html">المصادقة</a> → <a href="end-user-auth.html">مصادقة المستخدمين والمجالات الثلاثة</a> → <a href="security-rules.html">قواعد الأمان</a>.</li><li><strong>استخدام المجموعات البرمجية:</strong> <a href="sdks/javascript.html">JavaScript</a> · <a href="sdks/flutter.html">Flutter</a> — تتضمنان واجهة مصادقة وتحديثًا صامتًا.</li><li><strong>بناء تطبيقات تفاعلية:</strong> <a href="realtime.html">الوقت الفعلي</a> و<a href="batch-and-transactions.html">الكتابات الدفعية والمعاملات</a>.</li><li><strong>تشغيل نشر ما:</strong> <a href="errors-and-limits.html">الأخطاء والحدود</a> و<a href="production-checklist.html">قائمة التحقق للإنتاج</a>.</li><li><strong>استدعاء API مباشرة:</strong> <a href="rest-api.html">نظرة عامة على REST API</a> والمرجع الكامل لـ HTTP أسفل <code class="inline-code">./reference/</code>.</li></ul>
+<h2 id="حول-الأمثلة">حول الأمثلة<a class="anchor" href="#حول-الأمثلة" aria-label="Link to section">#</a></h2>
+<p>قد تتضمن كل دالة كتلة مثال، تُكتب كتوجيه example-tabs متبوع بمعرّف مسجّل. يوسّع مولّد الموقع الثابت كلًا منها إلى <strong>كتلة مصدر ثابتة مرفقة بمخرجات تشغيل حقيقية</strong>. يتم التحقق من الأمثلة بتشغيلها فعليًا مقابل قاعدة الكود؛ ولا تُظهر الوثائق سوى المصدر والمخرجات المسجّلة.</p>
+<div class="admonition admonition-warning"><div class="admonition-label">WARNING</div><p>الوثائق <strong>لا تنفّذ أي كود في المتصفح</strong>. كتل الأمثلة عناصر ساكنة معروضة مسبقًا. لا تُلصق أبدًا مفاتيح API حقيقية أو رموز جلسة أو عناوين URL لقواعد بيانات في الوثائق أو في التحكم بالمصادر — جميع المقتطفات هنا تستخدم عناصر نائبة مثل <code class="inline-code">&lt;YOUR_API_KEY&gt;</code>.</p></div>
+<h2 id="الأخطاء-الشائعة">الأخطاء الشائعة<a class="anchor" href="#الأخطاء-الشائعة" aria-label="Link to section">#</a></h2>
+<ul><li><strong>لا تضف وسيط رسائل أو خدمة تخزين مؤقت.</strong> PostgreSQL هو الاعتماد الوحيد وقت التشغيل؛ يُبنى الوقت الفعلي والتخزين المؤقت قصير العمر عليه.</li><li><strong>المفتاح العام ليس منحة وصول.</strong> كل عملية على المستندات تظل تمر عبر قواعد أمان البيئة.</li><li><strong>لا تنفّذ <code class="inline-code">CREATE INDEX</code> على <code class="inline-code">documents</code>.</strong> تُدار الفهارس المركّبة كصفوف عبر واجهة الفهارس، لذا لا تأخذ فهارس المستأجرين قفلًا على الجدول المشترك.</li></ul>
+<h2 id="ماذا-تقرأ-بعد-ذلك">ماذا تقرأ بعد ذلك<a class="anchor" href="#ماذا-تقرأ-بعد-ذلك" aria-label="Link to section">#</a></h2>
+<ul><li><a href="quickstart.html">البدء السريع</a> — ثبّت SDK واكتب أول مستند لديك.</li><li><a href="authentication.html">المصادقة</a> — مفتاحا <code class="inline-code">pk_</code> / <code class="inline-code">sk_</code> وجلسات Console.</li><li><a href="end-user-auth.html">مصادقة المستخدمين</a> — ثلاثة مجالات، تدوير التحديث، الإسقاط، مصادقة WebSocket وتحديد المعدل.</li><li><a href="rest-api.html">REST API</a> — عائلات نقاط النهاية والمرجع الكامل.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · التصميم الافتراضي الرسمي لـ shadcn/ui</span><span>مولَّد من docs/guides — لا تعدّل HTML مباشرة.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">في هذه الصفحة</div><a href="#السيناريو" class="toc-link toc-l2">السيناريو</a><a href="#البنية-في-60-ثانية" class="toc-link toc-l2">البنية في 60 ثانية</a><a href="#مبدأ-صفر-redis" class="toc-link toc-l3">مبدأ «صفر Redis»</a><a href="#من-أين-تبدأ" class="toc-link toc-l2">من أين تبدأ</a><a href="#حول-الأمثلة" class="toc-link toc-l2">حول الأمثلة</a><a href="#الأخطاء-الشائعة" class="toc-link toc-l2">الأخطاء الشائعة</a><a href="#ماذا-تقرأ-بعد-ذلك" class="toc-link toc-l2">ماذا تقرأ بعد ذلك</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="ابحث في الأدلة والواجهات والأمثلة…" autocomplete="off"><button id="searchClose" type="button">إغلاق</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="../assets/docs.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>الوقت الفعلي · VELLUM Docs</title>
+<meta name="description" content="LISTEN/NOTIFY مع صندوق بريد دائم، وعلامات الاستئناف وكشف الفجوات، وonSnapshot للمستندات والاستعلامات، وحدود الاتصال.">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-base="../">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="../ar/index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ التوثيق</span></span></a>
+  <span class="top-badge">أمثلة مُتحقَّق منها · ثابتة</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">ابحث في التوثيق <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="../realtime.html" title="English">EN</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">البداية</div><ul><li><a href="index.html" class="nav-link nav-home">الصفحة الرئيسية للتوثيق</a></li><li><a href="quickstart.html" class="nav-link">البدء السريع</a></li><li><a href="authentication.html" class="nav-link">المصادقة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المجموعات البرمجية</div><ul><li><a href="sdks/flutter.html" class="nav-link">مجموعة Flutter البرمجية (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المرجع</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">واجهة REST لمستوى التحكم والكونسول</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">واجهة REST العامة لمستوى البيانات</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">بروتوكول WebSocket للوقت الفعلي</a></li><li><a href="reference/wire-format.html" class="nav-link">تنسيق الإرسال الموسوم وقواعد المسارات</a></li><li><a href="reference/errors.html" class="nav-link">الرموز المعيارية للأخطاء وإرشادات إعادة المحاولة</a></li><li><a href="reference/packages.html" class="nav-link">واجهات الحزم البرمجية</a></li><li><a href="errors-and-limits.html" class="nav-link">الأخطاء والحدود</a></li><li><a href="rest-api.html" class="nav-link">نظرة عامة على REST API</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المفاهيم الأساسية</div><ul><li><a href="crud.html" class="nav-link">CRUD ومسارات المستندات</a></li><li><a href="field-transforms.html" class="nav-link">تحويلات الحقول</a></li><li><a href="query.html" class="nav-link">الاستعلام</a></li><li><a href="pagination.html" class="nav-link">الترقيم الصفحي</a></li><li><a href="indexes.html" class="nav-link">الفهارس المركّبة</a></li><li><a href="realtime.html" class="nav-link">الوقت الفعلي</a></li><li><a href="batch-and-transactions.html" class="nav-link">الكتابات الدفعية والمعاملات</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المصادقة</div><ul><li><a href="end-user-auth.html" class="nav-link">مصادقة المستخدمين النهائيين والمجالات الثلاثة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">الأمان</div><ul><li><a href="security-rules.html" class="nav-link">قواعد الأمان</a></li></ul></div><div class="nav-group"><div class="nav-group-title">التشغيل</div><ul><li><a href="production-checklist.html" class="nav-link">قائمة التحقق للإنتاج</a></li><li><a href="deployment.html" class="nav-link">النشر والاستضافة</a></li></ul></div></div>
+    <div class="sidebar-foot">تُنفَّذ الأمثلة على الـ API الحي وتُعرض كنص خامل. لا يُنفَّذ أي كود داخل هذا الموقع.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">المفاهيم الأساسية <span>/</span> <strong>الوقت الفعلي</strong></div>
+    <article class="article"><h1 id="الوقت-الفعلي">الوقت الفعلي<a class="anchor" href="#الوقت-الفعلي" aria-label="Link to section">#</a></h1>
+<p>يبثّ VELLUM التغييرات عبر WebSocket على <code class="inline-code">/v1/realtime</code>. يستخدم التصميم PostgreSQL كخدمة وحيدة تحمل الحالة: يُوقظ <code class="inline-code">LISTEN/NOTIFY</code> مستطلعًا، ويضمن صندوق بريد دائم عدم فقدان أي تغيير.</p>
+<h2 id="السيناريو">السيناريو<a class="anchor" href="#السيناريو" aria-label="Link to section">#</a></h2>
+<p>أنت تبني لوحة تحكم مشتركة يراقب فيها عدة مشغّلين قائمة الطلبات نفسها. تشترك في لقطة استعلام، فيظهر كل إنشاء أو تعديل لحظيًا. تحتفظ بأحدث <code class="inline-code">watermarkSeqId</code>، فإذا انقطع الاتصال تعيد الاتصال وتُعيد تشغيل الأحداث التي فاتتك فقط.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// اشتراك في مستند.</span>
+<span class="hl-keyword">const</span> stopUser = db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;users/u_123&quot;</span>)<span class="hl-property">.onSnapshot</span>(
+  (snapshot) =&gt; {
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">const</span> change <span class="hl-keyword">of</span> snapshot<span class="hl-property">.changes</span>) {
+      console<span class="hl-property">.log</span>(change<span class="hl-property">.type</span>, change<span class="hl-property">.seqId</span>, change<span class="hl-property">.doc</span><span class="hl-property">.data</span>());
+    }
+  },
+  (error) =&gt; console<span class="hl-property">.error</span>(<span class="hl-string">&quot;stream failed&quot;</span>, error)
+);
+
+<span class="hl-comment">// اشتراك في استعلام — snapshot.docs هي مجموعة النتائج المُجمَّعة.</span>
+<span class="hl-keyword">const</span> stopQuery = db
+  <span class="hl-property">.collection</span>(<span class="hl-string">&quot;users&quot;</span>)
+  <span class="hl-property">.where</span>(<span class="hl-string">&quot;online&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-keyword">true</span>)
+  <span class="hl-property">.onSnapshot</span>((snapshot) =&gt; {
+    console<span class="hl-property">.log</span>(snapshot<span class="hl-property">.docs</span><span class="hl-property">.map</span>((d) =&gt; d<span class="hl-property">.id</span>), snapshot<span class="hl-property">.watermarkSeqId</span>);
+  });
+
+<span class="hl-comment">// لاحقًا: أوقف الاستماع وأغلق الناقل المشترك عند عدم بقاء اشتراكات.</span>
+<span class="hl-fn">stopUser</span>();
+<span class="hl-fn">stopQuery</span>();</code></pre>
+</div>
+<h2 id="البنية">البنية<a class="anchor" href="#البنية" aria-label="Link to section">#</a></h2>
+<ol><li>كل تعديل على مستند يُدرج صفًا في <code class="inline-code">realtime_outbox</code> <strong>في نفس معاملة قاعدة البيانات</strong> التي تعدّل المستند، برقم <code class="inline-code">seq_id</code> تتزايد رتيبيًا.</li><li>يُصدر مُحفّز <code class="inline-code">AFTER INSERT</code> إشعار <code class="inline-code">NOTIFY</code> يحتوي فقط على <code class="inline-code">seqId</code> و<code class="inline-code">projectId</code> و<code class="inline-code">projectId</code> — ولا على بيانات المستند (يحدّ PostgreSQL حمولة NOTIFY بنحو 8,000 بايت على أي حال).</li><li>عميل PostgreSQL واحد مخصص لـ <code class="inline-code">LISTEN</code> يستقبل الإشعار ويوقظ مستطلع صندوق البريد كاشف الفجوات. وتعمل حلقة استطلاع عادية أيضًا، لذا يستمر الوقت الفعلي حتى عند غياب <code class="inline-code">LISTEN</code> (مثل نقطة نهاية المجمّع (pooler) الخاصة بـ Neon).</li><li>يجلب المستطلع صفوف صندوق البريد الكاملة عبر مهايئ التخزين المحدد للمستأجر ثم يوزّعها عبر مركز WebSocket. تُخفَّض التكرارات بين NOTIFY والاستطلاع اللذين يلاحظان الصف نفسه بواسطة <code class="inline-code">seqId</code>، مما يمنح تسليمًا لمرة واحدة عند حد الاشتراك.</li></ol>
+<div class="admonition admonition-note"><div class="admonition-label">NOTE</div><p>لا يوجد Redis ولا وسيط خارجي. يجب أن يكون اتصال LISTEN المخصص عنوان PostgreSQL بـ <strong>وضع الجلسة</strong>؛ فنقطة نهاية <code class="inline-code">-pooler</code> الخاصة بـ Neon تُسقط اشتراكات LISTEN على مستوى الجلسة. اضبط <code class="inline-code">DATA_DATABASE_URL_LISTEN</code> لأفضل زمن استجابة، أو اتركه غير محدد للعمل بوضع الاستطلاع فقط.</p></div>
+<h2 id="الاتصال-والاشتراك">الاتصال والاشتراك<a class="anchor" href="#الاتصال-والاشتراك" aria-label="Link to section">#</a></h2>
+<p>يجمع SDK جميع الاشتراكات عبر ناقل WebSocket واحد. اشترك في مسار مستند واحد أو في استعلام — كما في المثال أعلاه. يُرجع <code class="inline-code">onSnapshot</code> دالة إلغاء الاشتراك. أنواع التغيير هي <code class="inline-code">added</code> و<code class="inline-code">modified</code> و<code class="inline-code">removed</code>. بالنسبة لاشتراكات الاستعلامات يحمل <code class="inline-code">snapshot.docs</code> مجموعة النتائج الحالية؛ وبالنسبة لمسارات المستندات يكون فارغًا.</p>
+<p>في الباطن يرسل العميل إطار <code class="inline-code">auth</code> (<code class="inline-code">projectId</code>, <code class="inline-code">apiKey</code>, و<code class="inline-code">authToken</code> اختياري) ثم أطر <code class="inline-code">subscribe</code> مع <code class="inline-code">subId</code> وإما <code class="inline-code">path</code> أو <code class="inline-code">query</code>. تُتحقق قواعد الأمان من <code class="inline-code">get</code> على مسار مستند و<code class="inline-code">list</code> على استعلام مجموعة، تمامًا كما في قراءات HTTP.</p>
+<h2 id="أطر-الخادم">أطر الخادم<a class="anchor" href="#أطر-الخادم" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>الإطار</th><th>المعنى</th></tr></thead><tbody><tr><td><code class="inline-code">auth_ack</code></td><td>نجحت المصادقة؛ يتضمن <code class="inline-code">connectionId</code>.</td></tr><tr><td><code class="inline-code">initial_sync</code></td><td>مجموعة النتائج الحالية كاملة مع <code class="inline-code">seqId</code> ابتدائي.</td></tr><tr><td><code class="inline-code">mutation</code></td><td>تغيير (<code class="inline-code">create</code> / <code class="inline-code">update</code> / <code class="inline-code">delete</code>) مع <code class="inline-code">seqId</code> والمستند الكامل.</td></tr><tr><td><code class="inline-code">resume_complete</code></td><td>انتهت إعادة التشغيل؛ يتضمن <code class="inline-code">seqId</code> و<code class="inline-code">count</code> و<code class="inline-code">truncated</code>.</td></tr><tr><td><code class="inline-code">pong</code></td><td>رد على نبضة القلب (heartbeat).</td></tr><tr><td><code class="inline-code">error</code> / <code class="inline-code">sub_error</code></td><td>خطأ اشتراك أو اتصال.</td></tr></tbody></table></div>
+<h2 id="الاستئناف-وعلامات-المياه-وكشف-الفجوات">الاستئناف وعلامات المياه وكشف الفجوات<a class="anchor" href="#الاستئناف-وعلامات-المياه-وكشف-الفجوات" aria-label="Link to section">#</a></h2>
+<p>يحتفظ صندوق البريد بالأحداث مدة <strong>24 ساعة</strong>. عندما يوفر اشتراك <code class="inline-code">resumeSeqId</code> داخل هذه النافذة، يُعيد الخادم تشغيل التعديلات الفائتة بترتيب تسلسلي صارم قبل العودة إلى الأحداث الحية:</p>
+<ul><li><code class="inline-code">seq_id</code> هي علامة مياه لكل مستأجر. لا تُسلَّم أبدًا قيمة <code class="inline-code">seqId &lt;= watermark</code> مجددًا.</li><li>إذا تخطت إيقاظة رقمًا تسلسليًا واحدًا أو أكثر، يسجّل المستطلع فجوة ويجلب الصفوف المفقودة.</li><li>يُعلّم إطار <code class="inline-code">resume_complete</code> الحد: أُعيد تشغيل <code class="inline-code">count</code> حدثًا، و<code class="inline-code">seqId</code> هو آخر تسلسل سُلِّم، و<code class="inline-code">truncated: true</code> تعني بلوغ سقف 5,000 حدث. تُصدر الأحداث الحية التي وصلت أثناء إعادة التشغيل لاحقًا بترتيب تسلسلي.</li><li>إزالة التكرارات لكل اشتراك (<code class="inline-code">seenSeqIds</code>) تُسقط التكرارات التي تُظهرها كل من NOTIFY والاستطلاع.</li></ul>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// احفظ علامة المياه حتى تتمكن إعادة الاتصال من تشغيل الفائت فقط.</span>
+<span class="hl-keyword">const</span> stop = db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;orders&quot;</span>)<span class="hl-property">.onSnapshot</span>((snapshot) =&gt; {
+  <span class="hl-keyword">if</span> (snapshot<span class="hl-property">.watermarkSeqId</span> != <span class="hl-keyword">null</span>) {
+    localStorage<span class="hl-property">.setItem</span>(<span class="hl-string">&quot;orders:watermark&quot;</span>, <span class="hl-fn">String</span>(snapshot<span class="hl-property">.watermarkSeqId</span>));
+  }
+  <span class="hl-fn">render</span>(snapshot<span class="hl-property">.docs</span>);
+});</code></pre>
+</div>
+<div class="admonition admonition-tip"><div class="admonition-label">TIP</div><p>احفظ أحدث <code class="inline-code">watermarkSeqId</code> من لقطاتك إذا كنت تحتاج إمكانية الاستئناف. عند إعادة الاتصال، مرّرها كموضع استئناف ليُعيد الخادم تشغيل ما فاتك فقط. يعيد ناقل SDK الاتصال تلقائيًا بتراجع أُسّي وتشويش (exponential backoff and jitter).</p></div>
+<h2 id="الحدود">الحدود<a class="anchor" href="#الحدود" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>الحد</th><th>القيمة</th><th>الخطأ</th></tr></thead><tbody><tr><td>الاشتراكات لكل اتصال</td><td>50</td><td><code class="inline-code">SUBSCRIPTION_LIMIT_EXCEEDED</code> (400)</td></tr><tr><td>المخزن الصادر لكل اتصال</td><td>1 MiB</td><td><code class="inline-code">SLOW_CONSUMER_DISCONNECT</code> (429)</td></tr><tr><td>سقف إعادة التشغيل لكل استئناف</td><td>5,000 حدث</td><td><code class="inline-code">resume_complete.truncated = true</code></td></tr><tr><td>مدة الاحتفاظ بصندوق البريد</td><td>24 ساعة</td><td>لا يمكن استئناف الأحداث الأقدم</td></tr></tbody></table></div>
+<p>يُفصل المستهلكون البطيئون بدلًا من السماح بنمو الذاكرة بلا حد. أبقِ استدعاءات اللقطة سريعة وفَرِّغ العمل الثقيل إلى مكان آخر.</p>
+<h2 id="الأخطاء-الشائعة">الأخطاء الشائعة<a class="anchor" href="#الأخطاء-الشائعة" aria-label="Link to section">#</a></h2>
+<ul><li><strong>أداء عمل ثقيل داخل استدعاء اللقطة.</strong> المستهلك البطيء قد يتجاوز مخزن 1 MiB الصادر ويُفصل.</li><li><strong>تجاوز 50 اشتراكًا على اتصال واحد.</strong> يرفض الخادم الاشتراكات الجديدة بـ <code class="inline-code">SUBSCRIPTION_LIMIT_EXCEEDED</code>.</li><li><strong>توقّع الاستئناف بعد 24 ساعة.</strong> الأحداث الأقدم ضُغطت ولا يمكن إعادة تشغيلها.</li><li><strong>استخدام عنوان مجمّع لـ <code class="inline-code">LISTEN</code>.</strong> نقطة <code class="inline-code">-pooler</code> في Neon تُسقط LISTEN على مستوى الجلسة؛ استخدم عنوان وضع جلسة أو اقبل وضع الاستطلاع فقط.</li></ul>
+<h2 id="مثال-موثّق">مثال موثّق<a class="anchor" href="#مثال-موثّق" aria-label="Link to section">#</a></h2>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">المجموعة / البروتوكول</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed against the live PostgreSQL API by scripts/run-dart-examples.mjs.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// Realtime snapshots — watch a sensor document and a channel query.</span>
+<span class="hl-comment">// What you'll build: a live ops dashboard that listens via `snapshots()` and</span>
+<span class="hl-comment">// observes a new reading and a new matching sensor.</span>
+<span class="hl-comment">// Real-world scenario: the SDK multiplexes subscriptions over one WebSocket</span>
+<span class="hl-comment">// transport with full-jitter reconnect; cancelling the stream unsubscribes.</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix = <span class="hl-string">'ex_flutter_realtime_${DateTime.now().microsecondsSinceEpoch}'</span>;
+  <span class="hl-keyword">final</span> col = client<span class="hl-property">.collection</span>(prefix);
+  <span class="hl-keyword">final</span> ref = col<span class="hl-property">.doc</span>(<span class="hl-string">'sensor-1'</span>);
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== Realtime Snapshots (Flutter) ==='</span>);
+    <span class="hl-keyword">await</span> ref<span class="hl-property">.set</span>({<span class="hl-string">'reading'</span>: <span class="hl-number">1</span>, <span class="hl-string">'channel'</span>: <span class="hl-string">'sensors'</span>});
+
+    <span class="hl-keyword">final</span> docSub = ref<span class="hl-property">.snapshots</span>()<span class="hl-property">.listen</span>((snap) {
+      <span class="hl-fn">print</span>(
+          <span class="hl-string">'document change: version=${snap.version} reading=${snap.data()?['</span>reading<span class="hl-string">']}'</span>);
+    });
+    <span class="hl-keyword">final</span> querySub =
+        col<span class="hl-property">.where</span>(<span class="hl-string">'channel'</span>, <span class="hl-string">'=='</span>, <span class="hl-string">'sensors'</span>)<span class="hl-property">.snapshots</span>()<span class="hl-property">.listen</span>((page) {
+      <span class="hl-fn">print</span>(
+          <span class="hl-string">'query snapshot: count=${page.docs.length} watermark=${page.watermarkSeqId}'</span>);
+    });
+
+    <span class="hl-keyword">await</span> <span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt;<span class="hl-property">.delayed</span>(<span class="hl-keyword">const</span> <span class="hl-fn">Duration</span>(seconds: <span class="hl-number">1</span>));
+    <span class="hl-keyword">await</span> ref<span class="hl-property">.update</span>({<span class="hl-string">'reading'</span>: <span class="hl-number">2</span>});
+    <span class="hl-keyword">await</span> col<span class="hl-property">.doc</span>(<span class="hl-string">'sensor-2'</span>)<span class="hl-property">.set</span>({<span class="hl-string">'reading'</span>: <span class="hl-number">3</span>, <span class="hl-string">'channel'</span>: <span class="hl-string">'sensors'</span>});
+    <span class="hl-keyword">await</span> <span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt;<span class="hl-property">.delayed</span>(<span class="hl-keyword">const</span> <span class="hl-fn">Duration</span>(seconds: <span class="hl-number">1</span>));
+
+    <span class="hl-keyword">final</span> finalDoc = <span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>();
+    <span class="hl-fn">print</span>(<span class="hl-string">'finalReading=${finalDoc.data()?['</span>reading<span class="hl-string">']}'</span>);
+
+    <span class="hl-keyword">await</span> docSub<span class="hl-property">.cancel</span>();
+    <span class="hl-keyword">await</span> querySub<span class="hl-property">.cancel</span>();
+  } <span class="hl-keyword">finally</span> {
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> id <span class="hl-keyword">in</span> [<span class="hl-string">'sensor-1'</span>, <span class="hl-string">'sensor-2'</span>]) {
+      <span class="hl-keyword">try</span> {
+        <span class="hl-keyword">await</span> col<span class="hl-property">.doc</span>(id)<span class="hl-property">.delete</span>();
+      } <span class="hl-keyword">catch</span> (_) {}
+    }
+    client<span class="hl-property">.dispose</span>();
+  }
+}</code></pre><div class="et-note">للمرجعية فقط — لم يُنفَّذ هنا (لا توجد أداة Dart).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="تم تشغيل المصدر على الـ API الحي">✓ مصدر مُتحقَّق منه</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Realtime snapshots — watch a sensor feed and a matching query.
+ *
+ * What you'll build: a live ops dashboard that listens to one sensor document
+ * and to a channel query, and observes changes without re-polling manually.
+ * Real-world scenario: a monitoring screen must reflect a new reading the
+ * instant it is written. The document subscription sees value changes; the
+ * query subscription sees a new matching sensor appear.
+ *
+ * If a browser-free Node WebSocket cannot be established, the example degrades
+ * to a clearly-labelled REST polling fallback. The mutation is always asserted.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;realtime-snapshot&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> docPath = <span class="hl-string">`${col}/sensor-1`</span>;
+
+<span class="hl-keyword">interface</span> <span class="hl-type">ReceivedEvent</span> {
+  <span class="hl-keyword">type</span>: string;
+  id: string;
+  value: unknown;
+}
+
+<span class="hl-keyword">const</span> sleep = (ms: number): <span class="hl-type">Promise</span>&lt;<span class="hl-keyword">void</span>&gt; =&gt; <span class="hl-keyword">new</span> <span class="hl-fn">Promise</span>((resolve) =&gt; <span class="hl-fn">setTimeout</span>(resolve, ms));
+
+<span class="hl-keyword">async</span> <span class="hl-keyword">function</span> <span class="hl-fn">waitFor</span>(
+  events: <span class="hl-type">ReceivedEvent</span>[],
+  predicate: (event: <span class="hl-type">ReceivedEvent</span>) =&gt; boolean,
+  timeoutMs = <span class="hl-number">6000</span>
+): <span class="hl-type">Promise</span>&lt;<span class="hl-type">ReceivedEvent</span> | <span class="hl-keyword">null</span>&gt; {
+  <span class="hl-keyword">const</span> deadline = <span class="hl-type">Date</span><span class="hl-property">.now</span>() + timeoutMs;
+  <span class="hl-keyword">while</span> (<span class="hl-type">Date</span><span class="hl-property">.now</span>() &lt; deadline) {
+    <span class="hl-keyword">const</span> found = events<span class="hl-property">.find</span>(predicate);
+    <span class="hl-keyword">if</span> (found) <span class="hl-keyword">return</span> found;
+    <span class="hl-keyword">await</span> <span class="hl-fn">sleep</span>(<span class="hl-number">50</span>);
+  }
+  <span class="hl-keyword">return</span> <span class="hl-keyword">null</span>;
+}
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Realtime Snapshots ===&quot;</span>);
+  <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;sensor-1&quot;</span>)<span class="hl-property">.set</span>({ reading: <span class="hl-number">1</span>, channel: <span class="hl-string">&quot;sensors&quot;</span> });
+
+  <span class="hl-comment">// --- Document subscription -------------------------------------------------</span>
+  <span class="hl-keyword">const</span> docEvents: <span class="hl-type">ReceivedEvent</span>[] = [];
+  <span class="hl-keyword">const</span> unsubscribeDoc = h<span class="hl-property">.sdk</span><span class="hl-property">.doc</span>(docPath)<span class="hl-property">.onSnapshot</span>((snapshot) =&gt; {
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">const</span> change <span class="hl-keyword">of</span> snapshot<span class="hl-property">.changes</span>) {
+      <span class="hl-keyword">const</span> data = change<span class="hl-property">.doc</span><span class="hl-property">.data</span>() <span class="hl-keyword">as</span> <span class="hl-type">Record</span>&lt;string, unknown&gt;;
+      docEvents<span class="hl-property">.push</span>({ <span class="hl-keyword">type</span>: change<span class="hl-property">.type</span>, id: change<span class="hl-property">.doc</span><span class="hl-property">.id</span>, value: data[<span class="hl-string">&quot;reading&quot;</span>] });
+    }
+  });
+  <span class="hl-keyword">const</span> initial = <span class="hl-keyword">await</span> <span class="hl-fn">waitFor</span>(docEvents, (event) =&gt; event<span class="hl-property">.type</span> === <span class="hl-string">&quot;added&quot;</span>);
+
+  <span class="hl-keyword">let</span> mode: string;
+  <span class="hl-keyword">if</span> (initial) {
+    mode = <span class="hl-string">&quot;native WebSocket onSnapshot&quot;</span>;
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;sensor-1&quot;</span>)<span class="hl-property">.update</span>({ reading: <span class="hl-number">2</span> });
+    <span class="hl-keyword">const</span> modified = <span class="hl-keyword">await</span> <span class="hl-fn">waitFor</span>(docEvents, (event) =&gt; event<span class="hl-property">.type</span> === <span class="hl-string">&quot;modified&quot;</span> &amp;&amp; event<span class="hl-property">.value</span> === <span class="hl-number">2</span>);
+    <span class="hl-fn">check</span>(<span class="hl-fn">Boolean</span>(modified), <span class="hl-string">&quot;document subscription observed the new reading&quot;</span>);
+    h<span class="hl-property">.log</span>({
+      transport: mode,
+      target: <span class="hl-string">&quot;document&quot;</span>,
+      initialType: initial<span class="hl-property">.type</span>,
+      observedTypes: docEvents<span class="hl-property">.map</span>((event) =&gt; event<span class="hl-property">.type</span>),
+      finalReading: modified?<span class="hl-property">.value</span>,
+    });
+  } <span class="hl-keyword">else</span> {
+    mode = <span class="hl-string">&quot;REST polling fallback (WebSocket unavailable)&quot;</span>;
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;sensor-1&quot;</span>)<span class="hl-property">.update</span>({ reading: <span class="hl-number">2</span> });
+    <span class="hl-keyword">let</span> observed = <span class="hl-keyword">false</span>;
+    <span class="hl-keyword">const</span> deadline = <span class="hl-type">Date</span><span class="hl-property">.now</span>() + <span class="hl-number">6000</span>;
+    <span class="hl-keyword">while</span> (<span class="hl-type">Date</span><span class="hl-property">.now</span>() &lt; deadline) {
+      <span class="hl-keyword">const</span> snap = <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;sensor-1&quot;</span>)<span class="hl-property">.get</span>();
+      <span class="hl-keyword">if</span> ((snap<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { reading: number })<span class="hl-property">.reading</span> === <span class="hl-number">2</span>) {
+        observed = <span class="hl-keyword">true</span>;
+        <span class="hl-keyword">break</span>;
+      }
+      <span class="hl-keyword">await</span> <span class="hl-fn">sleep</span>(<span class="hl-number">100</span>);
+    }
+    <span class="hl-fn">check</span>(observed, <span class="hl-string">&quot;REST GET eventually observed the committed reading&quot;</span>);
+    h<span class="hl-property">.log</span>({ transport: mode, target: <span class="hl-string">&quot;document&quot;</span>, initialCallback: <span class="hl-keyword">false</span>, readingViaRest: <span class="hl-number">2</span>, mutationAsserted: <span class="hl-keyword">true</span> });
+  }
+  <span class="hl-fn">unsubscribeDoc</span>();
+
+  <span class="hl-comment">// --- Query subscription ----------------------------------------------------</span>
+  <span class="hl-comment">// The realtime subscribe frame strips unused null members and opaque cursors.</span>
+  <span class="hl-keyword">const</span> channelQuery = h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.where</span>(<span class="hl-string">&quot;channel&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;sensors&quot;</span>);
+
+  <span class="hl-keyword">const</span> queryEvents: <span class="hl-type">ReceivedEvent</span>[] = [];
+  <span class="hl-keyword">const</span> unsubscribeQuery = channelQuery<span class="hl-property">.onSnapshot</span>((snapshot) =&gt; {
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">const</span> change <span class="hl-keyword">of</span> snapshot<span class="hl-property">.changes</span>) {
+      queryEvents<span class="hl-property">.push</span>({ <span class="hl-keyword">type</span>: change<span class="hl-property">.type</span>, id: change<span class="hl-property">.doc</span><span class="hl-property">.id</span>, value: (change<span class="hl-property">.doc</span><span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { reading?: number })<span class="hl-property">.reading</span> });
+    }
+  });
+  <span class="hl-keyword">const</span> queryInitial = <span class="hl-keyword">await</span> <span class="hl-fn">waitFor</span>(queryEvents, (event) =&gt; event<span class="hl-property">.type</span> === <span class="hl-string">&quot;added&quot;</span>);
+
+  <span class="hl-keyword">if</span> (queryInitial &amp;&amp; mode === <span class="hl-string">&quot;native WebSocket onSnapshot&quot;</span>) {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;sensor-2&quot;</span>)<span class="hl-property">.set</span>({ reading: <span class="hl-number">3</span>, channel: <span class="hl-string">&quot;sensors&quot;</span> });
+    <span class="hl-keyword">const</span> added = <span class="hl-keyword">await</span> <span class="hl-fn">waitFor</span>(queryEvents, (event) =&gt; event<span class="hl-property">.type</span> === <span class="hl-string">&quot;added&quot;</span> &amp;&amp; event<span class="hl-property">.id</span> === <span class="hl-string">&quot;sensor-2&quot;</span>);
+    <span class="hl-fn">check</span>(<span class="hl-fn">Boolean</span>(added), <span class="hl-string">&quot;query subscription observed the new matching sensor&quot;</span>);
+    h<span class="hl-property">.log</span>({
+      transport: mode,
+      target: <span class="hl-string">&quot;query&quot;</span>,
+      initialCount: <span class="hl-number">1</span>,
+      observedTypes: queryEvents<span class="hl-property">.map</span>((event) =&gt; event<span class="hl-property">.type</span>),
+      addedId: added?<span class="hl-property">.id</span>,
+    });
+  } <span class="hl-keyword">else</span> {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;sensor-2&quot;</span>)<span class="hl-property">.set</span>({ reading: <span class="hl-number">3</span>, channel: <span class="hl-string">&quot;sensors&quot;</span> });
+    <span class="hl-keyword">let</span> count = <span class="hl-number">0</span>;
+    <span class="hl-keyword">const</span> deadline = <span class="hl-type">Date</span><span class="hl-property">.now</span>() + <span class="hl-number">6000</span>;
+    <span class="hl-keyword">while</span> (<span class="hl-type">Date</span><span class="hl-property">.now</span>() &lt; deadline) {
+      <span class="hl-keyword">const</span> result = <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.where</span>(<span class="hl-string">&quot;channel&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;sensors&quot;</span>)<span class="hl-property">.get</span>();
+      count = result<span class="hl-property">.docs</span><span class="hl-property">.length</span>;
+      <span class="hl-keyword">if</span> (count === <span class="hl-number">2</span>) <span class="hl-keyword">break</span>;
+      <span class="hl-keyword">await</span> <span class="hl-fn">sleep</span>(<span class="hl-number">100</span>);
+    }
+    <span class="hl-fn">check</span>(count === <span class="hl-number">2</span>, <span class="hl-string">&quot;REST query eventually returned both matching sensors&quot;</span>);
+    h<span class="hl-property">.log</span>({ transport: mode, target: <span class="hl-string">&quot;query&quot;</span>, initialCallback: <span class="hl-keyword">false</span>, countViaRest: count, mutationAsserted: <span class="hl-keyword">true</span> });
+  }
+  <span class="hl-fn">unsubscribeQuery</span>();
+
+  <span class="hl-keyword">const</span> finalDoc = <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;sensor-1&quot;</span>)<span class="hl-property">.get</span>();
+  <span class="hl-fn">check</span>((finalDoc<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { reading: number })<span class="hl-property">.reading</span> === <span class="hl-number">2</span>, <span class="hl-string">&quot;final sensor reading is committed&quot;</span>);
+  h<span class="hl-property">.log</span>({ finalReading: (finalDoc<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { reading: number })<span class="hl-property">.reading</span> });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">النتيجة · مُلتقطة من تشغيل فعلي</span><button class="cb-copy" type="button">نسخ</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Realtime Snapshots ===
+{&quot;transport&quot;:&quot;native WebSocket onSnapshot&quot;,&quot;target&quot;:&quot;document&quot;,&quot;initialType&quot;:&quot;added&quot;,&quot;observedTypes&quot;:[&quot;added&quot;,&quot;modified&quot;],&quot;finalReading&quot;:2}
+{&quot;transport&quot;:&quot;native WebSocket onSnapshot&quot;,&quot;target&quot;:&quot;query&quot;,&quot;initialCount&quot;:1,&quot;observedTypes&quot;:[&quot;added&quot;,&quot;added&quot;],&quot;addedId&quot;:&quot;sensor-2&quot;}
+{&quot;finalReading&quot;:2}</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="تم تشغيل المصدر على الـ API الحي">✓ مصدر مُتحقَّق منه</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Realtime snapshots (REST) — observe sensor changes by polling.
+ *
+ * What you'll build: a live dashboard's data path using only fetch — write a
+ * sensor reading, then observe it and a new matching sensor via repeated GET /
+ * query requests.
+ * Real-world scenario: the SDK exposes native WebSocket onSnapshot; a fetch-only
+ * client has no WebSocket, so this example uses the outbox/REST polling path and
+ * labels it explicitly. The committed mutation is always asserted.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;realtime-snapshot&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> docPath = <span class="hl-string">`${col}/sensor-1`</span>;
+<span class="hl-keyword">const</span> sleep = (ms) =&gt; <span class="hl-keyword">new</span> <span class="hl-fn">Promise</span>((resolve) =&gt; <span class="hl-fn">setTimeout</span>(resolve, ms));
+
+<span class="hl-keyword">async</span> <span class="hl-keyword">function</span> <span class="hl-fn">pollUntil</span>(predicate, timeoutMs = <span class="hl-number">6000</span>) {
+  <span class="hl-keyword">const</span> deadline = <span class="hl-type">Date</span><span class="hl-property">.now</span>() + timeoutMs;
+  <span class="hl-keyword">while</span> (<span class="hl-type">Date</span><span class="hl-property">.now</span>() &lt; deadline) {
+    <span class="hl-keyword">if</span> (<span class="hl-keyword">await</span> <span class="hl-fn">predicate</span>()) <span class="hl-keyword">return</span> <span class="hl-keyword">true</span>;
+    <span class="hl-keyword">await</span> <span class="hl-fn">sleep</span>(<span class="hl-number">100</span>);
+  }
+  <span class="hl-keyword">return</span> <span class="hl-keyword">false</span>;
+}
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Realtime Snapshots ===&quot;</span>);
+  <span class="hl-keyword">const</span> seeded = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>, { data: { reading: <span class="hl-number">1</span>, channel: <span class="hl-string">&quot;sensors&quot;</span> } });
+  <span class="hl-fn">check</span>(seeded<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">&quot;seed sensor&quot;</span>);
+
+  <span class="hl-keyword">const</span> mode = <span class="hl-string">&quot;REST polling (fetch-only; no WebSocket transport)&quot;</span>;
+
+  <span class="hl-comment">// --- Document observation --------------------------------------------------</span>
+  <span class="hl-keyword">const</span> patched = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;PATCH&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>, { data: { reading: <span class="hl-number">2</span> } });
+  <span class="hl-fn">check</span>(patched<span class="hl-property">.ok</span>, <span class="hl-string">&quot;writing the new reading succeeded&quot;</span>);
+  <span class="hl-keyword">const</span> observedDoc = <span class="hl-keyword">await</span> <span class="hl-fn">pollUntil</span>(<span class="hl-keyword">async</span> () =&gt; {
+    <span class="hl-keyword">const</span> snap = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>);
+    <span class="hl-keyword">return</span> snap<span class="hl-property">.ok</span> &amp;&amp; snap<span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.reading</span> === <span class="hl-number">2</span>;
+  });
+  <span class="hl-fn">check</span>(observedDoc, <span class="hl-string">&quot;REST GET eventually observed the committed reading&quot;</span>);
+  h<span class="hl-property">.log</span>({ transport: mode, target: <span class="hl-string">&quot;document&quot;</span>, initialCallback: <span class="hl-keyword">false</span>, readingViaRest: <span class="hl-number">2</span>, mutationAsserted: <span class="hl-keyword">true</span> });
+
+  <span class="hl-comment">// --- Query observation -----------------------------------------------------</span>
+  <span class="hl-keyword">const</span> createdSecond = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${col}/sensor-2`</span>, {
+    data: { reading: <span class="hl-number">3</span>, channel: <span class="hl-string">&quot;sensors&quot;</span> },
+  });
+  <span class="hl-fn">check</span>(createdSecond<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">&quot;second matching sensor created&quot;</span>);
+  <span class="hl-keyword">let</span> count = <span class="hl-number">0</span>;
+  <span class="hl-keyword">const</span> observedQuery = <span class="hl-keyword">await</span> <span class="hl-fn">pollUntil</span>(<span class="hl-keyword">async</span> () =&gt; {
+    <span class="hl-keyword">const</span> result = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/query&quot;</span>, {
+      collectionPath: col,
+      where: [{ field: <span class="hl-string">&quot;channel&quot;</span>, op: <span class="hl-string">&quot;==&quot;</span>, value: <span class="hl-string">&quot;sensors&quot;</span> }],
+      orderBy: [],
+      limit: <span class="hl-number">50</span>,
+      select: <span class="hl-keyword">null</span>,
+      startAt: <span class="hl-keyword">null</span>,
+      startAfter: <span class="hl-keyword">null</span>,
+    });
+    count = result<span class="hl-property">.body</span><span class="hl-property">.documents</span>?<span class="hl-property">.length</span> ?? <span class="hl-number">0</span>;
+    <span class="hl-keyword">return</span> count === <span class="hl-number">2</span>;
+  });
+  <span class="hl-fn">check</span>(observedQuery, <span class="hl-string">&quot;REST query eventually returned both matching sensors&quot;</span>);
+  h<span class="hl-property">.log</span>({ transport: mode, target: <span class="hl-string">&quot;query&quot;</span>, initialCallback: <span class="hl-keyword">false</span>, countViaRest: count, mutationAsserted: <span class="hl-keyword">true</span> });
+
+  <span class="hl-keyword">const</span> <span class="hl-keyword">final</span> = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>);
+  <span class="hl-fn">check</span>(<span class="hl-keyword">final</span><span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.reading</span> === <span class="hl-number">2</span>, <span class="hl-string">&quot;final sensor reading is committed&quot;</span>);
+  h<span class="hl-property">.log</span>({ finalReading: <span class="hl-keyword">final</span><span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.reading</span> });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">النتيجة · مُلتقطة من تشغيل فعلي</span><button class="cb-copy" type="button">نسخ</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Realtime Snapshots ===
+{&quot;transport&quot;:&quot;REST polling (fetch-only; no WebSocket transport)&quot;,&quot;target&quot;:&quot;document&quot;,&quot;initialCallback&quot;:false,&quot;readingViaRest&quot;:2,&quot;mutationAsserted&quot;:true}
+{&quot;transport&quot;:&quot;REST polling (fetch-only; no WebSocket transport)&quot;,&quot;target&quot;:&quot;query&quot;,&quot;initialCallback&quot;:false,&quot;countViaRest&quot;:2,&quot;mutationAsserted&quot;:true}
+{&quot;finalReading&quot;:2}</code></pre>
+</div></div></div>
+</div>
+<h2 id="ماذا-تقرأ-بعد-ذلك">ماذا تقرأ بعد ذلك<a class="anchor" href="#ماذا-تقرأ-بعد-ذلك" aria-label="Link to section">#</a></h2>
+<ul><li><a href="query.html">الاستعلام</a> — بناء الاستعلام المستخدم في اشتراك الاستعلام.</li><li><a href="batch-and-transactions.html">الكتابات الدفعية والمعاملات</a> — كيف تُنتج الكتابات المجمّعة أحداث صندوق البريد.</li><li><a href="production-checklist.html">قائمة التحقق للإنتاج</a> — اتصال LISTEN المخصص وفحوص الجاهزية.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · التصميم الافتراضي الرسمي لـ shadcn/ui</span><span>مولَّد من docs/guides — لا تعدّل HTML مباشرة.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">في هذه الصفحة</div><a href="#السيناريو" class="toc-link toc-l2">السيناريو</a><a href="#البنية" class="toc-link toc-l2">البنية</a><a href="#الاتصال-والاشتراك" class="toc-link toc-l2">الاتصال والاشتراك</a><a href="#أطر-الخادم" class="toc-link toc-l2">أطر الخادم</a><a href="#الاستئناف-وعلامات-المياه-وكشف-الفجوات" class="toc-link toc-l2">الاستئناف وعلامات المياه وكشف الفجوات</a><a href="#الحدود" class="toc-link toc-l2">الحدود</a><a href="#الأخطاء-الشائعة" class="toc-link toc-l2">الأخطاء الشائعة</a><a href="#مثال-موثّق" class="toc-link toc-l2">مثال موثّق</a><a href="#ماذا-تقرأ-بعد-ذلك" class="toc-link toc-l2">ماذا تقرأ بعد ذلك</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="ابحث في الأدلة والواجهات والأمثلة…" autocomplete="off"><button id="searchClose" type="button">إغلاق</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="../assets/docs.js" defer></script>
+</body>
+</html>

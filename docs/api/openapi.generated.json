@@ -1,0 +1,1062 @@
+{
+  "components": {
+    "schemas": {
+      "AggregateRequest": {
+        "properties": {
+          "collectionPath": {
+            "example": "orders",
+            "type": "string"
+          },
+          "groupBy": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "metrics": {
+            "additionalProperties": {
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "op": {
+                  "enum": [
+                    "count",
+                    "sum",
+                    "avg",
+                    "min",
+                    "max"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "op"
+              ],
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "or": {
+            "items": {
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "where": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "collectionPath",
+          "metrics"
+        ],
+        "type": "object"
+      },
+      "ApiKey": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "keyPrefix": {
+            "type": "string"
+          },
+          "keyType": {
+            "enum": [
+              "publishable",
+              "secret"
+            ],
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "name",
+          "keyType",
+          "keyPrefix",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "BatchWriteRequest": {
+        "properties": {
+          "operations": {
+            "items": {
+              "properties": {
+                "data": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "options": {
+                  "properties": {
+                    "merge": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "precondition": {
+                  "properties": {
+                    "exists": {
+                      "type": "boolean"
+                    },
+                    "lastUpdateTime": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": {
+                  "enum": [
+                    "create",
+                    "set",
+                    "update",
+                    "delete"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "path"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "BulkDeleteRequest": {
+        "properties": {
+          "collectionPath": {
+            "type": "string"
+          },
+          "limit": {
+            "default": 1000,
+            "maximum": 5000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "or": {
+            "items": {
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "where": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "collectionPath"
+        ],
+        "type": "object"
+      },
+      "DocumentPayload": {
+        "properties": {
+          "_included": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "_redactedRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "collectionGroup": {
+            "example": "users",
+            "type": "string"
+          },
+          "collectionPath": {
+            "example": "users",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "documentId": {
+            "example": "u_123",
+            "type": "string"
+          },
+          "path": {
+            "example": "users/u_123",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "maximum": 1048576,
+            "type": "integer"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "collectionPath",
+          "documentId",
+          "data",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ErrorEnvelope": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "example": "PERMISSION_DENIED",
+                "type": "string"
+              },
+              "details": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "message": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "IncludeSpec": {
+        "description": "Relation include, maximum depth 3, at most 10 specs per level.",
+        "properties": {
+          "as": {
+            "type": "string"
+          },
+          "collection": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "include": {
+            "items": {
+              "$ref": "#/components/schemas/IncludeSpec"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "onDelete": {
+            "enum": [
+              "restrict",
+              "cascade",
+              "set_null"
+            ],
+            "type": "string"
+          },
+          "select": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "type": "object"
+      },
+      "Organization": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "planTier": {
+            "enum": [
+              "free",
+              "developer",
+              "pro",
+              "enterprise"
+            ],
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "planTier",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Project": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "name",
+          "slug",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "QuerySpec": {
+        "properties": {
+          "collectionGroup": {
+            "example": "orders",
+            "type": "string"
+          },
+          "collectionPath": {
+            "example": "orders",
+            "type": "string"
+          },
+          "cursor": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "include": {
+            "description": "Batch-resolved document relations (max depth 3).",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "or": {
+            "description": "Disjunctive filter groups; each group is ANDed internally and groups are ORed together.",
+            "items": {
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "orderBy": {
+            "items": {
+              "properties": {
+                "direction": {
+                  "default": "asc",
+                  "enum": [
+                    "asc",
+                    "desc"
+                  ],
+                  "type": "string"
+                },
+                "field": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "field"
+              ],
+              "type": "object"
+            },
+            "maxItems": 3,
+            "type": "array"
+          },
+          "select": {
+            "description": "Dot-notation projection paths.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ttlSeconds": {
+            "description": "Document TTL in seconds from write time.",
+            "type": "integer"
+          },
+          "where": {
+            "items": {
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "op": {
+                  "enum": [
+                    "==",
+                    "!=",
+                    "<",
+                    "<=",
+                    ">",
+                    ">=",
+                    "in",
+                    "not-in",
+                    "array-contains",
+                    "array-contains-any",
+                    "contains_ci",
+                    "starts_with_ci",
+                    "text_search"
+                  ],
+                  "type": "string"
+                },
+                "value": {}
+              },
+              "required": [
+                "field",
+                "op",
+                "value"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "RealtimeSubscribe": {
+        "description": "WebSocket subscribe frame. Supply path or query. resolveIncludes is opt-in, depth 1 only. Included targets are snapshots at event processing; target-only edits do not retrigger the parent. Deleted/removed parents are not hydrated.",
+        "properties": {
+          "include": {
+            "items": {
+              "$ref": "#/components/schemas/IncludeSpec"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "path": {
+            "type": "string"
+          },
+          "query": {
+            "$ref": "#/components/schemas/QuerySpec"
+          },
+          "resolveIncludes": {
+            "default": false,
+            "type": "boolean"
+          },
+          "resumeSeqId": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "subId": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "subscribe"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "subId"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "EndUserBearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "Optional end-user JWT providing `auth.uid` and `auth.claims` for Security Rules AST.",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "ProjectKeyAuth": {
+        "description": "Public (`pk_...`) or Server (`sk_...`) project key.",
+        "in": "header",
+        "name": "X-Project-Key",
+        "type": "apiKey"
+      },
+      "VellumApiKeyAuth": {
+        "description": "Canonical alias for the project key (`pk_...` / `sk_...`).",
+        "in": "header",
+        "name": "X-Vellum-Api-Key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Firestore-inspired multi-tenant document database API with Tagged Wire Format, composite indexes, OCC transactions, and WebSocket realtime listeners. The tenant is the project: every resource is addressed as `/v1/projects/{projectId}/...`. API keys use the `pk_`/`sk_` prefixes and are scoped to a project.",
+    "title": "Document Database SaaS Public HTTP & Realtime API",
+    "version": "0.0.1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/admin/auth/overview": {
+      "get": {
+        "summary": "Platform-wide end-user auth metrics"
+      }
+    },
+    "/v1/admin/auth/projects": {
+      "get": {
+        "summary": "List projects with end-user auth enabled"
+      }
+    },
+    "/v1/admin/auth/projects/{projectId}/control": {
+      "patch": {
+        "summary": "Update a project's auth controls"
+      }
+    },
+    "/v1/admin/auth/projects/{projectId}/rotate-signing-key": {
+      "post": {
+        "summary": "Rotate a project's Ed25519 signing key"
+      }
+    },
+    "/v1/admin/auth/settings": {
+      "get": {
+        "summary": "Get platform auth global settings"
+      },
+      "patch": {
+        "summary": "Update platform auth global settings"
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Healthy"
+          }
+        },
+        "summary": "Liveness and Dual Data-Plane connectivity check"
+      }
+    },
+    "/v1/organizations": {
+      "get": {
+        "summary": "List organizations for authenticated user"
+      },
+      "post": {
+        "summary": "Create a new organization"
+      }
+    },
+    "/v1/organizations/{orgId}/projects": {
+      "get": {
+        "summary": "List projects under organization"
+      },
+      "post": {
+        "summary": "Create a project"
+      }
+    },
+    "/v1/projects/{projectId}/api-keys": {
+      "get": {
+        "summary": "List API keys for a project"
+      },
+      "post": {
+        "summary": "Generate a new publishable or secret API key"
+      }
+    },
+    "/v1/projects/{projectId}/api-keys/{keyId}": {
+      "delete": {
+        "summary": "Revoke an API key"
+      }
+    },
+    "/v1/projects/{projectId}/auth/.well-known/jwks.json": {
+      "get": {
+        "summary": "Public JWKS for verifying end-user access tokens"
+      }
+    },
+    "/v1/projects/{projectId}/auth/admin/config": {
+      "get": {
+        "summary": "Get sanitized project auth configuration"
+      },
+      "patch": {
+        "summary": "Update project auth configuration"
+      }
+    },
+    "/v1/projects/{projectId}/auth/admin/users": {
+      "get": {
+        "summary": "List end-users with cursor pagination and filters"
+      },
+      "post": {
+        "summary": "Create an end-user"
+      }
+    },
+    "/v1/projects/{projectId}/auth/admin/users/{uid}": {
+      "delete": {
+        "summary": "Delete an end-user"
+      },
+      "get": {
+        "summary": "Get end-user detail (identities, sessions, MFA status)"
+      },
+      "patch": {
+        "summary": "Update an end-user"
+      }
+    },
+    "/v1/projects/{projectId}/auth/admin/users/{uid}/claims": {
+      "put": {
+        "summary": "Replace an end-user's custom claims (max 1000 bytes)"
+      }
+    },
+    "/v1/projects/{projectId}/auth/admin/users/{uid}/revoke": {
+      "post": {
+        "summary": "Revoke all sessions for an end-user"
+      }
+    },
+    "/v1/projects/{projectId}/auth/admin/users:import": {
+      "post": {
+        "summary": "Import up to 100 end-users"
+      }
+    },
+    "/v1/projects/{projectId}/auth/email/verify/confirm": {
+      "post": {
+        "summary": "Consume an email verification token"
+      }
+    },
+    "/v1/projects/{projectId}/auth/email/verify/request": {
+      "post": {
+        "summary": "Request an email verification token"
+      }
+    },
+    "/v1/projects/{projectId}/auth/mfa/challenge": {
+      "post": {
+        "summary": "Answer an MFA challenge and receive session tokens"
+      }
+    },
+    "/v1/projects/{projectId}/auth/mfa/enroll": {
+      "post": {
+        "summary": "Begin TOTP MFA enrollment"
+      }
+    },
+    "/v1/projects/{projectId}/auth/mfa/verify": {
+      "post": {
+        "summary": "Confirm TOTP MFA enrollment"
+      }
+    },
+    "/v1/projects/{projectId}/auth/password/confirm": {
+      "post": {
+        "summary": "Consume a password reset token and set a new password"
+      }
+    },
+    "/v1/projects/{projectId}/auth/password/reset": {
+      "post": {
+        "summary": "Request a password reset token"
+      }
+    },
+    "/v1/projects/{projectId}/auth/sign-in/anonymous": {
+      "post": {
+        "summary": "Create a temporary anonymous end-user session"
+      }
+    },
+    "/v1/projects/{projectId}/auth/sign-in/email": {
+      "post": {
+        "summary": "Sign in an end-user with email and password (may return an MFA ticket)"
+      }
+    },
+    "/v1/projects/{projectId}/auth/sign-in/provider": {
+      "post": {
+        "summary": "Sign in or register an end-user via a configured identity provider"
+      }
+    },
+    "/v1/projects/{projectId}/auth/sign-out": {
+      "post": {
+        "summary": "Revoke the presented refresh token / all user sessions"
+      }
+    },
+    "/v1/projects/{projectId}/auth/sign-up/email": {
+      "post": {
+        "summary": "Create an end-user account with email and password"
+      }
+    },
+    "/v1/projects/{projectId}/auth/token/refresh": {
+      "post": {
+        "summary": "Rotate a refresh token and issue a fresh access token"
+      }
+    },
+    "/v1/projects/{projectId}/auth/user": {
+      "get": {
+        "summary": "Get the authenticated end-user profile"
+      },
+      "patch": {
+        "summary": "Update the authenticated end-user profile"
+      }
+    },
+    "/v1/projects/{projectId}/batchWrite": {
+      "post": {
+        "summary": "Execute up to 100 atomic write mutations in a single transaction"
+      }
+    },
+    "/v1/projects/{projectId}/documents/{path}": {
+      "delete": {
+        "summary": "Soft-delete a document"
+      },
+      "get": {
+        "summary": "Get a single document by full path or list a collection"
+      },
+      "patch": {
+        "summary": "Update document fields or apply atomic field transforms ($op)"
+      },
+      "post": {
+        "summary": "Create a new document (fails if exists)"
+      },
+      "put": {
+        "summary": "Create or overwrite/merge a document"
+      }
+    },
+    "/v1/projects/{projectId}/documents:aggregate": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AggregateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aggregate rows"
+          }
+        },
+        "summary": "Native SQL aggregations (count/sum/avg/min/max with optional groupBy)"
+      }
+    },
+    "/v1/projects/{projectId}/documents:bulk-delete": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deleted count"
+          }
+        },
+        "summary": "Rule-checked parameterized bulk delete"
+      }
+    },
+    "/v1/projects/{projectId}/documents:referencedBy": {
+      "post": {
+        "description": "Target get permission and dependent get/list permissions are required. Rows denied by Security Rules are omitted. Cursor is encrypted, caller/query-bound, expires after one hour. At most 1000 candidates are inspected per request; an empty page can have a nextCursor. The target must exist and be readable. Exact stored paths only; no inferred bare IDs. Includes use the same redaction rules as ordinary reads.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "collection": {
+                    "type": "string"
+                  },
+                  "cursor": {
+                    "maxLength": 32768,
+                    "type": "string"
+                  },
+                  "field": {
+                    "type": "string"
+                  },
+                  "include": {
+                    "items": {
+                      "$ref": "#/components/schemas/IncludeSpec"
+                    },
+                    "maxItems": 10,
+                    "type": "array"
+                  },
+                  "limit": {
+                    "default": 25,
+                    "maximum": 100,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "select": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 100,
+                    "type": "array"
+                  },
+                  "targetPath": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "targetPath"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "documents": {
+                      "items": {
+                        "$ref": "#/components/schemas/DocumentPayload"
+                      },
+                      "maxItems": 100,
+                      "type": "array"
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "documents",
+                    "nextCursor"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Readable dependent documents and opaque nextCursor (null when complete)"
+          },
+          "400": {
+            "description": "Invalid request or invalid/expired/query-mismatched cursor"
+          },
+          "403": {
+            "description": "Target read denied"
+          },
+          "404": {
+            "description": "Readable target does not exist"
+          },
+          "413": {
+            "description": "Response exceeds 4 MiB"
+          }
+        },
+        "summary": "Find readable documents referencing an exact target path"
+      }
+    },
+    "/v1/projects/{projectId}/indexes": {
+      "get": {
+        "summary": "List composite indexes for the project"
+      },
+      "post": {
+        "summary": "Create and asynchronously backfill a composite index"
+      }
+    },
+    "/v1/projects/{projectId}/indexes/recommendations": {
+      "get": {
+        "description": "Populated asynchronously from unindexed query telemetry; never blocks the read path.",
+        "summary": "List smart index advisor recommendations"
+      }
+    },
+    "/v1/projects/{projectId}/indexes/recommendations/{id}/apply": {
+      "post": {
+        "summary": "Create the recommended composite index in one click and mark it applied"
+      }
+    },
+    "/v1/projects/{projectId}/indexes/recommendations/{id}/dismiss": {
+      "post": {
+        "summary": "Dismiss a recommendation"
+      }
+    },
+    "/v1/projects/{projectId}/indexes/{indexId}": {
+      "delete": {
+        "summary": "Delete a composite index and its index entries"
+      }
+    },
+    "/v1/projects/{projectId}/query": {
+      "post": {
+        "description": "Uncovered composite queries return x-vellum-index-suggestion and x-vellum-index-url response headers (one-click dashboard deep link).",
+        "responses": {
+          "200": {
+            "description": "Query page",
+            "headers": {
+              "x-vellum-index-suggestion": {
+                "description": "JSON index suggestion payload (uncovered queries only).",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "x-vellum-index-url": {
+                "description": "One-click dashboard deep link (uncovered queries only).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Execute a structured collection query with filters, sort, and HMAC cursor"
+      }
+    },
+    "/v1/projects/{projectId}/relation-rules": {
+      "get": {
+        "summary": "List the project's referential-integrity (relation) rules with their version"
+      },
+      "put": {
+        "summary": "Replace the project's relation rules (optimistic concurrency via expectedVersion / If-Match)"
+      }
+    },
+    "/v1/projects/{projectId}/rules/compile": {
+      "post": {
+        "summary": "Compile human-readable Rules DSL into version-1 JSON AST with diagnostics"
+      }
+    },
+    "/v1/projects/{projectId}/rules/decompile": {
+      "post": {
+        "summary": "Decompile an existing JSON AST ruleset into readable DSL"
+      }
+    },
+    "/v1/projects/{projectId}/rules/simulate": {
+      "post": {
+        "summary": "Dry-run a rule against mock auth/resource/incoming data with an evaluation trace"
+      }
+    },
+    "/v1/projects/{projectId}/rulesets": {
+      "get": {
+        "summary": "Get current active security ruleset"
+      },
+      "post": {
+        "summary": "Deploy a new version of security ruleset"
+      }
+    },
+    "/v1/projects/{projectId}/transactions:begin": {
+      "post": {
+        "summary": "Begin an interactive OCC transaction and receive a signed transactionToken"
+      }
+    },
+    "/v1/projects/{projectId}/transactions:commit": {
+      "post": {
+        "summary": "Verify read-set versions and commit mutations atomically"
+      }
+    }
+  },
+  "security": [
+    {
+      "ProjectKeyAuth": []
+    },
+    {
+      "VellumApiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://api.vellum.dev"
+    }
+  ]
+}

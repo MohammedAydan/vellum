@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Batch Writes &amp; Transactions · VELLUM Docs</title>
+<meta name="description" content="Atomic batchWrite, auto-chunked bulk writes (batchWriteChunked and commitChunked), and interactive OCC runTransaction() with automatic ABORTED_CONFLICT retry.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/batch-and-transactions.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Core concepts <span>/</span> <strong>Batch Writes &amp; Transactions</strong></div>
+    <article class="article"><h1 id="batch-writes-transactions">Batch Writes &amp; Transactions<a class="anchor" href="#batch-writes-transactions" aria-label="Link to section">#</a></h1>
+<p>Choose the right write primitive for your consistency and throughput requirements:</p>
+<div class="table-wrap"><table><thead><tr><th>Primitive</th><th>Atomicity</th><th>Max Ops per Request</th><th>Use Case</th></tr></thead><tbody><tr><td><code class="inline-code">batchWrite</code> / <code class="inline-code">batch().commit()</code></td><td>All-or-nothing single SQL transaction</td><td>500 writes</td><td>Atomic multi-document writes without read dependencies.</td></tr><tr><td><code class="inline-code">batchWriteChunked</code> / <code class="inline-code">commitChunked</code></td><td>Atomic per chunk (not across chunks)</td><td>Unlimited (auto-chunked)</td><td>High-throughput imports, migrations, and catalog syncs.</td></tr><tr><td><code class="inline-code">runTransaction</code></td><td>Serializable OCC read-modify-write</td><td>Bounded interactive set</td><td>Balances, inventory reservations, uniqueness invariants.</td></tr></tbody></table></div>
+<hr>
+<h2 id="atomic-batch-writes-auto-chunked-bulk-writes">Atomic Batch Writes &amp; Auto-Chunked Bulk Writes<a class="anchor" href="#atomic-batch-writes-auto-chunked-bulk-writes" aria-label="Link to section">#</a></h2>
+<h3 id="typescript-vellum-sdk-js">TypeScript (<code class="inline-code">@vellum/sdk-js</code>)<a class="anchor" href="#typescript-vellum-sdk-js" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> { fieldOp } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/sdk-js&quot;</span>;
+
+<span class="hl-comment">// 1. Single atomic batch (&lt;= 500 operations)</span>
+<span class="hl-keyword">await</span> db<span class="hl-property">.batchWrite</span>([
+  { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;set&quot;</span>, path: <span class="hl-string">&quot;products/sku_1&quot;</span>, data: { priceCents: <span class="hl-number">1999</span> }, merge: <span class="hl-keyword">true</span> },
+  { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;update&quot;</span>, path: <span class="hl-string">&quot;products/sku_2&quot;</span>, data: { stock: fieldOp<span class="hl-property">.increment</span>(-<span class="hl-number">1</span>) } },
+  { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;delete&quot;</span>, path: <span class="hl-string">&quot;products/sku_old&quot;</span> },
+]);
+
+<span class="hl-comment">// 2. Auto-chunked bulk writes with bounded concurrency, progress, and AbortSignal</span>
+<span class="hl-keyword">const</span> ac = <span class="hl-keyword">new</span> <span class="hl-fn">AbortController</span>();
+<span class="hl-keyword">const</span> result = <span class="hl-keyword">await</span> db<span class="hl-property">.batchWriteChunked</span>(thousandsOfWrites, {
+  chunkSize: <span class="hl-number">500</span>,    <span class="hl-comment">// default 500 ops per HTTP batchWrite</span>
+  concurrency: <span class="hl-number">4</span>,    <span class="hl-comment">// default 4 concurrent in-flight chunks</span>
+  signal: ac<span class="hl-property">.signal</span>,
+  onProgress: ({ completedChunks, totalChunks, completedOperations, totalOperations }) =&gt; {
+    console<span class="hl-property">.log</span>(<span class="hl-string">`Chunk ${completedChunks}/${totalChunks} (${completedOperations}/${totalOperations} ops)`</span>);
+  },
+});
+
+console<span class="hl-property">.log</span>(<span class="hl-string">`Committed ${result.totalOperations} ops across ${result.totalChunks} chunks`</span>);</code></pre>
+</div>
+<h3 id="flutter-dart-vellum-flutter">Flutter / Dart (<code class="inline-code">vellum_flutter</code>)<a class="anchor" href="#flutter-dart-vellum-flutter" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// 1. Fluent batch builder for atomic or auto-chunked writes</span>
+<span class="hl-keyword">final</span> batch = client<span class="hl-property">.batch</span>();
+<span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> item <span class="hl-keyword">in</span> catalogItems) {
+  batch<span class="hl-property">.set</span>(
+    client<span class="hl-property">.collection</span>(<span class="hl-string">'products'</span>)<span class="hl-property">.doc</span>(item<span class="hl-property">.sku</span>),
+    item<span class="hl-property">.toMap</span>(),
+    merge: <span class="hl-keyword">true</span>,
+  );
+}
+
+<span class="hl-comment">// Single atomic batch (&lt;= 500 ops)</span>
+<span class="hl-keyword">await</span> batch<span class="hl-property">.commit</span>(idempotencyKey: <span class="hl-string">'catalog-atomic-1'</span>);
+
+<span class="hl-comment">// Auto-chunked sequential submission with deterministic per-chunk idempotency keys</span>
+<span class="hl-comment">// Sends &quot;catalog-sync-0&quot;, &quot;catalog-sync-1&quot;, ...</span>
+<span class="hl-keyword">final</span> chunkResponses = <span class="hl-keyword">await</span> batch<span class="hl-property">.commitChunked</span>(
+  chunkSize: <span class="hl-number">500</span>,
+  idempotencyKeyPrefix: <span class="hl-string">'catalog-sync'</span>,
+);
+
+<span class="hl-comment">// 2. Direct list helper</span>
+<span class="hl-keyword">await</span> client<span class="hl-property">.writeBatchChunked</span>(
+  rawWriteMaps,
+  chunkSize: <span class="hl-number">500</span>,
+  idempotencyKeyPrefix: <span class="hl-string">'bulk-import'</span>,
+);</code></pre>
+</div>
+<hr>
+<h2 id="interactive-occ-transactions-runtransaction">Interactive OCC Transactions (<code class="inline-code">runTransaction</code>)<a class="anchor" href="#interactive-occ-transactions-runtransaction" aria-label="Link to section">#</a></h2>
+<p>Transactions acquire a server <code class="inline-code">transactionToken</code> (<code class="inline-code">POST /transactions:begin</code>), track read versions via <code class="inline-code">tx.get(...)</code>, stage mutations (<code class="inline-code">create</code>, <code class="inline-code">set</code>, <code class="inline-code">update</code>, <code class="inline-code">delete</code>), and commit atomically (<code class="inline-code">POST /transactions:commit</code>). If a concurrent writer modifies a read document, the server responds with <code class="inline-code">ABORTED_CONFLICT</code> (<code class="inline-code">409</code>) and the SDK automatically retries with jittered backoff up to <code class="inline-code">maxAttempts</code> (default <code class="inline-code">5</code>).</p>
+<h3 id="typescript-vellum-sdk-js">TypeScript (<code class="inline-code">@vellum/sdk-js</code>)<a class="anchor" href="#typescript-vellum-sdk-js" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">const</span> { result } = <span class="hl-keyword">await</span> db<span class="hl-property">.runTransaction</span>(
+  <span class="hl-keyword">async</span> (tx) =&gt; {
+    <span class="hl-keyword">const</span> fromSnap = <span class="hl-keyword">await</span> tx<span class="hl-property">.get</span>(db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;accounts/acc_a&quot;</span>));
+    <span class="hl-keyword">const</span> toSnap = <span class="hl-keyword">await</span> tx<span class="hl-property">.get</span>(db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;accounts/acc_b&quot;</span>));
+
+    <span class="hl-keyword">const</span> fromBalance = <span class="hl-fn">Number</span>(fromSnap<span class="hl-property">.data</span>()[<span class="hl-string">&quot;balance&quot;</span>] ?? <span class="hl-number">0</span>);
+    <span class="hl-keyword">if</span> (fromBalance &lt; <span class="hl-number">250</span>) {
+      <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;INSUFFICIENT_FUNDS&quot;</span>);
+    }
+
+    tx<span class="hl-property">.update</span>(fromSnap<span class="hl-property">.path</span>, { balance: fromBalance - <span class="hl-number">250</span> });
+    tx<span class="hl-property">.update</span>(toSnap<span class="hl-property">.path</span>, { balance: <span class="hl-fn">Number</span>(toSnap<span class="hl-property">.data</span>()[<span class="hl-string">&quot;balance&quot;</span>] ?? <span class="hl-number">0</span>) + <span class="hl-number">250</span> });
+    tx<span class="hl-property">.create</span>(<span class="hl-string">&quot;ledger/tx_9001&quot;</span>, { <span class="hl-keyword">from</span>: <span class="hl-string">&quot;acc_a&quot;</span>, to: <span class="hl-string">&quot;acc_b&quot;</span>, amount: <span class="hl-number">250</span> });
+
+    <span class="hl-keyword">return</span> { newFromBalance: fromBalance - <span class="hl-number">250</span> };
+  },
+  { maxAttempts: <span class="hl-number">5</span>, signal: ac<span class="hl-property">.signal</span> }
+);</code></pre>
+</div>
+<h3 id="flutter-dart-vellum-flutter">Flutter / Dart (<code class="inline-code">vellum_flutter</code>)<a class="anchor" href="#flutter-dart-vellum-flutter" aria-label="Link to section">#</a></h3>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">final</span> newBalance = <span class="hl-keyword">await</span> client<span class="hl-property">.runTransaction</span>&lt;int&gt;((tx) <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> fromRef = client<span class="hl-property">.doc</span>(<span class="hl-string">'accounts/acc_a'</span>);
+  <span class="hl-keyword">final</span> toRef = client<span class="hl-property">.doc</span>(<span class="hl-string">'accounts/acc_b'</span>);
+  <span class="hl-keyword">final</span> fromSnap = <span class="hl-keyword">await</span> tx<span class="hl-property">.get</span>(fromRef);
+  <span class="hl-keyword">final</span> toSnap = <span class="hl-keyword">await</span> tx<span class="hl-property">.get</span>(toRef);
+
+  <span class="hl-keyword">final</span> fromBalance = (fromSnap<span class="hl-property">.data</span>()?[<span class="hl-string">'balance'</span>] <span class="hl-keyword">as</span> num?)?<span class="hl-property">.toInt</span>() ?? <span class="hl-number">0</span>;
+  <span class="hl-keyword">if</span> (fromBalance &lt; <span class="hl-number">250</span>) {
+    <span class="hl-keyword">throw</span> <span class="hl-fn">StateError</span>(<span class="hl-string">'INSUFFICIENT_FUNDS'</span>);
+  }
+
+  tx<span class="hl-property">.update</span>(fromRef, {<span class="hl-string">'balance'</span>: fromBalance - <span class="hl-number">250</span>});
+  tx<span class="hl-property">.update</span>(toRef, {<span class="hl-string">'balance'</span>: ((toSnap<span class="hl-property">.data</span>()?[<span class="hl-string">'balance'</span>] <span class="hl-keyword">as</span> num?)?<span class="hl-property">.toInt</span>() ?? <span class="hl-number">0</span>) + <span class="hl-number">250</span>});
+  <span class="hl-keyword">return</span> fromBalance - <span class="hl-number">250</span>;
+}, maxAttempts: <span class="hl-number">5</span>);</code></pre>
+</div>
+<blockquote><p><strong>Keep transaction callbacks pure</strong>: Because <code class="inline-code">updateFunction</code> may re-run on <code class="inline-code">ABORTED_CONFLICT</code>, avoid side effects (sending emails, charging cards, mutating external state) inside the callback until <code class="inline-code">runTransaction</code> resolves.</p></blockquote></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#atomic-batch-writes-auto-chunked-bulk-writes" class="toc-link toc-l2">Atomic Batch Writes &amp; Auto-Chunked Bulk Writes</a><a href="#typescript-vellum-sdk-js" class="toc-link toc-l3">TypeScript (`@vellum/sdk-js`)</a><a href="#flutter-dart-vellum-flutter" class="toc-link toc-l3">Flutter / Dart (`vellum_flutter`)</a><a href="#interactive-occ-transactions-runtransaction" class="toc-link toc-l2">Interactive OCC Transactions (`runTransaction`)</a><a href="#typescript-vellum-sdk-js" class="toc-link toc-l3">TypeScript (`@vellum/sdk-js`)</a><a href="#flutter-dart-vellum-flutter" class="toc-link toc-l3">Flutter / Dart (`vellum_flutter`)</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

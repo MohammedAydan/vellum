@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CRUD &amp; Document Paths · VELLUM Docs</title>
+<meta name="description" content="Canonical paths, document and collection references, create/set/update/delete, ifVersion, and the tagged wire format.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/crud.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Core concepts <span>/</span> <strong>CRUD &amp; Document Paths</strong></div>
+    <article class="article"><h1 id="crud-document-paths">CRUD &amp; Document Paths<a class="anchor" href="#crud-document-paths" aria-label="Link to section">#</a></h1>
+<p>Every resource in the data plane is addressed by a canonical, <code class="inline-code">/</code>-separated UTF-8 path. Paths alternate between collection segments and document-id segments.</p>
+<h2 id="scenario">Scenario<a class="anchor" href="#scenario" aria-label="Link to section">#</a></h2>
+<p>You are modeling a customer with their orders: one document at <code class="inline-code">users/u_123</code>, plus a subcollection of orders at <code class="inline-code">users/u_123/orders/ord_456</code>. You create the user, patch a field with a server timestamp, guard the update with a version precondition, and then read the document with its metadata.</p>
+<h2 id="path-rules">Path rules<a class="anchor" href="#path-rules" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Kind</th><th>Segments</th><th>Examples</th></tr></thead><tbody><tr><td>Document</td><td>Even, 2–10</td><td><code class="inline-code">users/u_123</code>, <code class="inline-code">users/u_123/orders/ord_456</code></td></tr><tr><td>Collection</td><td>Odd, 1–9</td><td><code class="inline-code">users</code>, <code class="inline-code">users/u_123/orders</code></td></tr></tbody></table></div>
+<p>A path of depth 10 allows five nested collections. For <code class="inline-code">users/u_123/orders/ord_456</code>:</p>
+<div class="table-wrap"><table><thead><tr><th>Component</th><th>Value</th></tr></thead><tbody><tr><td><code class="inline-code">path</code></td><td><code class="inline-code">users/u_123/orders/ord_456</code></td></tr><tr><td><code class="inline-code">collectionPath</code></td><td><code class="inline-code">users/u_123/orders</code></td></tr><tr><td><code class="inline-code">collectionGroup</code></td><td><code class="inline-code">orders</code></td></tr><tr><td><code class="inline-code">documentId</code></td><td><code class="inline-code">ord_456</code></td></tr><tr><td><code class="inline-code">pathDepth</code></td><td><code class="inline-code">4</code></td></tr></tbody></table></div>
+<h3 id="segment-constraints">Segment constraints<a class="anchor" href="#segment-constraints" aria-label="Link to section">#</a></h3>
+<ul><li>At most <strong>1,500 bytes</strong> per segment (UTF-8).</li><li>No <code class="inline-code">/</code>, NUL byte, or ASCII control characters (<code class="inline-code">0x00</code>–<code class="inline-code">0x1F</code>).</li><li><code class="inline-code">.</code> and <code class="inline-code">..</code> are rejected.</li><li>Segments matching <code class="inline-code">^__.*__$</code> (for example <code class="inline-code">__name__</code>) are reserved for engine metadata and rejected on user paths.</li></ul>
+<div class="admonition admonition-warning"><div class="admonition-label">WARNING</div><p>Exceeding the depth limit raises <code class="inline-code">INVALID_DOCUMENT_PATH</code> (400). Over-long segments and reserved segments produce the same code.</p></div>
+<h2 id="document-and-collection-references">Document and collection references<a class="anchor" href="#document-and-collection-references" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> { createClient } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/sdk-js&quot;</span>;
+
+<span class="hl-keyword">const</span> db = <span class="hl-fn">createClient</span>({ projectId: <span class="hl-string">&quot;&lt;YOUR_PROJECT_ID&gt;&quot;</span>, apiKey: <span class="hl-string">&quot;&lt;YOUR_API_KEY&gt;&quot;</span> });
+
+<span class="hl-comment">// Document reference (even number of segments).</span>
+<span class="hl-keyword">const</span> user = db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;users/u_123&quot;</span>);
+
+<span class="hl-comment">// Collection reference (odd number of segments), then a document inside it.</span>
+<span class="hl-keyword">const</span> orders = db<span class="hl-property">.collection</span>(<span class="hl-string">&quot;users/u_123/orders&quot;</span>);
+<span class="hl-keyword">const</span> order = orders<span class="hl-property">.doc</span>(<span class="hl-string">&quot;ord_456&quot;</span>);
+
+<span class="hl-comment">// Nested subcollection from an existing document reference.</span>
+<span class="hl-keyword">const</span> events = user<span class="hl-property">.collection</span>(<span class="hl-string">&quot;events&quot;</span>); <span class="hl-comment">// users/u_123/events</span></code></pre>
+</div>
+<p>References are immutable builders; calling a method on a reference returns a new value with the updated state where appropriate.</p>
+<h2 id="create-set-update-delete">create, set, update, delete<a class="anchor" href="#create-set-update-delete" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// create — fails with ALREADY_EXISTS if the path is occupied.</span>
+<span class="hl-keyword">await</span> user<span class="hl-property">.create</span>({ name: <span class="hl-string">&quot;Ada&quot;</span>, role: <span class="hl-string">&quot;admin&quot;</span> });
+
+<span class="hl-comment">// set — replace by default, or deep-merge with { merge: true }.</span>
+<span class="hl-keyword">await</span> user<span class="hl-property">.set</span>({ name: <span class="hl-string">&quot;Ada Lovelace&quot;</span> }, { merge: <span class="hl-keyword">true</span> });
+
+<span class="hl-comment">// update — patch only the supplied fields; supports field transforms.</span>
+<span class="hl-keyword">await</span> user<span class="hl-property">.update</span>({ lastSeenAt: fieldOp<span class="hl-property">.serverTimestamp</span>() });
+
+<span class="hl-comment">// delete — soft delete (tombstone + outbox event).</span>
+<span class="hl-keyword">await</span> user<span class="hl-property">.delete</span>();</code></pre>
+</div>
+<p><code class="inline-code">create</code> and <code class="inline-code">set</code> return the stored document (path, collection path, document id, data, <code class="inline-code">version</code>, <code class="inline-code">createdAt</code>, <code class="inline-code">updatedAt</code>). <code class="inline-code">update</code> applies only the given keys; missing keys are left untouched.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">// A read returns the document plus its server-managed metadata.</span>
+<span class="hl-keyword">const</span> snap = <span class="hl-keyword">await</span> user<span class="hl-property">.get</span>();
+console<span class="hl-property">.log</span>(snap<span class="hl-property">.path</span>, snap<span class="hl-property">.version</span>, snap<span class="hl-property">.exists</span>, snap<span class="hl-property">.data</span>());</code></pre>
+</div>
+<h3 id="optimistic-concurrency-with-ifversion">Optimistic concurrency with <code class="inline-code">ifVersion</code><a class="anchor" href="#optimistic-concurrency-with-ifversion" aria-label="Link to section">#</a></h3>
+<p>Every document has a monotonically increasing <code class="inline-code">version</code>. Pass the expected version as a precondition to reject a write if someone else changed the document first:</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">const</span> snap = <span class="hl-keyword">await</span> user<span class="hl-property">.get</span>();
+<span class="hl-keyword">await</span> user<span class="hl-property">.update</span>({ status: <span class="hl-string">&quot;approved&quot;</span> }, { ifVersion: snap<span class="hl-property">.version</span> });
+<span class="hl-comment">// If another writer bumped the version, this throws FAILED_PRECONDITION (412).</span></code></pre>
+</div>
+<p><code class="inline-code">set</code> and <code class="inline-code">delete</code> accept the same <code class="inline-code">ifVersion</code> option. A failed precondition returns <code class="inline-code">FAILED_PRECONDITION</code> with <code class="inline-code">expectedVersion</code> and <code class="inline-code">actualVersion</code> in the error details. For multi-document atomicity with preconditions, use <a href="batch-and-transactions.html">transactions</a>.</p>
+<h2 id="tagged-wire-format-basics">Tagged wire format basics<a class="anchor" href="#tagged-wire-format-basics" aria-label="Link to section">#</a></h2>
+<p>Native JSON primitives (<code class="inline-code">null</code>, <code class="inline-code">boolean</code>, <code class="inline-code">string</code>, finite <code class="inline-code">number</code>, <code class="inline-code">array</code>) are stored directly so PostgreSQL <code class="inline-code">jsonb_path_ops</code> indexes can use them without wrapper overhead. Extended types use the reserved keys <code class="inline-code">$t</code> (tag) and <code class="inline-code">$v</code> (value):</p>
+<div class="table-wrap"><table><thead><tr><th>Logical type</th><th>Representation</th></tr></thead><tbody><tr><td><code class="inline-code">int64</code></td><td><code class="inline-code">{ &quot;$t&quot;: &quot;int&quot;, &quot;$v&quot;: &quot;-9007199254740993&quot; }</code></td></tr><tr><td><code class="inline-code">timestamp</code></td><td><code class="inline-code">{ &quot;$t&quot;: &quot;ts&quot;, &quot;$v&quot;: &quot;2026-11-15T14:30:00.123Z&quot;, &quot;$ms&quot;: 1794753000123 }</code></td></tr><tr><td><code class="inline-code">reference</code></td><td><code class="inline-code">{ &quot;$t&quot;: &quot;ref&quot;, &quot;$v&quot;: &quot;users/u_123&quot; }</code></td></tr><tr><td><code class="inline-code">bytes</code></td><td><code class="inline-code">{ &quot;$t&quot;: &quot;bytes&quot;, &quot;$v&quot;: &quot;SGVsbG8=&quot; }</code> (Base64)</td></tr><tr><td><code class="inline-code">geopoint</code></td><td><code class="inline-code">{ &quot;$t&quot;: &quot;geo&quot;, &quot;$v&quot;: { &quot;lat&quot;: 30.0444, &quot;lng&quot;: 31.2357 } }</code></td></tr><tr><td>user map containing <code class="inline-code">$t</code></td><td><code class="inline-code">{ &quot;$t&quot;: &quot;map&quot;, &quot;$v&quot;: { ... } }</code> (automatic lossless escape)</td></tr></tbody></table></div>
+<ul><li>Numbers must be finite; <code class="inline-code">NaN</code> and <code class="inline-code">Infinity</code> are rejected.</li><li>Object/array nesting is capped at 20 levels (<code class="inline-code">MAX_NESTING_EXCEEDED</code>).</li><li>Field names are capped at 256 characters and cannot contain control characters (<code class="inline-code">INVALID_FIELD_NAME</code>).</li><li>A serialized document may not exceed 1 MiB (<code class="inline-code">DOCUMENT_TOO_LARGE</code>).</li></ul>
+<div class="admonition admonition-tip"><div class="admonition-label">TIP</div><p>References (<code class="inline-code">$t: &quot;ref&quot;</code>) must be valid canonical paths in the same project. They are plain path strings on the wire — VELLUM does not fetch the target document for you.</p></div>
+<h2 id="common-pitfalls">Common pitfalls<a class="anchor" href="#common-pitfalls" aria-label="Link to section">#</a></h2>
+<ul><li><strong>Mixing up document and collection paths.</strong> A document path has an even number of segments; a collection path has an odd number.</li><li><strong>Using a reserved segment.</strong> Names like <code class="inline-code">__name__</code> are engine metadata and are rejected on user paths.</li><li><strong>Expecting <code class="inline-code">create</code> to be idempotent.</strong> It fails with <code class="inline-code">ALREADY_EXISTS</code>; use <code class="inline-code">set</code> when an overwrite is intended.</li><li><strong>Assuming <code class="inline-code">delete</code> removes the row immediately.</strong> It is a soft delete (tombstone), with cleanup handled by the retention worker.</li></ul>
+<h2 id="verified-example">Verified example<a class="anchor" href="#verified-example" aria-label="Link to section">#</a></h2>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">SDK / protocol</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed against the live PostgreSQL API by scripts/run-dart-examples.mjs.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// Document CRUD &amp; optimistic concurrency — manage a versioned user profile.</span>
+<span class="hl-comment">// What you'll build: a profile created, merged, replaced, conditionally patched</span>
+<span class="hl-comment">// and deleted, plus a rejected stale write.</span>
+<span class="hl-comment">// Real-world scenario: a settings screen uses ifVersion so an old tab cannot</span>
+<span class="hl-comment">// silently overwrite newer profile data.</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix = <span class="hl-string">'ex_flutter_crud_${DateTime.now().microsecondsSinceEpoch}'</span>;
+  <span class="hl-keyword">final</span> ref = client<span class="hl-property">.collection</span>(prefix)<span class="hl-property">.doc</span>(<span class="hl-string">'user-profile'</span>);
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== Document CRUD &amp; Optimistic Concurrency (Flutter) ==='</span>);
+
+    <span class="hl-comment">// `create` has no dedicated helper on DocumentReference; use request().</span>
+    <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/documents/${ref.path}'</span>, body: {
+      <span class="hl-string">'data'</span>: {
+        <span class="hl-string">'displayName'</span>: <span class="hl-string">'Ada Lovelace'</span>,
+        <span class="hl-string">'email'</span>: <span class="hl-string">'ada@example.com'</span>,
+        <span class="hl-string">'status'</span>: <span class="hl-string">'active'</span>,
+        <span class="hl-string">'loginCount'</span>: <span class="hl-number">0</span>,
+        <span class="hl-string">'note'</span>: <span class="hl-string">'imported'</span>,
+      },
+    });
+    <span class="hl-keyword">final</span> first = <span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>();
+    <span class="hl-fn">print</span>(<span class="hl-string">'create profile: version=${first.version}'</span>);
+
+    <span class="hl-comment">// Partial merge: verifying the email must not drop the other fields.</span>
+    <span class="hl-keyword">await</span> ref<span class="hl-property">.set</span>({<span class="hl-string">'status'</span>: <span class="hl-string">'verified'</span>}, merge: <span class="hl-keyword">true</span>);
+    <span class="hl-keyword">final</span> merged = <span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>();
+    <span class="hl-fn">print</span>(
+        <span class="hl-string">'set(merge): version=${merged.version} note=${merged.data()?['</span>note<span class="hl-string">']}'</span>);
+
+    <span class="hl-comment">// Full replacement.</span>
+    <span class="hl-keyword">await</span> ref<span class="hl-property">.set</span>({<span class="hl-string">'displayName'</span>: <span class="hl-string">'Ada L.'</span>}, merge: <span class="hl-keyword">false</span>);
+    <span class="hl-keyword">final</span> replaced = <span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>();
+    <span class="hl-fn">print</span>(
+        <span class="hl-string">'set(replace): version=${replaced.version} keys=${replaced.data()?.keys.toList()}'</span>);
+
+    <span class="hl-comment">// Guarded patch.</span>
+    <span class="hl-keyword">await</span> ref<span class="hl-property">.update</span>({<span class="hl-string">'loginCount'</span>: <span class="hl-number">7</span>}, ifVersion: <span class="hl-number">3</span>);
+    <span class="hl-keyword">final</span> patched = <span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>();
+    <span class="hl-fn">print</span>(
+        <span class="hl-string">'update(ifVersion=3): version=${patched.version} loginCount=${patched.data()?['</span>loginCount<span class="hl-string">']}'</span>);
+
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> ref<span class="hl-property">.update</span>({<span class="hl-string">'loginCount'</span>: <span class="hl-number">99</span>}, ifVersion: <span class="hl-number">3</span>);
+    } on <span class="hl-type">VellumException</span> <span class="hl-keyword">catch</span> (e) {
+      <span class="hl-fn">print</span>(<span class="hl-string">'stale tab: code=${e.code} status=${e.statusCode}'</span>);
+    }
+
+    <span class="hl-keyword">await</span> ref<span class="hl-property">.delete</span>(ifVersion: <span class="hl-number">4</span>);
+    <span class="hl-fn">print</span>(<span class="hl-string">'delete(ifVersion=4): true'</span>);
+  } <span class="hl-keyword">finally</span> {
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> ref<span class="hl-property">.delete</span>();
+    } <span class="hl-keyword">catch</span> (_) {
+      <span class="hl-comment">// Best effort cleanup.</span>
+    }
+    client<span class="hl-property">.dispose</span>();
+  }
+}</code></pre><div class="et-note">Reference only — not executed here (no Dart toolchain).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Document CRUD &amp; optimistic concurrency — manage a user profile with
+ * versioned writes.
+ *
+ * What you'll build: a single user profile that is created, merged, replaced,
+ * conditionally patched and finally deleted.
+ * Real-world scenario: a settings screen does a partial &quot;verify email&quot; merge,
+ * a full profile replacement, and a guarded login-count bump. A second,
+ * stale write from an old tab is rejected with FAILED_PRECONDITION instead of
+ * silently overwriting newer data.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;crud&quot;</span>);
+<span class="hl-keyword">const</span> ref = h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(h<span class="hl-property">.prefix</span>)<span class="hl-property">.doc</span>(<span class="hl-string">&quot;user-profile&quot;</span>);
+
+<span class="hl-keyword">function</span> <span class="hl-fn">errorCode</span>(error: unknown): string {
+  <span class="hl-keyword">return</span> (error <span class="hl-keyword">as</span> { code?: string })<span class="hl-property">.code</span> ?? <span class="hl-string">&quot;UNKNOWN&quot;</span>;
+}
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Document CRUD &amp; Optimistic Concurrency ===&quot;</span>);
+
+  <span class="hl-keyword">await</span> ref<span class="hl-property">.create</span>({
+    displayName: <span class="hl-string">&quot;Ada Lovelace&quot;</span>,
+    email: <span class="hl-string">&quot;ada@example.com&quot;</span>,
+    status: <span class="hl-string">&quot;active&quot;</span>,
+    loginCount: <span class="hl-number">0</span>,
+    note: <span class="hl-string">&quot;imported&quot;</span>,
+  });
+  <span class="hl-keyword">const</span> first = <span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>();
+  <span class="hl-fn">check</span>(first<span class="hl-property">.version</span> === <span class="hl-number">1</span>, <span class="hl-string">&quot;create starts at version 1&quot;</span>);
+  h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;create profile&quot;</span>, version: first<span class="hl-property">.version</span>, data: first<span class="hl-property">.data</span>() });
+
+  <span class="hl-comment">// Partial update: verifying the email must not drop the other fields.</span>
+  <span class="hl-keyword">await</span> ref<span class="hl-property">.set</span>({ status: <span class="hl-string">&quot;verified&quot;</span> }, { merge: <span class="hl-keyword">true</span> });
+  <span class="hl-keyword">const</span> merged = <span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>();
+  <span class="hl-fn">check</span>(merged<span class="hl-property">.version</span> === <span class="hl-number">2</span> &amp;&amp; (merged<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { note: string })<span class="hl-property">.note</span> === <span class="hl-string">&quot;imported&quot;</span>, <span class="hl-string">&quot;merge preserves other fields&quot;</span>);
+  h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;set(merge) verify status&quot;</span>, version: merged<span class="hl-property">.version</span>, data: merged<span class="hl-property">.data</span>() });
+
+  <span class="hl-comment">// Full replacement: the client intentionally sends only the final shape.</span>
+  <span class="hl-keyword">await</span> ref<span class="hl-property">.set</span>({ displayName: <span class="hl-string">&quot;Ada L.&quot;</span> }, { merge: <span class="hl-keyword">false</span> });
+  <span class="hl-keyword">const</span> replaced = <span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>();
+  <span class="hl-fn">check</span>(replaced<span class="hl-property">.version</span> === <span class="hl-number">3</span> &amp;&amp; <span class="hl-type">Object</span><span class="hl-property">.keys</span>(replaced<span class="hl-property">.data</span>())<span class="hl-property">.length</span> === <span class="hl-number">1</span>, <span class="hl-string">&quot;set replaces the whole document&quot;</span>);
+  h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;set(replace) minimal profile&quot;</span>, version: replaced<span class="hl-property">.version</span>, data: replaced<span class="hl-property">.data</span>() });
+
+  <span class="hl-comment">// Guarded patch: only apply the login bump if nobody else changed the doc.</span>
+  <span class="hl-keyword">await</span> ref<span class="hl-property">.update</span>({ loginCount: <span class="hl-number">7</span> }, { ifVersion: <span class="hl-number">3</span> });
+  <span class="hl-keyword">const</span> patched = <span class="hl-keyword">await</span> ref<span class="hl-property">.get</span>();
+  <span class="hl-fn">check</span>(patched<span class="hl-property">.version</span> === <span class="hl-number">4</span> &amp;&amp; (patched<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { loginCount: number })<span class="hl-property">.loginCount</span> === <span class="hl-number">7</span>, <span class="hl-string">&quot;conditional update applied&quot;</span>);
+  h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;update(ifVersion=3) loginCount&quot;</span>, version: patched<span class="hl-property">.version</span>, loginCount: (patched<span class="hl-property">.data</span>() <span class="hl-keyword">as</span> { loginCount: number })<span class="hl-property">.loginCount</span> });
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> ref<span class="hl-property">.update</span>({ loginCount: <span class="hl-number">99</span> }, { ifVersion: <span class="hl-number">3</span> });
+    <span class="hl-keyword">throw</span> <span class="hl-keyword">new</span> <span class="hl-fn">Error</span>(<span class="hl-string">&quot;stale update should have been rejected&quot;</span>);
+  } <span class="hl-keyword">catch</span> (error: unknown) {
+    <span class="hl-fn">check</span>(<span class="hl-fn">errorCode</span>(error) === <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>, <span class="hl-string">&quot;stale ifVersion returns FAILED_PRECONDITION&quot;</span>);
+    h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;update(ifVersion=3) from stale tab&quot;</span>, code: <span class="hl-fn">errorCode</span>(error), status: (error <span class="hl-keyword">as</span> { status?: number })<span class="hl-property">.status</span> });
+  }
+
+  <span class="hl-keyword">await</span> ref<span class="hl-property">.delete</span>({ ifVersion: <span class="hl-number">4</span> });
+  <span class="hl-keyword">const</span> missing = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${h.prefix}/user-profile`</span>);
+  <span class="hl-fn">check</span>(missing<span class="hl-property">.status</span> === <span class="hl-number">404</span>, <span class="hl-string">&quot;deleted profile is gone&quot;</span>);
+  h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;delete(ifVersion=4)&quot;</span>, status: missing<span class="hl-property">.status</span>, code: (missing<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { error?: { code?: string } })?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Document CRUD &amp; Optimistic Concurrency ===
+{&quot;operation&quot;:&quot;create profile&quot;,&quot;version&quot;:1,&quot;data&quot;:{&quot;note&quot;:&quot;imported&quot;,&quot;email&quot;:&quot;ada@example.com&quot;,&quot;status&quot;:&quot;active&quot;,&quot;loginCount&quot;:0,&quot;displayName&quot;:&quot;Ada Lovelace&quot;}}
+{&quot;operation&quot;:&quot;set(merge) verify status&quot;,&quot;version&quot;:2,&quot;data&quot;:{&quot;note&quot;:&quot;imported&quot;,&quot;email&quot;:&quot;ada@example.com&quot;,&quot;status&quot;:&quot;verified&quot;,&quot;loginCount&quot;:0,&quot;displayName&quot;:&quot;Ada Lovelace&quot;}}
+{&quot;operation&quot;:&quot;set(replace) minimal profile&quot;,&quot;version&quot;:3,&quot;data&quot;:{&quot;displayName&quot;:&quot;Ada L.&quot;}}
+{&quot;operation&quot;:&quot;update(ifVersion=3) loginCount&quot;,&quot;version&quot;:4,&quot;loginCount&quot;:7}
+{&quot;operation&quot;:&quot;update(ifVersion=3) from stale tab&quot;,&quot;code&quot;:&quot;FAILED_PRECONDITION&quot;,&quot;status&quot;:412}
+{&quot;operation&quot;:&quot;delete(ifVersion=4)&quot;,&quot;status&quot;:404,&quot;code&quot;:&quot;NOT_FOUND&quot;}</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Document CRUD &amp; optimistic concurrency (REST) — manage a versioned profile.
+ *
+ * What you'll build: a user profile created with POST, merged with PUT,
+ * replaced with PUT, conditionally patched with PATCH and deleted with
+ * ifVersion. A second, stale PATCH is rejected with FAILED_PRECONDITION.
+ * Real-world scenario: a settings screen avoids lost updates by guarding writes
+ * with the version it last read.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;crud&quot;</span>);
+<span class="hl-keyword">const</span> docPath = <span class="hl-string">`${h.prefix}/user-profile`</span>;
+<span class="hl-keyword">const</span> codeOf = (reply) =&gt; reply<span class="hl-property">.body</span>?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> ?? <span class="hl-string">&quot;UNKNOWN&quot;</span>;
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Document CRUD &amp; Optimistic Concurrency ===&quot;</span>);
+
+  <span class="hl-keyword">const</span> created = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>, {
+    data: {
+      displayName: <span class="hl-string">&quot;Ada Lovelace&quot;</span>,
+      email: <span class="hl-string">&quot;ada@example.com&quot;</span>,
+      status: <span class="hl-string">&quot;active&quot;</span>,
+      loginCount: <span class="hl-number">0</span>,
+      note: <span class="hl-string">&quot;imported&quot;</span>,
+    },
+  });
+  <span class="hl-fn">check</span>(created<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">&quot;create profile&quot;</span>);
+  <span class="hl-keyword">const</span> first = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>);
+  <span class="hl-fn">check</span>(first<span class="hl-property">.body</span><span class="hl-property">.version</span> === <span class="hl-number">1</span>, <span class="hl-string">&quot;create starts at version 1&quot;</span>);
+  h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;create profile&quot;</span>, version: first<span class="hl-property">.body</span><span class="hl-property">.version</span>, data: first<span class="hl-property">.body</span><span class="hl-property">.data</span> });
+
+  <span class="hl-keyword">const</span> merged = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;PUT&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>, {
+    data: { status: <span class="hl-string">&quot;verified&quot;</span> },
+    merge: <span class="hl-keyword">true</span>,
+  });
+  <span class="hl-fn">check</span>(merged<span class="hl-property">.ok</span> &amp;&amp; merged<span class="hl-property">.body</span><span class="hl-property">.version</span> === <span class="hl-number">2</span>, <span class="hl-string">&quot;merge advanced the version&quot;</span>);
+  <span class="hl-keyword">const</span> afterMerge = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>);
+  <span class="hl-fn">check</span>(afterMerge<span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.note</span> === <span class="hl-string">&quot;imported&quot;</span>, <span class="hl-string">&quot;merge preserves other fields&quot;</span>);
+  h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;set(merge) verify status&quot;</span>, version: afterMerge<span class="hl-property">.body</span><span class="hl-property">.version</span>, data: afterMerge<span class="hl-property">.body</span><span class="hl-property">.data</span> });
+
+  <span class="hl-keyword">const</span> replaced = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;PUT&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>, {
+    data: { displayName: <span class="hl-string">&quot;Ada L.&quot;</span> },
+    merge: <span class="hl-keyword">false</span>,
+  });
+  <span class="hl-fn">check</span>(replaced<span class="hl-property">.ok</span> &amp;&amp; replaced<span class="hl-property">.body</span><span class="hl-property">.version</span> === <span class="hl-number">3</span>, <span class="hl-string">&quot;replace advanced the version&quot;</span>);
+  <span class="hl-keyword">const</span> afterReplace = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>);
+  <span class="hl-fn">check</span>(<span class="hl-type">Object</span><span class="hl-property">.keys</span>(afterReplace<span class="hl-property">.body</span><span class="hl-property">.data</span>)<span class="hl-property">.length</span> === <span class="hl-number">1</span>, <span class="hl-string">&quot;replace dropped all other fields&quot;</span>);
+  h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;set(replace) minimal profile&quot;</span>, version: afterReplace<span class="hl-property">.body</span><span class="hl-property">.version</span>, data: afterReplace<span class="hl-property">.body</span><span class="hl-property">.data</span> });
+
+  <span class="hl-keyword">const</span> patched = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;PATCH&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>, {
+    data: { loginCount: <span class="hl-number">7</span> },
+    ifVersion: <span class="hl-number">3</span>,
+  });
+  <span class="hl-fn">check</span>(patched<span class="hl-property">.ok</span> &amp;&amp; patched<span class="hl-property">.body</span><span class="hl-property">.version</span> === <span class="hl-number">4</span>, <span class="hl-string">&quot;conditional patch applied&quot;</span>);
+  h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;update(ifVersion=3) loginCount&quot;</span>, version: patched<span class="hl-property">.body</span><span class="hl-property">.version</span>, loginCount: patched<span class="hl-property">.body</span><span class="hl-property">.data</span><span class="hl-property">.loginCount</span> });
+
+  <span class="hl-keyword">const</span> stale = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;PATCH&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>, {
+    data: { loginCount: <span class="hl-number">99</span> },
+    ifVersion: <span class="hl-number">3</span>,
+  });
+  <span class="hl-fn">check</span>(stale<span class="hl-property">.status</span> === <span class="hl-number">412</span> &amp;&amp; <span class="hl-fn">codeOf</span>(stale) === <span class="hl-string">&quot;FAILED_PRECONDITION&quot;</span>, <span class="hl-string">&quot;stale patch rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;update(ifVersion=3) from stale tab&quot;</span>, code: <span class="hl-fn">codeOf</span>(stale), status: stale<span class="hl-property">.status</span> });
+
+  <span class="hl-keyword">const</span> removed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;DELETE&quot;</span>, <span class="hl-string">`/documents/${docPath}?ifVersion=4`</span>);
+  <span class="hl-fn">check</span>(removed<span class="hl-property">.ok</span>, <span class="hl-string">&quot;delete applied&quot;</span>);
+  <span class="hl-keyword">const</span> missing = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`/documents/${docPath}`</span>);
+  <span class="hl-fn">check</span>(missing<span class="hl-property">.status</span> === <span class="hl-number">404</span>, <span class="hl-string">&quot;deleted profile is gone&quot;</span>);
+  h<span class="hl-property">.log</span>({ operation: <span class="hl-string">&quot;delete(ifVersion=4)&quot;</span>, status: missing<span class="hl-property">.status</span>, code: <span class="hl-fn">codeOf</span>(missing) });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Document CRUD &amp; Optimistic Concurrency ===
+{&quot;operation&quot;:&quot;create profile&quot;,&quot;version&quot;:1,&quot;data&quot;:{&quot;note&quot;:&quot;imported&quot;,&quot;email&quot;:&quot;ada@example.com&quot;,&quot;status&quot;:&quot;active&quot;,&quot;loginCount&quot;:0,&quot;displayName&quot;:&quot;Ada Lovelace&quot;}}
+{&quot;operation&quot;:&quot;set(merge) verify status&quot;,&quot;version&quot;:2,&quot;data&quot;:{&quot;note&quot;:&quot;imported&quot;,&quot;email&quot;:&quot;ada@example.com&quot;,&quot;status&quot;:&quot;verified&quot;,&quot;loginCount&quot;:0,&quot;displayName&quot;:&quot;Ada Lovelace&quot;}}
+{&quot;operation&quot;:&quot;set(replace) minimal profile&quot;,&quot;version&quot;:3,&quot;data&quot;:{&quot;displayName&quot;:&quot;Ada L.&quot;}}
+{&quot;operation&quot;:&quot;update(ifVersion=3) loginCount&quot;,&quot;version&quot;:4,&quot;loginCount&quot;:7}
+{&quot;operation&quot;:&quot;update(ifVersion=3) from stale tab&quot;,&quot;code&quot;:&quot;FAILED_PRECONDITION&quot;,&quot;status&quot;:412}
+{&quot;operation&quot;:&quot;delete(ifVersion=4)&quot;,&quot;status&quot;:404,&quot;code&quot;:&quot;NOT_FOUND&quot;}</code></pre>
+</div></div></div>
+</div>
+<h2 id="what-to-read-next">What to read next<a class="anchor" href="#what-to-read-next" aria-label="Link to section">#</a></h2>
+<ul><li><a href="field-transforms.html">Field transforms</a> — atomic server-side field operations.</li><li><a href="query.html">Query</a> — filter, sort, and project documents.</li><li><a href="realtime.html">Realtime</a> — subscribe to changes on a document or collection.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#scenario" class="toc-link toc-l2">Scenario</a><a href="#path-rules" class="toc-link toc-l2">Path rules</a><a href="#segment-constraints" class="toc-link toc-l3">Segment constraints</a><a href="#document-and-collection-references" class="toc-link toc-l2">Document and collection references</a><a href="#create-set-update-delete" class="toc-link toc-l2">create, set, update, delete</a><a href="#optimistic-concurrency-with-ifversion" class="toc-link toc-l3">Optimistic concurrency with `ifVersion`</a><a href="#tagged-wire-format-basics" class="toc-link toc-l2">Tagged wire format basics</a><a href="#common-pitfalls" class="toc-link toc-l2">Common pitfalls</a><a href="#verified-example" class="toc-link toc-l2">Verified example</a><a href="#what-to-read-next" class="toc-link toc-l2">What to read next</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

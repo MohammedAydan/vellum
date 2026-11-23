@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Authentication · VELLUM Docs</title>
+<meta name="description" content="API keys, console sessions, TOTP MFA, key rotation, and least-privilege access.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/authentication.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Getting started <span>/</span> <strong>Authentication</strong></div>
+    <article class="article"><h1 id="authentication">Authentication<a class="anchor" href="#authentication" aria-label="Link to section">#</a></h1>
+<p>VELLUM has <strong>three isolated authentication realms</strong> — <code class="inline-code">SUPER_ADMIN</code>, <code class="inline-code">CUSTOMER_CONSOLE</code> and <code class="inline-code">PROJECT_END_USER</code>. They share only stateless crypto primitives; storage, signing secrets, JWT <code class="inline-code">typ</code>/<code class="inline-code">iss</code>/<code class="inline-code">aud</code>, claims and middleware are fully separate, so a token from one realm is rejected by the other two.</p>
+<ol><li>The <strong>document plane</strong> (<code class="inline-code">/v1/projects/...</code>) uses API keys via <code class="inline-code">x-vellum-api-key</code> (legacy <code class="inline-code">x-project-key</code>), with an optional <strong>EdDSA-only</strong> end-user bearer. There is no HS256 fallback, anonymous fallback or implicit master key.</li><li>The <strong>console</strong> (<code class="inline-code">/v1/console/...</code>) and <strong>admin</strong> (<code class="inline-code">/v1/admin/...</code>) planes use realm-bound HS256 session tokens plus an HttpOnly <code class="inline-code">vellum_refresh_token</code> cookie.</li></ol>
+<p>See <a href="end-user-auth.html">End-User Authentication &amp; the Three Realms</a> for tokens, refresh rotation, the full REST reference and rate limits.</p>
+<div class="admonition admonition-note"><div class="admonition-label">NOTE</div><p>A public API key can safely appear in a browser or mobile app, but it grants <strong>zero implicit data access</strong>. Every operation is evaluated against the project's active security ruleset. A server key bypasses rules only for the explicit scopes it carries.</p></div>
+<h2 id="scenario">Scenario<a class="anchor" href="#scenario" aria-label="Link to section">#</a></h2>
+<p>You are adding a feature where users sign in to your app and the client reads only its own documents. You issue a public <code class="inline-code">pk_</code> key for the browser, attach the signed-in user's JWT on each request, and rely on security rules to enforce ownership — keeping the master <code class="inline-code">sk_</code> key on your server only.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">BASH</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment"># Every document-plane call presents the key in a header, never in the URL.</span>
+curl <span class="hl-string">&quot;https://api.example.com/v1/projects/&lt;PROJECT_ID&gt;/documents/users/u_123&quot;</span> \
+  -<span class="hl-type">H</span> <span class="hl-string">&quot;x-project-key: &lt;YOUR_PUBLIC_KEY&gt;&quot;</span> \
+  -<span class="hl-type">H</span> <span class="hl-string">&quot;Authorization: Bearer &lt;END_USER_JWT&gt;&quot;</span></code></pre>
+</div>
+<h2 id="api-keys-pk-sk">API keys (<code class="inline-code">pk_</code> / <code class="inline-code">sk_</code>)<a class="anchor" href="#api-keys-pk-sk" aria-label="Link to section">#</a></h2>
+<p>Keys are generated in the form <code class="inline-code">&lt;prefix&gt;_&lt;envTag&gt;_&lt;random&gt;</code>:</p>
+<div class="table-wrap"><table><thead><tr><th>Prefix</th><th>Type</th><th>Body length</th><th>Project tag</th></tr></thead><tbody><tr><td><code class="inline-code">pk_</code></td><td>Public</td><td>32 base62 chars</td><td><code class="inline-code">live</code> (legacy <code class="inline-code">dev</code> / <code class="inline-code">stg</code> still valid)</td></tr><tr><td><code class="inline-code">sk_</code></td><td>Server</td><td>48 base62 chars</td><td><code class="inline-code">live</code> (legacy <code class="inline-code">dev</code> / <code class="inline-code">stg</code> still valid)</td></tr></tbody></table></div>
+<p>Examples of the <em>shape</em> (not usable values): <code class="inline-code">pk_...</code> and <code class="inline-code">sk_...</code>. Keys use only the <code class="inline-code">pk_</code>/<code class="inline-code">sk_</code> prefixes and are scoped to the project.</p>
+<p>Only a 16-character prefix and a digest are persisted. The digest is <code class="inline-code">SHA256(fullKey + &quot;:&quot; + API_KEY_PEPPER)</code>, compared in constant time. The plaintext key is returned only once, at creation. Verified keys are cached in-process for 30 seconds; revocation and rotation publish <code class="inline-code">NOTIFY vellum_cache_invalidate</code> so other instances drop their cached entry.</p>
+<h3 id="scopes">Scopes<a class="anchor" href="#scopes" aria-label="Link to section">#</a></h3>
+<p>A server key carries explicit scopes. Required scope by operation:</p>
+<div class="table-wrap"><table><thead><tr><th>Operation</th><th>Required scope</th></tr></thead><tbody><tr><td><code class="inline-code">get</code>, <code class="inline-code">list</code>, <code class="inline-code">query</code></td><td><code class="inline-code">documents:read</code></td></tr><tr><td><code class="inline-code">create</code>, <code class="inline-code">set</code>, <code class="inline-code">update</code>, <code class="inline-code">delete</code>, <code class="inline-code">batchWrite</code>, transactions</td><td><code class="inline-code">documents:write</code></td></tr><tr><td>index management</td><td><code class="inline-code">indexes:manage</code></td></tr></tbody></table></div>
+<p>The <code class="inline-code">*</code> scope grants everything. A public key cannot manage composite indexes. A missing scope yields <code class="inline-code">PERMISSION_DENIED</code> (403); a missing or invalid key yields <code class="inline-code">UNAUTHENTICATED</code> (401).</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> { createClient } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/sdk-js&quot;</span>;
+
+<span class="hl-keyword">const</span> db = <span class="hl-fn">createClient</span>({
+  endpoint: <span class="hl-string">&quot;https://api.example.com&quot;</span>,
+  projectId: <span class="hl-string">&quot;&lt;YOUR_PROJECT_ID&gt;&quot;</span>,
+  apiKey: <span class="hl-string">&quot;&lt;YOUR_API_KEY&gt;&quot;</span>, <span class="hl-comment">// sent as x-project-key</span>
+  getAuthToken: <span class="hl-keyword">async</span> () =&gt; <span class="hl-fn">currentUserJwt</span>(), <span class="hl-comment">// optional end-user token for auth.uid</span>
+});</code></pre>
+</div>
+<h2 id="end-user-tokens-and-rules-evaluation">End-user tokens and rules evaluation<a class="anchor" href="#end-user-tokens-and-rules-evaluation" aria-label="Link to section">#</a></h2>
+<p>When a public key is used, an optional <code class="inline-code">Authorization: Bearer &lt;jwt&gt;</code> supplies the end-user identity. The SDK's <code class="inline-code">getAuthToken</code> callback supplies this token on each request. The rules AST can read <code class="inline-code">auth.uid</code> and <code class="inline-code">auth.claims.&lt;field&gt;</code>, so the same public key can serve many users safely. See <a href="security-rules.html">Security rules</a>.</p>
+<h2 id="console-sessions-and-password-auth">Console sessions and password auth<a class="anchor" href="#console-sessions-and-password-auth" aria-label="Link to section">#</a></h2>
+<p>The dashboard authenticates with email/password against the control plane:</p>
+<div class="table-wrap"><table><thead><tr><th>Endpoint</th><th>Purpose</th></tr></thead><tbody><tr><td><code class="inline-code">POST /v1/auth/sign-up/email</code></td><td>Create a user, default organization, project with one project, and a production (<code class="inline-code">live</code>) key.</td></tr><tr><td><code class="inline-code">POST /v1/auth/sign-in/email</code></td><td>Verify password (scrypt) and return a session token.</td></tr><tr><td><code class="inline-code">GET /v1/auth/session</code></td><td>Validate the presented token and return its claims.</td></tr><tr><td><code class="inline-code">POST /v1/auth/sign-out</code></td><td>Revoke the session refresh token when one is presented.</td></tr></tbody></table></div>
+<p>Console session access tokens are short-lived; a refresh token is held in an HttpOnly cookie. Every console request checks organization membership and writes an immutable audit-log entry.</p>
+<h2 id="totp-mfa-console-users">TOTP MFA (console users)<a class="anchor" href="#totp-mfa-console-users" aria-label="Link to section">#</a></h2>
+<p>MFA is RFC 6238 TOTP (SHA-1, 30-second period, six digits, ±1 step tolerance). All MFA routes require a valid session:</p>
+<div class="table-wrap"><table><thead><tr><th>Endpoint</th><th>Purpose</th></tr></thead><tbody><tr><td><code class="inline-code">GET /v1/auth/mfa/status</code></td><td><code class="inline-code">{ enabled: boolean }</code></td></tr><tr><td><code class="inline-code">POST /v1/auth/mfa/setup</code></td><td>Returns the secret, an <code class="inline-code">otpauth://</code> URI, and recovery codes.</td></tr><tr><td><code class="inline-code">POST /v1/auth/mfa/verify{ &quot;code&quot;: &quot;123456&quot; }</code></td><td>Enables MFA after a valid TOTP code.</td></tr><tr><td><code class="inline-code">POST /v1/auth/mfa/disable{ &quot;code&quot;: &quot;...&quot; }</code></td><td>Disables MFA using a TOTP code or a recovery code.</td></tr></tbody></table></div>
+<p>The TOTP secret is encrypted at rest in the control-plane <code class="inline-code">mfa_secrets</code> table and recovery codes are stored as keyed hashes. Verification attempts are throttled by an in-process sliding window (five attempts per 60 seconds by default) — no Redis is involved.</p>
+<div class="admonition admonition-tip"><div class="admonition-label">TIP</div><p>Enrollment is idempotent while unverified: calling setup again before verification returns the same secret and codes. Store the recovery codes somewhere safe; they are shown only at setup time.</p></div>
+<h2 id="rotation-and-revocation">Rotation and revocation<a class="anchor" href="#rotation-and-revocation" aria-label="Link to section">#</a></h2>
+<p>Keys are managed through the session-authenticated console API under <code class="inline-code">/v1/projects/:projectId/api-keys</code>:</p>
+<ul><li><code class="inline-code">POST</code> — create a key; the raw key appears only in this response.</li><li><code class="inline-code">GET</code> — list keys (prefixes, scopes, status, usage metadata).</li><li><code class="inline-code">DELETE /:keyId</code> — revoke a key immediately and publish a cache invalidation.</li></ul>
+<p>To rotate without downtime: create the new key, deploy it to clients, confirm traffic has moved, then revoke the old key. Because revocation is also enforced against the control-plane record, a cached key cannot be used after its <code class="inline-code">revokedAt</code> is set.</p>
+<h2 id="least-privilege">Least privilege<a class="anchor" href="#least-privilege" aria-label="Link to section">#</a></h2>
+<ul><li>Use separate keys per project and never reuse a key across projects. Keys use only the <code class="inline-code">pk_</code>/<code class="inline-code">sk_</code> prefixes and are scoped to the project; there are no environment-scoped keys or deployment stages in the product.</li><li>Prefer <code class="inline-code">pk_</code> keys in client apps and let security rules decide access; use <code class="inline-code">sk_</code> keys only on trusted servers.</li><li>Grant the narrowest scope set: read-only services get <code class="inline-code">documents:read</code>, index tooling gets <code class="inline-code">indexes:manage</code>.</li><li>Set an expiry on temporary keys and audit every <code class="inline-code">api_key.created</code> / <code class="inline-code">api_key.revoked</code> event.</li></ul>
+<div class="admonition admonition-warning"><div class="admonition-label">WARNING</div><p>Never log raw <code class="inline-code">pk_</code>/<code class="inline-code">sk_</code> keys, bearer JWTs, or database URLs. The structured logger in <code class="inline-code">@vellum/observability</code> redacts these patterns automatically; keep all application logs on that path.</p></div>
+<h2 id="common-pitfalls">Common pitfalls<a class="anchor" href="#common-pitfalls" aria-label="Link to section">#</a></h2>
+<ul><li><strong>Confusing the two surfaces.</strong> A console session JWT is not accepted on the document plane, and an API key is not accepted on the console plane.</li><li><strong>Assuming a public key is privileged.</strong> With no active ruleset, public-key access is denied; rules must explicitly allow each operation.</li><li><strong>Using a <code class="inline-code">*</code> scope for convenience.</strong> An over-scoped server key defeats least privilege; grant only what the service needs.</li><li><strong>Forgetting to rotate.</strong> Create the replacement first, move clients, then revoke — never revoke before the new key is deployed.</li></ul>
+<h2 id="verified-examples">Verified examples<a class="anchor" href="#verified-examples" aria-label="Link to section">#</a></h2>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">SDK / protocol</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed by scripts/run-dart-examples.mjs against a PostgreSQL API.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// Authentication &amp; API keys — full key lifecycle with immediate revocation.</span>
+<span class="hl-comment">// What you'll build: sign-in, session check, server key creation, a probe with</span>
+<span class="hl-comment">// that key, revocation, and proof the revoked key is rejected immediately.</span>
+<span class="hl-comment">// Real-world scenario: rotating a leaked key must take effect on the next</span>
+<span class="hl-comment">// request. Auth/console endpoints are outside baseUrl, so httpTransport is used</span>
+<span class="hl-comment">// directly; credentials are injected via --dart-define, never hard-coded.</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+  <span class="hl-keyword">final</span> email = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_EMAIL'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_EMAIL'</span>);
+  <span class="hl-keyword">final</span> password = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PASSWORD'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PASSWORD'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix = <span class="hl-string">'ex_flutter_auth_${DateTime.now().microsecondsSinceEpoch}'</span>;
+  <span class="hl-keyword">final</span> keysUrl = <span class="hl-string">'$endpoint/v1/console/projects/$projectId/api-keys'</span>;
+  <span class="hl-keyword">final</span> probeUrl = <span class="hl-string">'$endpoint/v1/projects/$projectId/documents/$prefix/probe'</span>;
+  <span class="hl-keyword">final</span> jsonHeaders = {<span class="hl-string">'Content-Type'</span>: <span class="hl-string">'application/json'</span>};
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== Authentication &amp; API Keys (Flutter) ==='</span>);
+
+    <span class="hl-keyword">final</span> login = <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(
+      <span class="hl-string">'POST'</span>,
+      <span class="hl-string">'$endpoint/v1/auth/sign-in/email'</span>,
+      jsonHeaders,
+      {<span class="hl-string">'email'</span>: email, <span class="hl-string">'password'</span>: password},
+    );
+    <span class="hl-keyword">final</span> loginMap = <span class="hl-fn">objectMap</span>(login, <span class="hl-string">'sign-in'</span>);
+    <span class="hl-keyword">final</span> token = loginMap[<span class="hl-string">'token'</span>];
+    <span class="hl-keyword">if</span> (token <span class="hl-keyword">is</span>! <span class="hl-type">String</span> || token<span class="hl-property">.isEmpty</span>)
+      <span class="hl-keyword">throw</span> <span class="hl-fn">StateError</span>(<span class="hl-string">'Missing sign-in token'</span>);
+    <span class="hl-fn">print</span>(<span class="hl-string">'signIn: success=${loginMap['</span>success<span class="hl-string">']} tokenLength=${token.length}'</span>);
+
+    <span class="hl-keyword">final</span> session = <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(
+      <span class="hl-string">'GET'</span>,
+      <span class="hl-string">'$endpoint/v1/auth/session'</span>,
+      {..<span class="hl-property">.jsonHeaders</span>, <span class="hl-string">'Authorization'</span>: <span class="hl-string">'Bearer $token'</span>},
+      <span class="hl-keyword">null</span>,
+    );
+    <span class="hl-fn">print</span>(
+        <span class="hl-string">'session: hasSession=${objectMap(session, '</span>session<span class="hl-string">')['</span>session<span class="hl-string">'] != null}'</span>);
+
+    <span class="hl-keyword">final</span> authHeaders = {..<span class="hl-property">.jsonHeaders</span>, <span class="hl-string">'Authorization'</span>: <span class="hl-string">'Bearer $token'</span>};
+    <span class="hl-keyword">final</span> listedResponse =
+        <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(<span class="hl-string">'GET'</span>, keysUrl, authHeaders, <span class="hl-keyword">null</span>);
+    <span class="hl-keyword">final</span> listed = listedResponse <span class="hl-keyword">is</span> <span class="hl-type">VellumHttpResponse</span>
+        ? listedResponse<span class="hl-property">.body</span>
+        : listedResponse;
+    <span class="hl-keyword">if</span> (listed <span class="hl-keyword">is</span>! <span class="hl-type">List</span>) <span class="hl-keyword">throw</span> <span class="hl-fn">StateError</span>(<span class="hl-string">'Expected API key list'</span>);
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> key <span class="hl-keyword">in</span> listed) {
+      <span class="hl-fn">objectMap</span>(key, <span class="hl-string">'API key'</span>);
+    }
+    <span class="hl-fn">print</span>(<span class="hl-string">'listKeys: responseReceived=${listed.isNotEmpty}'</span>);
+
+    <span class="hl-keyword">final</span> created = <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(<span class="hl-string">'POST'</span>, keysUrl, authHeaders, {
+      <span class="hl-string">'name'</span>: <span class="hl-string">'examples:flutter-auth:ephemeral'</span>,
+      <span class="hl-string">'keyType'</span>: <span class="hl-string">'server'</span>,
+    });
+    <span class="hl-keyword">final</span> createdMap = <span class="hl-fn">objectMap</span>(created, <span class="hl-string">'created key'</span>);
+    <span class="hl-keyword">final</span> ephemeralId = <span class="hl-fn">objectMap</span>(createdMap[<span class="hl-string">'apiKey'</span>], <span class="hl-string">'API key'</span>)[<span class="hl-string">'id'</span>];
+    <span class="hl-keyword">final</span> rawKey = createdMap[<span class="hl-string">'rawKey'</span>];
+    <span class="hl-keyword">if</span> (ephemeralId <span class="hl-keyword">is</span>! <span class="hl-type">String</span> || rawKey <span class="hl-keyword">is</span>! <span class="hl-type">String</span>)
+      <span class="hl-keyword">throw</span> <span class="hl-fn">StateError</span>(<span class="hl-string">'Malformed created key'</span>);
+    <span class="hl-fn">print</span>(<span class="hl-string">'createKey: idReturned=${ephemeralId.isNotEmpty}'</span>);
+
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">var</span> missingKeyRejected = <span class="hl-keyword">false</span>;
+      <span class="hl-keyword">try</span> {
+        <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(<span class="hl-string">'GET'</span>, probeUrl, jsonHeaders, <span class="hl-keyword">null</span>);
+      } on <span class="hl-type">VellumException</span> <span class="hl-keyword">catch</span> (e) {
+        <span class="hl-keyword">if</span> (e<span class="hl-property">.statusCode</span> != <span class="hl-number">401</span>) rethrow;
+        missingKeyRejected = <span class="hl-keyword">true</span>;
+        <span class="hl-fn">print</span>(<span class="hl-string">'missingKey: code=${e.code} status=${e.statusCode}'</span>);
+      }
+
+      <span class="hl-keyword">if</span> (!missingKeyRejected) <span class="hl-keyword">throw</span> <span class="hl-fn">StateError</span>(<span class="hl-string">'Missing key was accepted'</span>);
+      <span class="hl-keyword">try</span> {
+        <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(
+            <span class="hl-string">'GET'</span>, probeUrl, {..<span class="hl-property">.jsonHeaders</span>, <span class="hl-string">'x-project-key'</span>: rawKey}, <span class="hl-keyword">null</span>);
+      } on <span class="hl-type">VellumException</span> <span class="hl-keyword">catch</span> (error) {
+        <span class="hl-comment">// A missing probe document still proves that authentication succeeded.</span>
+        <span class="hl-keyword">if</span> (error<span class="hl-property">.statusCode</span> != <span class="hl-number">404</span>) rethrow;
+      }
+      <span class="hl-fn">print</span>(<span class="hl-string">'freshKeyAuthenticates: true'</span>);
+    } <span class="hl-keyword">finally</span> {
+      <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(
+          <span class="hl-string">'DELETE'</span>, <span class="hl-string">'$keysUrl/$ephemeralId'</span>, authHeaders, <span class="hl-keyword">null</span>);
+    }
+    <span class="hl-fn">print</span>(<span class="hl-string">'revokeKey: true'</span>);
+    <span class="hl-keyword">var</span> revokedKeyRejected = <span class="hl-keyword">false</span>;
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(
+          <span class="hl-string">'GET'</span>, probeUrl, {..<span class="hl-property">.jsonHeaders</span>, <span class="hl-string">'x-project-key'</span>: rawKey}, <span class="hl-keyword">null</span>);
+    } on <span class="hl-type">VellumException</span> <span class="hl-keyword">catch</span> (e) {
+      <span class="hl-keyword">if</span> (e<span class="hl-property">.statusCode</span> != <span class="hl-number">401</span>) rethrow;
+      revokedKeyRejected = <span class="hl-keyword">true</span>;
+      <span class="hl-fn">print</span>(<span class="hl-string">'revokedKeyRejected: code=${e.code} status=${e.statusCode}'</span>);
+    }
+    <span class="hl-keyword">if</span> (!revokedKeyRejected) <span class="hl-keyword">throw</span> <span class="hl-fn">StateError</span>(<span class="hl-string">'Revoked key was accepted'</span>);
+  } <span class="hl-keyword">catch</span> (e) {
+    <span class="hl-fn">print</span>(<span class="hl-string">'auth example error: $e'</span>);
+    rethrow;
+  } <span class="hl-keyword">finally</span> {
+    client<span class="hl-property">.dispose</span>();
+  }
+}
+
+<span class="hl-type">Map</span>&lt;<span class="hl-type">String</span>, dynamic&gt; <span class="hl-fn">objectMap</span>(<span class="hl-type">Object</span>? value, <span class="hl-type">String</span> context) {
+  <span class="hl-keyword">if</span> (value <span class="hl-keyword">is</span> <span class="hl-type">VellumHttpResponse</span>) value = value<span class="hl-property">.body</span>;
+  <span class="hl-keyword">if</span> (value <span class="hl-keyword">is</span>! <span class="hl-type">Map</span>&lt;<span class="hl-type">String</span>, dynamic&gt;)
+    <span class="hl-keyword">throw</span> <span class="hl-fn">FormatException</span>(<span class="hl-string">'Expected object: $context'</span>);
+  <span class="hl-keyword">return</span> value;
+}</code></pre><div class="et-note">Reference only — not executed here (no Dart toolchain).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Authentication &amp; API keys — full key lifecycle with immediate revocation.
+ *
+ * What you'll build: a sign-in, a session check, a server key creation, and a
+ * verification that revoking that key takes effect on the very next request.
+ * Real-world scenario: an operator rotates a leaked key. A freshly verified
+ * key must stop authenticating immediately after it is revoked — no cache
+ * window. All tokens/keys are kept out of output; only stable codes are logged.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;auth&quot;</span>);
+<span class="hl-keyword">const</span> keysPath = <span class="hl-string">`/projects/${h.projectId}/api-keys`</span>;
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Authentication &amp; API Keys ===&quot;</span>);
+
+  <span class="hl-keyword">const</span> login = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.signIn</span>();
+  <span class="hl-fn">check</span>(login<span class="hl-property">.success</span> === <span class="hl-keyword">true</span> &amp;&amp; typeof login<span class="hl-property">.token</span> === <span class="hl-string">&quot;string&quot;</span> &amp;&amp; login<span class="hl-property">.token</span><span class="hl-property">.length</span> &gt; <span class="hl-number">0</span>, <span class="hl-string">&quot;sign-in returned a token&quot;</span>);
+  h<span class="hl-property">.log</span>({ signIn: { success: login<span class="hl-property">.success</span>, tokenLength: login<span class="hl-property">.token</span><span class="hl-property">.length</span>, userRole: login<span class="hl-property">.user</span>[<span class="hl-string">&quot;platformRole&quot;</span>] } });
+
+  <span class="hl-keyword">const</span> session = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>&lt;{ session?: unknown }&gt;(
+    <span class="hl-string">&quot;GET&quot;</span>,
+    <span class="hl-string">&quot;/v1/auth/session&quot;</span>,
+    <span class="hl-keyword">undefined</span>,
+    { authorization: <span class="hl-string">`Bearer ${login.token}`</span> }
+  );
+  <span class="hl-fn">check</span>(session<span class="hl-property">.status</span> === <span class="hl-number">200</span>, <span class="hl-string">&quot;session endpoint accepted the bearer token&quot;</span>);
+  h<span class="hl-property">.log</span>({ session: { status: session<span class="hl-property">.status</span>, hasSession: <span class="hl-fn">Boolean</span>(session<span class="hl-property">.body</span><span class="hl-property">.session</span>) } });
+
+  <span class="hl-keyword">const</span> listed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>&lt;<span class="hl-type">Array</span>&lt;{ id: string; keyType: string }&gt;&gt;(<span class="hl-string">&quot;GET&quot;</span>, keysPath);
+  <span class="hl-fn">check</span>(listed<span class="hl-property">.ok</span> &amp;&amp; <span class="hl-type">Array</span><span class="hl-property">.isArray</span>(listed<span class="hl-property">.body</span>) &amp;&amp; listed<span class="hl-property">.body</span><span class="hl-property">.length</span> &gt; <span class="hl-number">0</span>, <span class="hl-string">&quot;API keys are listable&quot;</span>);
+  h<span class="hl-property">.log</span>({ listKeys: { status: listed<span class="hl-property">.status</span>, nonEmpty: listed<span class="hl-property">.body</span><span class="hl-property">.length</span> &gt; <span class="hl-number">0</span>, includesServerKey: listed<span class="hl-property">.body</span><span class="hl-property">.some</span>((k) =&gt; k<span class="hl-property">.keyType</span> === <span class="hl-string">&quot;server&quot;</span>) } });
+
+  <span class="hl-keyword">const</span> created = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>&lt;{
+    apiKey?: { id: string; keyType: string };
+    rawKey?: string;
+  }&gt;(<span class="hl-string">&quot;POST&quot;</span>, keysPath, { name: <span class="hl-string">&quot;examples:auth-ephemeral&quot;</span>, keyType: <span class="hl-string">&quot;server&quot;</span> });
+  <span class="hl-fn">check</span>(created<span class="hl-property">.status</span> === <span class="hl-number">201</span> &amp;&amp; <span class="hl-fn">Boolean</span>(created<span class="hl-property">.body</span><span class="hl-property">.apiKey</span>?<span class="hl-property">.id</span>) &amp;&amp; <span class="hl-fn">Boolean</span>(created<span class="hl-property">.body</span><span class="hl-property">.rawKey</span>), <span class="hl-string">&quot;ephemeral key created&quot;</span>);
+  <span class="hl-keyword">const</span> ephemeralId = created<span class="hl-property">.body</span><span class="hl-property">.apiKey</span>?<span class="hl-property">.id</span>;
+  h<span class="hl-property">.log</span>({ createKey: { status: created<span class="hl-property">.status</span>, keyType: created<span class="hl-property">.body</span><span class="hl-property">.apiKey</span>?<span class="hl-property">.keyType</span>, idReturned: <span class="hl-fn">Boolean</span>(ephemeralId) } });
+
+  <span class="hl-keyword">const</span> unauth = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(
+    <span class="hl-string">&quot;GET&quot;</span>,
+    <span class="hl-string">`/v1/projects/${h.projectId}/documents/${h.prefix}/probe`</span>
+  );
+  <span class="hl-keyword">const</span> unauthCode = (unauth<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { error?: { code?: string } })?<span class="hl-property">.error</span>?<span class="hl-property">.code</span>;
+  <span class="hl-fn">check</span>(unauth<span class="hl-property">.status</span> === <span class="hl-number">401</span> &amp;&amp; unauthCode === <span class="hl-string">&quot;UNAUTHENTICATED&quot;</span>, <span class="hl-string">&quot;missing key returns 401 UNAUTHENTICATED&quot;</span>);
+  h<span class="hl-property">.log</span>({ missingKey: { status: unauth<span class="hl-property">.status</span>, code: unauthCode } });
+
+  <span class="hl-keyword">const</span> docProbe = <span class="hl-string">`/v1/projects/${h.projectId}/documents/${h.prefix}/probe`</span>;
+  <span class="hl-keyword">const</span> whileActive = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;GET&quot;</span>, docProbe, <span class="hl-keyword">undefined</span>, { <span class="hl-string">&quot;x-project-key&quot;</span>: created<span class="hl-property">.body</span><span class="hl-property">.rawKey</span> <span class="hl-keyword">as</span> string });
+  <span class="hl-fn">check</span>(whileActive<span class="hl-property">.status</span> !== <span class="hl-number">401</span>, <span class="hl-string">&quot;freshly created key authenticates&quot;</span>);
+
+  <span class="hl-keyword">const</span> revoked = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;DELETE&quot;</span>, <span class="hl-string">`${keysPath}/${ephemeralId}`</span>);
+  <span class="hl-fn">check</span>(revoked<span class="hl-property">.ok</span>, <span class="hl-string">&quot;ephemeral key was revoked&quot;</span>);
+  h<span class="hl-property">.log</span>({ revokeKey: { status: revoked<span class="hl-property">.status</span>, success: (revoked<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { success?: boolean } | <span class="hl-keyword">null</span>)?<span class="hl-property">.success</span> } });
+
+  <span class="hl-comment">// Revocation must take effect immediately, even for a recently verified key.</span>
+  <span class="hl-keyword">const</span> afterRevoke = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;GET&quot;</span>, docProbe, <span class="hl-keyword">undefined</span>, { <span class="hl-string">&quot;x-project-key&quot;</span>: created<span class="hl-property">.body</span><span class="hl-property">.rawKey</span> <span class="hl-keyword">as</span> string });
+  <span class="hl-keyword">const</span> revokeCode = (afterRevoke<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { error?: { code?: string } })?<span class="hl-property">.error</span>?<span class="hl-property">.code</span>;
+  <span class="hl-fn">check</span>(afterRevoke<span class="hl-property">.status</span> === <span class="hl-number">401</span> &amp;&amp; revokeCode === <span class="hl-string">&quot;UNAUTHENTICATED&quot;</span>, <span class="hl-string">&quot;revoked key is rejected immediately&quot;</span>);
+  h<span class="hl-property">.log</span>({ revokedKeyRejected: { status: afterRevoke<span class="hl-property">.status</span>, code: revokeCode } });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Authentication &amp; API Keys ===
+{&quot;signIn&quot;:{&quot;success&quot;:true,&quot;tokenLength&quot;:540,&quot;userRole&quot;:&quot;customer&quot;}}
+{&quot;session&quot;:{&quot;status&quot;:200,&quot;hasSession&quot;:true}}
+{&quot;listKeys&quot;:{&quot;status&quot;:200,&quot;nonEmpty&quot;:true,&quot;includesServerKey&quot;:true}}
+{&quot;createKey&quot;:{&quot;status&quot;:201,&quot;keyType&quot;:&quot;server&quot;,&quot;idReturned&quot;:true}}
+{&quot;missingKey&quot;:{&quot;status&quot;:401,&quot;code&quot;:&quot;UNAUTHENTICATED&quot;}}
+{&quot;revokeKey&quot;:{&quot;status&quot;:200,&quot;success&quot;:true}}
+{&quot;revokedKeyRejected&quot;:{&quot;status&quot;:401,&quot;code&quot;:&quot;UNAUTHENTICATED&quot;}}</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Authentication &amp; API keys (REST) — full key lifecycle with immediate revocation.
+ *
+ * What you'll build: email sign-in, session check, server key creation, a probe
+ * with that key, revocation, and proof the revoked key is rejected at once.
+ * Real-world scenario: rotating a leaked key must take effect on the next request
+ * with no cache window. Tokens and raw keys never appear in output.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;auth&quot;</span>);
+<span class="hl-keyword">const</span> keysPath = <span class="hl-string">`/projects/${h.projectId}/api-keys`</span>;
+<span class="hl-keyword">const</span> docProbe = <span class="hl-string">`/v1/projects/${h.projectId}/documents/${h.prefix}/probe`</span>;
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Authentication &amp; API Keys ===&quot;</span>);
+
+  <span class="hl-keyword">const</span> login = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.signIn</span>();
+  <span class="hl-fn">check</span>(login<span class="hl-property">.success</span> === <span class="hl-keyword">true</span> &amp;&amp; typeof login<span class="hl-property">.token</span> === <span class="hl-string">&quot;string&quot;</span> &amp;&amp; login<span class="hl-property">.token</span><span class="hl-property">.length</span> &gt; <span class="hl-number">0</span>, <span class="hl-string">&quot;sign-in returned a token&quot;</span>);
+  h<span class="hl-property">.log</span>({ signIn: { success: login<span class="hl-property">.success</span>, tokenLength: login<span class="hl-property">.token</span><span class="hl-property">.length</span>, userRole: login<span class="hl-property">.user</span><span class="hl-property">.platformRole</span> } });
+
+  <span class="hl-keyword">const</span> session = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">&quot;/v1/auth/session&quot;</span>, <span class="hl-keyword">undefined</span>, {
+    authorization: <span class="hl-string">`Bearer ${login.token}`</span>,
+  });
+  <span class="hl-fn">check</span>(session<span class="hl-property">.status</span> === <span class="hl-number">200</span>, <span class="hl-string">&quot;session endpoint accepted the bearer token&quot;</span>);
+  h<span class="hl-property">.log</span>({ session: { status: session<span class="hl-property">.status</span>, hasSession: <span class="hl-fn">Boolean</span>(session<span class="hl-property">.body</span><span class="hl-property">.session</span>) } });
+
+  <span class="hl-keyword">const</span> listed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;GET&quot;</span>, keysPath);
+  <span class="hl-fn">check</span>(listed<span class="hl-property">.ok</span> &amp;&amp; <span class="hl-type">Array</span><span class="hl-property">.isArray</span>(listed<span class="hl-property">.body</span>) &amp;&amp; listed<span class="hl-property">.body</span><span class="hl-property">.length</span> &gt; <span class="hl-number">0</span>, <span class="hl-string">&quot;API keys are listable&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    listKeys: {
+      status: listed<span class="hl-property">.status</span>,
+      nonEmpty: listed<span class="hl-property">.body</span><span class="hl-property">.length</span> &gt; <span class="hl-number">0</span>,
+      includesServerKey: listed<span class="hl-property">.body</span><span class="hl-property">.some</span>((k) =&gt; k<span class="hl-property">.keyType</span> === <span class="hl-string">&quot;server&quot;</span>),
+    },
+  });
+
+  <span class="hl-keyword">const</span> created = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;POST&quot;</span>, keysPath, { name: <span class="hl-string">&quot;examples:rest-auth:ephemeral&quot;</span>, keyType: <span class="hl-string">&quot;server&quot;</span> });
+  <span class="hl-fn">check</span>(created<span class="hl-property">.status</span> === <span class="hl-number">201</span> &amp;&amp; <span class="hl-fn">Boolean</span>(created<span class="hl-property">.body</span><span class="hl-property">.apiKey</span>?<span class="hl-property">.id</span>) &amp;&amp; <span class="hl-fn">Boolean</span>(created<span class="hl-property">.body</span><span class="hl-property">.rawKey</span>), <span class="hl-string">&quot;ephemeral key created&quot;</span>);
+  <span class="hl-keyword">const</span> ephemeralId = created<span class="hl-property">.body</span><span class="hl-property">.apiKey</span><span class="hl-property">.id</span>;
+  h<span class="hl-property">.log</span>({
+    createKey: { status: created<span class="hl-property">.status</span>, keyType: created<span class="hl-property">.body</span><span class="hl-property">.apiKey</span><span class="hl-property">.keyType</span>, idReturned: <span class="hl-fn">Boolean</span>(ephemeralId) },
+  });
+
+  <span class="hl-keyword">const</span> unauth = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;GET&quot;</span>, docProbe);
+  <span class="hl-fn">check</span>(unauth<span class="hl-property">.status</span> === <span class="hl-number">401</span> &amp;&amp; unauth<span class="hl-property">.body</span>?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> === <span class="hl-string">&quot;UNAUTHENTICATED&quot;</span>, <span class="hl-string">&quot;missing key returns 401&quot;</span>);
+  h<span class="hl-property">.log</span>({ missingKey: { status: unauth<span class="hl-property">.status</span>, code: unauth<span class="hl-property">.body</span><span class="hl-property">.error</span><span class="hl-property">.code</span> } });
+
+  <span class="hl-keyword">const</span> whileActive = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;GET&quot;</span>, docProbe, <span class="hl-keyword">undefined</span>, { <span class="hl-string">&quot;x-project-key&quot;</span>: created<span class="hl-property">.body</span><span class="hl-property">.rawKey</span> });
+  <span class="hl-fn">check</span>(whileActive<span class="hl-property">.status</span> !== <span class="hl-number">401</span>, <span class="hl-string">&quot;freshly created key authenticates&quot;</span>);
+
+  <span class="hl-keyword">const</span> revoked = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;DELETE&quot;</span>, <span class="hl-string">`${keysPath}/${ephemeralId}`</span>);
+  <span class="hl-fn">check</span>(revoked<span class="hl-property">.ok</span>, <span class="hl-string">&quot;ephemeral key revoked&quot;</span>);
+  h<span class="hl-property">.log</span>({ revokeKey: { status: revoked<span class="hl-property">.status</span>, success: revoked<span class="hl-property">.body</span>?<span class="hl-property">.success</span> } });
+
+  <span class="hl-keyword">const</span> afterRevoke = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;GET&quot;</span>, docProbe, <span class="hl-keyword">undefined</span>, { <span class="hl-string">&quot;x-project-key&quot;</span>: created<span class="hl-property">.body</span><span class="hl-property">.rawKey</span> });
+  <span class="hl-fn">check</span>(afterRevoke<span class="hl-property">.status</span> === <span class="hl-number">401</span> &amp;&amp; afterRevoke<span class="hl-property">.body</span>?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> === <span class="hl-string">&quot;UNAUTHENTICATED&quot;</span>, <span class="hl-string">&quot;revoked key rejected immediately&quot;</span>);
+  h<span class="hl-property">.log</span>({ revokedKeyRejected: { status: afterRevoke<span class="hl-property">.status</span>, code: afterRevoke<span class="hl-property">.body</span><span class="hl-property">.error</span><span class="hl-property">.code</span> } });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Authentication &amp; API Keys ===
+{&quot;signIn&quot;:{&quot;success&quot;:true,&quot;tokenLength&quot;:540,&quot;userRole&quot;:&quot;customer&quot;}}
+{&quot;session&quot;:{&quot;status&quot;:200,&quot;hasSession&quot;:true}}
+{&quot;listKeys&quot;:{&quot;status&quot;:200,&quot;nonEmpty&quot;:true,&quot;includesServerKey&quot;:true}}
+{&quot;createKey&quot;:{&quot;status&quot;:201,&quot;keyType&quot;:&quot;server&quot;,&quot;idReturned&quot;:true}}
+{&quot;missingKey&quot;:{&quot;status&quot;:401,&quot;code&quot;:&quot;UNAUTHENTICATED&quot;}}
+{&quot;revokeKey&quot;:{&quot;status&quot;:200,&quot;success&quot;:true}}
+{&quot;revokedKeyRejected&quot;:{&quot;status&quot;:401,&quot;code&quot;:&quot;UNAUTHENTICATED&quot;}}</code></pre>
+</div></div></div>
+</div>
+<h2 id="what-to-read-next">What to read next<a class="anchor" href="#what-to-read-next" aria-label="Link to section">#</a></h2>
+<ul><li><a href="end-user-auth.html">End-User Authentication &amp; the Three Realms</a> — realm isolation, refresh rotation, profile projection, WS auth, rate limits.</li><li><a href="sdks/javascript.html">JavaScript SDK</a> · <a href="sdks/flutter.html">Flutter SDK</a> — the auth façades and silent refresh in both clients.</li><li><a href="security-rules.html">Security rules</a> — the deny-by-default AST evaluated for public keys.</li><li><a href="rest-api.html">REST API</a> — how the key is sent on each endpoint.</li><li><a href="production-checklist.html">Production checklist</a> — release gates and secret hygiene.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#scenario" class="toc-link toc-l2">Scenario</a><a href="#api-keys-pk-sk" class="toc-link toc-l2">API keys (`pk_` / `sk_`)</a><a href="#scopes" class="toc-link toc-l3">Scopes</a><a href="#end-user-tokens-and-rules-evaluation" class="toc-link toc-l2">End-user tokens and rules evaluation</a><a href="#console-sessions-and-password-auth" class="toc-link toc-l2">Console sessions and password auth</a><a href="#totp-mfa-console-users" class="toc-link toc-l2">TOTP MFA (console users)</a><a href="#rotation-and-revocation" class="toc-link toc-l2">Rotation and revocation</a><a href="#least-privilege" class="toc-link toc-l2">Least privilege</a><a href="#common-pitfalls" class="toc-link toc-l2">Common pitfalls</a><a href="#verified-examples" class="toc-link toc-l2">Verified examples</a><a href="#what-to-read-next" class="toc-link toc-l2">What to read next</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Security Rules · VELLUM Docs</title>
+<meta name="description" content="The v1 JSON rules AST, deterministic deny-by-default evaluation, validation bounds, publishing, and simulation.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/security-rules.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Security <span>/</span> <strong>Security Rules</strong></div>
+    <article class="article"><h1 id="security-rules">Security Rules<a class="anchor" href="#security-rules" aria-label="Link to section">#</a></h1>
+<p>Security rules decide whether a public API key (<code class="inline-code">pk_</code>) may read or write a document. They are stored as a versioned JSON <strong>Abstract Syntax Tree</strong> in the control plane and evaluated synchronously in memory — never by generating or executing code.</p>
+<div class="admonition admonition-note"><div class="admonition-label">NOTE</div><p>Server keys (<code class="inline-code">sk_</code>) bypass the rules AST for operations covered by their scopes. Public keys always evaluate rules; with no active ruleset, access is denied.</p></div>
+<h2 id="scenario">Scenario<a class="anchor" href="#scenario" aria-label="Link to section">#</a></h2>
+<p>You run a multi-user app where each user may read and write only their own <code class="inline-code">users/{userId}</code> document, while a small admin group may read all users. You publish a ruleset that binds ownership to the path wildcard, check it in the Rule Simulator, and verify that an unauthorized <code class="inline-code">pk_</code> request gets <code class="inline-code">PERMISSION_DENIED</code>.</p>
+<h2 id="ruleset-shape-v1">Ruleset shape (v1)<a class="anchor" href="#ruleset-shape-v1" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">JSON</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">{
+  <span class="hl-string">&quot;version&quot;</span>: <span class="hl-number">1</span>,
+  <span class="hl-string">&quot;rules&quot;</span>: [
+    {
+      <span class="hl-string">&quot;match&quot;</span>: <span class="hl-string">&quot;users/{userId}&quot;</span>,
+      <span class="hl-string">&quot;allow&quot;</span>: {
+        <span class="hl-string">&quot;get&quot;</span>: { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.uid&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;path.userId&quot;</span> } },
+        <span class="hl-string">&quot;list&quot;</span>: { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.claims.role&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;val&quot;</span>: <span class="hl-string">&quot;admin&quot;</span> } },
+        <span class="hl-string">&quot;create&quot;</span>: {
+          <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;all&quot;</span>,
+          <span class="hl-string">&quot;conditions&quot;</span>: [
+            { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.uid&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;path.userId&quot;</span> } },
+            { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;request.data.ownerId&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.uid&quot;</span> } }
+          ]
+        },
+        <span class="hl-string">&quot;update&quot;</span>: { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;resource.data.ownerId&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.uid&quot;</span> } },
+        <span class="hl-string">&quot;delete&quot;</span>: { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.claims.role&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;val&quot;</span>: <span class="hl-string">&quot;admin&quot;</span> } }
+      }
+    }
+  ]
+}</code></pre>
+</div>
+<p><code class="inline-code">version</code> must be <code class="inline-code">1</code> and <code class="inline-code">rules</code> must be an array. Each rule has a <code class="inline-code">match</code> path pattern and an <code class="inline-code">allow</code> object whose keys are operations: <code class="inline-code">get</code>, <code class="inline-code">list</code>, <code class="inline-code">create</code>, <code class="inline-code">update</code>, <code class="inline-code">delete</code>, plus the shorthands <code class="inline-code">read</code> (covers <code class="inline-code">get</code>/<code class="inline-code">list</code>) and <code class="inline-code">write</code> (covers <code class="inline-code">create</code>/<code class="inline-code">update</code>/<code class="inline-code">delete</code>).</p>
+<h3 id="wildcard-matching">Wildcard matching<a class="anchor" href="#wildcard-matching" aria-label="Link to section">#</a></h3>
+<ul><li><code class="inline-code">{paramName}</code> binds one segment to <code class="inline-code">path.&lt;paramName&gt;</code>.</li><li><code class="inline-code">{document=**}</code> at the end of a pattern matches one or more remaining segments and binds the relative sub-path to <code class="inline-code">path.document</code>.</li><li>If several rules match a path, access is granted when <strong>any</strong> matching rule evaluates to true for the operation (standard OR semantics). No match, or no true expression, means deny.</li></ul>
+<h2 id="expression-operators">Expression operators<a class="anchor" href="#expression-operators" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Category</th><th>Operators</th></tr></thead><tbody><tr><td>Comparisons</td><td><code class="inline-code">==</code>, <code class="inline-code">!=</code>, <code class="inline-code">&lt;</code>, <code class="inline-code">&lt;=</code>, <code class="inline-code">&gt;</code>, <code class="inline-code">&gt;=</code>, <code class="inline-code">in</code></td></tr><tr><td>Object / type</td><td><code class="inline-code">hasKey</code>, <code class="inline-code">isType</code></td></tr><tr><td>Combinators</td><td><code class="inline-code">all</code> (every <code class="inline-code">conditions</code>), <code class="inline-code">any</code> (some <code class="inline-code">conditions</code>), <code class="inline-code">not</code> (one <code class="inline-code">condition</code>)</td></tr></tbody></table></div>
+<p>Operands are either <code class="inline-code">{ &quot;val&quot;: ... }</code> for a literal or <code class="inline-code">{ &quot;var&quot;: &quot;...&quot; }</code> for a context value:</p>
+<div class="table-wrap"><table><thead><tr><th>Variable</th><th>Meaning</th></tr></thead><tbody><tr><td><code class="inline-code">auth.uid</code></td><td>End-user id from the bearer JWT (null without a token).</td></tr><tr><td><code class="inline-code">auth.claims.&lt;path&gt;</code></td><td>Claim from the end-user JWT.</td></tr><tr><td><code class="inline-code">path.&lt;param&gt;</code></td><td>Value bound by a wildcard in <code class="inline-code">match</code>.</td></tr><tr><td><code class="inline-code">resource.data[.&lt;path&gt;]</code></td><td>Existing document data (null on create).</td></tr><tr><td><code class="inline-code">request.data[.&lt;path&gt;]</code></td><td>Incoming document data (null on reads/deletes).</td></tr><tr><td><code class="inline-code">request.time</code></td><td>Request timestamp in epoch milliseconds.</td></tr></tbody></table></div>
+<p>All comparisons use the same typed wire-value equality and ordering as the query engine.</p>
+<h2 id="deterministic-evaluation-and-bounds">Deterministic evaluation and bounds<a class="anchor" href="#deterministic-evaluation-and-bounds" aria-label="Link to section">#</a></h2>
+<ul><li>Evaluation is 100% synchronous and in memory: no dynamic code execution, no network calls, and no recursive I/O. Complex expressions cannot turn a request into a denial-of-service vector.</li><li>Validation enforces <strong>max AST depth 10</strong> and <strong>max 100 nodes per rule expression</strong>. Exceeding either raises <code class="inline-code">QUERY_TOO_COMPLEX</code>.</li><li>Circular references are rejected at validation time, and unknown operators or operands evaluate to false (deny).</li><li><strong>Deny by default:</strong> <code class="inline-code">authorizeOperation</code> throws <code class="inline-code">PERMISSION_DENIED</code> (403) unless a matching rule explicitly allows the operation.</li></ul>
+<div class="admonition admonition-warning"><div class="admonition-label">WARNING</div><p>Rules are validated against the v1 schema at publish time. A malformed AST (bad version, missing <code class="inline-code">match</code>/<code class="inline-code">allow</code>, unsupported operation or operator) is rejected with <code class="inline-code">INVALID_ARGUMENT</code> before it can become active.</p></div>
+<h2 id="publishing-and-simulation">Publishing and simulation<a class="anchor" href="#publishing-and-simulation" aria-label="Link to section">#</a></h2>
+<p>Publish through the session-authenticated console API:</p>
+<div class="table-wrap"><table><thead><tr><th>Method</th><th>Endpoint</th><th>Purpose</th></tr></thead><tbody><tr><td><code class="inline-code">POST</code></td><td><code class="inline-code">/v1/projects/:projectId/rulesets</code></td><td>Validate and publish a new version; writes an audit log and invalidates caches.</td></tr><tr><td><code class="inline-code">GET</code></td><td><code class="inline-code">/v1/projects/:projectId/rulesets</code></td><td>Read the active ruleset (or the built-in default when none is published).</td></tr></tbody></table></div>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">BASH</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">curl -<span class="hl-type">X</span> <span class="hl-type">POST</span> <span class="hl-string">&quot;https://api.example.com/v1/projects/&lt;PROJECT_ID&gt;/rulesets&quot;</span> \
+  -<span class="hl-type">H</span> <span class="hl-string">&quot;Authorization: Bearer &lt;SESSION_TOKEN&gt;&quot;</span> \
+  -<span class="hl-type">H</span> <span class="hl-string">&quot;content-type: application/json&quot;</span> \
+  -d <span class="hl-string">'{ &quot;rulesAst&quot;: { &quot;version&quot;: 1, &quot;rules&quot;: [ /* ... */ ] } }'</span></code></pre>
+</div>
+<p>Publishing immediately affects the project: the ruleset cache is invalidated locally and across instances via <code class="inline-code">NOTIFY vellum_cache_invalidate</code>. For a dry run before publishing, the dashboard's <strong>Rule Simulator</strong> evaluates a candidate AST against a simulated auth and path context and reports whether the request would be allowed and which rule matched. You can also validate a candidate against the project using a public key.</p>
+<h2 id="least-privilege-patterns">Least privilege patterns<a class="anchor" href="#least-privilege-patterns" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">JSON</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">{
+  <span class="hl-string">&quot;match&quot;</span>: <span class="hl-string">&quot;users/{userId}/orders/{orderId}&quot;</span>,
+  <span class="hl-string">&quot;allow&quot;</span>: {
+    <span class="hl-string">&quot;get&quot;</span>: { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.uid&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;path.userId&quot;</span> } },
+    <span class="hl-string">&quot;create&quot;</span>: {
+      <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;all&quot;</span>,
+      <span class="hl-string">&quot;conditions&quot;</span>: [
+        { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.uid&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;path.userId&quot;</span> } },
+        { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;isType&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;request.data.total&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;val&quot;</span>: <span class="hl-string">&quot;number&quot;</span> } }
+      ]
+    }
+  }
+}</code></pre>
+</div>
+<p>Bind the owner id to a path wildcard rather than trusting a client-supplied field, and check <code class="inline-code">resource.data</code> on updates so ownership cannot be transferred by a malicious patch.</p>
+<h2 id="common-pitfalls">Common pitfalls<a class="anchor" href="#common-pitfalls" aria-label="Link to section">#</a></h2>
+<ul><li><strong>Trusting a client-supplied owner field.</strong> Bind ownership to a path wildcard and verify it against <code class="inline-code">auth.uid</code>.</li><li><strong>Allowing updates without checking <code class="inline-code">resource.data</code>.</strong> A malicious patch could transfer ownership if you only validate the incoming data.</li><li><strong>Forgetting deny-by-default.</strong> If no rule matches, access is denied — publish the ruleset and confirm the shape (<code class="inline-code">version: 1</code>).</li><li><strong>Overly deep or large rulesets.</strong> Exceeding depth 10 or 100 nodes per expression raises <code class="inline-code">QUERY_TOO_COMPLEX</code> at publish time.</li></ul>
+<h2 id="verified-example">Verified example<a class="anchor" href="#verified-example" aria-label="Link to section">#</a></h2>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">SDK / protocol</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed by scripts/run-dart-examples.mjs against a PostgreSQL API.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// Security rules AST — publish a deny-by-default v1 ruleset.</span>
+<span class="hl-comment">// What you'll build: a versioned ruleset with one explicit scoped allow, then</span>
+<span class="hl-comment">// verification, rejection of a malformed AST, and restoration.</span>
+<span class="hl-comment">// Real-world scenario: locking down a collection means allowing only the</span>
+<span class="hl-comment">// listed operations; everything else is denied by default. Console endpoints</span>
+<span class="hl-comment">// live outside the data-plane baseUrl, so `client.httpTransport` is used with a</span>
+<span class="hl-comment">// session bearer token. Credentials are injected via --dart-define, never hard-coded.</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+  <span class="hl-keyword">final</span> email = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_EMAIL'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_EMAIL'</span>);
+  <span class="hl-keyword">final</span> password = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PASSWORD'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PASSWORD'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix = <span class="hl-string">'ex_flutter_rules_${DateTime.now().microsecondsSinceEpoch}'</span>;
+  <span class="hl-keyword">final</span> rulesUrl = <span class="hl-string">'$endpoint/v1/console/projects/$projectId/rulesets'</span>;
+
+  <span class="hl-keyword">final</span> signIn = <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(
+    <span class="hl-string">'POST'</span>,
+    <span class="hl-string">'$endpoint/v1/auth/sign-in/email'</span>,
+    {<span class="hl-string">'Content-Type'</span>: <span class="hl-string">'application/json'</span>},
+    {<span class="hl-string">'email'</span>: email, <span class="hl-string">'password'</span>: password},
+  );
+  <span class="hl-keyword">final</span> login = <span class="hl-fn">objectMap</span>(signIn, <span class="hl-string">'sign-in'</span>);
+  <span class="hl-keyword">if</span> (login[<span class="hl-string">'token'</span>] <span class="hl-keyword">is</span>! <span class="hl-type">String</span>) <span class="hl-keyword">throw</span> <span class="hl-fn">StateError</span>(<span class="hl-string">'Missing sign-in token'</span>);
+  <span class="hl-keyword">final</span> headers = {
+    <span class="hl-string">'Content-Type'</span>: <span class="hl-string">'application/json'</span>,
+    <span class="hl-string">'Authorization'</span>: <span class="hl-string">'Bearer ${login['</span>token<span class="hl-string">']}'</span>,
+  };
+
+  <span class="hl-keyword">final</span> original = <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(<span class="hl-string">'GET'</span>, rulesUrl, headers, <span class="hl-keyword">null</span>);
+  <span class="hl-keyword">final</span> originalMap = <span class="hl-fn">objectMap</span>(original, <span class="hl-string">'ruleset'</span>);
+  <span class="hl-keyword">final</span> originalAst = originalMap[<span class="hl-string">'rulesAst'</span>] ?? {<span class="hl-string">'version'</span>: <span class="hl-number">1</span>, <span class="hl-string">'rules'</span>: []};
+  <span class="hl-keyword">final</span> beforeVersion = (originalMap[<span class="hl-string">'version'</span>] <span class="hl-keyword">as</span> num?) ?? <span class="hl-number">0</span>;
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== Security Rules AST (Flutter) ==='</span>);
+    <span class="hl-fn">print</span>(<span class="hl-string">'before: hasRuleset=${beforeVersion &gt; 0}'</span>);
+
+    <span class="hl-comment">// Deny by default: only a scoped read and a conditional create are granted.</span>
+    <span class="hl-keyword">final</span> ast = {
+      <span class="hl-string">'version'</span>: <span class="hl-number">1</span>,
+      <span class="hl-string">'rules'</span>: [
+        {
+          <span class="hl-string">'match'</span>: <span class="hl-string">'$prefix/{docId}'</span>,
+          <span class="hl-string">'allow'</span>: {
+            <span class="hl-string">'read'</span>: <span class="hl-keyword">true</span>,
+            <span class="hl-string">'create'</span>: {
+              <span class="hl-string">'op'</span>: <span class="hl-string">'=='</span>,
+              <span class="hl-string">'left'</span>: {<span class="hl-string">'var'</span>: <span class="hl-string">'request.data.team'</span>},
+              <span class="hl-string">'right'</span>: {<span class="hl-string">'val'</span>: <span class="hl-string">'red'</span>}
+            },
+          },
+        },
+      ],
+    };
+    <span class="hl-keyword">final</span> published = <span class="hl-keyword">await</span> client
+        <span class="hl-property">.httpTransport</span>(<span class="hl-string">'POST'</span>, rulesUrl, headers, {<span class="hl-string">'rulesAst'</span>: ast});
+    <span class="hl-fn">print</span>(
+        <span class="hl-string">'publish: versionAdvancedBy=${(objectMap(published, '</span>published ruleset<span class="hl-string">')['</span>version<span class="hl-string">'] as num) - beforeVersion}'</span>);
+
+    <span class="hl-keyword">final</span> active = <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(<span class="hl-string">'GET'</span>, rulesUrl, headers, <span class="hl-keyword">null</span>);
+    <span class="hl-keyword">final</span> activeMap = <span class="hl-fn">objectMap</span>(active, <span class="hl-string">'active ruleset'</span>);
+    <span class="hl-keyword">final</span> rulesValue = <span class="hl-fn">objectMap</span>(activeMap[<span class="hl-string">'rulesAst'</span>], <span class="hl-string">'rules AST'</span>)[<span class="hl-string">'rules'</span>];
+    <span class="hl-keyword">if</span> (rulesValue <span class="hl-keyword">is</span>! <span class="hl-type">List</span> || rulesValue<span class="hl-property">.isEmpty</span>)
+      <span class="hl-keyword">throw</span> <span class="hl-fn">StateError</span>(<span class="hl-string">'Expected non-empty rules'</span>);
+    <span class="hl-keyword">final</span> allow =
+        <span class="hl-fn">objectMap</span>(<span class="hl-fn">objectMap</span>(rulesValue<span class="hl-property">.first</span>, <span class="hl-string">'rule'</span>)[<span class="hl-string">'allow'</span>], <span class="hl-string">'allow'</span>);
+    <span class="hl-fn">print</span>(
+        <span class="hl-string">'activeVersion=${activeMap['</span>version<span class="hl-string">']} operations=${allow.keys.toList()}'</span>);
+
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> client<span class="hl-property">.httpTransport</span>(<span class="hl-string">'POST'</span>, rulesUrl, headers, {
+        <span class="hl-string">'rulesAst'</span>: {<span class="hl-string">'version'</span>: <span class="hl-number">2</span>, <span class="hl-string">'rules'</span>: []}
+      });
+    } on <span class="hl-type">VellumException</span> <span class="hl-keyword">catch</span> (e) {
+      <span class="hl-fn">print</span>(<span class="hl-string">'invalidAst: code=${e.code} status=${e.statusCode}'</span>);
+    }
+  } <span class="hl-keyword">finally</span> {
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> client
+          <span class="hl-property">.httpTransport</span>(<span class="hl-string">'POST'</span>, rulesUrl, headers, {<span class="hl-string">'rulesAst'</span>: originalAst});
+    } <span class="hl-keyword">finally</span> {
+      client<span class="hl-property">.dispose</span>();
+    }
+  }
+}
+
+<span class="hl-type">Map</span>&lt;<span class="hl-type">String</span>, dynamic&gt; <span class="hl-fn">objectMap</span>(<span class="hl-type">Object</span>? value, <span class="hl-type">String</span> context) {
+  <span class="hl-keyword">if</span> (value <span class="hl-keyword">is</span> <span class="hl-type">VellumHttpResponse</span>) value = value<span class="hl-property">.body</span>;
+  <span class="hl-keyword">if</span> (value <span class="hl-keyword">is</span>! <span class="hl-type">Map</span>&lt;<span class="hl-type">String</span>, dynamic&gt;)
+    <span class="hl-keyword">throw</span> <span class="hl-fn">FormatException</span>(<span class="hl-string">'Expected object: $context'</span>);
+  <span class="hl-keyword">return</span> value;
+}</code></pre><div class="et-note">Reference only — not executed here (no Dart toolchain).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Security rules AST — publish a deny-by-default v1 ruleset.
+ *
+ * What you'll build: a versioned ruleset that grants exactly one scoped
+ * permission (read plus a conditional create) and denies everything else.
+ * Real-world scenario: locking down a new collection means publishing a rule
+ * whose only `allow` clauses are explicit; any operation not matched is denied
+ * by default. The example verifies the active version, rejects a malformed AST,
+ * and restores the original ruleset in `finally` so no policy change leaks.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;rules&quot;</span>);
+<span class="hl-keyword">const</span> rulesPath = <span class="hl-string">`/projects/${h.projectId}/rulesets`</span>;
+<span class="hl-keyword">const</span> original = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>&lt;{ rulesAst?: unknown }&gt;(<span class="hl-string">&quot;GET&quot;</span>, rulesPath);
+<span class="hl-keyword">let</span> originalAst: unknown = original<span class="hl-property">.body</span><span class="hl-property">.rulesAst</span> ?? { version: <span class="hl-number">1</span>, rules: [] };
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Security Rules AST ===&quot;</span>);
+  <span class="hl-keyword">const</span> beforeVersion = (original<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { version?: number })<span class="hl-property">.version</span> ?? <span class="hl-number">0</span>;
+  h<span class="hl-property">.log</span>({
+    before: {
+      hasRuleset: beforeVersion &gt; <span class="hl-number">0</span>,
+      ruleCount: <span class="hl-type">Array</span><span class="hl-property">.isArray</span>((original<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { rulesAst?: { rules?: unknown[] } })<span class="hl-property">.rulesAst</span>?<span class="hl-property">.rules</span>)
+        ? (original<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { rulesAst: { rules: unknown[] } })<span class="hl-property">.rulesAst</span><span class="hl-property">.rules</span><span class="hl-property">.length</span>
+        : <span class="hl-number">0</span>,
+    },
+  });
+
+  <span class="hl-comment">// Deny by default: only `read` and a conditional `create` are allowed for</span>
+  <span class="hl-comment">// this one collection. update/delete (and all other paths) are not listed.</span>
+  <span class="hl-keyword">const</span> ast = {
+    version: <span class="hl-number">1</span>,
+    rules: [
+      {
+        match: <span class="hl-string">`${h.prefix}/{docId}`</span>,
+        allow: {
+          read: <span class="hl-keyword">true</span>,
+          create: {
+            op: <span class="hl-string">&quot;==&quot;</span>,
+            left: { <span class="hl-keyword">var</span>: <span class="hl-string">&quot;request.data.team&quot;</span> },
+            right: { <span class="hl-keyword">val</span>: <span class="hl-string">&quot;red&quot;</span> },
+          },
+        },
+      },
+    ],
+  };
+  <span class="hl-keyword">const</span> published = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;POST&quot;</span>, rulesPath, { rulesAst: ast });
+  <span class="hl-fn">check</span>(published<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">&quot;valid AST publishes with HTTP 201&quot;</span>);
+  <span class="hl-keyword">const</span> publishedBody = published<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { id: string; version: number };
+  h<span class="hl-property">.log</span>({ publish: <span class="hl-string">&quot;ok&quot;</span>, versionAdvancedBy: publishedBody<span class="hl-property">.version</span> - beforeVersion, ruleCount: ast<span class="hl-property">.rules</span><span class="hl-property">.length</span> });
+
+  <span class="hl-keyword">const</span> active = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>&lt;{
+    version: number;
+    rulesAst: { version: number; rules: <span class="hl-type">Array</span>&lt;{ match: string; allow: <span class="hl-type">Record</span>&lt;string, unknown&gt; }&gt; };
+  }&gt;(<span class="hl-string">&quot;GET&quot;</span>, rulesPath);
+  <span class="hl-fn">check</span>(active<span class="hl-property">.body</span><span class="hl-property">.rulesAst</span><span class="hl-property">.rules</span><span class="hl-property">.length</span> === <span class="hl-number">1</span>, <span class="hl-string">&quot;published rule is the active ruleset&quot;</span>);
+  <span class="hl-fn">check</span>(active<span class="hl-property">.body</span><span class="hl-property">.version</span> &gt;= publishedBody<span class="hl-property">.version</span>, <span class="hl-string">&quot;active version did not regress&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    activeVersionMatchesPublished: active<span class="hl-property">.body</span><span class="hl-property">.version</span> === publishedBody<span class="hl-property">.version</span>,
+    astVersion: active<span class="hl-property">.body</span><span class="hl-property">.rulesAst</span><span class="hl-property">.version</span>,
+    match: active<span class="hl-property">.body</span><span class="hl-property">.rulesAst</span><span class="hl-property">.rules</span>[<span class="hl-number">0</span>]?<span class="hl-property">.match</span>,
+    operations: <span class="hl-type">Object</span><span class="hl-property">.keys</span>(active<span class="hl-property">.body</span><span class="hl-property">.rulesAst</span><span class="hl-property">.rules</span>[<span class="hl-number">0</span>]?<span class="hl-property">.allow</span> ?? {}),
+  });
+
+  <span class="hl-keyword">const</span> invalid = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;POST&quot;</span>, rulesPath, { rulesAst: { version: <span class="hl-number">2</span>, rules: [] } });
+  <span class="hl-keyword">const</span> invalidCode = (invalid<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { error?: { code?: string } })?<span class="hl-property">.error</span>?<span class="hl-property">.code</span>;
+  <span class="hl-fn">check</span>(invalid<span class="hl-property">.status</span> === <span class="hl-number">400</span> &amp;&amp; invalidCode === <span class="hl-string">&quot;INVALID_ARGUMENT&quot;</span>, <span class="hl-string">&quot;unsupported AST version is rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ invalidAst: { status: invalid<span class="hl-property">.status</span>, code: invalidCode } });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;POST&quot;</span>, rulesPath, { rulesAst: originalAst });
+  } <span class="hl-keyword">catch</span> {
+    <span class="hl-comment">// Best effort restoration.</span>
+  }
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Security Rules AST ===
+{&quot;before&quot;:{&quot;hasRuleset&quot;:true,&quot;ruleCount&quot;:3}}
+{&quot;publish&quot;:&quot;ok&quot;,&quot;versionAdvancedBy&quot;:1,&quot;ruleCount&quot;:1}
+{&quot;activeVersionMatchesPublished&quot;:true,&quot;astVersion&quot;:1,&quot;match&quot;:&quot;&lt;run&gt;/{docId}&quot;,&quot;operations&quot;:[&quot;read&quot;,&quot;create&quot;]}
+{&quot;invalidAst&quot;:{&quot;status&quot;:400,&quot;code&quot;:&quot;INVALID_ARGUMENT&quot;}}</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Security rules AST (REST) — publish a deny-by-default v1 ruleset.
+ *
+ * What you'll build: a versioned ruleset with one explicit scoped allow,
+ * verified through the Console API, then restored.
+ * Real-world scenario: locking down a collection means publishing only the
+ * operations that should be allowed; everything else is denied by default. A
+ * malformed (version 2) AST is rejected and the original ruleset is restored.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;rules&quot;</span>);
+<span class="hl-keyword">const</span> rulesPath = <span class="hl-string">`/projects/${h.projectId}/rulesets`</span>;
+<span class="hl-keyword">const</span> original = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;GET&quot;</span>, rulesPath);
+<span class="hl-keyword">let</span> originalAst = original<span class="hl-property">.body</span>?<span class="hl-property">.rulesAst</span> ?? { version: <span class="hl-number">1</span>, rules: [] };
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Security Rules AST ===&quot;</span>);
+  <span class="hl-keyword">const</span> beforeVersion = original<span class="hl-property">.body</span>?<span class="hl-property">.version</span> ?? <span class="hl-number">0</span>;
+  h<span class="hl-property">.log</span>({
+    before: {
+      hasRuleset: beforeVersion &gt; <span class="hl-number">0</span>,
+      ruleCount: <span class="hl-type">Array</span><span class="hl-property">.isArray</span>(original<span class="hl-property">.body</span>?<span class="hl-property">.rulesAst</span>?<span class="hl-property">.rules</span>) ? original<span class="hl-property">.body</span><span class="hl-property">.rulesAst</span><span class="hl-property">.rules</span><span class="hl-property">.length</span> : <span class="hl-number">0</span>,
+    },
+  });
+
+  <span class="hl-keyword">const</span> ast = {
+    version: <span class="hl-number">1</span>,
+    rules: [
+      {
+        match: <span class="hl-string">`${h.prefix}/{docId}`</span>,
+        allow: {
+          read: <span class="hl-keyword">true</span>,
+          create: { op: <span class="hl-string">&quot;==&quot;</span>, left: { <span class="hl-keyword">var</span>: <span class="hl-string">&quot;request.data.team&quot;</span> }, right: { <span class="hl-keyword">val</span>: <span class="hl-string">&quot;red&quot;</span> } },
+        },
+      },
+    ],
+  };
+  <span class="hl-keyword">const</span> published = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;POST&quot;</span>, rulesPath, { rulesAst: ast });
+  <span class="hl-fn">check</span>(published<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">&quot;valid AST publishes with HTTP 201&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    publish: <span class="hl-string">&quot;ok&quot;</span>,
+    versionAdvancedBy: published<span class="hl-property">.body</span><span class="hl-property">.version</span> - beforeVersion,
+    ruleCount: ast<span class="hl-property">.rules</span><span class="hl-property">.length</span>,
+  });
+
+  <span class="hl-keyword">const</span> active = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;GET&quot;</span>, rulesPath);
+  <span class="hl-fn">check</span>(active<span class="hl-property">.body</span><span class="hl-property">.rulesAst</span><span class="hl-property">.rules</span><span class="hl-property">.length</span> === <span class="hl-number">1</span>, <span class="hl-string">&quot;published rule is active&quot;</span>);
+  <span class="hl-fn">check</span>(active<span class="hl-property">.body</span><span class="hl-property">.version</span> &gt;= published<span class="hl-property">.body</span><span class="hl-property">.version</span>, <span class="hl-string">&quot;active version did not regress&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    activeVersionMatchesPublished: active<span class="hl-property">.body</span><span class="hl-property">.version</span> === published<span class="hl-property">.body</span><span class="hl-property">.version</span>,
+    astVersion: active<span class="hl-property">.body</span><span class="hl-property">.rulesAst</span><span class="hl-property">.version</span>,
+    match: active<span class="hl-property">.body</span><span class="hl-property">.rulesAst</span><span class="hl-property">.rules</span>[<span class="hl-number">0</span>]?<span class="hl-property">.match</span>,
+    operations: <span class="hl-type">Object</span><span class="hl-property">.keys</span>(active<span class="hl-property">.body</span><span class="hl-property">.rulesAst</span><span class="hl-property">.rules</span>[<span class="hl-number">0</span>]?<span class="hl-property">.allow</span> ?? {}),
+  });
+
+  <span class="hl-keyword">const</span> invalid = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;POST&quot;</span>, rulesPath, { rulesAst: { version: <span class="hl-number">2</span>, rules: [] } });
+  <span class="hl-fn">check</span>(invalid<span class="hl-property">.status</span> === <span class="hl-number">400</span> &amp;&amp; invalid<span class="hl-property">.body</span>?<span class="hl-property">.error</span>?<span class="hl-property">.code</span> === <span class="hl-string">&quot;INVALID_ARGUMENT&quot;</span>, <span class="hl-string">&quot;unsupported AST version rejected&quot;</span>);
+  h<span class="hl-property">.log</span>({ invalidAst: { status: invalid<span class="hl-property">.status</span>, code: invalid<span class="hl-property">.body</span><span class="hl-property">.error</span><span class="hl-property">.code</span> } });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">try</span> {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.console</span>(<span class="hl-string">&quot;POST&quot;</span>, rulesPath, { rulesAst: originalAst });
+  } <span class="hl-keyword">catch</span> {
+    <span class="hl-comment">// Best effort restoration.</span>
+  }
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Security Rules AST ===
+{&quot;before&quot;:{&quot;hasRuleset&quot;:true,&quot;ruleCount&quot;:3}}
+{&quot;publish&quot;:&quot;ok&quot;,&quot;versionAdvancedBy&quot;:1,&quot;ruleCount&quot;:1}
+{&quot;activeVersionMatchesPublished&quot;:true,&quot;astVersion&quot;:1,&quot;match&quot;:&quot;&lt;run&gt;/{docId}&quot;,&quot;operations&quot;:[&quot;read&quot;,&quot;create&quot;]}
+{&quot;invalidAst&quot;:{&quot;status&quot;:400,&quot;code&quot;:&quot;INVALID_ARGUMENT&quot;}}</code></pre>
+</div></div></div>
+</div>
+<h2 id="what-to-read-next">What to read next<a class="anchor" href="#what-to-read-next" aria-label="Link to section">#</a></h2>
+<ul><li><a href="authentication.html">Authentication</a> — public keys, end-user tokens, and server-key scopes.</li><li><a href="crud.html">CRUD</a> — path patterns that rules match against.</li><li><a href="errors-and-limits.html">Errors &amp; limits</a> — <code class="inline-code">PERMISSION_DENIED</code> and rules complexity errors.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#scenario" class="toc-link toc-l2">Scenario</a><a href="#ruleset-shape-v1" class="toc-link toc-l2">Ruleset shape (v1)</a><a href="#wildcard-matching" class="toc-link toc-l3">Wildcard matching</a><a href="#expression-operators" class="toc-link toc-l2">Expression operators</a><a href="#deterministic-evaluation-and-bounds" class="toc-link toc-l2">Deterministic evaluation and bounds</a><a href="#publishing-and-simulation" class="toc-link toc-l2">Publishing and simulation</a><a href="#least-privilege-patterns" class="toc-link toc-l2">Least privilege patterns</a><a href="#common-pitfalls" class="toc-link toc-l2">Common pitfalls</a><a href="#verified-example" class="toc-link toc-l2">Verified example</a><a href="#what-to-read-next" class="toc-link toc-l2">What to read next</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

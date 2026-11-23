@@ -1,0 +1,65 @@
+---
+title: End-User Authentication & the Three Realms
+order: 4
+group: Authentication
+description: Three isolated auth realms, EdDSA-only end-user tokens, refresh rotation with a 15 s grace window, profile projection, REST surfaces, WS auth and rate limits.
+---
+
+# End-User Authentication & the Three Realms
+
+VELLUM authenticates three **isolated realms**. They share only stateless crypto primitives from `@vellum/auth` (scrypt, AES-256-GCM, SHA-256, TOTP, token generators, rotation math). Storage, signing secrets, JWT `typ`/`iss`/`aud`, claims, session services and middleware are 100% separate — a token from one realm is rejected by the other two.
+
+| Realm | Sessions | Secret | Algorithm | `typ` | `iss` | `aud` |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `super_admin` | `control_db.control_plane_refresh_sessions` | `SUPER_ADMIN_JWT_SECRET` | HS256 | `vellum+superadmin+jwt` | `vellum:control-plane:super-admin` | `vellum-super-admin` |
+| `customer_console` | `control_db.control_plane_refresh_sessions` | `CONSOLE_JWT_SECRET` | HS256 | `vellum+console+jwt` | `vellum:control-plane:console` | `vellum-customer-console` |
+| `project_end_user` | `data_db.project_auth_*` (FORCE RLS) | project Ed25519 key | **EdDSA** | `vellum+enduser+jwt` | `https://api.vellum.dev/v1/projects/<projectId>/auth` | `<projectId>` |
+
+:::important No HS256 fallback
+End-user tokens are verified **EdDSA-only** on both HTTP and WebSocket, against the project's Ed25519 public key. A console/admin HS256 token — or any raw HS256 token — is rejected on the document plane even with a valid project API key.
+:::
+
+## End-user tokens and JWKS
+
+Access tokens carry `iss`, `sub`, `aud=projectId`, `email`, `email_verified`, `is_anonymous`, `claims`, `iat`, `exp`, `auth_time` and `jti`, signed per project. Verification requires `alg=EdDSA`, `typ=vellum+enduser+jwt`, exact `aud`/`iss`, and reports expired tokens as `TOKEN_EXPIRED` with `retryableWithRefresh: true`. Public keys are served at `GET /v1/projects/:projectId/auth/.well-known/jwks.json` (OKP/Ed25519, no API key). Each project has one Ed25519 key pair.
+
+Refresh tokens are opaque 32-byte values; only SHA-256 hashes are stored. Rotation keeps the previous hash plus `rotated_at`:
+
+- current hash → normal rotation;
+- previous hash within **15 s** → benign concurrent tab, a brand-new session is issued and no session is revoked;
+- previous hash after 15 s → replay → **all sessions revoked** with reason `refresh_token_replay_detected`.
+
+Both client SDKs pre-flight refresh 45 s before `exp`, deduplicate with a single-flight mutex, and react to a `401` with one forced refresh plus one transparent replay.
+
+## Automatic user projection
+
+With `enable_user_projection` on (default), auth writes `users/{uid}` via `DocumentEngine.setDocument` with `system_bypass` (`bypassRules: true`) and `merge: true`. The document is re-synced after sign-up, `updateProfile`, email-verification confirmation, and customer-admin patch / claims grants — all live-verified.
+
+## REST surfaces
+
+- **End-user** (`/v1/projects/:p/auth`): `sign-up/email`, `sign-in/email`, `sign-in/anonymous`, `sign-in/provider`, `token/refresh`, `sign-out`, `GET|PATCH /user`, `password/reset`, `password/confirm`, `email/verify/request`, `email/verify/confirm`, `mfa/enroll`, `mfa/verify`, `mfa/challenge`, `/.well-known/jwks.json`.
+- **Customer admin** (`.../auth/admin`): user directory/CRUD, `PUT /users/:uid/claims`, revoke, import, `GET|PATCH /config`.
+- **Super admin** (`/v1/admin/auth`): `overview`, `projects`, control PATCH, `rotate-signing-key`, `GET|PATCH /settings`, and the refresh endpoint `POST /session/refresh`.
+- **Console refresh** `POST /v1/console/auth/refresh` and **super-admin refresh** `POST /v1/admin/auth/session/refresh` accept a body token or the HttpOnly `vellum_refresh_token` cookie and reject cross-realm tokens.
+
+See the [full REST reference](../../docs/07-end-user-auth.md).
+
+## WebSocket auth and subscribe frames
+
+The `auth` frame sends `{ type:"auth", projectId, apiKey, authToken }`; `authToken` is the EdDSA JWT verified with the project public key. Query subscriptions nest the spec:
+
+```json
+{ "type": "subscribe", "subId": "sub_ab12cd34",
+  "query": { "collectionPath": "tasks", "where": [{ "field": "done", "op": "==", "value": false }],
+             "orderBy": [{ "field": "priority", "direction": "asc" }], "limit": 20 } }
+```
+
+After token rotation the SDK re-sends the `auth` frame on the live connection.
+
+## Rate limits
+
+In-process sliding windows (no Redis): 10 failed logins / 15 min per `(ip,email)`; 5 reset/verify requests / 15 min (keyed by `(ip,email)` or `ip + SHA-256(signed bearer)` when no email); 5 failed MFA attempts / 5 min. Throttled responses are `429 TOO_MANY_REQUESTS` with `Retry-After`.
+
+## Read next
+
+- [JavaScript SDK](./sdks/javascript.md) · [Flutter SDK](./sdks/flutter.md)

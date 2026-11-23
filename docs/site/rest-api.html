@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>REST API Orientation · VELLUM Docs</title>
+<meta name="description" content="A short map of the /v1 HTTP endpoint families, with a link to the full reference.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/rest-api.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Reference <span>/</span> <strong>REST API Orientation</strong></div>
+    <article class="article"><h1 id="rest-api-orientation">REST API Orientation<a class="anchor" href="#rest-api-orientation" aria-label="Link to section">#</a></h1>
+<p>The HTTP API is mounted under <code class="inline-code">/v1</code> and returns JSON for every response, attaching <code class="inline-code">X-Request-Id</code>. Document-plane endpoints authenticate with the <code class="inline-code">x-project-key</code> header; console endpoints use a session bearer token. A machine-readable OpenAPI 3.1 document is served at <code class="inline-code">GET /v1/openapi.json</code>.</p>
+<div class="admonition admonition-note"><div class="admonition-label">NOTE</div><p>Prefer the <a href="quickstart.html">SDK</a> for application code. Use raw HTTP when calling from a language without an official SDK or when debugging. The full endpoint-by-endpoint reference lives in the <a href="reference/rest-data-plane.html">HTTP API reference</a>.</p></div>
+<h2 id="scenario">Scenario<a class="anchor" href="#scenario" aria-label="Link to section">#</a></h2>
+<p>You are integrating VELLUM from a language that has no official SDK. You discover the available endpoints from <code class="inline-code">/v1/openapi.json</code>, then make a signed <code class="inline-code">x-project-key</code> request to read a document and a <code class="inline-code">POST</code> to <code class="inline-code">/query</code> to fetch a filtered page — checking <code class="inline-code">X-Request-Id</code> on each response for support.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">BASH</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment"># Discover the live contract before writing integration code.</span>
+curl -fsS <span class="hl-string">&quot;https://api.example.com/v1/openapi.json&quot;</span> | jq <span class="hl-string">'.paths | keys[]'</span></code></pre>
+</div>
+<h2 id="endpoint-families">Endpoint families<a class="anchor" href="#endpoint-families" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Family</th><th>Base path</th><th>Auth</th><th>What it does</th></tr></thead><tbody><tr><td>Health</td><td><code class="inline-code">/v1/health/live</code>, <code class="inline-code">/v1/health/ready</code></td><td>Public</td><td>Liveness and real SQL readiness probes.</td></tr><tr><td>Metadata</td><td><code class="inline-code">/v1/openapi.json</code></td><td>Public</td><td>OpenAPI 3.1 specification.</td></tr><tr><td>Documents</td><td><code class="inline-code">/v1/projects/:projectId/documents/*path</code></td><td><code class="inline-code">x-project-key</code></td><td><code class="inline-code">GET</code> doc/collection, <code class="inline-code">POST</code> create, <code class="inline-code">PUT</code> set, <code class="inline-code">PATCH</code> update + transforms, <code class="inline-code">DELETE</code> soft delete.</td></tr><tr><td>Query</td><td><code class="inline-code">/v1/projects/:projectId/query</code></td><td><code class="inline-code">x-project-key</code> + rules</td><td>Structured <code class="inline-code">where</code> / <code class="inline-code">orderBy</code> / <code class="inline-code">select</code> / cursor query.</td></tr><tr><td>Batch</td><td><code class="inline-code">/v1/projects/:projectId/batchWrite</code></td><td><code class="inline-code">x-project-key</code> + rules</td><td>Up to 100 atomic mutations.</td></tr><tr><td>Transactions</td><td><code class="inline-code">/v1/.../transactions:begin</code>, <code class="inline-code">.../transactions:commit</code></td><td><code class="inline-code">x-project-key</code> + rules</td><td>OCC token issuance and atomic commit.</td></tr><tr><td>Indexes</td><td><code class="inline-code">/v1/.../indexes</code>, <code class="inline-code">/v1/.../indexes/:indexId</code></td><td>Server key, <code class="inline-code">indexes:manage</code></td><td>List, create, and delete composite indexes.</td></tr><tr><td>Collections</td><td><code class="inline-code">/v1/.../collections</code></td><td><code class="inline-code">x-project-key</code></td><td>List real collection paths (studio helper).</td></tr><tr><td>Auth</td><td><code class="inline-code">/v1/auth/sign-up/email</code>, <code class="inline-code">/v1/auth/sign-in/email</code>, <code class="inline-code">/v1/auth/session</code>, <code class="inline-code">/v1/auth/sign-out</code></td><td>Session / public</td><td>Email auth and session management.</td></tr><tr><td>MFA</td><td><code class="inline-code">/v1/auth/mfa/status</code>, <code class="inline-code">/setup</code>, <code class="inline-code">/verify</code>, <code class="inline-code">/disable</code></td><td>Session</td><td>TOTP enrollment and verification.</td></tr><tr><td>Console</td><td><code class="inline-code">/v1/console/...</code></td><td>Session JWT + org check</td><td>Dashboards; audited control-plane mutations.</td></tr><tr><td>Rulesets</td><td><code class="inline-code">/v1/projects/:projectId/rulesets</code></td><td>Session</td><td>Publish and read security rulesets.</td></tr><tr><td>Realtime</td><td><code class="inline-code">/v1/realtime</code> (WebSocket)</td><td><code class="inline-code">auth</code> frame</td><td>Live document and query streams.</td></tr></tbody></table></div>
+<h2 id="a-raw-request">A raw request<a class="anchor" href="#a-raw-request" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">BASH</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">curl <span class="hl-string">&quot;https://api.example.com/v1/projects/&lt;PROJECT_ID&gt;/documents/users/u_123&quot;</span> \
+  -<span class="hl-type">H</span> <span class="hl-string">&quot;x-project-key: &lt;YOUR_API_KEY&gt;&quot;</span></code></pre>
+</div>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">JSON</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">{
+  <span class="hl-string">&quot;path&quot;</span>: <span class="hl-string">&quot;users/u_123&quot;</span>,
+  <span class="hl-string">&quot;collectionPath&quot;</span>: <span class="hl-string">&quot;users&quot;</span>,
+  <span class="hl-string">&quot;collectionGroup&quot;</span>: <span class="hl-string">&quot;users&quot;</span>,
+  <span class="hl-string">&quot;documentId&quot;</span>: <span class="hl-string">&quot;u_123&quot;</span>,
+  <span class="hl-string">&quot;data&quot;</span>: { <span class="hl-string">&quot;name&quot;</span>: <span class="hl-string">&quot;Ada&quot;</span>, <span class="hl-string">&quot;role&quot;</span>: <span class="hl-string">&quot;admin&quot;</span> },
+  <span class="hl-string">&quot;sizeBytes&quot;</span>: <span class="hl-number">96</span>,
+  <span class="hl-string">&quot;version&quot;</span>: <span class="hl-number">3</span>,
+  <span class="hl-string">&quot;createdAt&quot;</span>: <span class="hl-string">&quot;2026-11-15T14:30:00.123Z&quot;</span>,
+  <span class="hl-string">&quot;updatedAt&quot;</span>: <span class="hl-string">&quot;2026-11-17T09:00:00.000Z&quot;</span>
+}</code></pre>
+</div>
+<p>For a query, <code class="inline-code">POST</code> a query spec to <code class="inline-code">.../query</code>; the response is <code class="inline-code">{ documents, nextCursor, meta }</code>:</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">BASH</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">curl -<span class="hl-type">X</span> <span class="hl-type">POST</span> <span class="hl-string">&quot;https://api.example.com/v1/projects/&lt;PROJECT_ID&gt;/query&quot;</span> \
+  -<span class="hl-type">H</span> <span class="hl-string">&quot;x-project-key: &lt;YOUR_API_KEY&gt;&quot;</span> \
+  -<span class="hl-type">H</span> <span class="hl-string">&quot;content-type: application/json&quot;</span> \
+  -d <span class="hl-string">'{&quot;collectionPath&quot;:&quot;users&quot;,&quot;where&quot;:[{&quot;field&quot;:&quot;status&quot;,&quot;op&quot;:&quot;==&quot;,&quot;value&quot;:&quot;active&quot;}],&quot;limit&quot;:25}'</span></code></pre>
+</div>
+<p>See <a href="query.html">Query</a> and <a href="pagination.html">Pagination</a>.</p>
+<div class="admonition admonition-warning"><div class="admonition-label">WARNING</div><p>Never place a server key or session token in a URL or commit it to source control. Use placeholders and pass credentials in headers from a secret store.</p></div>
+<h2 id="common-pitfalls">Common pitfalls<a class="anchor" href="#common-pitfalls" aria-label="Link to section">#</a></h2>
+<ul><li><strong>Putting the key in the URL.</strong> Always send <code class="inline-code">x-project-key</code> (or <code class="inline-code">Authorization: Bearer</code>) in a header.</li><li><strong>Mixing up auth surfaces.</strong> Document endpoints take an API key; console endpoints take a session bearer token.</li><li><strong>Forgetting <code class="inline-code">X-Request-Id</code>.</strong> Capture it on every response so support can correlate incidents safely.</li><li><strong>Skipping the OpenAPI spec.</strong> <code class="inline-code">GET /v1/openapi.json</code> is the authoritative, up-to-date request/response schema.</li></ul>
+<h2 id="verified-example">Verified example<a class="anchor" href="#verified-example" aria-label="Link to section">#</a></h2>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">SDK / protocol</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed against the live PostgreSQL API by scripts/run-dart-examples.mjs.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// Raw REST API — call the public data plane with `vellum_flutter`'s request()</span>
+<span class="hl-comment">// helper, which attaches the x-project-key header for you.</span>
+<span class="hl-comment">// What you'll build: document POST/GET/PUT/PATCH/DELETE, a collection listing</span>
+<span class="hl-comment">// and a structured /query call.</span>
+<span class="hl-comment">// Real-world scenario: request() is the escape hatch for endpoints that have no</span>
+<span class="hl-comment">// convenience method (indexes, rulesets, batchWrite, transactions, etc.).</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix = <span class="hl-string">'ex_flutter_rest_api_${DateTime.now().microsecondsSinceEpoch}'</span>;
+  <span class="hl-keyword">final</span> docPath = <span class="hl-string">'$prefix/rest-doc'</span>;
+
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== Raw REST API (Flutter) ==='</span>);
+
+    <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/documents/$docPath'</span>, body: {
+      <span class="hl-string">'data'</span>: {<span class="hl-string">'title'</span>: <span class="hl-string">'raw'</span>, <span class="hl-string">'count'</span>: <span class="hl-number">1</span>}
+    });
+    <span class="hl-fn">print</span>(<span class="hl-string">'POST /documents/:path: 201'</span>);
+
+    <span class="hl-keyword">final</span> fetched = <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'GET'</span>, <span class="hl-string">'/documents/$docPath'</span>);
+    <span class="hl-fn">print</span>(<span class="hl-string">'GET: version=${fetched['</span>version<span class="hl-string">']}'</span>);
+
+    <span class="hl-keyword">final</span> put = <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'PUT'</span>, <span class="hl-string">'/documents/$docPath'</span>, body: {
+      <span class="hl-string">'data'</span>: {<span class="hl-string">'title'</span>: <span class="hl-string">'merged'</span>},
+      <span class="hl-string">'merge'</span>: <span class="hl-keyword">true</span>
+    });
+    <span class="hl-fn">print</span>(<span class="hl-string">'PUT: version=${put['</span>version<span class="hl-string">']}'</span>);
+
+    <span class="hl-keyword">final</span> patch = <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'PATCH'</span>, <span class="hl-string">'/documents/$docPath'</span>, body: {
+      <span class="hl-string">'data'</span>: {<span class="hl-string">'count'</span>: <span class="hl-number">2</span>}
+    });
+    <span class="hl-fn">print</span>(<span class="hl-string">'PATCH: version=${patch['</span>version<span class="hl-string">']}'</span>);
+
+    <span class="hl-keyword">final</span> query = <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/query'</span>, body: {
+      <span class="hl-string">'collectionPath'</span>: prefix,
+      <span class="hl-string">'where'</span>: [
+        {<span class="hl-string">'field'</span>: <span class="hl-string">'count'</span>, <span class="hl-string">'op'</span>: <span class="hl-string">'=='</span>, <span class="hl-string">'value'</span>: <span class="hl-number">2</span>},
+      ],
+      <span class="hl-string">'orderBy'</span>: [],
+      <span class="hl-string">'limit'</span>: <span class="hl-number">10</span>,
+      <span class="hl-string">'select'</span>: <span class="hl-keyword">null</span>,
+      <span class="hl-string">'startAt'</span>: <span class="hl-keyword">null</span>,
+      <span class="hl-string">'startAfter'</span>: <span class="hl-keyword">null</span>,
+    });
+    <span class="hl-keyword">final</span> ids =
+        (query[<span class="hl-string">'documents'</span>] <span class="hl-keyword">as</span> <span class="hl-type">List</span>)<span class="hl-property">.map</span>((d) =&gt; d[<span class="hl-string">'documentId'</span>])<span class="hl-property">.toList</span>();
+    <span class="hl-fn">print</span>(<span class="hl-string">'POST /query: ids=$ids'</span>);
+
+    <span class="hl-keyword">final</span> listing = <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'GET'</span>, <span class="hl-string">'/documents/$prefix?limit=10'</span>);
+    <span class="hl-fn">print</span>(<span class="hl-string">'GET collection: count=${(listing['</span>documents<span class="hl-string">'] as List).length}'</span>);
+
+    <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'DELETE'</span>, <span class="hl-string">'/documents/$docPath'</span>);
+    <span class="hl-fn">print</span>(<span class="hl-string">'DELETE: 200'</span>);
+  } <span class="hl-keyword">finally</span> {
+    <span class="hl-keyword">try</span> {
+      <span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(docPath)<span class="hl-property">.delete</span>();
+    } <span class="hl-keyword">catch</span> (_) {}
+    client<span class="hl-property">.dispose</span>();
+  }
+}</code></pre><div class="et-note">Reference only — not executed here (no Dart toolchain).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Raw REST API — call the public data plane with `fetch` directly.
+ *
+ * What you'll build: the same document lifecycle as the SDK examples, but using
+ * plain HTTP and the x-project-key header (no SDK involved).
+ * Real-world scenario: a non-JavaScript client or a thin serverless function
+ * can talk to Vellum with nothing but fetch. This covers POST/GET/PUT/PATCH/
+ * DELETE, a collection listing and the structured /query endpoint.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;rest-api&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> docPath = <span class="hl-string">`${col}/rest-doc`</span>;
+<span class="hl-keyword">const</span> dataBase = <span class="hl-string">`/v1/projects/${h.projectId}`</span>;
+<span class="hl-keyword">const</span> auth = { <span class="hl-string">&quot;x-project-key&quot;</span>: h<span class="hl-property">.apiKey</span> };
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Raw REST API ===&quot;</span>);
+
+  <span class="hl-keyword">const</span> created = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`${dataBase}/documents/${docPath}`</span>, {
+    data: { title: <span class="hl-string">&quot;raw&quot;</span>, count: <span class="hl-number">1</span> },
+  }, auth);
+  <span class="hl-fn">check</span>(created<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">&quot;POST created the document&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;POST /documents/:path&quot;</span>: { status: created<span class="hl-property">.status</span>, id: (created<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { documentId?: string })<span class="hl-property">.documentId</span> } });
+
+  <span class="hl-keyword">const</span> fetched = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`${dataBase}/documents/${docPath}`</span>, <span class="hl-keyword">undefined</span>, auth);
+  <span class="hl-keyword">const</span> version = (fetched<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { version: number })<span class="hl-property">.version</span>;
+  <span class="hl-fn">check</span>(fetched<span class="hl-property">.status</span> === <span class="hl-number">200</span> &amp;&amp; version === <span class="hl-number">1</span>, <span class="hl-string">&quot;GET returned version 1&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;GET /documents/:path&quot;</span>: { status: fetched<span class="hl-property">.status</span>, version } });
+
+  <span class="hl-keyword">const</span> put = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;PUT&quot;</span>, <span class="hl-string">`${dataBase}/documents/${docPath}`</span>, {
+    data: { title: <span class="hl-string">&quot;merged&quot;</span> },
+    merge: <span class="hl-keyword">true</span>,
+  }, auth);
+  <span class="hl-fn">check</span>(put<span class="hl-property">.ok</span>, <span class="hl-string">&quot;PUT with merge succeeded&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;PUT /documents/:path&quot;</span>: { status: put<span class="hl-property">.status</span>, version: (put<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { version: number })<span class="hl-property">.version</span> } });
+
+  <span class="hl-keyword">const</span> patch = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;PATCH&quot;</span>, <span class="hl-string">`${dataBase}/documents/${docPath}`</span>, {
+    data: { count: <span class="hl-number">2</span> },
+  }, auth);
+  <span class="hl-fn">check</span>(patch<span class="hl-property">.ok</span>, <span class="hl-string">&quot;PATCH succeeded&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;PATCH /documents/:path&quot;</span>: { status: patch<span class="hl-property">.status</span>, version: (patch<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { version: number })<span class="hl-property">.version</span> } });
+
+  <span class="hl-keyword">const</span> query = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`${dataBase}/query`</span>, {
+    collectionPath: col,
+    where: [{ field: <span class="hl-string">&quot;count&quot;</span>, op: <span class="hl-string">&quot;==&quot;</span>, value: <span class="hl-number">2</span> }],
+    orderBy: [],
+    limit: <span class="hl-number">10</span>,
+    select: <span class="hl-keyword">null</span>,
+    startAt: <span class="hl-keyword">null</span>,
+    startAfter: <span class="hl-keyword">null</span>,
+  }, auth);
+  <span class="hl-keyword">const</span> ids = ((query<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { documents?: <span class="hl-type">Array</span>&lt;{ documentId: string }&gt; })<span class="hl-property">.documents</span> ?? [])<span class="hl-property">.map</span>((d) =&gt; d<span class="hl-property">.documentId</span>);
+  <span class="hl-fn">check</span>(query<span class="hl-property">.ok</span> &amp;&amp; ids<span class="hl-property">.includes</span>(<span class="hl-string">&quot;rest-doc&quot;</span>), <span class="hl-string">&quot;query found the document&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;POST /query&quot;</span>: { status: query<span class="hl-property">.status</span>, ids } });
+
+  <span class="hl-keyword">const</span> listing = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`${dataBase}/documents/${col}?limit=10`</span>, <span class="hl-keyword">undefined</span>, auth);
+  <span class="hl-fn">check</span>(listing<span class="hl-property">.ok</span>, <span class="hl-string">&quot;collection listing succeeded&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;GET /documents/:collection&quot;</span>: { status: listing<span class="hl-property">.status</span>, count: (listing<span class="hl-property">.body</span> <span class="hl-keyword">as</span> { documents?: unknown[] })<span class="hl-property">.documents</span>?<span class="hl-property">.length</span> } });
+
+  <span class="hl-keyword">const</span> removed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;DELETE&quot;</span>, <span class="hl-string">`${dataBase}/documents/${docPath}`</span>, <span class="hl-keyword">undefined</span>, auth);
+  <span class="hl-fn">check</span>(removed<span class="hl-property">.ok</span>, <span class="hl-string">&quot;DELETE succeeded&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;DELETE /documents/:path&quot;</span>: { status: removed<span class="hl-property">.status</span> } });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Raw REST API ===
+{&quot;POST /documents/:path&quot;:{&quot;status&quot;:201,&quot;id&quot;:&quot;rest-doc&quot;}}
+{&quot;GET /documents/:path&quot;:{&quot;status&quot;:200,&quot;version&quot;:1}}
+{&quot;PUT /documents/:path&quot;:{&quot;status&quot;:200,&quot;version&quot;:2}}
+{&quot;PATCH /documents/:path&quot;:{&quot;status&quot;:200,&quot;version&quot;:3}}
+{&quot;POST /query&quot;:{&quot;status&quot;:200,&quot;ids&quot;:[&quot;rest-doc&quot;]}}
+{&quot;GET /documents/:collection&quot;:{&quot;status&quot;:200,&quot;count&quot;:1}}
+{&quot;DELETE /documents/:path&quot;:{&quot;status&quot;:200}}</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Raw REST API (REST) — the canonical fetch-only HTTP walkthrough.
+ *
+ * What you'll build: document POST/GET/PUT/PATCH/DELETE, a collection listing
+ * and a structured /query call, all with the x-project-key header.
+ * Real-world scenario: any language with an HTTP client can integrate with
+ * Vellum; this is the minimal, dependency-free reference for that path.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;rest-api&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> docPath = <span class="hl-string">`${col}/rest-doc`</span>;
+<span class="hl-keyword">const</span> dataBase = <span class="hl-string">`/v1/projects/${h.projectId}`</span>;
+<span class="hl-keyword">const</span> auth = { <span class="hl-string">&quot;x-project-key&quot;</span>: h<span class="hl-property">.apiKey</span> };
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Raw REST API ===&quot;</span>);
+
+  <span class="hl-keyword">const</span> created = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`${dataBase}/documents/${docPath}`</span>, {
+    data: { title: <span class="hl-string">&quot;raw&quot;</span>, count: <span class="hl-number">1</span> },
+  }, auth);
+  <span class="hl-fn">check</span>(created<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">&quot;POST created the document&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;POST /documents/:path&quot;</span>: { status: created<span class="hl-property">.status</span>, id: created<span class="hl-property">.body</span><span class="hl-property">.documentId</span> } });
+
+  <span class="hl-keyword">const</span> fetched = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`${dataBase}/documents/${docPath}`</span>, <span class="hl-keyword">undefined</span>, auth);
+  <span class="hl-fn">check</span>(fetched<span class="hl-property">.status</span> === <span class="hl-number">200</span> &amp;&amp; fetched<span class="hl-property">.body</span><span class="hl-property">.version</span> === <span class="hl-number">1</span>, <span class="hl-string">&quot;GET returned version 1&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;GET /documents/:path&quot;</span>: { status: fetched<span class="hl-property">.status</span>, version: fetched<span class="hl-property">.body</span><span class="hl-property">.version</span> } });
+
+  <span class="hl-keyword">const</span> put = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;PUT&quot;</span>, <span class="hl-string">`${dataBase}/documents/${docPath}`</span>, {
+    data: { title: <span class="hl-string">&quot;merged&quot;</span> },
+    merge: <span class="hl-keyword">true</span>,
+  }, auth);
+  <span class="hl-fn">check</span>(put<span class="hl-property">.ok</span>, <span class="hl-string">&quot;PUT with merge succeeded&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;PUT /documents/:path&quot;</span>: { status: put<span class="hl-property">.status</span>, version: put<span class="hl-property">.body</span><span class="hl-property">.version</span> } });
+
+  <span class="hl-keyword">const</span> patch = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;PATCH&quot;</span>, <span class="hl-string">`${dataBase}/documents/${docPath}`</span>, {
+    data: { count: <span class="hl-number">2</span> },
+  }, auth);
+  <span class="hl-fn">check</span>(patch<span class="hl-property">.ok</span>, <span class="hl-string">&quot;PATCH succeeded&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;PATCH /documents/:path&quot;</span>: { status: patch<span class="hl-property">.status</span>, version: patch<span class="hl-property">.body</span><span class="hl-property">.version</span> } });
+
+  <span class="hl-keyword">const</span> query = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`${dataBase}/query`</span>, {
+    collectionPath: col,
+    where: [{ field: <span class="hl-string">&quot;count&quot;</span>, op: <span class="hl-string">&quot;==&quot;</span>, value: <span class="hl-number">2</span> }],
+    orderBy: [],
+    limit: <span class="hl-number">10</span>,
+    select: <span class="hl-keyword">null</span>,
+    startAt: <span class="hl-keyword">null</span>,
+    startAfter: <span class="hl-keyword">null</span>,
+  }, auth);
+  <span class="hl-keyword">const</span> ids = (query<span class="hl-property">.body</span><span class="hl-property">.documents</span> ?? [])<span class="hl-property">.map</span>((d) =&gt; d<span class="hl-property">.documentId</span>);
+  <span class="hl-fn">check</span>(query<span class="hl-property">.ok</span> &amp;&amp; ids<span class="hl-property">.includes</span>(<span class="hl-string">&quot;rest-doc&quot;</span>), <span class="hl-string">&quot;query found the document&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;POST /query&quot;</span>: { status: query<span class="hl-property">.status</span>, ids } });
+
+  <span class="hl-keyword">const</span> listing = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">`${dataBase}/documents/${col}?limit=10`</span>, <span class="hl-keyword">undefined</span>, auth);
+  <span class="hl-fn">check</span>(listing<span class="hl-property">.ok</span>, <span class="hl-string">&quot;collection listing succeeded&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;GET /documents/:collection&quot;</span>: { status: listing<span class="hl-property">.status</span>, count: listing<span class="hl-property">.body</span><span class="hl-property">.documents</span>?<span class="hl-property">.length</span> } });
+
+  <span class="hl-keyword">const</span> removed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.raw</span>(<span class="hl-string">&quot;DELETE&quot;</span>, <span class="hl-string">`${dataBase}/documents/${docPath}`</span>, <span class="hl-keyword">undefined</span>, auth);
+  <span class="hl-fn">check</span>(removed<span class="hl-property">.ok</span>, <span class="hl-string">&quot;DELETE succeeded&quot;</span>);
+  h<span class="hl-property">.log</span>({ <span class="hl-string">&quot;DELETE /documents/:path&quot;</span>: { status: removed<span class="hl-property">.status</span> } });
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Raw REST API ===
+{&quot;POST /documents/:path&quot;:{&quot;status&quot;:201,&quot;id&quot;:&quot;rest-doc&quot;}}
+{&quot;GET /documents/:path&quot;:{&quot;status&quot;:200,&quot;version&quot;:1}}
+{&quot;PUT /documents/:path&quot;:{&quot;status&quot;:200,&quot;version&quot;:2}}
+{&quot;PATCH /documents/:path&quot;:{&quot;status&quot;:200,&quot;version&quot;:3}}
+{&quot;POST /query&quot;:{&quot;status&quot;:200,&quot;ids&quot;:[&quot;rest-doc&quot;]}}
+{&quot;GET /documents/:collection&quot;:{&quot;status&quot;:200,&quot;count&quot;:1}}
+{&quot;DELETE /documents/:path&quot;:{&quot;status&quot;:200}}</code></pre>
+</div></div></div>
+</div>
+<h2 id="what-to-read-next">What to read next<a class="anchor" href="#what-to-read-next" aria-label="Link to section">#</a></h2>
+<ul><li><a href="reference/rest-data-plane.html">Full HTTP API reference</a> — request/response schemas for every endpoint.</li><li><a href="authentication.html">Authentication</a> — header formats, scopes, and sessions.</li><li><a href="realtime.html">Realtime</a> — the WebSocket frame protocol.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#scenario" class="toc-link toc-l2">Scenario</a><a href="#endpoint-families" class="toc-link toc-l2">Endpoint families</a><a href="#a-raw-request" class="toc-link toc-l2">A raw request</a><a href="#common-pitfalls" class="toc-link toc-l2">Common pitfalls</a><a href="#verified-example" class="toc-link toc-l2">Verified example</a><a href="#what-to-read-next" class="toc-link toc-l2">What to read next</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>

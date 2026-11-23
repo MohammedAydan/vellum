@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Composite Indexes · VELLUM Docs</title>
+<meta name="description" content="Tenant composite indexes as rows, order-preserving sort keys, creation and status, when an index is needed, and duplicate conflicts.">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-base="">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ Documentation</span></span></a>
+  <span class="top-badge">VERIFIED EXAMPLES · STATIC</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">Search docs <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="ar/indexes.html" title="العربية">AR</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Core concepts <span>/</span> <strong>Composite Indexes</strong></div>
+    <article class="article"><h1 id="composite-indexes">Composite Indexes<a class="anchor" href="#composite-indexes" aria-label="Link to section">#</a></h1>
+<p>Composite indexes accelerate queries that filter or sort on custom document fields. In a multi-tenant service, running <code class="inline-code">CREATE INDEX</code> per customer on the shared <code class="inline-code">documents</code> table would cause catalog bloat and DDL locks. VELLUM therefore stores indexes as <strong>rows</strong>, never as customer DDL.</p>
+<h2 id="scenario">Scenario<a class="anchor" href="#scenario" aria-label="Link to section">#</a></h2>
+<p>Your reporting screen filters users by <code class="inline-code">status</code> and sorts by <code class="inline-code">priority desc</code>, and the query starts failing with <code class="inline-code">FAILED_PRECONDITION</code> and a <code class="inline-code">suggestedIndex</code>. You register that index with a server key, poll until its status is <code class="inline-code">ready</code>, and then the query runs as a single B-tree range scan.</p>
+<h2 id="how-tenant-indexes-work">How tenant indexes work<a class="anchor" href="#how-tenant-indexes-work" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Table</th><th>Role</th></tr></thead><tbody><tr><td><code class="inline-code">document_indexes</code></td><td>Index definition: collection path, ordered field list, definition hash, build status.</td></tr><tr><td><code class="inline-code">document_index_entries</code></td><td>One row per document in the index, keyed by an order-preserving <code class="inline-code">sort_key BYTEA</code>.</td></tr></tbody></table></div>
+<p>An index definition names up to <strong>3 fields</strong>, each with a path and a direction:</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">JSON</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">{
+  <span class="hl-string">&quot;collectionPath&quot;</span>: <span class="hl-string">&quot;users&quot;</span>,
+  <span class="hl-string">&quot;fields&quot;</span>: [
+    { <span class="hl-string">&quot;path&quot;</span>: <span class="hl-string">&quot;status&quot;</span>, <span class="hl-string">&quot;dir&quot;</span>: <span class="hl-string">&quot;asc&quot;</span> },
+    { <span class="hl-string">&quot;path&quot;</span>: <span class="hl-string">&quot;priority&quot;</span>, <span class="hl-string">&quot;dir&quot;</span>: <span class="hl-string">&quot;desc&quot;</span> }
+  ]
+}</code></pre>
+</div>
+<p>The sort key encodes each field value with a type-prefix byte (missing, null, boolean, numeric, string, timestamp, reference, bytes), then escapes delimiters so the key preserves the natural ordering of the logical values. For a <code class="inline-code">desc</code> field, every byte of that segment is inverted so a single ascending B-tree scan yields descending order. Because PostgreSQL compares <code class="inline-code">BYTEA</code> byte-by-byte, the primary key <code class="inline-code">(index_id, sort_key, document_id)</code> answers a multi-field range-and-sort query with <strong>one index scan</strong>.</p>
+<h2 id="creation-and-status">Creation and status<a class="anchor" href="#creation-and-status" aria-label="Link to section">#</a></h2>
+<p>Indexes are managed with a server key holding the <code class="inline-code">indexes:manage</code> scope (public keys cannot manage indexes):</p>
+<div class="table-wrap"><table><thead><tr><th>Method</th><th>Endpoint</th><th>Purpose</th></tr></thead><tbody><tr><td><code class="inline-code">GET</code></td><td><code class="inline-code">/v1/projects/:projectId/indexes</code></td><td>List indexes and their statuses.</td></tr><tr><td><code class="inline-code">POST</code></td><td><code class="inline-code">/v1/projects/:projectId/indexes</code></td><td>Register and backfill a new index.</td></tr><tr><td><code class="inline-code">DELETE</code></td><td><code class="inline-code">/v1/projects/:projectId/indexes/:indexId</code></td><td>Delete an index and its entries.</td></tr></tbody></table></div>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">BASH</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code">curl -<span class="hl-type">X</span> <span class="hl-type">POST</span> <span class="hl-string">&quot;https://api.example.com/v1/projects/&lt;PROJECT_ID&gt;/indexes&quot;</span> \
+  -<span class="hl-type">H</span> <span class="hl-string">&quot;x-project-key: &lt;YOUR_SERVER_KEY&gt;&quot;</span> \
+  -<span class="hl-type">H</span> <span class="hl-string">&quot;content-type: application/json&quot;</span> \
+  -d <span class="hl-string">'{
+    &quot;collectionPath&quot;: &quot;users&quot;,
+    &quot;fields&quot;: [
+      { &quot;path&quot;: &quot;status&quot;, &quot;dir&quot;: &quot;asc&quot; },
+      { &quot;path&quot;: &quot;priority&quot;, &quot;dir&quot;: &quot;desc&quot; }
+    ]
+  }'</span></code></pre>
+</div>
+<p>Status values:</p>
+<div class="table-wrap"><table><thead><tr><th>Status</th><th>Meaning</th></tr></thead><tbody><tr><td><code class="inline-code">building</code></td><td>Registered; the backfill worker is populating entries.</td></tr><tr><td><code class="inline-code">ready</code></td><td>Fully built and used by the query planner.</td></tr><tr><td><code class="inline-code">failed</code></td><td>Build failed; <code class="inline-code">errorMessage</code> explains why.</td></tr><tr><td><code class="inline-code">deleting</code></td><td>Being removed.</td></tr></tbody></table></div>
+<p>The backfill worker claims <code class="inline-code">building</code> rows and scans active documents in deterministic batches of 500 ordered by <code class="inline-code">document_id ASC</code>, computing each <code class="inline-code">sort_key</code> and upserting entries until the index is <code class="inline-code">ready</code>. Subsequent writes maintain index entries transactionally.</p>
+<div class="admonition admonition-note"><div class="admonition-label">NOTE</div><p>Registration returns immediately with status <code class="inline-code">building</code>. Poll <code class="inline-code">GET .../indexes</code> until the index is <code class="inline-code">ready</code> before relying on it for queries.</p></div>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">BASH</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment"># Poll until the index is ready before depending on it in queries.</span>
+curl -s <span class="hl-string">&quot;https://api.example.com/v1/projects/&lt;PROJECT_ID&gt;/indexes&quot;</span> \
+  -<span class="hl-type">H</span> <span class="hl-string">&quot;x-project-key: &lt;YOUR_SERVER_KEY&gt;&quot;</span> | jq <span class="hl-string">'.indexes[] | {id, status, errorMessage}'</span></code></pre>
+</div>
+<h2 id="duplicate-creation-409">Duplicate creation (409)<a class="anchor" href="#duplicate-creation-409" aria-label="Link to section">#</a></h2>
+<p>Index definitions are deduplicated by a hash of <code class="inline-code">(project, collection path, fields)</code> enforced by a unique database constraint. Creating an identical index returns <code class="inline-code">ALREADY_EXISTS</code> (409) with the existing <code class="inline-code">collectionPath</code> and <code class="inline-code">definitionHash</code> in the error details. Reuse the existing index instead of retrying.</p>
+<h2 id="when-an-index-is-needed">When an index is needed<a class="anchor" href="#when-an-index-is-needed" aria-label="Link to section">#</a></h2>
+<ul><li><strong>No index needed:</strong> equality filters (<code class="inline-code">==</code>, <code class="inline-code">in</code>) and single-field ordering on built-in fields (<code class="inline-code">documentId</code>, <code class="inline-code">createdAt</code>, <code class="inline-code">updatedAt</code>) use built-in B-tree / GIN indexes.</li><li><strong>Index needed:</strong> combining a range filter (<code class="inline-code">&lt;</code>, <code class="inline-code">&lt;=</code>, <code class="inline-code">&gt;</code>, <code class="inline-code">&gt;=</code>) with additional filters, or ordering by one or more custom document fields, requires a composite index.</li></ul>
+<p>If a query needs an index that does not exist, the server returns <code class="inline-code">FAILED_PRECONDITION</code> (412) with a <code class="inline-code">suggestedIndex</code> field list. Create that index, wait for <code class="inline-code">ready</code>, and retry. See <a href="query.html">Query</a>.</p>
+<div class="admonition admonition-warning"><div class="admonition-label">WARNING</div><p>Each document's composite index entries count toward storage. Keep index definitions narrow — only the fields a real query needs — and delete unused indexes.</p></div>
+<h2 id="common-pitfalls">Common pitfalls<a class="anchor" href="#common-pitfalls" aria-label="Link to section">#</a></h2>
+<ul><li><strong>Using a public key to manage indexes.</strong> Only a server key with <code class="inline-code">indexes:manage</code> can create or delete indexes.</li><li><strong>Querying before the index is <code class="inline-code">ready</code>.</strong> Registration returns <code class="inline-code">building</code>; poll until <code class="inline-code">ready</code> first.</li><li><strong>Retrying a duplicate index blindly.</strong> An identical definition returns <code class="inline-code">ALREADY_EXISTS</code> (409); reuse the existing index.</li><li><strong>Indexing every field &quot;just in case&quot;.</strong> Entries consume storage and slow writes; index only fields real queries use.</li></ul>
+<h2 id="verified-example">Verified example<a class="anchor" href="#verified-example" aria-label="Link to section">#</a></h2>
+<div class="example-tabs" data-example-tabs>
+  <div class="et-head"><span class="et-label">SDK / protocol</span><div class="et-tablist" role="tablist"><button type="button" class="et-tab" data-example-tab="dart" role="tab" aria-selected="false">Flutter / Dart</button><button type="button" class="et-tab is-active" data-example-tab="ts" role="tab" aria-selected="true">JS / TypeScript</button><button type="button" class="et-tab" data-example-tab="rest" role="tab" aria-selected="false">REST</button></div></div>
+  <div class="et-panels"><div class="et-panel" data-example-panel="dart" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> <span class="hl-string">'dart:io'</span>;
+<span class="hl-comment">// Executed against the live PostgreSQL API by scripts/run-dart-examples.mjs.</span>
+<span class="hl-comment">//</span>
+<span class="hl-comment">// Composite indexes — a leaderboard index over (team, score).</span>
+<span class="hl-comment">// What you'll build: a tenant composite index created as a row via the REST</span>
+<span class="hl-comment">// API, an ordered query that uses it, then cleanup.</span>
+<span class="hl-comment">// Real-world scenario: ranking players by team and score needs a composite</span>
+<span class="hl-comment">// index, but no CREATE INDEX is ever issued on the shared documents table.</span>
+<span class="hl-comment">// `vellum_flutter` has no index helper, so `client.request` is used directly.</span>
+<span class="hl-keyword">import</span> <span class="hl-string">'package:vellum_flutter/vellum_flutter.dart'</span>;
+
+<span class="hl-type">Future</span>&lt;<span class="hl-keyword">void</span>&gt; <span class="hl-fn">main</span>() <span class="hl-keyword">async</span> {
+  <span class="hl-keyword">final</span> endpoint = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_BASE'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_BASE'</span>,
+          defaultValue: <span class="hl-string">'http://127.0.0.1:8080'</span>);
+  <span class="hl-keyword">final</span> projectId = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_PROJECT_ID'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_PROJECT_ID'</span>);
+  <span class="hl-keyword">final</span> apiKey = <span class="hl-type">Platform</span><span class="hl-property">.environment</span>[<span class="hl-string">'VELLUM_API_KEY'</span>] ??
+      <span class="hl-keyword">const</span> <span class="hl-type">String</span><span class="hl-property">.fromEnvironment</span>(<span class="hl-string">'VELLUM_API_KEY'</span>);
+
+  <span class="hl-keyword">final</span> client =
+      <span class="hl-fn">VellumClient</span>(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+  <span class="hl-keyword">final</span> prefix = <span class="hl-string">'ex_flutter_indexes_${DateTime.now().microsecondsSinceEpoch}'</span>;
+  <span class="hl-keyword">final</span> col = client<span class="hl-property">.collection</span>(prefix);
+
+  <span class="hl-type">String</span>? createdIndexId;
+  <span class="hl-keyword">try</span> {
+    <span class="hl-fn">print</span>(<span class="hl-string">'=== Composite Indexes (Flutter) ==='</span>);
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> row <span class="hl-keyword">in</span> [
+      {<span class="hl-string">'id'</span>: <span class="hl-string">'p1'</span>, <span class="hl-string">'team'</span>: <span class="hl-string">'red'</span>, <span class="hl-string">'score'</span>: <span class="hl-number">10</span>},
+      {<span class="hl-string">'id'</span>: <span class="hl-string">'p2'</span>, <span class="hl-string">'team'</span>: <span class="hl-string">'red'</span>, <span class="hl-string">'score'</span>: <span class="hl-number">30</span>},
+      {<span class="hl-string">'id'</span>: <span class="hl-string">'p3'</span>, <span class="hl-string">'team'</span>: <span class="hl-string">'blue'</span>, <span class="hl-string">'score'</span>: <span class="hl-number">20</span>},
+    ]) {
+      <span class="hl-keyword">await</span> col<span class="hl-property">.doc</span>(row[<span class="hl-string">'id'</span>] <span class="hl-keyword">as</span> <span class="hl-type">String</span>)<span class="hl-property">.set</span>(row);
+    }
+
+    <span class="hl-keyword">final</span> created = <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'POST'</span>, <span class="hl-string">'/indexes'</span>, body: {
+      <span class="hl-string">'collectionPath'</span>: prefix,
+      <span class="hl-string">'fields'</span>: [
+        {<span class="hl-string">'path'</span>: <span class="hl-string">'team'</span>, <span class="hl-string">'dir'</span>: <span class="hl-string">'asc'</span>},
+        {<span class="hl-string">'path'</span>: <span class="hl-string">'score'</span>, <span class="hl-string">'dir'</span>: <span class="hl-string">'asc'</span>},
+      ],
+    });
+    createdIndexId = created[<span class="hl-string">'id'</span>] <span class="hl-keyword">as</span> <span class="hl-type">String</span>?;
+    <span class="hl-fn">print</span>(<span class="hl-string">'create: idReturned=${createdIndexId != null}'</span>);
+
+    <span class="hl-keyword">final</span> listed = <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'GET'</span>, <span class="hl-string">'/indexes'</span>);
+    <span class="hl-keyword">final</span> indexes =
+        (listed[<span class="hl-string">'indexes'</span>] <span class="hl-keyword">as</span> <span class="hl-type">List</span>? ?? [])<span class="hl-property">.cast</span>&lt;<span class="hl-type">Map</span>&lt;<span class="hl-type">String</span>, dynamic&gt;&gt;();
+    <span class="hl-fn">print</span>(<span class="hl-string">'listed: count=${indexes.length}'</span>);
+
+    <span class="hl-keyword">final</span> rows = <span class="hl-keyword">await</span> col<span class="hl-property">.where</span>(<span class="hl-string">'team'</span>, <span class="hl-string">'=='</span>, <span class="hl-string">'red'</span>)<span class="hl-property">.orderBy</span>(<span class="hl-string">'score'</span>)<span class="hl-property">.get</span>();
+    <span class="hl-fn">print</span>(
+        <span class="hl-string">'query ids=${rows.docs.map((d) =&gt; d.id).toList()} indexUsed=${rows.meta['</span>indexUsed<span class="hl-string">']}'</span>);
+  } <span class="hl-keyword">finally</span> {
+    <span class="hl-keyword">if</span> (createdIndexId != <span class="hl-keyword">null</span>) {
+      <span class="hl-keyword">try</span> {
+        <span class="hl-keyword">await</span> client<span class="hl-property">.request</span>(<span class="hl-string">'DELETE'</span>, <span class="hl-string">'/indexes/$createdIndexId'</span>);
+      } <span class="hl-keyword">catch</span> (_) {}
+    }
+    <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> id <span class="hl-keyword">in</span> [<span class="hl-string">'p1'</span>, <span class="hl-string">'p2'</span>, <span class="hl-string">'p3'</span>]) {
+      <span class="hl-keyword">try</span> {
+        <span class="hl-keyword">await</span> col<span class="hl-property">.doc</span>(id)<span class="hl-property">.delete</span>();
+      } <span class="hl-keyword">catch</span> (_) {}
+    }
+    client<span class="hl-property">.dispose</span>();
+  }
+}</code></pre><div class="et-note">Reference only — not executed here (no Dart toolchain).</div>
+</div></div><div class="et-panel" data-example-panel="ts" role="tabpanel"><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">TS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Composite indexes — a leaderboard index over (team, score).
+ *
+ * What you'll build: a tenant-defined composite index that accelerates an
+ * ordered leaderboard query.
+ * Real-world scenario: ranking players by score within a team would otherwise
+ * need a custom index. Tenant indexes are rows in document_indexes (never DDL
+ * on the shared documents table), so creating one is safe in a shared cluster.
+ * A repeated definition returns 409 ALREADY_EXISTS and is explicitly tolerated.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.js&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;indexes&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> fields = [
+  { path: <span class="hl-string">&quot;team&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> },
+  { path: <span class="hl-string">&quot;score&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> },
+];
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Composite Indexes ===&quot;</span>);
+  <span class="hl-keyword">for</span> (<span class="hl-keyword">const</span> row <span class="hl-keyword">of</span> [
+    { id: <span class="hl-string">&quot;p1&quot;</span>, team: <span class="hl-string">&quot;red&quot;</span>, score: <span class="hl-number">10</span> },
+    { id: <span class="hl-string">&quot;p2&quot;</span>, team: <span class="hl-string">&quot;red&quot;</span>, score: <span class="hl-number">30</span> },
+    { id: <span class="hl-string">&quot;p3&quot;</span>, team: <span class="hl-string">&quot;blue&quot;</span>, score: <span class="hl-number">20</span> },
+  ]) {
+    <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.doc</span>(row<span class="hl-property">.id</span>)<span class="hl-property">.set</span>(row);
+  }
+
+  <span class="hl-keyword">const</span> created = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>&lt;{ id?: string }&gt;(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>, {
+    collectionPath: col,
+    fields,
+  });
+  <span class="hl-fn">check</span>(created<span class="hl-property">.status</span> === <span class="hl-number">201</span> || created<span class="hl-property">.status</span> === <span class="hl-number">409</span>, <span class="hl-string">&quot;index creation is 201 or duplicate 409&quot;</span>);
+  <span class="hl-keyword">const</span> alreadyExists = created<span class="hl-property">.status</span> === <span class="hl-number">409</span>;
+  h<span class="hl-property">.log</span>({ createStatus: created<span class="hl-property">.status</span>, outcome: alreadyExists ? <span class="hl-string">&quot;already exists&quot;</span> : <span class="hl-string">&quot;created&quot;</span> });
+
+  <span class="hl-keyword">const</span> listed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>&lt;{ indexes: <span class="hl-type">Array</span>&lt;{ collectionPath: string; id: string }&gt; }&gt;(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>);
+  <span class="hl-fn">check</span>(listed<span class="hl-property">.ok</span>, <span class="hl-string">&quot;index listing succeeded&quot;</span>);
+  <span class="hl-comment">// The server returns the real (unscrubbed) path, so compare against `col`.</span>
+  <span class="hl-keyword">const</span> found = listed<span class="hl-property">.body</span><span class="hl-property">.indexes</span><span class="hl-property">.find</span>((index) =&gt; index<span class="hl-property">.collectionPath</span> === col);
+  <span class="hl-fn">check</span>(<span class="hl-fn">Boolean</span>(found) || alreadyExists, <span class="hl-string">&quot;created index appears in the listing&quot;</span>);
+  h<span class="hl-property">.log</span>({ listed: listed<span class="hl-property">.body</span><span class="hl-property">.indexes</span><span class="hl-property">.length</span> &gt; <span class="hl-number">0</span>, foundInListing: <span class="hl-fn">Boolean</span>(found) });
+
+  <span class="hl-keyword">const</span> rows = <span class="hl-keyword">await</span> h<span class="hl-property">.sdk</span><span class="hl-property">.collection</span>(col)<span class="hl-property">.where</span>(<span class="hl-string">&quot;team&quot;</span>, <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;red&quot;</span>)<span class="hl-property">.orderBy</span>(<span class="hl-string">&quot;score&quot;</span>, <span class="hl-string">&quot;asc&quot;</span>)<span class="hl-property">.get</span>();
+  <span class="hl-fn">check</span>(rows<span class="hl-property">.docs</span><span class="hl-property">.length</span> === <span class="hl-number">2</span>, <span class="hl-string">&quot;indexed query returned both red-team rows&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    query: <span class="hl-string">&quot;team == red ORDER BY score ASC&quot;</span>,
+    ids: rows<span class="hl-property">.docs</span><span class="hl-property">.map</span>((doc) =&gt; doc<span class="hl-property">.id</span>),
+    indexUsed: (rows<span class="hl-property">.meta</span> <span class="hl-keyword">as</span> { indexUsed?: string } | <span class="hl-keyword">null</span>)?<span class="hl-property">.indexUsed</span>,
+  });
+
+  <span class="hl-keyword">if</span> (found) {
+    <span class="hl-keyword">const</span> removed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;DELETE&quot;</span>, <span class="hl-string">`/indexes/${found.id}`</span>);
+    <span class="hl-fn">check</span>(removed<span class="hl-property">.ok</span>, <span class="hl-string">&quot;index deletion succeeded&quot;</span>);
+    h<span class="hl-property">.log</span>({ deleted: <span class="hl-keyword">true</span> });
+  }
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Composite Indexes ===
+{&quot;createStatus&quot;:201,&quot;outcome&quot;:&quot;created&quot;}
+{&quot;listed&quot;:true,&quot;foundInListing&quot;:true}
+{&quot;query&quot;:&quot;team == red ORDER BY score ASC&quot;,&quot;ids&quot;:[&quot;p1&quot;,&quot;p2&quot;],&quot;indexUsed&quot;:&quot;idx_docs_data_gin_active&quot;}
+{&quot;deleted&quot;:true}
+[VELLUM Index Advisor] Slow/unindexed query detected on &quot;ex_indexes_mwo4fgll24jw&quot;.
+Reason: Composite index needed for equality filter on [team] + sort on [score ASC, documentId ASC]
+Create this index in 1 click: http://localhost:3000/orgs/d29c31e0-e93f-402c-8499-74909e9bfb0a/projects/1382468e-5dc0-44a8-9b68-5427a5b6ea5c/envs/development/indexes?suggest=eyJvcmdJZCI6ImQyOWMzMWUwLWU5M2YtNDAyYy04NDk5LTc0OTA5ZTliZmIwYSIsInByb2plY3RJZCI6IjEzODI0NjhlLTVkYzAtNDRhOC05YjY4LTU0MjdhNWI2ZWE1YyIsImVudmlyb25tZW50SWQiOiIxYWMyN2Q4OS0zNWJhLTQwMmUtODc0Ny0zMjBhMTA5MjY0M2QiLCJlbnYiOiJkZXZlbG9wbWVudCIsImNvbGxlY3Rpb25QYXRoIjoiZXhfaW5kZXhlc19td280ZmdsbDI0anciLCJmaWVsZHMiOlt7InBhdGgiOiJ0ZWFtIiwiZGlyIjoiYXNjIn0seyJwYXRoIjoic2NvcmUiLCJkaXIiOiJhc2MifSx7InBhdGgiOiJkb2N1bWVudElkIiwiZGlyIjoiYXNjIn1dLCJmaW5nZXJwcmludCI6ImViM2Q3NGNjYzNjYWQyNjQ1OGE4NjA0YjM5ODA1YzY1Y2NmZjJmMDRmM2U0NjNjZGU4MGFlYzBlMTI4NjdmMTgiLCJyZWFzb24iOiJDb21wb3NpdGUgaW5kZXggbmVlZGVkIGZvciBlcXVhbGl0eSBmaWx0ZXIgb24gW3RlYW1dICsgc29ydCBvbiBbc2NvcmUgQVNDLCBkb2N1bWVudElkIEFTQ10ifQ</code></pre>
+</div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
+  <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-comment">/**
+ * Composite indexes (REST) — a leaderboard index over (team, score).
+ *
+ * What you'll build: a tenant composite index created as a row via the REST
+ * API, then an ordered query that uses it, then cleanup.
+ * Real-world scenario: ranking players by team and score needs a composite
+ * index, but no CREATE INDEX on the shared documents table is ever issued.
+ */</span>
+<span class="hl-keyword">import</span> { harness, check } <span class="hl-keyword">from</span> <span class="hl-string">&quot;./_harness.mjs&quot;</span>;
+
+<span class="hl-keyword">const</span> h = <span class="hl-keyword">await</span> <span class="hl-fn">harness</span>(<span class="hl-string">&quot;indexes&quot;</span>);
+<span class="hl-keyword">const</span> col = h<span class="hl-property">.prefix</span>;
+<span class="hl-keyword">const</span> fields = [
+  { path: <span class="hl-string">&quot;team&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> },
+  { path: <span class="hl-string">&quot;score&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> },
+];
+
+<span class="hl-keyword">try</span> {
+  h<span class="hl-property">.log</span>(<span class="hl-string">&quot;=== Composite Indexes ===&quot;</span>);
+  <span class="hl-keyword">for</span> (<span class="hl-keyword">const</span> row <span class="hl-keyword">of</span> [
+    { id: <span class="hl-string">&quot;p1&quot;</span>, team: <span class="hl-string">&quot;red&quot;</span>, score: <span class="hl-number">10</span> },
+    { id: <span class="hl-string">&quot;p2&quot;</span>, team: <span class="hl-string">&quot;red&quot;</span>, score: <span class="hl-number">30</span> },
+    { id: <span class="hl-string">&quot;p3&quot;</span>, team: <span class="hl-string">&quot;blue&quot;</span>, score: <span class="hl-number">20</span> },
+  ]) {
+    <span class="hl-keyword">const</span> res = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">`/documents/${col}/${row.id}`</span>, { data: row });
+    <span class="hl-fn">check</span>(res<span class="hl-property">.status</span> === <span class="hl-number">201</span>, <span class="hl-string">`seed player ${row.id}`</span>);
+  }
+
+  <span class="hl-keyword">const</span> created = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>, { collectionPath: col, fields });
+  <span class="hl-fn">check</span>(created<span class="hl-property">.status</span> === <span class="hl-number">201</span> || created<span class="hl-property">.status</span> === <span class="hl-number">409</span>, <span class="hl-string">&quot;index creation is 201 or duplicate 409&quot;</span>);
+  <span class="hl-keyword">const</span> alreadyExists = created<span class="hl-property">.status</span> === <span class="hl-number">409</span>;
+  h<span class="hl-property">.log</span>({ createStatus: created<span class="hl-property">.status</span>, outcome: alreadyExists ? <span class="hl-string">&quot;already exists&quot;</span> : <span class="hl-string">&quot;created&quot;</span> });
+
+  <span class="hl-keyword">const</span> listed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;GET&quot;</span>, <span class="hl-string">&quot;/indexes&quot;</span>);
+  <span class="hl-fn">check</span>(listed<span class="hl-property">.ok</span>, <span class="hl-string">&quot;index listing succeeded&quot;</span>);
+  <span class="hl-keyword">const</span> found = listed<span class="hl-property">.body</span><span class="hl-property">.indexes</span><span class="hl-property">.find</span>((index) =&gt; index<span class="hl-property">.collectionPath</span> === col);
+  <span class="hl-fn">check</span>(<span class="hl-fn">Boolean</span>(found) || alreadyExists, <span class="hl-string">&quot;created index appears in the listing&quot;</span>);
+  h<span class="hl-property">.log</span>({ listed: listed<span class="hl-property">.body</span><span class="hl-property">.indexes</span><span class="hl-property">.length</span> &gt; <span class="hl-number">0</span>, foundInListing: <span class="hl-fn">Boolean</span>(found) });
+
+  <span class="hl-keyword">const</span> rows = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;POST&quot;</span>, <span class="hl-string">&quot;/query&quot;</span>, {
+    collectionPath: col,
+    where: [{ field: <span class="hl-string">&quot;team&quot;</span>, op: <span class="hl-string">&quot;==&quot;</span>, value: <span class="hl-string">&quot;red&quot;</span> }],
+    orderBy: [{ field: <span class="hl-string">&quot;score&quot;</span>, dir: <span class="hl-string">&quot;asc&quot;</span> }],
+    limit: <span class="hl-number">50</span>,
+    select: <span class="hl-keyword">null</span>,
+    startAt: <span class="hl-keyword">null</span>,
+    startAfter: <span class="hl-keyword">null</span>,
+  });
+  <span class="hl-keyword">const</span> ids = rows<span class="hl-property">.body</span><span class="hl-property">.documents</span><span class="hl-property">.map</span>((d) =&gt; d<span class="hl-property">.documentId</span>);
+  <span class="hl-fn">check</span>(rows<span class="hl-property">.ok</span> &amp;&amp; ids<span class="hl-property">.length</span> === <span class="hl-number">2</span>, <span class="hl-string">&quot;indexed query returned both red-team rows&quot;</span>);
+  h<span class="hl-property">.log</span>({
+    query: <span class="hl-string">&quot;team == red ORDER BY score ASC&quot;</span>,
+    ids,
+    indexUsed: rows<span class="hl-property">.body</span><span class="hl-property">.meta</span>?<span class="hl-property">.indexUsed</span>,
+  });
+
+  <span class="hl-keyword">if</span> (found) {
+    <span class="hl-keyword">const</span> removed = <span class="hl-keyword">await</span> h<span class="hl-property">.api</span><span class="hl-property">.data</span>(<span class="hl-string">&quot;DELETE&quot;</span>, <span class="hl-string">`/indexes/${found.id}`</span>);
+    <span class="hl-fn">check</span>(removed<span class="hl-property">.ok</span>, <span class="hl-string">&quot;index deletion succeeded&quot;</span>);
+    h<span class="hl-property">.log</span>({ deleted: <span class="hl-keyword">true</span> });
+  }
+} <span class="hl-keyword">finally</span> {
+  <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
+}</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
+       <pre class="cb-out"><code class="hl-text">=== Composite Indexes ===
+{&quot;createStatus&quot;:201,&quot;outcome&quot;:&quot;created&quot;}
+{&quot;listed&quot;:true,&quot;foundInListing&quot;:true}
+{&quot;query&quot;:&quot;team == red ORDER BY score ASC&quot;,&quot;ids&quot;:[&quot;p1&quot;,&quot;p2&quot;],&quot;indexUsed&quot;:&quot;idx_docs_data_gin_active&quot;}
+{&quot;deleted&quot;:true}</code></pre>
+</div></div></div>
+</div>
+<h2 id="what-to-read-next">What to read next<a class="anchor" href="#what-to-read-next" aria-label="Link to section">#</a></h2>
+<ul><li><a href="query.html">Query</a> — which query shapes require a composite index.</li><li><a href="pagination.html">Pagination</a> — how indexed keyset cursors carry the signed sort key.</li><li><a href="production-checklist.html">Production checklist</a> — index health in readiness probes and admin UI.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#scenario" class="toc-link toc-l2">Scenario</a><a href="#how-tenant-indexes-work" class="toc-link toc-l2">How tenant indexes work</a><a href="#creation-and-status" class="toc-link toc-l2">Creation and status</a><a href="#duplicate-creation-409" class="toc-link toc-l2">Duplicate creation (409)</a><a href="#when-an-index-is-needed" class="toc-link toc-l2">When an index is needed</a><a href="#common-pitfalls" class="toc-link toc-l2">Common pitfalls</a><a href="#verified-example" class="toc-link toc-l2">Verified example</a><a href="#what-to-read-next" class="toc-link toc-l2">What to read next</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="assets/docs.js" defer></script>
+</body>
+</html>
