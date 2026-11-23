@@ -159,3 +159,13 @@ describe("SDK audit regressions", () => {
     } finally { vi.unstubAllGlobals(); }
   });
 });
+
+describe("document path validation", () => {
+  it("rejects a collection path used as a document path with a clear error", () => {
+    const db = createClient({ projectId: "p", apiKey: "sk_test", endpoint: "http://127.0.0.1:1" });
+    expect(() => db.doc("onlycollection")).toThrow(/even number of segments/);
+    expect(() => db.doc("a/b/c")).toThrow(/even number of segments/);
+    expect(() => db.doc("a/b")).not.toThrow();
+    db.dispose?.();
+  });
+});

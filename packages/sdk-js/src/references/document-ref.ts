@@ -65,9 +65,14 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
     converter: DocDataConverter<T> | null = null
   ) {
     encodeResourcePath(path, "document path");
+    const parts = path.split("/");
+    if (parts.length < 2 || parts.length % 2 !== 0) {
+      throw new Error(
+        `@vellumdb/sdk-js: invalid document path "${path}" (a document path needs an even number of segments: collection/docId[/subcollection/docId...])`
+      );
+    }
     this.ctx = ctx;
     this.path = path;
-    const parts = path.split("/");
     this.id = parts[parts.length - 1] ?? "";
     this.converter = converter;
     Object.freeze(this);
