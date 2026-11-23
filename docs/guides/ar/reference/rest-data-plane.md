@@ -143,29 +143,28 @@ description: عمليات مستندات بمفتاح API فقط: CRUD، الا�
 
 المجموعات صفوف دائمة في الجدول `data_db.project_collections` مع سياسات RLS مفعّلة وقسرية (`ENABLE` + `FORCE`)، وليست عرضاً عابراً ناتجاً عن `DISTINCT`. المجموعة موجودة حتى وهي خالية من المستندات، وإعداداتها تبقى بعد حذف المستندات وبعد تحديث الصفحة (F5) أو إعادة تشغيل الخادم. بيانات المجموعات القديمة نُقلت من `documents.collection_path` عند تشغيل الترحيل `0009_project_collections.sql`.
 
-يوجد **سطحان متوازيان بعقد إرسال متطابق**:
+مستوى البيانات العام هو السطح الوحيد الموثّق:
 
 | السطح | المسار الأساسي | المصادقة |
 | :--- | :--- | :--- |
 | مستوى البيانات العام | `/v1/projects/:projectId/collections…` | مفتاح API في الرأس `x-vellum-api-key` (ويُقبل `x-project-key` القديم) |
-| Console (لوحة العميل) | `/v1/console/projects/:projectId/collections…` | رمز جلسة مجال `CUSTOMER_CONSOLE` |
 
-كلا السطحين مقيدان بزوجي `(projectId)`، وكل تعديل يُسجَّل في سجل التدقيق (`collection.create|update|clear|delete`). عمليات التعديل على السطح العام تتطلّب **مفتاح خادم `sk_`**؛ مفاتيح `pk_` العامة تسمح بالقراءات الثلاث فقط (سرد المجموعات، قراءة واحدة، التصدير). تعديلات Console تُصرَّح بها الجلسة وتُسجَّل عبر دالة `audit()`. أي مفتاح مفقود أو من نوع خاطئ يُنتج `403 PERMISSION_DENIED`.
+كل شيء مقيد بزوجي `(projectId)`، وكل تعديل يُسجَّل في سجل التدقيق (`collection.create|update|clear|delete`). عمليات التعديل تتطلّب **مفتاح خادم `sk_`**؛ مفاتيح `pk_` العامة تسمح بالقراءات الثلاث فقط (سرد المجموعات، قراءة واحدة، التصدير). أي مفتاح مفقود أو من نوع خاطئ يُنتج `403 PERMISSION_DENIED`.
 
 ### نقاط النهاية الثمانية
 
-يقبل كلا المسارين الأساسيين اللواحق نفسها؛ الحرف «م» يشير إلى التعديلات التي تحتاج `sk_` على السطح العام.
+يقبل المسار الأساسي اللواحق التالية؛ الحرف «م» يشير إلى التعديلات التي تحتاج `sk_`.
 
-| الطريقة | اللاحقة | المصادقة (عام / Console) | الاستجابة |
+| الطريقة | اللاحقة | المصادقة | الاستجابة |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/collections` | `pk_` أو `sk_` / جلسة | `{ collections: CollectionWithStats[], nextCursor: string \| null }` |
-| `POST` | `/collections` | `sk_` (م) / جلسة | `201CollectionRecord` |
-| `GET` | `/collections/:name` | `pk_` أو `sk_` / جلسة | `CollectionWithStats \| null` (المفقودة → `null` في الحزم البرمجية) |
-| `PATCH` | `/collections/:name` | `sk_` (م) / جلسة | `CollectionWithStats` |
-| `POST` | `/collections/:name/clear` | `sk_` (م) / جلسة | `{ deletedCount, freedBytes }` |
-| `DELETE` | `/collections/:name` | `sk_` (م) / جلسة | `{ deletedCollection, deletedDocuments, freedBytes }` |
-| `POST` | `/collections/:name/import` | `sk_` (م) / جلسة | `{ importedCount, skippedCount, errors: [{ index, message }] }` |
-| `GET` | `/collections/:name/export` | `pk_` أو `sk_` / جلسة | `{ documents: ExportedDocument[], nextCursor: string \| null }` |
+| `GET` | `/collections` | `pk_` أو `sk_` | `{ collections: CollectionWithStats[], nextCursor: string \| null }` |
+| `POST` | `/collections` | `sk_` (م) | `201CollectionRecord` |
+| `GET` | `/collections/:name` | `pk_` أو `sk_` | `CollectionWithStats \| null` (المفقودة → `null` في الحزم البرمجية) |
+| `PATCH` | `/collections/:name` | `sk_` (م) | `CollectionWithStats` |
+| `POST` | `/collections/:name/clear` | `sk_` (م) | `{ deletedCount, freedBytes }` |
+| `DELETE` | `/collections/:name` | `sk_` (م) | `{ deletedCollection, deletedDocuments, freedBytes }` |
+| `POST` | `/collections/:name/import` | `sk_` (م) | `{ importedCount, skippedCount, errors: [{ index, message }] }` |
+| `GET` | `/collections/:name/export` | `pk_` أو `sk_` | `{ documents: ExportedDocument[], nextCursor: string \| null }` |
 
 يمدّ `CollectionWithStats` صف السجل بإحصاءات حيّة: `documentCount` و`storageBytes` و`lastDocumentAt`.
 
@@ -174,7 +173,7 @@ description: عمليات مستندات بمفتاح API فقط: CRUD، الا�
 يقبل `GET …/collections` المعاملات `search` و`limit` و`cursor`:
 
 - `search` — تطابق جزئي اختياري على اسم المجموعة (بحد أقصى 256 حرفاً).
-- `limit` — عدد صحيح من 1 إلى 500، **الافتراضي 50**. استخدم `limit=500` لرؤية كل المجموعات عند وجود أكثر من 50 مجموعة؛ وتابع الصفحات التالية عبر `nextCursor`، ثم مرّره في `cursor=`. لوحة مستكشف البيانات ترسل دائماً `limit=500`.
+- `limit` — عدد صحيح من 1 إلى 500، **الافتراضي 50**. استخدم `limit=500` لرؤية كل المجموعات عند وجود أكثر من 50 مجموعة؛ وتابع الصفحات التالية عبر `nextCursor`، ثم مرّره في `cursor=`.
 - `cursor` — مؤشر مواربة معتم، يُعاد كـ `nextCursor`؛ لا تُنشئه أو تعدّله يدوياً.
 
 ### أسماء المجموعات وإعداداتها
@@ -200,7 +199,7 @@ description: عمليات مستندات بمفتاح API فقط: CRUD، الا�
 
 ### صيغ الاستيراد والتصدير
 
-يقبل `POST …/:name/import` **إما مصفوفة JSON تضم 500 كائن كحد أقصى**، كل منها `{ "id"?: string, "data": { … } }، أو غلاف الحزم البرمجية ولوحة التحكم `{ "documents": […], "mode": "upsert" | "insert_only" }`. يصبح `id` معرّف المستند، وإذا غاب يُنشئ الخادم UUID. العناصر غير الصالحة تُتخطى بدلاً من إفشال الدفعة، ويُبلَّغ عن كل فشل بفهرسه ابتداءً من صفر برسالة آمنة (بلا رؤوس أو مفاتيح أو أسرار):
+يقبل `POST …/:name/import` **إما مصفوفة JSON تضم 500 كائن كحد أقصى**، كل منها `{ "id"?: string, "data": { … } }، أو غلاف الحزم البرمجية `{ "documents": […], "mode": "upsert" | "insert_only" }`. يصبح `id` معرّف المستند، وإذا غاب يُنشئ الخادم UUID. العناصر غير الصالحة تُتخطى بدلاً من إفشال الدفعة، ويُبلَّغ عن كل فشل بفهرسه ابتداءً من صفر برسالة آمنة (بلا رؤوس أو مفاتيح أو أسرار):
 
 ```json
 [
@@ -219,7 +218,6 @@ description: عمليات مستندات بمفتاح API فقط: CRUD، الا�
 
 ## مرجع سريع
 
-- ما يقابلها في الكونسول (المصادقة بالجلسة): [مستوى التحكم والكونسول عبر REST](./rest-control-plane.md)
 - الاشتراك/اللقطات/الاستئناف عبر WebSocket: [بروتوكول الوقت الفعلي](./realtime-protocol.md)
 - الرموز والحالات المعيارية: [الأخطاء](./errors.md)
 - القيم الموسومة وتحويلات الحقول وقواعد المسارات: [تنسيق الإرسال](./wire-format.md)

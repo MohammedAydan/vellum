@@ -12,7 +12,7 @@ VELLUM is a multi-tenant document database built entirely on PostgreSQL/JSONB. Y
 There is **one stateful runtime dependency: PostgreSQL**. No Redis, no message broker, and no separate cache service. Realtime is built on PostgreSQL `LISTEN/NOTIFY` plus a durable outbox; caching and rate limits use short-lived in-process state with PostgreSQL backing where durability matters; transactions are native PostgreSQL transactions.
 
 :::note
-VELLUM's public document API is scoped by API key with an optional EdDSA end-user bearer. The dashboards use separate realm-bound Console/Admin session tokens (`/v1/console/...`, `/v1/admin/...`). Three isolated realms share only crypto primitives — see [End-User Authentication & the Three Realms](./end-user-auth.md).
+VELLUM's public document API is scoped by API key with an optional EdDSA end-user bearer. End-user credentials are fully isolated from every other surface and share only crypto primitives — see [End-User Authentication](./end-user-auth.md).
 :::
 
 ## Scenario
@@ -85,6 +85,6 @@ The documentation **never executes code in the browser**. Example blocks are ine
 ## What to read next
 
 - [Quickstart](./quickstart.md) — install the SDK and write your first document.
-- [Authentication](./authentication.md) — `pk_` / `sk_` keys and console sessions.
+- [Authentication](./authentication.md) — `pk_` / `sk_` keys and end-user tokens.
 - [End-user auth](./end-user-auth.md) — three realms, refresh rotation, projection, WS auth, rate limits.
 - [REST API](./rest-api.md) — endpoint families and the full reference.

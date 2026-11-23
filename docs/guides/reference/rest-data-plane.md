@@ -143,29 +143,28 @@ Endpoints require `indexes:manage` scope, which only server (`sk_`) keys carry. 
 
 Collections are durable registry rows in `data_db.project_collections` (RLS `ENABLE` + `FORCE`), not an emergent `DISTINCT` view. A collection exists even when it holds zero documents, and its settings survive document deletes, F5 and process restarts. Existing legacy data was backfilled from `documents.collection_path` when migration `0009_project_collections.sql` ran.
 
-There are **two parallel surfaces with an identical wire contract**:
+The public data plane is the only documented surface:
 
 | Surface | Base path | Authentication |
 | :--- | :--- | :--- |
 | Public data plane | `/v1/projects/:projectId/collections…` | API key in `x-vellum-api-key` (legacy `x-project-key` accepted) |
-| Console (Dashboard) | `/v1/console/projects/:projectId/collections…` | `CUSTOMER_CONSOLE` realm session token |
 
-Both are scoped by `(projectId)` and every mutation is audited (`collection.create|update|clear|delete`). The public mutation routes additionally require a **server (`sk_`) key**; public (`pk_`) keys may only perform the three reads (`GET` list, `GET` one, `GET` export). Console writes are authorized by the session and audited with the console `audit()` helper. A missing/wrong key type returns `403 PERMISSION_DENIED`.
+Everything is scoped by `(projectId)` and every mutation is audited (`collection.create|update|clear|delete`). The mutation routes require a **server (`sk_`) key**; public (`pk_`) keys may only perform the three reads (`GET` list, `GET` one, `GET` export). A missing/wrong key type returns `403 PERMISSION_DENIED`.
 
 ### The eight endpoints
 
-Both base paths below accept the same suffixes; `M` marks mutations that need `sk_` on the public surface.
+The base path below accepts the following suffixes; `M` marks mutations that need `sk_`.
 
-| Method | Suffix | Auth (public / console) | Response |
+| Method | Suffix | Auth | Response |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/collections` | `pk_` or `sk_` / session | `{ collections: CollectionWithStats[], nextCursor: string \| null }` |
-| `POST` | `/collections` | `sk_` (M) / session | `201CollectionRecord` |
-| `GET` | `/collections/:name` | `pk_` or `sk_` / session | `CollectionWithStats \| null` (404 → `null` in the SDKs) |
-| `PATCH` | `/collections/:name` | `sk_` (M) / session | `CollectionWithStats` |
-| `POST` | `/collections/:name/clear` | `sk_` (M) / session | `{ deletedCount, freedBytes }` |
-| `DELETE` | `/collections/:name` | `sk_` (M) / session | `{ deletedCollection, deletedDocuments, freedBytes }` |
-| `POST` | `/collections/:name/import` | `sk_` (M) / session | `{ importedCount, skippedCount, errors: [{ index, message }] }` |
-| `GET` | `/collections/:name/export` | `pk_` or `sk_` / session | `{ documents: ExportedDocument[], nextCursor: string \| null }` |
+| `GET` | `/collections` | `pk_` or `sk_` | `{ collections: CollectionWithStats[], nextCursor: string \| null }` |
+| `POST` | `/collections` | `sk_` (M) | `201CollectionRecord` |
+| `GET` | `/collections/:name` | `pk_` or `sk_` | `CollectionWithStats \| null` (404 → `null` in the SDKs) |
+| `PATCH` | `/collections/:name` | `sk_` (M) | `CollectionWithStats` |
+| `POST` | `/collections/:name/clear` | `sk_` (M) | `{ deletedCount, freedBytes }` |
+| `DELETE` | `/collections/:name` | `sk_` (M) | `{ deletedCollection, deletedDocuments, freedBytes }` |
+| `POST` | `/collections/:name/import` | `sk_` (M) | `{ importedCount, skippedCount, errors: [{ index, message }] }` |
+| `GET` | `/collections/:name/export` | `pk_` or `sk_` | `{ documents: ExportedDocument[], nextCursor: string \| null }` |
 
 `CollectionWithStats` extends the registry row with `documentCount`, `storageBytes` and `lastDocumentAt`:
 
@@ -193,7 +192,7 @@ Both base paths below accept the same suffixes; `M` marks mutations that need `s
 `GET …/collections` accepts `search`, `limit` and `cursor`:
 
 - `search` — optional substring match on the collection name (max 256 characters).
-- `limit` — integer 1–500, **default 50**. Set `limit=500` to see all collections when more than 50 exist; follow `nextCursor` via `cursor=` for further pages. The Dashboard Data Explorer always sends `limit=500`.
+- `limit` — integer 1–500, **default 50**. Set `limit=500` to see all collections when more than 50 exist; follow `nextCursor` via `cursor=` for further pages.
 - `cursor` — opaque continuation token returned as `nextCursor`; never construct or edit it.
 
 ### Collection names and settings
@@ -229,7 +228,7 @@ Both operations meter the freed storage (`recordDeletes`) and append a hash-chai
 
 ### Import and export formats
 
-`POST …/:name/import` takes **either** a JSON array of at most 500 objects, each `{ "id"?: string, "data": { … } }`, **or** the SDK/Dashboard envelope `{ "documents": […], "mode": "upsert" | "insert_only" }`. `id` becomes the document id; when omitted the server generates a UUID. Invalid entries are skipped rather than aborting the batch, and each failure is reported by zero-based index with a safe message (no headers, keys or secrets):
+`POST …/:name/import` takes **either** a JSON array of at most 500 objects, each `{ "id"?: string, "data": { … } }`, **or** the SDK envelope `{ "documents": […], "mode": "upsert" | "insert_only" }`. `id` becomes the document id; when omitted the server generates a UUID. Invalid entries are skipped rather than aborting the batch, and each failure is reported by zero-based index with a safe message (no headers, keys or secrets):
 
 ```json
 [
@@ -264,7 +263,6 @@ The official SDKs wrap these calls as `importDocuments(collection, docs, { mode 
 
 ## Quick cross-reference
 
-- Console equivalents (session-authenticated): [Control Plane & Console REST](./rest-control-plane.md)
 - WebSocket subscribe/snapshots/resume: [Realtime Protocol](./realtime-protocol.md)
 - Canonical codes and statuses: [Errors](./errors.md)
 - Tagged values, field transforms, path grammar: [Wire Format](./wire-format.md)

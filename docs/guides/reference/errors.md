@@ -89,6 +89,6 @@ Full-jitter backoff used by both SDKs for reconnects and OCC retries: `sleep = r
 
 ## Quick cross-reference
 
-- Endpoint-specific error tables: [Control Plane & Console REST](./rest-control-plane.md), [REST Data Plane](./rest-data-plane.md)
+- Endpoint-specific error tables: [REST Data Plane](./rest-data-plane.md)
 - WebSocket error frames: [Realtime Protocol](./realtime-protocol.md)
 - Limit constants and tagged-value validation: [Wire Format](./wire-format.md)

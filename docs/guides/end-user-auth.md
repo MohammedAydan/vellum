@@ -1,22 +1,20 @@
 ---
-title: End-User Authentication & the Three Realms
+title: End-User Authentication
 order: 4
 group: Authentication
-description: Three isolated auth realms, EdDSA-only end-user tokens, refresh rotation with a 15 s grace window, profile projection, REST surfaces, WS auth and rate limits.
+description: EdDSA-only end-user tokens, refresh rotation with a 15 s grace window, profile projection, REST surfaces, WS auth and rate limits.
 ---
 
-# End-User Authentication & the Three Realms
+# End-User Authentication
 
-VELLUM authenticates three **isolated realms**. They share only stateless crypto primitives from `@vellum/auth` (scrypt, AES-256-GCM, SHA-256, TOTP, token generators, rotation math). Storage, signing secrets, JWT `typ`/`iss`/`aud`, claims, session services and middleware are 100% separate — a token from one realm is rejected by the other two.
+Project end-user tokens are fully isolated from every other credential. The token layer shares only stateless crypto primitives from `@vellum/auth` (scrypt, AES-256-GCM, SHA-256, TOTP, token generators, rotation math) with other surfaces; storage, signing keys, JWT `typ`/`iss`/`aud`, claims, session services and middleware are 100% separate, so a token from another surface is always rejected here.
 
-| Realm | Sessions | Secret | Algorithm | `typ` | `iss` | `aud` |
+| Surface | Sessions | Secret | Algorithm | `typ` | `iss` | `aud` |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `super_admin` | `control_db.control_plane_refresh_sessions` | `SUPER_ADMIN_JWT_SECRET` | HS256 | `vellum+superadmin+jwt` | `vellum:control-plane:super-admin` | `vellum-super-admin` |
-| `customer_console` | `control_db.control_plane_refresh_sessions` | `CONSOLE_JWT_SECRET` | HS256 | `vellum+console+jwt` | `vellum:control-plane:console` | `vellum-customer-console` |
-| `project_end_user` | `data_db.project_auth_*` (FORCE RLS) | project Ed25519 key | **EdDSA** | `vellum+enduser+jwt` | `https://api.vellum.dev/v1/projects/<projectId>/auth` | `<projectId>` |
+| project end users | `data_db.project_auth_*` (FORCE RLS) | project Ed25519 key | **EdDSA** | `vellum+enduser+jwt` | `https://api.vellum.dev/v1/projects/<projectId>/auth` | `<projectId>` |
 
 :::important No HS256 fallback
-End-user tokens are verified **EdDSA-only** on both HTTP and WebSocket, against the project's Ed25519 public key. A console/admin HS256 token — or any raw HS256 token — is rejected on the document plane even with a valid project API key.
+End-user tokens are verified **EdDSA-only** on both HTTP and WebSocket, against the project's Ed25519 public key. Any HS256 token is rejected on the document plane even with a valid project API key.
 :::
 
 ## End-user tokens and JWKS
@@ -33,14 +31,12 @@ Both client SDKs pre-flight refresh 45 s before `exp`, deduplicate with a single
 
 ## Automatic user projection
 
-With `enable_user_projection` on (default), auth writes `users/{uid}` via `DocumentEngine.setDocument` with `system_bypass` (`bypassRules: true`) and `merge: true`. The document is re-synced after sign-up, `updateProfile`, email-verification confirmation, and customer-admin patch / claims grants — all live-verified.
+With `enable_user_projection` on (default), auth writes `users/{uid}` via `DocumentEngine.setDocument` with `system_bypass` (`bypassRules: true`) and `merge: true`. The document is re-synced after sign-up, `updateProfile`, email-verification confirmation, and claims changes — all live-verified.
 
 ## REST surfaces
 
 - **End-user** (`/v1/projects/:p/auth`): `sign-up/email`, `sign-in/email`, `sign-in/anonymous`, `sign-in/provider`, `token/refresh`, `sign-out`, `GET|PATCH /user`, `password/reset`, `password/confirm`, `email/verify/request`, `email/verify/confirm`, `mfa/enroll`, `mfa/verify`, `mfa/challenge`, `/.well-known/jwks.json`.
-- **Customer admin** (`.../auth/admin`): user directory/CRUD, `PUT /users/:uid/claims`, revoke, import, `GET|PATCH /config`.
-- **Super admin** (`/v1/admin/auth`): `overview`, `projects`, control PATCH, `rotate-signing-key`, `GET|PATCH /settings`, and the refresh endpoint `POST /session/refresh`.
-- **Console refresh** `POST /v1/console/auth/refresh` and **super-admin refresh** `POST /v1/admin/auth/session/refresh` accept a body token or the HttpOnly `vellum_refresh_token` cookie and reject cross-realm tokens.
+- **User management** (`.../auth/admin`, server key): user directory/CRUD, `PUT /users/:uid/claims`, revoke, import, `GET|PATCH /config`.
 
 See the [full REST reference](../../docs/07-end-user-auth.md).
 
