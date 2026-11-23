@@ -1,0 +1,41 @@
+{
+  "name": "@vellum/realtime",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./pubsub": {
+      "types": "./dist/pg-notify-pubsub.d.ts",
+      "import": "./dist/pg-notify-pubsub.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run",
+    "test:security": "vitest run"
+  },
+  "dependencies": {
+    "@vellum/core": "workspace:*",
+    "@vellum/auth": "workspace:*",
+    "@vellum/api-contract": "workspace:*",
+    "@vellum/authorization": "workspace:*",
+    "@vellum/query-engine": "workspace:*",
+    "@vellum/storage": "workspace:*",
+    "pg": "^8.13.3",
+    "@vellum/document-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.11",
+    "dotenv": "^18.0.10"
+  }
+}
