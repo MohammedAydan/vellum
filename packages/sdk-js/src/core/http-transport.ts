@@ -10,6 +10,7 @@
  * - Secret redaction (`private readonly` API key + safe `toJSON()`/`toString()`)
  */
 
+import { normalizeEndpoint, validateProjectConfig } from "./config.js";
 import type { IndexSuggestionEvent } from "../types.js";
 import { computeReconnectBackoffMs, createAbortError, parseRetryAfterMs, sleepWithSignal } from "./backoff.js";
 import { encodePathSegment, safeJsonParse, sanitizeAndClone } from "./safe-json.js";
@@ -132,9 +133,10 @@ export class HttpTransport {
   private readonly seenIndexFingerprints = new Set<string>();
 
   public constructor(options: HttpTransportOptions) {
+    validateProjectConfig(options.projectId, options.apiKey);
     this.projectId = options.projectId;
     this.apiKey = options.apiKey;
-    this.endpoint = (options.endpoint ?? "http://localhost:8080").replace(/\/$/, "");
+    this.endpoint = normalizeEndpoint(options.endpoint);
     this.baseUrl = `${this.endpoint}/v1/projects/${encodePathSegment(options.projectId, "projectId")}`;
     this.customFetch = options.customFetch ?? globalThis.fetch;
 
@@ -145,7 +147,7 @@ export class HttpTransport {
 
     this.effectiveTimeoutMs = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 0;
     this.effectiveMaxRetries =
-      typeof maxRetries === "number" && maxRetries >= 0 ? Math.floor(maxRetries) : DEFAULT_MAX_RETRIES;
+      typeof maxRetries === "number" && Number.isFinite(maxRetries) && maxRetries >= 0 ? Math.floor(maxRetries) : DEFAULT_MAX_RETRIES;
     this.effectiveRetryBaseMs =
       typeof retryBaseDelayMs === "number" && retryBaseDelayMs > 0 ? retryBaseDelayMs : DEFAULT_RETRY_BASE_MS;
     this.effectiveRetryMaxMs =
@@ -328,7 +330,7 @@ export class HttpTransport {
       // Canonical alias plus the legacy header; both are always sent.
       "x-vellum-api-key": this.apiKey,
       "x-project-key": this.apiKey,
-      "content-type": "application/json",
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
       ...extraHeaders,
     };
 

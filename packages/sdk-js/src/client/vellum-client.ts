@@ -14,6 +14,7 @@ import { isRecord } from "../auth/jwt-utils.js";
 import { batchWriteChunked as runBatchWriteChunked } from "../batch/batch-chunked.js";
 import { BoundedReadCache } from "../cache/read-cache.js";
 import { computeReconnectBackoffMs, createAbortError, sleepWithSignal } from "../core/backoff.js";
+import { normalizeEndpoint, validateProjectConfig } from "../core/config.js";
 import { HttpTransport } from "../core/http-transport.js";
 import { encodePathSegment, encodeResourcePath, sanitizeAndClone } from "../core/safe-json.js";
 import { RealtimeTransport, toRealtimeUrl } from "../realtime/realtime-transport.js";
@@ -247,13 +248,11 @@ export class VellumClient implements VellumClientInterface {
   public readonly auth: VellumAuthClient;
 
   public constructor(config: ClientConfig) {
-    if (!config.projectId || !config.apiKey) {
-      throw new Error("@vellumdb/sdk-js: 'projectId' and 'apiKey' are required");
-    }
+    validateProjectConfig(config.projectId, config.apiKey);
 
     this.projectId = config.projectId;
     this.apiKey = config.apiKey;
-    this.endpoint = (config.endpoint ?? "http://localhost:8080").replace(/\/$/, "");
+    this.endpoint = normalizeEndpoint(config.endpoint);
     this.realtimeUrl = config.realtimeUrl ?? null;
     this.realtimeHub = config.realtimeHub ?? null;
     this.webSocketFactory = config.webSocketFactory ?? null;
@@ -886,7 +885,7 @@ export class VellumClient implements VellumClientInterface {
     const res = await this.transport.request<{ deletedCount: number; freedBytes: number }>(
       "POST",
       `/collections/${encoded}/clear`,
-      undefined,
+      {},
       {},
       true,
       options.signal
