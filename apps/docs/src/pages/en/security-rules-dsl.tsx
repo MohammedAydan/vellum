@@ -1,272 +1,58 @@
-import {
-  Api,
-  Callout,
-  Code,
-  Doc,
-  P,
-  PageLink,
-  Section,
-  Table,
-  UL,
-} from "../../ui";
+import { Code, Doc, P, PageLink, Section, Table } from "../../ui";
+import "../../rules-guide.css";
 
-const exampleDsl = `rules_version = '2';
-
-function isMember() {
-  return isSignedIn() && hasAnyRole(['member', 'admin']);
-}
-
-match /users/{userId} {
-  allow get: if isOwner(userId) || hasRole('admin');
-  allow create: if isOwner(userId) && isEmailVerified()
-                   && isType(incoming.displayName, 'string');
-  allow update: if isOwner(userId) && unchanged(['ownerId', 'createdAt']);
-  allow delete: if hasRole('admin');
-
-  match /orders/{orderId} {
-    allow read: if isOwner(userId);
-  }
-}`;
-
-const exampleAst = `{
-  "version": 1,
-  "rules": [
-    {
-      "match": "/users/{userId}",
-      "allow": {
-        "get": {
-          "op": "any",
-          "conditions": [
-            { "op": "==", "left": { "var": "auth.uid" }, "right": { "var": "path.userId" } },
-            { "op": "==", "left": { "var": "auth.claims.role" }, "right": { "val": "admin" } }
-          ]
-        }
-      }
-    }
-  ]
-}`;
-
-const endpoints = `BASE="https://api.example.com/v1/projects/$PROJECT_ID/rules"
-
-# Compile DSL → v1 AST + diagnostics.
-curl -s -X POST "$BASE/compile" \\
-  -H "x-vellum-api-key: $API_KEY" -H "content-type: application/json" \\
-  -d '${JSON.stringify({ source: "rules_version = '2';\nmatch /users/{uid} {\n  allow get: if isOwner(uid);\n}" }).replaceAll("'", "'\\''")}'
-
-# Decompile v1 AST → DSL.
-curl -s -X POST "$BASE/decompile" \\
-  -H "x-vellum-api-key: $API_KEY" -H "content-type: application/json" \\
-  -d '{ "rulesAst": { "version": 1, "rules": [] } }'
-
-# Simulate with an explicit deny-by-default AST. Omit rulesAst only when an active ruleset exists.
-curl -s -X POST "$BASE/simulate" \\
-  -H "x-vellum-api-key: $API_KEY" -H "content-type: application/json" \\
-  -d '{ "operation": "get", "path": "users/u_123",
-        "auth": { "uid": "u_123", "claims": { "role": "member" } },
-        "resourceData": { "ownerId": "u_123" }, "incomingData": null,
-        "rulesAst": { "version": 1, "rules": [] } }'`;
-
-const diagnostic = `{
-  "error": {
-    "code": "INVALID_ARGUMENT",
-    "message": "Expected '}' but found 'end of input' (line 5, column 3)",
-    "line": 5,
-    "column": 3,
-    "snippet": "  allow get: if auth.uid == userId;\n  ^"
-  }
-}`;
-
+// Keep these examples aligned with docs/guides/security-rules-dsl.md.
 export default function Page() {
   return (
-    <Doc
-      title="Security Rules DSL"
-      description="A readable rules language that compiles to the deterministic v1 AST, with macros, functions and a full compile/decompile/simulate toolchain."
-      eyebrow="Security"
-    >
-      <Section id="overview" title="Overview">
-        <P>
-          The Rules DSL is a small, human-friendly language for authoring security rules. The compiler
-          tokenizes and parses your source, expands macros and user functions, and emits a v1 JSON AST —
-          the exact same structure described in{" "}
-          <PageLink slug="security-rules">Security rules</PageLink>. There is no <code>eval()</code> and no{" "}
-          <code>new Function()</code>: the runtime evaluator only ever walks the deterministic AST, in
-          memory, with deny-by-default semantics.
-        </P>
-        <Callout tone="info" title="Authoring format, not a new security model">
-          The DSL changes how rules are written, not how they are enforced. Publishing still stores a
-          validated <code>version: 1</code> ruleset in the control plane.
-        </Callout>
+    <Doc title="Rules DSL" description="Complete syntax, built-ins, safe patterns and real-engine testing for document rules." eyebrow="Security">
+      <div className="rules-guide">
+        <P>{"The DSL is a rules authoring language, not JavaScript, Dart or the Firebase rules language. It compiles into version 1 JSON expressions. Read "}<PageLink slug="security-rules" lang="en">{"Security rules"}</PageLink>{" first for operation contexts, list access and realtime differences."}</P>
+      <Section id="section-1" title="Syntax and first complete policy">
+        <Code lang="text" code={"rules_version = '2';\n\nfunction ownsNamespace() {\n  return isOwner(path.userId);\n}\n\nmatch /users/{userId}/notes/{noteId} {\n  allow get, list: if ownsNamespace();\n  allow create, update: if ownsNamespace()\n    && isType(incoming.title, 'string');\n  allow delete: if ownsNamespace();\n}"} />
+        <P>{"The optional version declaration accepts '1' and '2'; both emit JSON version 1. Other versions produce a diagnostic, not a new evaluator. Match paths can begin with /. JSON examples use canonical relative paths. Prefer explicit path.userId; the corrected compiler also resolves a bare name that matches a wildcard."}</P>
+        <P>{"A file contains top-level function and match declarations and must produce at least one rule. Nested match blocks join their path to their parent and produce separate rules; parent permissions are not inherited. Use a recursive wildcard only as the final segment. Comments support // and /* ... */. Statements use semicolons; always include them even where the parser accepts omission."}</P>
+        <P>{"allow get, list shares an expression. read expands to get and list; write expands to create, update and delete. Repeating an operation in one match block replaces its earlier expression, not OR. Separate matching rules use OR: a permissive rule elsewhere can defeat a restrictive one."}</P>
       </Section>
-
-      <Section id="version" title="rules_version = '2' is sugar">
-        <P>
-          A ruleset typically starts with <code>rules_version = '2';</code>. That declaration is{" "}
-          <strong>sugar only</strong>: <code>compileRulesDsl()</code> always emits{" "}
-          <code>{"{ \"version\": 1, \"rules\": [...] }"}</code>, because the validator requires version 1.
-          Declaring <code>'1'</code> is accepted; any other value produces a diagnostic but does not change
-          the emitted version. The declaration may be omitted.
-        </P>
-        <Code lang="ts" title="DSL → AST" code={exampleDsl} />
-        <P>The compiler turns that into the v1 AST used everywhere else:</P>
-        <Code lang="json" title="Emitted v1 AST" code={exampleAst} />
+      <Section id="section-2" title="Operators, values and precedence">
+        <Table head={["Form", "Meaning"]} rows={[["a == b, a != b", "Typed equality or inequality; missing operands do not pass either comparison."], ["a < b, a <= b, a > b, a >= b", "Wire ordering. Guard the type before checking numeric bounds."], ["a in ['one', 'two']", "Array membership using typed equality."], ["hasKey(value, 'field')", "Direct own-key check, not a dotted-path lookup or allowlist."], ["isType(value, 'string')", "Type predicate; see the complete type table in Security rules."], ["a && b", "Both expressions pass."], ["a OR b (double vertical bar)", "At least one passes."], ["!a", "Negation. Use parentheses around compound expressions."]]} />
+        <P>{"Comparisons bind more tightly than !, then &&, then || in this parser. Use parentheses instead of relying on unfamiliar precedence. Values include single/double-quoted strings, signed numbers, booleans, null and literal arrays. Dynamic array entries are not supported. Do not use JavaScript object literals, bracket property access, methods, arithmetic, loops, assignment, ternaries, regex, string concatenation or database calls."}</P>
+        <P>{"A bare field in a boolean position is compared with true; there is no JavaScript truthiness. Prefer explicit predicates. Functions are boolean-expression helpers, not value-returning arithmetic helpers. Use a function as a complete predicate, not as an operand in another comparison or inside an array."}</P>
       </Section>
-
-      <Section id="syntax" title="Syntax">
-        <P>
-          A ruleset is a sequence of <code>function</code> and <code>match</code> declarations and must
-          contain at least one match block. Both <code>//</code> and <code>/* … */</code> comments are
-          supported, as are single/double-quoted strings, numbers, booleans, <code>null</code> and array
-          literals. A single wildcard <code>{"{param}"}</code> binds one path segment; a trailing{" "}
-          <code>{"{document=**}"}</code> matches one or more segments. Nested matches are flattened.
-        </P>
-        <Code lang="ts" title="Allow statement forms" code={`allow get: if <expression>;
-allow list, get: if <expression>;     // multiple operations share one expression
-allow read: if <expression>;          // expands to get + list
-allow write: if <expression>;         // expands to create + update + delete`} />
-        <Table
-          head={["Construct", "DSL", "AST op"]}
-          rows={[
-            ["Logical AND", <code>a &amp;&amp; b</code>, <code>all</code>],
-            ["Logical OR", <code>a || b</code>, <code>any</code>],
-            ["Negation", <code>!a</code>, <code>not</code>],
-            ["Comparison", <code>== != &lt; &lt;= &gt; &gt;=</code>, "same operator"],
-            ["Membership", <code>a in ['x','y']</code>, <code>in</code>],
-            ["Key / type", <code>hasKey(a,'f') · isType(a,'string')</code>, "hasKey · isType"],
-          ]}
-        />
-        <Callout tone="warning" title="Complexity bounds">
-          Expressions are limited to depth 10 and 100 nodes. Exceeding either is a syntax error — the
-          compiler checks complexity after inlining functions.
-        </Callout>
+      <Section id="section-3" title="Every built-in">
+        <Table head={["Built-in", "Arguments", "Exact behavior"]} rows={[["isSignedIn()", "None", "auth.uid != null. Anonymous users with a uid count as signed in."], ["isAuth()", "None", "Alias of isSignedIn()."], ["isOwner(id)", "One value", "Signed in AND uid equals id."], ["hasRole(role)", "One value", "auth.claims.role equals role. It does not inspect claims.roles."], ["hasAnyRole(['writer', 'reviewer'])", "One literal string array", "Singular auth.claims.role is in that array."], ["isEmailVerified()", "None", "auth.email_verified equals true. Does not itself require a uid."], ["unchanged(['ownerId', 'createdAt'])", "One literal string array", "Each listed field in the full new data equals stored data. Dotted field paths work. Empty array returns true. Missing fields do not compare equal."], ["onlyChanged(['title'])", "One literal string array", "Negated equality for each listed field, with a diagnostic. Does NOT forbid other changes. Empty array returns true. Do not use as a write allowlist."], ["hasKey(value, 'field')", "Two values", "Own direct key on a non-array object; reserved prototype-related keys are blocked."], ["isType(value, 'type')", "Two values", "null, bool/boolean, string, number, array, map, or matching wire tag such as ref, int, ts, bytes, geo."]]} />
+        <P>{"There are no other built-ins. Incorrect argument counts fail compilation. unchanged, onlyChanged and hasAnyRole require string arrays, not a runtime variable containing an array. Never let a client assign its own trusted role claim. Never replace missing identity checks with auth != null: the unauthenticated auth context is an object with uid:null."}</P>
       </Section>
-
-      <Section id="aliases" title="Aliases & context variables">
-        <P>
-          Short names map onto the exact variable paths the evaluator understands:
-        </P>
-        <Table
-          head={["DSL alias", "AST variable", "Meaning"]}
-          rows={[
-            [<code>auth</code>, <code>auth</code>, "End-user identity (uid, email, email_verified, claims.*)"],
-            [<code>resource</code>, <code>resource.data</code>, "Existing document data (null on create)"],
-            [<code>incoming</code>, <code>request.data</code>, "Incoming data (null on reads/deletes)"],
-            [<code>request.auth.*</code>, <code>auth.*</code>, "Alternate spelling of identity claims"],
-            [<code>request.resource.data.*</code>, <code>request.data.*</code>, "Alternate spelling of incoming data"],
-            [<code>path.&lt;param&gt;</code>, <code>path.&lt;param&gt;</code>, "Value bound by a wildcard"],
-            [<code>request.time</code>, <code>request.time</code>, "Request time in epoch milliseconds"],
-          ]}
-        />
+      <Section id="section-4" title="Context aliases">
+        <Table head={["DSL", "Canonical JSON variable"]} rows={[["auth.uid, request.auth.uid", "auth.uid"], ["auth.email, auth.email_verified, auth.is_anonymous", "Same path"], ["auth.claims.team, request.auth.claims.team", "auth.claims.team"], ["path.userId", "path.userId"], ["resource, resource.title, resource.data.title", "resource.data, resource.data.title, resource.data.title"], ["incoming, incoming.title", "request.data, request.data.title"], ["request.resource.data.title", "request.data.title"], ["request.data.title, request.time", "Same path"]]} />
+        <P>{"incoming is the full post-write document after merges and transforms. It is null on read/delete. resource is null on create and at collection-level list gates. Missing fields are undefined, distinct from explicit null."}</P>
       </Section>
-
-      <Section id="macros" title="Built-in macros">
-        <Table
-          head={["Macro", "Args", "Meaning"]}
-          rows={[
-            [<code>isSignedIn() / isAuth()</code>, "0", <code>auth.uid != null</code>],
-            [<code>isOwner(id)</code>, "1", "signed in and uid equals id"],
-            [<code>hasRole(role)</code>, "1", <code>auth.claims.role == role</code>],
-            [<code>hasAnyRole(['a','b'])</code>, "1", <code>auth.claims.role in [...]</code>],
-            [<code>isEmailVerified()</code>, "0", <code>auth.email_verified == true</code>],
-            [<code>unchanged(['a','b'])</code>, "1", "each listed field is unchanged"],
-            [<code>onlyChanged(['a','b'])</code>, "1", "each listed field differs — see limitation"],
-            [<code>hasKey(obj,'f') / isType(v,'string')</code>, "2", "key / type test"],
-          ]}
-        />
-        <Callout tone="danger" title="The onlyChanged limitation">
-          The v1 AST has no dynamic key-set comparison, so <code>onlyChanged([...])</code>{" "}
-          <strong>cannot fully enforce</strong> that no other keys changed. The compiler emits a check
-          that each listed field differs and attaches a diagnostic advising you to enforce "all other keys
-          unchanged" in application logic. An unknown function compiles to <code>false</code> — never a
-          silent grant.
-        </Callout>
+      <Section id="section-5" title="Public reads, trusted roles and field validation">
+        <P>{"This policy intentionally makes every post publicly readable. Only signed-in users can create their own post, the original author can edit without transferring ownership, and a verified reviewer role may delete."}</P>
+        <Code lang="text" code={"match /posts/{postId} {\n  allow read: if true;\n  allow create: if isSignedIn()\n    && incoming.authorId == auth.uid\n    && isType(incoming.title, 'string')\n    && isType(incoming.score, 'number')\n    && incoming.score >= 0 && incoming.score <= 100;\n  allow update: if isOwner(resource.authorId)\n    && unchanged(['authorId'])\n    && isType(incoming.title, 'string')\n    && isType(incoming.score, 'number')\n    && incoming.score >= 0 && incoming.score <= 100;\n  allow delete: if hasRole('reviewer');\n}"} />
+        <P>{"These predicates constrain named fields but do not reject additional fields. isType(title,'string') allows an empty string; no length predicate is available. To make posts private, do not merely change get while leaving list:true. Use the private namespace pattern instead, or deny list on a mixed-owner collection."}</P>
       </Section>
-
-      <Section id="functions" title="User functions & inlining">
-        <P>
-          Declare functions as <code>function name(p) {"{ return <expr>; }"}</code>. Calls are{" "}
-          <strong>inlined</strong> at the call site — parameters are substituted and the resulting AST is
-          emitted with no function-call nodes at runtime. User definitions shadow built-ins, forward
-          references work, recursion is rejected and inlining is capped at depth 16.
-        </P>
-        <Code lang="ts" title="Inlined function" code={`function canReadPost() {
-  return isSignedIn() && (hasRole('admin') || isOwner(path.userId));
-}
-match /posts/{postId} {
-  allow get: if canReadPost();
-}`} />
+      <Section id="section-6" title="Relations and immutable fields">
+        <Code lang="text" code={"match /users/{userId}/notes/{noteId} {\n  allow get, list: if isOwner(path.userId);\n  allow create: if isOwner(path.userId)\n    && isType(incoming.author, 'ref')\n    && incoming.author.$v == auth.claims.profilePath;\n  allow update: if isOwner(path.userId)\n    && unchanged(['author']);\n}"} />
+        <P>{"This assumes the verified token contains a trusted profilePath claim, such as profiles/alice. The type check confirms a tagged reference and $v compares its target path. It does not check target existence, read the target, grant target access or create an inverse relation. The application must not let an end user self-assign profilePath. Included targets still require their own get permission."}</P>
+        <P>{"unchanged checks the full post-write value, so a patch that omits author can pass while replacing the document without author fails. Use explicit required-field/type checks on create; unchanged alone is not a create validator."}</P>
       </Section>
-
-      <Section id="diagnostics" title="Diagnostics — exact line & column">
-        <P>
-          Positions are 1-based. <code>RulesDslSyntaxError</code> is thrown for lexer, parser, grammar and
-          complexity failures and exposes <code>line</code>, <code>column</code> and a caret{" "}
-          <code>snippet</code>. A separate diagnostics array (returned with the AST) covers semantic
-          concerns that do not block compilation: unknown functions/variables, the{" "}
-          <code>onlyChanged</code> limitation, non-literal array elements and unsupported versions.
-        </P>
-        <Code lang="json" title="Compile error (HTTP 400)" code={diagnostic} />
-        <Callout tone="info" title="Successful compile">
-          A successful compile returns <code>{"{ \"ast\": {...}, \"diagnostics\": [...] }"}</code>. The
-          diagnostics may be non-empty even though compilation succeeded.
-        </Callout>
+      <Section id="section-7" title="Reusable functions">
+        <Code lang="text" code={"function mayRead(userId) {\n  return isOwner(userId) || hasAnyRole(['reviewer', 'support']);\n}\nmatch /users/{userId}/tickets/{ticketId} {\n  allow get, list: if mayRead(path.userId);\n}"} />
+        <P>{"Functions contain exactly one return expression. Parameters substitute complete values/expressions; forward references work. Definitions are top-level and names must be unique. User functions shadow built-ins, so do not name your helper isOwner or isSignedIn. Calls are inlined; recursion is rejected, inlining depth is capped at 16 and the final expression still must fit depth 10 and 100 nodes. Helpers do not add new runtime capabilities."}</P>
       </Section>
-
-      <Section id="endpoints" title="Compile / decompile / simulate API">
-        <P>
-          All three endpoints live under <code>/v1/projects/:projectId/rules/*</code> and accept
-          an API key or a realm-verified Customer Console session. They are pure tooling — none publishes
-          a ruleset or touches document data.
-        </P>
-        <Table
-          head={["Method", "Path", "Purpose"]}
-          rows={[
-            [<code>POST</code>, <code>…/rules/compile</code>, "DSL source → v1 AST + diagnostics"],
-            [<code>POST</code>, <code>…/rules/decompile</code>, "v1 AST → DSL text"],
-            [<code>POST</code>, <code>…/rules/simulate</code>, "Dry-run an operation with an evaluation trace"],
-          ]}
-        />
-        <Api method="POST" path="/v1/projects/:projectId/rules/simulate">
-          <P>
-            Body: <code>operation</code>, <code>path</code>, optional <code>rulesAst</code>,{" "}
-            <code>auth</code>, <code>resourceData</code> and <code>incomingData</code>. Returns{" "}
-            <code>allowed</code>, <code>matchedRule</code> and <code>evaluationTrace</code>. With no{" "}
-            <code>rulesAst</code> the active ruleset is used.
-          </P>
-        </Api>
-        <Code lang="bash" title="cURL" code={endpoints} />
-        <P>
-          Publishing is separate: send the compiled <code>rulesAst</code> to the rulesets endpoint as{" "}
-          <code>{"{ \"rulesAst\": { \"version\": 1, \"rules\": [...] } }"}</code>. Only a validated v1 AST
-          can become active.
-        </P>
+      <Section id="section-8" title="Compile, decompile and simulate">
+        <Table head={["Method and path", "Request", "Response"]} rows={[["POST /v1/projects/:projectId/rules/compile", "source: DSL text", "ast and diagnostics"], ["POST /v1/projects/:projectId/rules/decompile", "rulesAst: version 1 AST", "dsl text"], ["POST /v1/projects/:projectId/rules/simulate", "operation, path, optional rulesAst, auth, resourceData, incomingData", "allowed, matchedRule, evaluationTrace"]]} />
+        <P>{"Use the project's API key in X-Project-Key. These tools do not write documents or activate rules. Supplying auth in a simulation only chooses test input; it cannot authenticate a real data request. Omitting rulesAst in simulation uses the active ruleset, if any. Decompilation preserves supported expression behavior, not original comments, helper names or formatting."}</P>
+        <Code lang="json" code={"{\n  \"operation\": \"get\",\n  \"path\": \"users/alice/notes/one\",\n  \"auth\": { \"uid\": \"alice\", \"claims\": {} },\n  \"resourceData\": { \"title\": \"Private note\" },\n  \"incomingData\": null,\n  \"rulesAst\": {\n    \"version\": 1,\n    \"rules\": [{\n      \"match\": \"users/{userId}/notes/{noteId}\",\n      \"allow\": { \"get\": {\n        \"op\": \"all\",\n        \"conditions\": [\n          { \"op\": \"!=\", \"left\": { \"var\": \"auth.uid\" }, \"right\": { \"val\": null } },\n          { \"op\": \"==\", \"left\": { \"var\": \"auth.uid\" }, \"right\": { \"var\": \"path.userId\" } }\n        ]\n      } }\n    }]\n  }\n}"} />
+        <P>{"Repeat with uid:bob and uid:null and expect denial. Then issue real document requests with public-key/end-user credentials against the active ruleset. The simulation does not prove collection gates, query filtering, key scopes, tenant authentication or realtime behavior."}</P>
       </Section>
-
-      <Section id="studio" title="Dashboard Rules Studio">
-        <P>
-          The customer dashboard offers two synchronized editing modes: <strong>DSL mode</strong> (the
-          default, with quick-insert templates and live compile-on-edit) and <strong>JSON mode</strong>{" "}
-          (direct v1 AST editing for advanced users). Syntax errors show message, line, column and snippet
-          in the editor; non-fatal diagnostics are listed separately. The <strong>Rule Simulator</strong>{" "}
-          panel dry-runs an operation against the draft or active ruleset, showing the decision, matched
-          rule and full evaluation trace. Nothing is published until you explicitly publish.
-        </P>
+      <Section id="section-9" title="Diagnostics and pitfalls">
+        <P>{"Syntax errors include one-based line/column and a caret snippet. Non-fatal diagnostics can accompany a successful AST: unknown functions, unknown variable roots, unsupported version declarations, non-literal arrays and onlyChanged. Require zero diagnostics for production policies, then still run negative tests. A typo under a known root may not produce a diagnostic at all."}</P>
+        <P>{"An unknown function becomes false, but !unknownFunction() can therefore become true. Undefined-field comparisons also behave differently under negation. Do not treat an unknown identifier or a warning as a safe deny for an entire policy. Prefer positive existence, type and identity checks."}</P>
+        <P>{"Source length is capped at 131072 JavaScript string code units; the error calls this bytes, but the implementation measures string length. The token cap is 16384; parser nesting is capped at 64. Keep policies short enough that runtime membership checks also stay within the 256-step budget. There is no general field allowlist: onlyChanged is not one, hasKey is not one, and validation in an untrusted client is not one."}</P>
+        <P>{"The complete examples in these two guides are extracted by tests/integration/rules-guide-examples.test.ts and evaluated with real authorization and the local document engine. Run corepack pnpm exec vitest run tests/integration/rules-guide-examples.test.ts when changing them."}</P>
       </Section>
-
-      <Section id="pitfalls" title="Common pitfalls">
-        <UL
-          items={[
-            <>Assuming <code>'2'</code> produces a v2 AST — it is sugar; the output is always version 1.</>,
-            <>Relying on <code>onlyChanged</code> to lock an entire write — enforce the rest in application logic.</>,
-            <>Trusting a client-supplied owner field — compare <code>auth.uid</code> with a path wildcard.</>,
-            <>Allowing updates without checking stored data — add <code>unchanged(['ownerId'])</code>.</>,
-            <>Forgetting deny-by-default — no matching rule means deny.</>,
-          ]}
-        />
-        <P>
-          Continue with <PageLink slug="security-rules">Security rules</PageLink> for the runtime
-          evaluator and variable semantics.
-        </P>
-      </Section>
+      </div>
     </Doc>
   );
 }

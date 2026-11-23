@@ -133,7 +133,7 @@ for await (const page of query.pages({ pageSize: 100, maxPages: 10, signal: cont
 
 // 2. Or stream individual DocumentSnapshots directly
 for await (const doc of query.stream({ pageSize: 100 })) {
-  await processInvoice(doc.id, doc.data());
+  console.log(doc.id, doc.data());
 }`,
             },
             {
@@ -151,7 +151,7 @@ await for (final page in query.streamPages(pageSize: 100, maxPages: 10)) {
 
 // 2. Or stream individual DocumentSnapshots across all pages
 await for (final doc in query.streamDocuments(pageSize: 100)) {
-  await processInvoice(doc.id, doc.data());
+  print(doc.data());
 }`,
             },
           ]}

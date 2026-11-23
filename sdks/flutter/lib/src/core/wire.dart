@@ -73,10 +73,30 @@ class VellumWire {
     };
   }
 
-  static JsonMap reference(String documentPath) => <String, Object?>{
-        '\$t': 'ref',
-        '\$v': documentPath,
-      };
+  /// Creates a project-relative reference value, not a target document.
+  /// Validates the path without checking target existence or permissions.
+  static JsonMap reference(String documentPath) {
+    final clean = validateVellumPath(documentPath, requireEvenSegments: true);
+    final segments = clean.split('/');
+    if (clean != documentPath ||
+        documentPath.trim() != documentPath ||
+        documentPath.length > 2048 ||
+        segments.length > 10 ||
+        segments.any((segment) =>
+            RegExp(r'^__.*__$').hasMatch(segment) ||
+            utf8.encode(segment).length > 1500)) {
+      throw const VellumException(
+        code: 'INVALID_DOCUMENT_PATH',
+        message:
+            'Reference requires a canonical document path within path limits',
+        statusCode: 400,
+      );
+    }
+    return Map<String, Object?>.unmodifiable(<String, Object?>{
+      '\$t': 'ref',
+      '\$v': documentPath,
+    });
+  }
 
   static JsonMap bytes(List<int> rawBytes) => <String, Object?>{
         '\$t': 'bytes',

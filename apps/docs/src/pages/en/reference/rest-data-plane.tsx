@@ -451,31 +451,27 @@ export default function Page() {
         <P>
           A collection is a durable registry row in <code>data_db.project_collections</code> with{" "}
           <code>ENABLE FORCE ROW LEVEL SECURITY</code>, not an emergent view over documents. It exists
-          even when empty and keeps its settings across deletes, F5 and restarts. The <strong>same
-          eight endpoints</strong> are exposed on two surfaces: the public data plane shown here and
-          the session-authenticated console at{" "}
-          <code>/v1/console/projects/:projectId/collections…</code>, which the Dashboard uses.
+          even when empty and keeps its settings across deletes, F5 and restarts. Eight lifecycle
+          endpoints manage collections on the public data plane shown here.
         </P>
         <Callout tone="danger" title="Key types: pk_ reads, sk_ writes">
           <P>
-            On the public surface, <code>GET</code> (list, single, export) accepts a publishable{" "}
+            <code>GET</code> (list, single, export) accepts a publishable{" "}
             <code>pk_</code> key. Every mutation — create, patch, clear, delete, import — requires a{" "}
             <code>sk_</code> server key or the request returns <code>403 PERMISSION_DENIED</code>.
-            Console calls use the realm-bound <code>CUSTOMER_CONSOLE</code> session token instead and
-            are written to the hash-chained audit log.
           </P>
         </Callout>
         <Table
-          head={["Method", "Path suffix", "Auth (public / console)", "Response"]}
+          head={["Method", "Path suffix", "Auth", "Response"]}
           rows={[
-            [<code>GET</code>, <code>/collections</code>, <><code>pk_</code>/<code>sk_</code> / session</>, <><code>{'{ collections: CollectionWithStats[], nextCursor }'}</code></>],
-            [<code>POST</code>, <code>/collections</code>, <><code>sk_</code> / session</>, <>201 <code>CollectionRecord</code></>],
-            [<code>GET</code>, <code>/collections/:name</code>, <><code>pk_</code>/<code>sk_</code> / session</>, <><code>CollectionWithStats | null</code></>],
-            [<code>PATCH</code>, <code>/collections/:name</code>, <><code>sk_</code> / session</>, <code>CollectionWithStats</code>],
-            [<code>POST</code>, <code>/collections/:name/clear</code>, <><code>sk_</code> / session</>, <><code>{'{ deletedCount, freedBytes }'}</code></>],
-            [<code>DELETE</code>, <code>/collections/:name</code>, <><code>sk_</code> / session</>, <><code>{'{ deletedCollection, deletedDocuments, freedBytes }'}</code></>],
-            [<code>POST</code>, <code>/collections/:name/import</code>, <><code>sk_</code> / session</>, <><code>{'{ importedCount, skippedCount, errors }'}</code></>],
-            [<code>GET</code>, <code>/collections/:name/export</code>, <><code>pk_</code>/<code>sk_</code> / session</>, <><code>{'{ documents, nextCursor }'}</code></>],
+            [<code>GET</code>, <code>/collections</code>, <><code>pk_</code>/<code>sk_</code></>, <><code>{'{ collections: CollectionWithStats[], nextCursor }'}</code></>],
+            [<code>POST</code>, <code>/collections</code>, <><code>sk_</code></>, <>201 <code>CollectionRecord</code></>],
+            [<code>GET</code>, <code>/collections/:name</code>, <><code>pk_</code>/<code>sk_</code></>, <><code>CollectionWithStats | null</code></>],
+            [<code>PATCH</code>, <code>/collections/:name</code>, <><code>sk_</code></>, <code>CollectionWithStats</code>],
+            [<code>POST</code>, <code>/collections/:name/clear</code>, <><code>sk_</code></>, <><code>{'{ deletedCount, freedBytes }'}</code></>],
+            [<code>DELETE</code>, <code>/collections/:name</code>, <><code>sk_</code></>, <><code>{'{ deletedCollection, deletedDocuments, freedBytes }'}</code></>],
+            [<code>POST</code>, <code>/collections/:name/import</code>, <><code>sk_</code></>, <><code>{'{ importedCount, skippedCount, errors }'}</code></>],
+            [<code>GET</code>, <code>/collections/:name/export</code>, <><code>pk_</code>/<code>sk_</code></>, <><code>{'{ documents, nextCursor }'}</code></>],
           ]}
         />
         <Api method="GET" path="/v1/projects/:projectId/collections">
@@ -483,8 +479,7 @@ export default function Page() {
             Required header: <code>x-vellum-api-key</code>. Query parameters: <code>search</code>{" "}
             (substring, ≤256 characters), <code>limit</code> (1–500, <strong>default 50</strong>),{" "}
             <code>cursor</code> (opaque continuation from <code>nextCursor</code>). Use{" "}
-            <code>?limit=500</code> to see all collections when more than 50 exist — the Dashboard
-            Data Explorer always does.
+            <code>?limit=500</code> to see all collections when more than 50 exist.
           </P>
           <Code
             title="Response · 200"
@@ -631,9 +626,7 @@ export default function Page() {
         />
         <P>
           The complete locked-v1 quota table lives in{" "}
-          <PageLink slug="errors-and-limits">Quotas &amp; limits</PageLink>. For session-authenticated
-          management endpoints, continue to the{" "}
-          <PageLink slug="reference/rest-control-plane">control plane REST API</PageLink>.
+          <PageLink slug="errors-and-limits">Quotas &amp; limits</PageLink>.
         </P>
       </Section>
     </Doc>

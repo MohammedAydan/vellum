@@ -29,14 +29,14 @@ const q = db
 // الأسلوب اليدوي عبر startAfter
 let cursor: string | null = null;
 do {
-  const page = await (cursor ? q.startAfter(cursor) : q).get();
+  const page: import("@vellumdb/sdk-js").QuerySnapshot = await (cursor ? q.startAfter(cursor) : q).get();
   for (const doc of page.docs) console.log(doc.id, doc.data());
   cursor = page.nextCursor; // null تعني نهاية النتائج
 } while (cursor);
 
 // أو الأسلوب الانسيابي الحديث بذاكرة محدودة (Async Generator)
 const controller = new AbortController();
-for await (const doc of q.stream({ pageSize: 50, maxDocs: 500, signal: controller.signal })) {
+for await (const doc of q.stream({ pageSize: 50, maxPages: 500, signal: controller.signal })) {
   console.log(doc.id, doc.data());
 }`;
 
@@ -57,7 +57,7 @@ do {
 } while (cursor != null);
 
 // أو عبر التدفقات المدمجة (Streams) بذاكرة محدودة
-await for (final doc in q.streamDocuments(pageSize: 50, maxDocuments: 500)) {
+await for (final doc in q.streamDocuments(pageSize: 50, maxPages: 10)) {
   print('\${doc.id} \${doc.data()}');
 }`;
 

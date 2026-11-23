@@ -16,39 +16,21 @@ import {
 export default function Page() {
   return (
     <Doc
-      title="المستخدمون النهائيون والمجالات الثلاثة"
-      description="ثلاثة مجالات مصادقة معزولة تماماً، ورموز EdDSA حصراً على مستوى البيانات، وتدوير رموز التحديث بنافذة سماح 15 ثانية، ونقاط نهاية المصادقة الفعلية."
+      title="مصادقة المستخدمين النهائيين"
+      description="رموز EdDSA حصراً على مستوى البيانات، وتدوير رموز التحديث بنافذة سماح 15 ثانية، ونقاط نهاية المصادقة الفعلية."
       eyebrow="المصادقة"
     >
-      <Section id="three-realms" title="المجالات الثلاثة المعزولة">
+      <Section id="isolated-credentials" title="بيانات اعتماد معزولة">
         <P>
-          يصادق VELLUM على ثلاثة <strong>مجالات منفصلة</strong> لا يتقاسم فيها سوى بدائل التشفير عديمة الحالة من{" "}
+          بيانات الاعتماد في VELLUM <strong>منفصلة تماماً</strong> لكل سطح، ولا تتقاسم سوى بدائل التشفير عديمة الحالة من{" "}
           <code>@vellum/auth</code> (مثل <code>scrypt</code> و <code>AES-256-GCM</code> و <code>SHA-256</code> و{" "}
           <code>TOTP</code> ومولّدات الرموز ومنطق التدوير). أمّا جداول التخزين ومفاتيح التوقيع ونوع الرمز{" "}
           <code>typ</code> والمُصدِر <code>iss</code> والجمهور <code>aud</code> وشكل المطالبات وخدمات الجلسات
-          والوسائط، فهي مستقلة بشكل كامل؛ ولذلك يُرفض أي رمز صادر عن مجال في المجالين الآخرين.
+          والوسائط، فهي مستقلة بشكل كامل؛ ولذلك يُرفض أي رمز صادر عن سطح في غيره.
         </P>
         <Table
           head={["المجال", "تخزين الجلسات", "السر", "الخوارزمية", "typ", "iss", "aud"]}
           rows={[
-            [
-              <code>super_admin</code>,
-              <code>control_db.control_plane_refresh_sessions</code>,
-              <code>SUPER_ADMIN_JWT_SECRET</code>,
-              "HS256",
-              <code>vellum+superadmin+jwt</code>,
-              <code>vellum:control-plane:super-admin</code>,
-              <code>vellum-super-admin</code>,
-            ],
-            [
-              <code>customer_console</code>,
-              <code>control_db.control_plane_refresh_sessions</code>,
-              <code>CONSOLE_JWT_SECRET</code>,
-              "HS256",
-              <code>vellum+console+jwt</code>,
-              <code>vellum:control-plane:console</code>,
-              <code>vellum-customer-console</code>,
-            ],
             [
               <code>project_end_user</code>,
               <><code>data_db.project_auth_*</code> (مع <code>FORCE RLS</code>)</>,
@@ -63,8 +45,8 @@ export default function Page() {
         <Callout tone="danger" title="لا بديل HS256 للمستخدمين النهائيين">
           <P>
             يتم التحقق من رموز المستخدم النهائي بخوارزمية <strong>EdDSA فقط</strong> على كلٍّ من HTTP و WebSocket،
-            مقابل مفتاح Ed25519 العام الخاص بالمشروع. أي رمز <code>HS256</code> — بما في ذلك رموز Console أو Admin
-            — يُرفض على مستوى المستندات حتى لو صُحب بمفتاح API صالح؛ لأن التحقق يشترط{" "}
+            مقابل مفتاح Ed25519 العام الخاص بالمشروع. أي رمز <code>HS256</code>
+            يُرفض على مستوى المستندات حتى لو صُحب بمفتاح API صالح؛ لأن التحقق يشترط{" "}
             <code>alg=EdDSA</code> و <code>typ=vellum+enduser+jwt</code> والمطابقة التامة لـ <code>aud</code> و{" "}
             <code>iss</code>.
           </P>
@@ -279,7 +261,7 @@ const user = await db.auth.signUpWithEmailAndPassword("user@example.com", "S3cur
 const token = await db.auth.getIdToken();
 await db.auth.signOut();
 
-const unsub = db.collection("tasks").snapshots((snapshot) => console.log(snapshot.docs));`,
+const unsub = db.collection("tasks").onSnapshot((snapshot) => console.log(snapshot.docs));`,
             },
             {
               label: "Flutter",

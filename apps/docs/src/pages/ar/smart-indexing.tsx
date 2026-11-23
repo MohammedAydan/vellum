@@ -19,7 +19,7 @@ const db = createClient({
   warnOnMissingIndexes: true, // الافتراضي؛ false تُوقف طباعة التحذير في console
   onIndexSuggestion: ({ url, suggestion }) => {
     // يُستدعى لكل توصية حتى لو كان warnOnMissingIndexes = false.
-    telemetry.track("slow_query", { url, suggestion });
+    console.log("slow_query", { url, suggestion });
   },
 });`;
 
@@ -55,10 +55,10 @@ curl -s -D - -o /dev/null -X POST \\
 # x-vellum-index-suggestion: {"collectionPath":"posts","fields":[...],"fingerprint":"..."}
 # x-vellum-index-url: http://localhost:3000/app/orgs/.../indexes?suggest=...
 
-# تطبيق التوصية بنقرة واحدة من طابور لوحة التحكم:
+# تطبيق التوصية بمفتاح خادم:
 curl -s -X POST \\
   "https://api.example.com/v1/projects/$PROJECT_ID/indexes/recommendations/$ID/apply" \\
-  -H "Authorization: Bearer $CONSOLE_SESSION_TOKEN"`;
+  -H "x-vellum-api-key: $SERVER_KEY"`;
 
 export default function Page() {
   return (
@@ -71,7 +71,7 @@ export default function Page() {
         <P>
           يحلّل <strong>مستشار الفهارس الذكي (E/S/R Index Advisor)</strong> كل استعلام وقراءة مجموعة تلقائياً.
           إذا لم يجد فهرساً مركّباً بحالة <code>ready</code> يغطي شكل الاستعلام، يُرفق الخادم ترويسات إرشادية
-          في الاستجابة، ويُسجّل التوصية في طابور لوحة التحكم، وتطبع الحزمة البرمجية رابطاً مباشراً لإنشاء
+          في الاستجابة، ويُسجّل التوصية، وتطبع الحزمة البرمجية رابطاً مباشراً لإنشاء
           الفهرس بنقرة واحدة — وكل ذلك بصورة استشارية غير معطّلة لا تؤثر إطلاقاً على نتيجة الاستعلام أو
           زمن استجابته.
         </P>
@@ -147,7 +147,7 @@ export default function Page() {
         <Code lang="text" title="بنية الرابط المباشر" code={deepLink} />
         <P>
           القيمة الافتراضية لـ <code>VELLUM_DASHBOARD_BASE_URL</code> هي <code>http://localhost:3000</code>،
-          وتُكشف ترويستا المستشار عبر CORS. عند فتح الرابط تُملأ بيانات الفهرس تلقائياً في لوحة التحكم، وعند
+          وتُكشف ترويستا المستشار عبر CORS. عند فتح الرابط تُملأ بيانات الفهرس تلقائياً، وعند
           إنشائه تُحدَّث حالة التوصية المطابقة إلى <code>applied</code>.
         </P>
       </Section>
@@ -173,11 +173,10 @@ export default function Page() {
         </Callout>
       </Section>
 
-      <Section id="dashboard" title="طابور توصيات الفهرسة في لوحة التحكم">
+      <Section id="recommendations" title="توصيات الفهرسة وإدارتها">
         <P>
-          يُغذّى قسم مستشار الفهارس في لوحة التحكم من نقاط نهاية حيّة تسجّل عدد التكرارات والزمن الأقصى
-          وعينة الاستعلام والحقول المقترحة (تُسجَّل التوصيات بشكل غير متزامن Fire-and-Forget دون إضافة أي
-          تأخير على مسار الاستعلام):
+          تُسجَّل التوصيات مع عدد التكرارات والزمن الأقصى وعينة الاستعلام والحقول المقترحة (بشكل غير
+          متزامن Fire-and-Forget دون إضافة أي تأخير على مسار الاستعلام)، وتُدار عبر نقاط النهاية التالية:
         </P>
         <Table
           head={["الطريقة", "المسار", "الغرض"]}
@@ -188,7 +187,7 @@ export default function Page() {
           ]}
         />
         <Api method="POST" path="/v1/projects/:projectId/indexes/recommendations/:id/apply">
-          <P>يتطلب صلاحية <code>indexes:manage</code> عبر جلسة لوحة التحكم أو مفتاح خادم <code>sk_</code>.</P>
+          <P>يتطلب مفتاح خادم <code>sk_</code> بصلاحية <code>indexes:manage</code>.</P>
         </Api>
         <Code lang="bash" title="cURL" code={curl} />
       </Section>

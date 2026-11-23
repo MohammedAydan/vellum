@@ -208,7 +208,7 @@ export function parseReference(value: unknown, spec: IncludeSpec): string | null
   }
   if (raw === null) return null;
   const trimmed = raw.trim();
-  if (trimmed.length === 0 || trimmed.length > 1536) return null;
+  if (trimmed.length === 0 || trimmed.length > 2048) return null;
 
   let path = trimmed;
   if (!trimmed.includes("/")) {

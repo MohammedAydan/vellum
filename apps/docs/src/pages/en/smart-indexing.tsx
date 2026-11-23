@@ -14,7 +14,7 @@ export default function Page() {
     <Doc
       eyebrow="Core concepts"
       title="Smart Indexing &amp; Performance"
-      description="The automatic E/S/R (Equality → Sort → Range) index advisor, response headers, one-click console deep links, SDK deduplication, and bounded in-process caches."
+      description="The automatic E/S/R (Equality → Sort → Range) index advisor, response headers, advisor deep links, SDK deduplication, and bounded in-process caches."
     >
       <P>
         Designing composite indexes by hand is error-prone when queries combine multiple equality
@@ -64,9 +64,8 @@ export default function Page() {
               <code>fields</code> array, and human-readable <code>reason</code>.
             </>,
             <>
-              <code>x-vellum-index-url</code>: A deep link straight into the VELLUM Console&apos;s
-              Index Builder with the collection and E/S/R fields pre-populated for one-click
-              creation.
+              <code>x-vellum-index-url</code>: A pre-filled index-creation link carrying the
+              collection and E/S/R fields for one-click creation.
             </>,
           ]}
         />
@@ -92,12 +91,8 @@ const db = createClient({
   projectId: process.env.VELLUM_PROJECT_ID!,
   apiKey: process.env.VELLUM_API_KEY!,
   warnOnMissingIndexes: process.env.NODE_ENV !== "production",
-  onIndexSuggestion(suggestion) {
-    telemetry.record("vellum.missing_index", {
-      fingerprint: suggestion.fingerprint,
-      collectionPath: suggestion.collectionPath,
-      url: suggestion.url,
-    });
+  onIndexSuggestion({ url, suggestion }) {
+    console.log("vellum.missing_index", { url, suggestion });
   },
 });`,
             },
@@ -106,11 +101,11 @@ const db = createClient({
               lang: "dart",
               code: `final db = VellumClient(
   endpoint: 'https://api.example.com',
-  projectId: projectId,
-  apiKey: apiKey,
-  warnOnMissingIndexes: kDebugMode,
+  projectId: const String.fromEnvironment('VELLUM_PROJECT_ID'),
+  apiKey: const String.fromEnvironment('VELLUM_API_KEY'),
+  warnOnMissingIndexes: true,
   onIndexSuggestion: (VellumIndexSuggestion suggestion) {
-    logger.warning(
+    print(
       'Missing index \${suggestion.fingerprint}: \${suggestion.url}',
     );
   },

@@ -36,12 +36,14 @@ export type ConnectionStateListener = (state: ConnectionState, previousState: Co
 export interface ClientConfig {
   projectId: string;
   apiKey: string;
+  /** Absolute HTTP(S) origin only, without /v1, credentials, query, or fragment. */
   endpoint?: string;
   /** Explicit realtime WS(S) URL override. Defaults to `<endpoint>/v1/realtime`. */
   realtimeUrl?: string;
   getAuthToken?: (() => Promise<string | null> | string | null) | null;
   /**
-   * Session persistence. Defaults to `BrowserLocalStorage` when
+   * Session persistence. Default browser storage is scoped by endpoint and project.
+   * Defaults to `BrowserLocalStorage` when
    * `window.localStorage` is available, otherwise `MemoryAuthStorage`.
    */
   authStorage?: AuthStorage | null;

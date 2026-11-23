@@ -1,22 +1,20 @@
 ---
-title: مصادقة المستخدمين النهائيين والمجالات الثلاثة
+title: مصادقة المستخدمين النهائيين
 order: 4
 group: المصادقة
-description: ثلاثة مجالات مصادقة معزولة، رموز EdDSA للمستخدمين النهائيين، تدوير الرموز مع نافذة سماح 15 ثانية، إسقاط الملف الشخصي، واجهات REST، مصادقة WebSocket وتحديد المعدل.
+description: رموز EdDSA للمستخدمين النهائيين، تدوير الرموز مع نافذة سماح 15 ثانية، إسقاط الملف الشخصي، واجهات REST، مصادقة WebSocket وتحديد المعدل.
 ---
 
-# مصادقة المستخدمين النهائيين والمجالات الثلاثة
+# مصادقة المستخدمين النهائيين
 
-يُقسّم VELLUM المصادقة إلى **ثلاثة مجالات معزولة**. تشترك هذه المجالات في عناصر التشفير عديمة الحالة من `@vellum/auth` فقط (scrypt، AES-256-GCM، SHA-256، TOTP، مولّدات الرموز، حساب التدوير). أما التخزين ومفاتيح التوقيع و`typ`/`iss`/`aud` والclaims وخدمات الجلسة والوسيط فهي منفصلة تمامًا — يُرفض أي رمز من مجال في المجالين الآخرين.
+تُعزل رموز المستخدمين النهائيين للمشروع عن أي اعتماد آخر تمامًا. لا تشترك طبقة الرموز مع الأسطح الأخرى إلا في عناصر التشفير عديمة الحالة من `@vellum/auth` (scrypt، AES-256-GCM، SHA-256، TOTP، مولّدات الرموز، حساب التدوير)؛ أما التخزين ومفاتيح التوقيع و`typ`/`iss`/`aud` والclaims وخدمات الجلسة والوسيط فهي منفصلة 100%، ويُرفض أي رمز من سطح آخر هنا دائمًا.
 
-| المجال | الجلسات | السر | الخوارزمية | `typ` | `iss` | `aud` |
+| السطح | الجلسات | السر | الخوارزمية | `typ` | `iss` | `aud` |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `super_admin` | `control_db.control_plane_refresh_sessions` | `SUPER_ADMIN_JWT_SECRET` | HS256 | `vellum+superadmin+jwt` | `vellum:control-plane:super-admin` | `vellum-super-admin` |
-| `customer_console` | `control_db.control_plane_refresh_sessions` | `CONSOLE_JWT_SECRET` | HS256 | `vellum+console+jwt` | `vellum:control-plane:console` | `vellum-customer-console` |
-| `project_end_user` | `data_db.project_auth_*` (FORCE RLS) | مفتاح Ed25519 لكل بيئة | **EdDSA** | `vellum+enduser+jwt` | `https://api.vellum.dev/v1/projects/<projectId>/auth` | `<projectId>` |
+| مستخدمو المشروع النهائيون | `data_db.project_auth_*` (FORCE RLS) | مفتاح Ed25519 لكل بيئة | **EdDSA** | `vellum+enduser+jwt` | `https://api.vellum.dev/v1/projects/<projectId>/auth` | `<projectId>` |
 
 :::important لا يوجد بديل HS256
-تُتحقق رموز المستخدمين النهائيين عبر **EdDSA فقط** في كل من HTTP وWebSocket، مقابل مفتاح البيئة العام Ed25519. يُرفض أي رمز HS256 خاص بـ Console/Admin — أو أي رمز HS256 خام — على مستوى المستندات حتى مع مفتاح مشروع صالح.
+تُتحقق رموز المستخدمين النهائيين عبر **EdDSA فقط** في كل من HTTP وWebSocket، مقابل مفتاح البيئة العام Ed25519. يُرفض أي رمز HS256 على مستوى المستندات حتى مع مفتاح مشروع صالح.
 :::
 
 ## رموز المستخدمين النهائيين وJWKS
@@ -33,14 +31,11 @@ description: ثلاثة مجالات مصادقة معزولة، رموز EdDSA 
 
 ## الإسقاط التلقائي لملف المستخدم
 
-عند تفعيل `enable_user_projection` (الافتراضي)، تكتب واجهة المصادقة `users/{uid}` عبر `DocumentEngine.setDocument` باستخدام `system_bypass` (`bypassRules: true`) و`merge: true`. يُحدَّث المستند بعد التسجيل وتعديل الملف وتأكيد التحقق من البريد وتعديلات مسؤول العميل ومنح الـ claims — وكل ذلك مُتحقَّق منه عمليًا.
+عند تفعيل `enable_user_projection` (الافتراضي)، تكتب واجهة المصادقة `users/{uid}` عبر `DocumentEngine.setDocument` باستخدام `system_bypass` (`bypassRules: true`) و`merge: true`. يُحدَّث المستند بعد التسجيل وتعديل الملف وتأكيد التحقق من البريد وتغييرات الـ claims — وكل ذلك مُتحقَّق منه عمليًا.
 
 ## واجهات REST
 
 - **المستخدم النهائي** (`/v1/projects/:p/auth`): `sign-up/email`، `sign-in/email`، `sign-in/anonymous`، `sign-in/provider`، `token/refresh`، `sign-out`، `GET|PATCH /user`، `password/reset`، `password/confirm`، `email/verify/request`، `email/verify/confirm`، `mfa/enroll`، `mfa/verify`، `mfa/challenge`، `/.well-known/jwks.json`.
-- **مسؤول العميل** (`.../auth/admin`): دليل المستخدمين وCRUD، `PUT /users/:uid/claims`، الإلغاء، الاستيراد، `GET|PATCH /config`.
-- **المدير العام** (`/v1/admin/auth`): `overview`، `projects`، تعديل التحكم، `rotate-signing-key`، `GET|PATCH /settings`، ونقطة التحديث `POST /session/refresh`.
-- تحديث Console `POST /v1/console/auth/refresh` وتحديث المدير `POST /v1/admin/auth/session/refresh` يقبلان الرمز من الجسم أو من ملف تعريف الارتباط HttpOnly `vellum_refresh_token` ويرفضان رموز المجالات الأخرى.
 
 راجع [مرجع REST الكامل](../../../docs/07-end-user-auth.md).
 

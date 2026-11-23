@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Untitled · VELLUM Docs</title>
+<meta name="description" content="">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-base="../">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="../ar/index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ التوثيق</span></span></a>
+  <span class="top-badge">أمثلة مُتحقَّق منها · ثابتة</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">ابحث في التوثيق <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="../creating-relationships.html" title="English">EN</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">البداية</div><ul><li><a href="index.html" class="nav-link nav-home">الصفحة الرئيسية للتوثيق</a></li><li><a href="quickstart.html" class="nav-link">البدء السريع</a></li><li><a href="authentication.html" class="nav-link">المصادقة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المجموعات البرمجية</div><ul><li><a href="sdks/flutter.html" class="nav-link">مجموعة Flutter البرمجية (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellumdb/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المرجع</div><ul><li><a href="reference/rest-data-plane.html" class="nav-link">واجهة REST العامة لمستوى البيانات</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">بروتوكول WebSocket للوقت الفعلي</a></li><li><a href="reference/wire-format.html" class="nav-link">تنسيق الإرسال الموسوم وقواعد المسارات</a></li><li><a href="reference/errors.html" class="nav-link">الرموز المعيارية للأخطاء وإرشادات إعادة المحاولة</a></li><li><a href="reference/packages.html" class="nav-link">واجهات الحزم البرمجية</a></li><li><a href="errors-and-limits.html" class="nav-link">الأخطاء والحدود</a></li><li><a href="rest-api.html" class="nav-link">نظرة عامة على REST API</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المفاهيم الأساسية</div><ul><li><a href="crud.html" class="nav-link">CRUD ومسارات المستندات</a></li><li><a href="field-transforms.html" class="nav-link">تحويلات الحقول</a></li><li><a href="query.html" class="nav-link">الاستعلام</a></li><li><a href="pagination.html" class="nav-link">الترقيم الصفحي</a></li><li><a href="indexes.html" class="nav-link">الفهارس المركّبة</a></li><li><a href="realtime.html" class="nav-link">الوقت الفعلي</a></li><li><a href="batch-and-transactions.html" class="nav-link">الكتابات الدفعية والمعاملات</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المصادقة</div><ul><li><a href="end-user-auth.html" class="nav-link">مصادقة المستخدمين النهائيين</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">قواعد الأمان</a></li><li><a href="security-rules-dsl.html" class="nav-link">لغة قواعد الأمان DSL</a></li></ul></div><div class="nav-group"><div class="nav-group-title">التشغيل</div><ul><li><a href="production-checklist.html" class="nav-link">قائمة التحقق للإنتاج</a></li><li><a href="deployment.html" class="nav-link">النشر والاستضافة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Guides</div><ul><li><a href="creating-relationships.html" class="nav-link">Untitled</a></li></ul></div></div>
+    <div class="sidebar-foot">تُنفَّذ الأمثلة على الـ API الحي وتُعرض كنص خامل. لا يُنفَّذ أي كود داخل هذا الموقع.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Guides <span>/</span> <strong>Untitled</strong></div>
+    <article class="article"><h1 id="إنشاء-علاقات-بين-المستندات">إنشاء علاقات بين المستندات<a class="anchor" href="#إنشاء-علاقات-بين-المستندات" aria-label="Link to section">#</a></h1>
+<p>العلاقة حقل عادي داخل المستند، وقيمته مرجع لمستند آخر في نفس المشروع. استخدم مرجعًا واحدًا لعلاقة مع مستند واحد، أو مصفوفة مراجع لعلاقة مع عدة مستندات. لا تحتاج إلى مسار API منفصل لإنشاء العلاقة.</p>
+<h2 id="javascript-وtypescript">JavaScript وTypeScript<a class="anchor" href="#javascript-وtypescript" aria-label="Link to section">#</a></h2>
+<p>المثال يعمل مع الإصدار المنشور <code class="inline-code">@vellumdb/sdk-js</code> رقم 0.0.1. المتغير <code class="inline-code">db</code> يمثل عميل المشروع بعد تهيئته، مع صلاحية كتابة المستندات المستخدمة.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">const</span> ref = (path: string) =&gt; ({ $t: <span class="hl-string">&quot;ref&quot;</span> <span class="hl-keyword">as</span> <span class="hl-keyword">const</span>, $v: path });
+<span class="hl-keyword">await</span> db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;users/u1&quot;</span>)<span class="hl-property">.create</span>({ name: <span class="hl-string">&quot;Ada&quot;</span> });
+<span class="hl-keyword">await</span> db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;users/u2&quot;</span>)<span class="hl-property">.create</span>({ name: <span class="hl-string">&quot;Sam&quot;</span> });
+<span class="hl-keyword">await</span> db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;posts/p1&quot;</span>)<span class="hl-property">.create</span>({
+  title: <span class="hl-string">&quot;First post&quot;</span>,
+  author: <span class="hl-fn">ref</span>(<span class="hl-string">&quot;users/u1&quot;</span>),
+  reviewers: [<span class="hl-fn">ref</span>(<span class="hl-string">&quot;users/u1&quot;</span>), <span class="hl-fn">ref</span>(<span class="hl-string">&quot;users/u2&quot;</span>)],
+});
+<span class="hl-keyword">const</span> post = <span class="hl-keyword">await</span> db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;posts/p1&quot;</span>)<span class="hl-property">.get</span>({
+  include: [<span class="hl-string">&quot;author&quot;</span>, <span class="hl-string">&quot;reviewers&quot;</span>],
+});
+console<span class="hl-property">.log</span>(post<span class="hl-property">.included</span>?.[<span class="hl-string">&quot;author&quot;</span>]);
+console<span class="hl-property">.log</span>(post<span class="hl-property">.included</span>?.[<span class="hl-string">&quot;reviewers&quot;</span>]);
+<span class="hl-keyword">await</span> db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;posts/p1&quot;</span>)<span class="hl-property">.update</span>({ author: <span class="hl-fn">ref</span>(<span class="hl-string">&quot;users/u2&quot;</span>) });
+<span class="hl-keyword">await</span> db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;posts/p1&quot;</span>)<span class="hl-property">.update</span>({ author: <span class="hl-keyword">null</span> });
+<span class="hl-keyword">let</span> cursor: string | <span class="hl-keyword">undefined</span>;
+<span class="hl-keyword">do</span> {
+  <span class="hl-keyword">const</span> page = <span class="hl-keyword">await</span> db<span class="hl-property">.doc</span>(<span class="hl-string">&quot;users/u1&quot;</span>)<span class="hl-property">.referencedBy</span>({
+    collection: <span class="hl-string">&quot;posts&quot;</span>, field: <span class="hl-string">&quot;reviewers&quot;</span>, limit: <span class="hl-number">25</span>, cursor,
+  });
+  <span class="hl-keyword">for</span> (<span class="hl-keyword">const</span> source <span class="hl-keyword">of</span> page<span class="hl-property">.documents</span>) console<span class="hl-property">.log</span>(source<span class="hl-property">.path</span>);
+  cursor = page<span class="hl-property">.nextCursor</span> ?? <span class="hl-keyword">undefined</span>;
+} <span class="hl-keyword">while</span> (cursor !== <span class="hl-keyword">undefined</span>);</code></pre>
+</div>
+<p>أضفنا في الشفرة المصدرية الدالة <code class="inline-code">reference(path)</code> للتحقق من المسار وإنتاج نفس المرجع. بعد تثبيت إصدار يحتوي عليها، استبدل تعريف <code class="inline-code">ref</code> المحلي بـ <code class="inline-code">import { reference as ref } from &quot;@vellumdb/sdk-js&quot;</code>. الإصدار المنشور 0.0.1 لا يصدّر هذه الدالة، لذلك يستخدم المثال أعلاه القيمة الموسومة مباشرة.</p>
+<h2 id="flutter-وdart">Flutter وDart<a class="anchor" href="#flutter-وdart" aria-label="Link to section">#</a></h2>
+<p>المتغير <code class="inline-code">client</code> يمثل عميل المشروع بعد تهيئته. الدالة <code class="inline-code">VellumWire.reference</code> موجودة في الإصدار المنشور <code class="inline-code">vellum_flutter</code> رقم 0.0.1.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-string">'users/u1'</span>)<span class="hl-property">.create</span>({<span class="hl-string">'name'</span>: <span class="hl-string">'Ada'</span>});
+<span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-string">'users/u2'</span>)<span class="hl-property">.create</span>({<span class="hl-string">'name'</span>: <span class="hl-string">'Sam'</span>});
+<span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-string">'posts/p1'</span>)<span class="hl-property">.create</span>({
+  <span class="hl-string">'title'</span>: <span class="hl-string">'First post'</span>,
+  <span class="hl-string">'author'</span>: <span class="hl-type">VellumWire</span><span class="hl-property">.reference</span>(<span class="hl-string">'users/u1'</span>),
+  <span class="hl-string">'reviewers'</span>: [
+    <span class="hl-type">VellumWire</span><span class="hl-property">.reference</span>(<span class="hl-string">'users/u1'</span>),
+    <span class="hl-type">VellumWire</span><span class="hl-property">.reference</span>(<span class="hl-string">'users/u2'</span>),
+  ],
+});
+<span class="hl-keyword">final</span> post = <span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-string">'posts/p1'</span>)<span class="hl-property">.get</span>(
+  include: [<span class="hl-string">'author'</span>, <span class="hl-string">'reviewers'</span>],
+);
+<span class="hl-fn">print</span>(post<span class="hl-property">.included</span>?[<span class="hl-string">'author'</span>]);
+<span class="hl-fn">print</span>(post<span class="hl-property">.included</span>?[<span class="hl-string">'reviewers'</span>]);
+<span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-string">'posts/p1'</span>)<span class="hl-property">.update</span>({
+  <span class="hl-string">'author'</span>: <span class="hl-type">VellumWire</span><span class="hl-property">.reference</span>(<span class="hl-string">'users/u2'</span>),
+});
+<span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-string">'posts/p1'</span>)<span class="hl-property">.update</span>({<span class="hl-string">'author'</span>: <span class="hl-keyword">null</span>});
+<span class="hl-type">String</span>? cursor;
+<span class="hl-keyword">do</span> {
+  <span class="hl-keyword">final</span> page = <span class="hl-keyword">await</span> client<span class="hl-property">.doc</span>(<span class="hl-string">'users/u1'</span>)<span class="hl-property">.referencedBy</span>(
+    collection: <span class="hl-string">'posts'</span>, field: <span class="hl-string">'reviewers'</span>, limit: <span class="hl-number">25</span>, cursor: cursor,
+  );
+  <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> source <span class="hl-keyword">in</span> page<span class="hl-property">.documents</span>) {
+    <span class="hl-fn">print</span>(source<span class="hl-property">.path</span>);
+  }
+  cursor = page<span class="hl-property">.nextCursor</span>;
+} <span class="hl-keyword">while</span> (cursor != <span class="hl-keyword">null</span>);</code></pre>
+</div>
+<h2 id="rest">REST<a class="anchor" href="#rest" aria-label="Link to section">#</a></h2>
+<p>بعد إنشاء <code class="inline-code">users/u1</code> أرسل المرجع ضمن <code class="inline-code">data</code> في مسار كتابة المستند المعتاد:</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">HTTP</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code"><span class="hl-type">POST</span> /v1/projects/<span class="hl-type">PROJECT_ID</span>/documents/posts/p1
+<span class="hl-type">Content</span>-<span class="hl-type">Type</span>: application/json
+x-vellum-api-key: <span class="hl-type">PROJECT_API_KEY</span>
+
+{<span class="hl-string">&quot;data&quot;</span>:{<span class="hl-string">&quot;title&quot;</span>:<span class="hl-string">&quot;First post&quot;</span>,<span class="hl-string">&quot;author&quot;</span>:{<span class="hl-string">&quot;$t&quot;</span>:<span class="hl-string">&quot;ref&quot;</span>,<span class="hl-string">&quot;$v&quot;</span>:<span class="hl-string">&quot;users/u1&quot;</span>}}}</code></pre>
+</div>
+<p>يجب أن يطابق الطلب قواعد الأمان ومتطلبات المصادقة الخاصة بالمشروع. إذا كانت القواعد تتطلب مستخدمًا مسجلًا، أرسل bearer token الخاص به بجانب مفتاح API للمشروع.</p>
+<h2 id="السلوك-والحدود">السلوك والحدود<a class="anchor" href="#السلوك-والحدود" aria-label="Link to section">#</a></h2>
+<ul><li>خزّن مسار المستند داخل المشروع مثل <code class="inline-code">users/u1</code>، وليس رابطًا أو معرّف مشروع أو مسار collection فقط أو كائن <code class="inline-code">DocumentReference</code> حيًا من المكتبة.</li><li>المسار من 2 إلى 10 أجزاء بالتبادل بين collection ومستند. الحد 2048 حرفًا للمسار و1500 بايت UTF-8 لكل جزء. الأجزاء المحجوزة <code class="inline-code">__...__</code> ومسارات الرجوع ومحارف التحكم غير صالحة.</li><li>المرجع لا ينشئ المستند الهدف ولا يضمن وجوده أو تفرده، ولا يضيف علاقة عكسية تلقائيًا. إنشاء الأهداف أولًا يجعل المثال واضحًا، لكنه ليس فحص foreign key تلقائيًا.</li><li><code class="inline-code">include</code> يحمّل العلاقات عند القراءة. كل هدف يخضع لفحص صلاحية القراءة. الهدف الواحد المفقود أو الممنوع يرجع null. المنع يضيف اسم حقل الإرفاق إلى <code class="inline-code">redactedRefs</code>. المصفوفات تستبعد الأهداف المفقودة والممنوعة، فلا تعتمد على عدد النتائج الموسعة كعدد للمراجع الأصلية.</li><li>استخدم المسار الكامل بدل الاعتماد على استنتاج اسم collection. أقصى عمق لـ include هو 3 مع حدود لعدد وحجم النتائج.</li><li>غيّر المرجع أو اجعله null لتغيير العلاقة أو إزالتها. يمكن استخدام عمليات المصفوفات الحالية لإضافة أو إزالة مرجع، مع تمرير القيمة الموسومة نفسها عند الإزالة. هذا لا يحذف الهدف.</li><li><code class="inline-code">include</code> خيار قراءة، وليس طريقة لتثبيت سلوك حذف دائم. المرجع وحده لا يفرض foreign key. قواعد الحذف الموجودة للمشروع، إن كانت مهيأة، تحدد سلوك restrict أو cascade أو set_null. بدونها يمكن أن يبقى مرجع لهدف محذوف.</li><li>الكتابة ترسل أحداث realtime المعتادة للمستندات. الاشتراكات تستطيع طلب include؛ لا يضيف هذا الدليل نوع أحداث أو ضمان تسليم جديدًا.</li><li>عند تكرار المثال استخدم معرّفات جديدة أو تعامل مع خطأ وجود المستند مسبقًا، لأن الأمثلة تستخدم create.</li></ul></article>
+    <footer class="article-foot"><span>VELLUM v1 · التصميم الافتراضي الرسمي لـ shadcn/ui</span><span>مولَّد من docs/guides — لا تعدّل HTML مباشرة.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">في هذه الصفحة</div><a href="#javascript-وtypescript" class="toc-link toc-l2">JavaScript وTypeScript</a><a href="#flutter-وdart" class="toc-link toc-l2">Flutter وDart</a><a href="#rest" class="toc-link toc-l2">REST</a><a href="#السلوك-والحدود" class="toc-link toc-l2">السلوك والحدود</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="ابحث في الأدلة والواجهات والأمثلة…" autocomplete="off"><button id="searchClose" type="button">إغلاق</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="../assets/docs.js" defer></script>
+</body>
+</html>

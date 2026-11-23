@@ -184,7 +184,11 @@ await sub.cancel();`,
               label: "TypeScript",
               lang: "ts",
               code: `const off = db.doc("orders/ord_1").onSnapshot(
-  (snap) => console.log(snap.doc.included, snap.doc.redactedRefs),
+  (snap) => {
+    for (const change of snap.changes) {
+      console.log(change.doc.included, change.doc.redactedRefs);
+    }
+  },
   (err) => console.error(err),
   { resolveIncludes: true, include: ["customer", { field: "items", select: ["sku"] }] }
 );`,

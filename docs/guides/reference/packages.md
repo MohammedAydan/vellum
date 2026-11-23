@@ -17,7 +17,7 @@ The libraries below are **internal building blocks** used by `apps/api` and the 
 
 | Rule | Consequence for these packages |
 | :--- | :--- |
-| Modular-monolith boundary | All domain logic lives in framework-agnostic `packages/*`. `apps/api`, `apps/dashboard`, `apps/admin` are thin delivery adapters — no AST evaluation, wire serialization or SQL compilation in route handlers/UI. |
+| Modular-monolith boundary | All domain logic lives in framework-agnostic `packages/*`. The delivery apps are thin adapters — no AST evaluation, wire serialization or SQL compilation in route handlers/UI. |
 | Dual data plane | `database-control` (users, orgs, projects, key hashes, rulesets, metering, audit) and `database-data` (documents, index defs/entries, outbox, transactions) are physically/logically separate. Bootstrap and key verification never depend on the public document API. |
 | Tenant isolation | Every Data Plane operation requires `(projectId)` (`TenantContext`). PostgreSQL transactions bind `SET LOCAL statement_timeout='5000ms'`, `app.current_project_id` so RLS fails closed. |
 | Zero customer DDL | Tenant composite indexes are rows in `document_indexes` + `document_index_entries` with binary sort keys — never `CREATE INDEX` on `documents`. |
@@ -172,6 +172,6 @@ All eight packages below are framework-agnostic (none import Hono, Next.js, or R
 
 ## Quick cross-reference
 
-- [REST Control Plane & Console](./rest-control-plane.md) · [REST Data Plane](./rest-data-plane.md) · [Realtime Protocol](./realtime-protocol.md)
+- [REST Data Plane](./rest-data-plane.md) · [Realtime Protocol](./realtime-protocol.md)
 - [Wire Format & Path Grammar](./wire-format.md) · [Errors](./errors.md)
 - Architecture narrative: [01 — Architecture](../../01-architecture.md)

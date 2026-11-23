@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>لغة قواعد الأمان DSL · VELLUM Docs</title>
+<meta name="description" content="الصياغة الكاملة والدوال المدمجة وأنماط آمنة واختبارات بالمحرك الحقيقي.">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-base="../">
+<header class="topbar">
+  <button class="mobile-menu" id="mobileMenu" type="button" aria-label="☰">☰</button>
+  <a class="brand" href="../ar/index.html"><span class="brand-mark">◈</span><span>VELLUM <span class="brand-dim">/ التوثيق</span></span></a>
+  <span class="top-badge">أمثلة مُتحقَّق منها · ثابتة</span>
+  <div class="top-actions">
+    <button class="search-trigger" id="searchTrigger" type="button">ابحث في التوثيق <kbd>⌘K</kbd></button>
+    <a class="lang-link" href="../security-rules-dsl.html" title="English">EN</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="◐">◐</button>
+    <a class="icon-btn" href="https://github.com/MohammedAydan/document-db" target="_blank" rel="noopener" aria-label="GitHub">⌥</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">البداية</div><ul><li><a href="index.html" class="nav-link nav-home">الصفحة الرئيسية للتوثيق</a></li><li><a href="quickstart.html" class="nav-link">البدء السريع</a></li><li><a href="authentication.html" class="nav-link">المصادقة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المجموعات البرمجية</div><ul><li><a href="sdks/flutter.html" class="nav-link">مجموعة Flutter البرمجية (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellumdb/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المرجع</div><ul><li><a href="reference/rest-data-plane.html" class="nav-link">واجهة REST العامة لمستوى البيانات</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">بروتوكول WebSocket للوقت الفعلي</a></li><li><a href="reference/wire-format.html" class="nav-link">تنسيق الإرسال الموسوم وقواعد المسارات</a></li><li><a href="reference/errors.html" class="nav-link">الرموز المعيارية للأخطاء وإرشادات إعادة المحاولة</a></li><li><a href="reference/packages.html" class="nav-link">واجهات الحزم البرمجية</a></li><li><a href="errors-and-limits.html" class="nav-link">الأخطاء والحدود</a></li><li><a href="rest-api.html" class="nav-link">نظرة عامة على REST API</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المفاهيم الأساسية</div><ul><li><a href="crud.html" class="nav-link">CRUD ومسارات المستندات</a></li><li><a href="field-transforms.html" class="nav-link">تحويلات الحقول</a></li><li><a href="query.html" class="nav-link">الاستعلام</a></li><li><a href="pagination.html" class="nav-link">الترقيم الصفحي</a></li><li><a href="indexes.html" class="nav-link">الفهارس المركّبة</a></li><li><a href="realtime.html" class="nav-link">الوقت الفعلي</a></li><li><a href="batch-and-transactions.html" class="nav-link">الكتابات الدفعية والمعاملات</a></li></ul></div><div class="nav-group"><div class="nav-group-title">المصادقة</div><ul><li><a href="end-user-auth.html" class="nav-link">مصادقة المستخدمين النهائيين</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">قواعد الأمان</a></li><li><a href="security-rules-dsl.html" class="nav-link">لغة قواعد الأمان DSL</a></li></ul></div><div class="nav-group"><div class="nav-group-title">التشغيل</div><ul><li><a href="production-checklist.html" class="nav-link">قائمة التحقق للإنتاج</a></li><li><a href="deployment.html" class="nav-link">النشر والاستضافة</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Guides</div><ul><li><a href="creating-relationships.html" class="nav-link">Untitled</a></li></ul></div></div>
+    <div class="sidebar-foot">تُنفَّذ الأمثلة على الـ API الحي وتُعرض كنص خامل. لا يُنفَّذ أي كود داخل هذا الموقع.</div>
+  </aside>
+  <main class="main">
+    <div class="breadcrumb">Security <span>/</span> <strong>لغة قواعد الأمان DSL</strong></div>
+    <article class="article"><h1 id="لغة-قواعد-الأمان-dsl">لغة قواعد الأمان DSL<a class="anchor" href="#لغة-قواعد-الأمان-dsl" aria-label="Link to section">#</a></h1>
+<p>DSL لغة لكتابة القواعد، وليست JavaScript أو Dart أو لغة قواعد Firebase. تتحول إلى تعبيرات JSON بالإصدار 1. ابدأ بدليل <a href="security-rules.html">قواعد الأمان</a> لفهم سياقات العمليات وصلاحية list واختلاف الوقت الفعلي.</p>
+<h2 id="الصياغة-وأول-سياسة-كاملة">الصياغة وأول سياسة كاملة<a class="anchor" href="#الصياغة-وأول-سياسة-كاملة" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TEXT</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code">rules_version = '2';
+
+function ownsNamespace() {
+  return isOwner(path.userId);
+}
+
+match /users/{userId}/notes/{noteId} {
+  allow get, list: if ownsNamespace();
+  allow create, update: if ownsNamespace()
+    &amp;&amp; isType(incoming.title, 'string');
+  allow delete: if ownsNamespace();
+}</code></pre>
+</div>
+<p>تصريح الإصدار اختياري؛ تقبل '1' و'2' وكلاهما ينتج JSON بالإصدار 1. أي إصدار آخر يصدر ملاحظة، ولا يغير المحرك. يمكن أن يبدأ مسار DSL بشرطة /. تستخدم أمثلة JSON المسارات النسبية. فضّل path.userId الصريحة؛ يدعم المترجم المصحح أيضًا الاسم المنفرد المطابق لمتغير المسار.</p>
+<p>يحتوي الملف تصريحات function وmatch في المستوى الأعلى ويجب أن ينتج قاعدة واحدة على الأقل. تضم match المتداخلة مسارها لمسار الأب وتنتج قواعد مستقلة دون وراثة الصلاحيات. ضع المتغير التكراري في نهاية المسار. التعليقات // و/<em> ... </em>/ مدعومة. استخدم الفاصلة المنقوطة دائمًا حتى حين يسمح المحلل بحذفها.</p>
+<p>يجعل allow get, list العمليتين تشتركان في التعبير. يوسع read إلى get وlist وwrite إلى create وupdate وdelete. تكرار العملية داخل الكتلة نفسها يستبدل التعبير السابق ولا يضيف OR. أما القواعد المستقلة المطابقة فتستخدم OR؛ قد تهزم قاعدة متساهلة قاعدة أكثر تقييدًا.</p>
+<h2 id="العوامل-والقيم-والأولوية">العوامل والقيم والأولوية<a class="anchor" href="#العوامل-والقيم-والأولوية" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>الصيغة</th><th>المعنى</th></tr></thead><tbody><tr><td>a == b, a != b</td><td>مساواة أو اختلاف مع مراعاة النوع؛ لا تنجح أي منهما مع طرف غائب.</td></tr><tr><td>a &lt; b, a &lt;= b, a &gt; b, a &gt;= b</td><td>ترتيب wire. افحص نوع الرقم قبل حدوده.</td></tr><tr><td>a in ['one', 'two']</td><td>عضوية في مصفوفة باستخدام مساواة ذات أنواع محددة.</td></tr><tr><td>hasKey(value, 'field')</td><td>مفتاح مباشر مملوك للكائن، لا مسار متداخل ولا قائمة سماح.</td></tr><tr><td>isType(value, 'string')</td><td>فحص نوع؛ راجع جدول الأنواع في دليل القواعد.</td></tr><tr><td>a &amp;&amp; b</td><td>نجاح التعبيرين.</td></tr><tr><td>a OR b (الرمز المزدوج)</td><td>نجاح واحد على الأقل.</td></tr><tr><td>!a</td><td>النفي؛ استخدم أقواسًا مع التعبيرات المركبة.</td></tr></tbody></table></div>
+<p>في هذا المحلل تربط المقارنات أولًا، ثم ! ثم &amp;&amp; ثم ||. استخدم الأقواس بدل الاعتماد على أولوية غير مألوفة. القيم تشمل نصوصًا باقتباس مفرد أو مزدوج وأرقامًا بإشارة وقيمًا منطقية وnull ومصفوفات ثابتة. عناصر المصفوفة الديناميكية غير مدعومة. لا تستخدم كائنات JavaScript الحرفية أو الوصول بالأقواس أو methods أو الحساب أو الحلقات أو الإسناد أو الشرط الثلاثي أو regex أو تجميع النصوص أو استدعاءات قاعدة البيانات.</p>
+<p>يُقارن الحقل المنفرد في موضع شرط بالقيمة true، ولا توجد truthiness خاصة بـ JavaScript. اكتب شروطًا صريحة. الدوال مساعدات لتعبيرات منطقية وليست دوال لإرجاع قيم حسابية. استخدم استدعاء الدالة كشرط كامل، لا كطرف داخل مقارنة أخرى أو داخل مصفوفة.</p>
+<h2 id="جميع-الدوال-المدمجة">جميع الدوال المدمجة<a class="anchor" href="#جميع-الدوال-المدمجة" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>الدالة</th><th>الوسائط</th><th>السلوك الدقيق</th></tr></thead><tbody><tr><td>isSignedIn()</td><td>دون وسائط</td><td>auth.uid != null؛ الحساب المجهول ذو uid يعد مسجلًا.</td></tr><tr><td>isAuth()</td><td>دون وسائط</td><td>مرادف isSignedIn().</td></tr><tr><td>isOwner(id)</td><td>قيمة واحدة</td><td>وجود هوية ومساواة uid للقيمة.</td></tr><tr><td>hasRole(role)</td><td>قيمة واحدة</td><td>مساواة auth.claims.role للقيمة، لا فحص مصفوفة claims.roles.</td></tr><tr><td>hasAnyRole(['writer', 'reviewer'])</td><td>مصفوفة نصوص ثابتة</td><td>وجود قيمة auth.claims.role المفردة داخل المصفوفة.</td></tr><tr><td>isEmailVerified()</td><td>دون وسائط</td><td>مساواة auth.email_verified لـ true، دون اشتراط uid بذاتها.</td></tr><tr><td>unchanged(['ownerId', 'createdAt'])</td><td>مصفوفة نصوص ثابتة</td><td>كل حقل جديد كامل يساوي الحقل المخزن. تقبل المسارات المنقطة. المصفوفة الفارغة true؛ الحقول الغائبة لا تتساوى.</td></tr><tr><td>onlyChanged(['title'])</td><td>مصفوفة نصوص ثابتة</td><td>نفي مساواة كل حقل مع إصدار ملاحظة. لا تمنع تغيير حقول أخرى؛ الفارغة true. ليست قائمة سماح للكتابة.</td></tr><tr><td>hasKey(value, 'field')</td><td>قيمتان</td><td>مفتاح مباشر مملوك لكائن غير مصفوفة؛ مفاتيح prototype المحجوزة ممنوعة.</td></tr><tr><td>isType(value, 'type')</td><td>قيمتان</td><td>null أو bool/boolean أو string أو number أو array أو map أو وسم wire مثل ref/int/ts/bytes/geo.</td></tr></tbody></table></div>
+<p>لا توجد دوال مدمجة أخرى. العدد الخاطئ للوسائط يفشل التجميع. تتطلب unchanged وonlyChanged وhasAnyRole مصفوفات نصوص ثابتة، لا متغيرًا يحتوي مصفوفة. لا تسمح للعميل بمنح نفسه مطالبة دور موثوقة. ولا تستبدل فحص الهوية بـ auth != null؛ سياق غير المسجل كائن يحتوي uid:null.</p>
+<h2 id="اختصارات-السياق">اختصارات السياق<a class="anchor" href="#اختصارات-السياق" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>DSL</th><th>متغير JSON القياسي</th></tr></thead><tbody><tr><td>auth.uid, request.auth.uid</td><td>auth.uid</td></tr><tr><td>auth.email, auth.email_verified, auth.is_anonymous</td><td>المسار نفسه</td></tr><tr><td>auth.claims.team, request.auth.claims.team</td><td>auth.claims.team</td></tr><tr><td>path.userId</td><td>path.userId</td></tr><tr><td>resource, resource.title, resource.data.title</td><td>resource.data, resource.data.title, resource.data.title</td></tr><tr><td>incoming, incoming.title</td><td>request.data, request.data.title</td></tr><tr><td>request.resource.data.title</td><td>request.data.title</td></tr><tr><td>request.data.title, request.time</td><td>المسار نفسه</td></tr></tbody></table></div>
+<p>incoming هو المستند الجديد الكامل بعد الدمج والتحويلات؛ null عند القراءة والحذف. resource يساوي null عند الإنشاء وبوابات list على المجموعة. الحقول الغائبة undefined وليست null صريحة.</p>
+<h2 id="قراءة-عامة-وأدوار-موثوقة-والتحقق-من-الحقول">قراءة عامة وأدوار موثوقة والتحقق من الحقول<a class="anchor" href="#قراءة-عامة-وأدوار-موثوقة-والتحقق-من-الحقول" aria-label="Link to section">#</a></h2>
+<p>تجعل هذه السياسة كل المنشورات عامة عمدًا. ينشئ المسجل منشوره، ويعدله المؤلف دون نقل الملكية، ويحذف صاحب دور reviewer الموثوق.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TEXT</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code">match /posts/{postId} {
+  allow read: if true;
+  allow create: if isSignedIn()
+    &amp;&amp; incoming.authorId == auth.uid
+    &amp;&amp; isType(incoming.title, 'string')
+    &amp;&amp; isType(incoming.score, 'number')
+    &amp;&amp; incoming.score &gt;= 0 &amp;&amp; incoming.score &lt;= 100;
+  allow update: if isOwner(resource.authorId)
+    &amp;&amp; unchanged(['authorId'])
+    &amp;&amp; isType(incoming.title, 'string')
+    &amp;&amp; isType(incoming.score, 'number')
+    &amp;&amp; incoming.score &gt;= 0 &amp;&amp; incoming.score &lt;= 100;
+  allow delete: if hasRole('reviewer');
+}</code></pre>
+</div>
+<p>تقيّد الشروط الحقول المذكورة ولا ترفض الحقول الإضافية. يقبل isType(title,'string') النص الفارغ؛ لا يوجد فحص للطول. لجعل المنشورات خاصة لا تغير get مع ترك list:true. استخدم مساحة خاصة بالمستخدم، أو امنع list على مجموعة متعددة الملاك.</p>
+<h2 id="العلاقات-والحقول-الثابتة">العلاقات والحقول الثابتة<a class="anchor" href="#العلاقات-والحقول-الثابتة" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TEXT</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code">match /users/{userId}/notes/{noteId} {
+  allow get, list: if isOwner(path.userId);
+  allow create: if isOwner(path.userId)
+    &amp;&amp; isType(incoming.author, 'ref')
+    &amp;&amp; incoming.author.$v == auth.claims.profilePath;
+  allow update: if isOwner(path.userId)
+    &amp;&amp; unchanged(['author']);
+}</code></pre>
+</div>
+<p>يفترض المثال أن الرمز المتحقق منه يحمل profilePath موثوقة مثل profiles/alice. يتحقق النوع من مرجع موسوم، وتقارن $v مساره. لا يفحص وجود الهدف أو يقرأه أو يمنح صلاحية له أو ينشئ علاقة عكسية. يجب ألا يستطيع المستخدم تعيين profilePath لنفسه. تظل الأهداف المضمنة بحاجة لفحص get الخاص بها.</p>
+<p>تفحص unchanged القيمة الجديدة الكاملة؛ لذلك يمكن لتعديل جزئي لا يذكر author النجاح، بينما يفشل استبدال المستند دون author. استخدم فحص الحقول المطلوبة وأنواعها عند الإنشاء؛ ليست unchanged تحققًا كافيًا للإنشاء.</p>
+<h2 id="الدوال-القابلة-لإعادة-الاستخدام">الدوال القابلة لإعادة الاستخدام<a class="anchor" href="#الدوال-القابلة-لإعادة-الاستخدام" aria-label="Link to section">#</a></h2>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TEXT</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code">function mayRead(userId) {
+  return isOwner(userId) || hasAnyRole(['reviewer', 'support']);
+}
+match /users/{userId}/tickets/{ticketId} {
+  allow get, list: if mayRead(path.userId);
+}</code></pre>
+</div>
+<p>تحتوي الدالة تعبير return واحدًا. تستبدل الوسائط قيمًا أو تعبيرات كاملة، وتعمل الإشارات لدوال معرفة لاحقًا. التعريفات في المستوى الأعلى وأسماؤها فريدة. يمكن لتعريف مستخدم أن يحجب دالة مدمجة، لذا لا تسم مساعدك isOwner أو isSignedIn. تُوسع الاستدعاءات عند التجميع؛ يمنع الاستدعاء الذاتي، وحد عمق التوسيع 16، ويبقى التعبير النهائي مقيدًا بعمق 10 و100 عقدة. لا تضيف المساعدات قدرات تشغيل جديدة.</p>
+<h2 id="التجميع-والتحويل-العكسي-والمحاكاة">التجميع والتحويل العكسي والمحاكاة<a class="anchor" href="#التجميع-والتحويل-العكسي-والمحاكاة" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table><thead><tr><th>الطريقة والمسار</th><th>الطلب</th><th>الاستجابة</th></tr></thead><tbody><tr><td>POST /v1/projects/:projectId/rules/compile</td><td>source: نص DSL</td><td>ast وdiagnostics</td></tr><tr><td>POST /v1/projects/:projectId/rules/decompile</td><td>rulesAst: AST إصدار 1</td><td>dsl</td></tr><tr><td>POST /v1/projects/:projectId/rules/simulate</td><td>operation وpath واختياريًا rulesAst وauth وresourceData وincomingData</td><td>allowed وmatchedRule وevaluationTrace</td></tr></tbody></table></div>
+<p>استخدم مفتاح المشروع في X-Project-Key. لا تكتب هذه الأدوات مستندات ولا تفعل قواعد. يختار auth في المحاكاة مدخل الاختبار فقط، ولا يصادق على طلب بيانات حقيقي. عند حذف rulesAst تستخدم المحاكاة القواعد النشطة إن وجدت. يحافظ التحويل العكسي على سلوك التعبيرات المدعومة لا التعليقات وأسماء المساعدات والتنسيق.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">JSON</span><button class="cb-copy" type="button">نسخ</button></div>
+  <pre><code class="hl-code">{
+  <span class="hl-string">&quot;operation&quot;</span>: <span class="hl-string">&quot;get&quot;</span>,
+  <span class="hl-string">&quot;path&quot;</span>: <span class="hl-string">&quot;users/alice/notes/one&quot;</span>,
+  <span class="hl-string">&quot;auth&quot;</span>: { <span class="hl-string">&quot;uid&quot;</span>: <span class="hl-string">&quot;alice&quot;</span>, <span class="hl-string">&quot;claims&quot;</span>: {} },
+  <span class="hl-string">&quot;resourceData&quot;</span>: { <span class="hl-string">&quot;title&quot;</span>: <span class="hl-string">&quot;Private note&quot;</span> },
+  <span class="hl-string">&quot;incomingData&quot;</span>: <span class="hl-keyword">null</span>,
+  <span class="hl-string">&quot;rulesAst&quot;</span>: {
+    <span class="hl-string">&quot;version&quot;</span>: <span class="hl-number">1</span>,
+    <span class="hl-string">&quot;rules&quot;</span>: [{
+      <span class="hl-string">&quot;match&quot;</span>: <span class="hl-string">&quot;users/{userId}/notes/{noteId}&quot;</span>,
+      <span class="hl-string">&quot;allow&quot;</span>: { <span class="hl-string">&quot;get&quot;</span>: {
+        <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;all&quot;</span>,
+        <span class="hl-string">&quot;conditions&quot;</span>: [
+          { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;!=&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.uid&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;val&quot;</span>: <span class="hl-keyword">null</span> } },
+          { <span class="hl-string">&quot;op&quot;</span>: <span class="hl-string">&quot;==&quot;</span>, <span class="hl-string">&quot;left&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;auth.uid&quot;</span> }, <span class="hl-string">&quot;right&quot;</span>: { <span class="hl-string">&quot;var&quot;</span>: <span class="hl-string">&quot;path.userId&quot;</span> } }
+        ]
+      } }
+    }]
+  }
+}</code></pre>
+</div>
+<p>كرر مع uid:bob وuid:null وتوقع الرفض. ثم اختبر طلبات مستندات حقيقية بمفتاح عام ورمز مستخدم مع القواعد النشطة. لا تثبت المحاكاة بوابات المجموعات أو ترشيح النتائج أو نطاقات المفاتيح أو مصادقة المشروع أو سلوك الوقت الفعلي.</p>
+<h2 id="الملاحظات-والأخطاء-الشائعة">الملاحظات والأخطاء الشائعة<a class="anchor" href="#الملاحظات-والأخطاء-الشائعة" aria-label="Link to section">#</a></h2>
+<p>أخطاء الصياغة تحمل line وcolumn يبدأان من 1 ومقطعًا يحدد موضع الخطأ. قد تنتج AST ناجحة مع ملاحظات غير مانعة: دوال مجهولة أو جذور متغيرات مجهولة أو إصدارات غير مدعومة أو مصفوفات غير ثابتة أو onlyChanged. اشترط صفر ملاحظات ثم اختبر حالات الرفض؛ الخطأ الإملائي داخل جذر معروف قد لا ينتج ملاحظة أصلًا.</p>
+<p>تتحول الدالة المجهولة إلى false، لذا قد يصبح !unknownFunction() مساويًا true. تختلف المقارنات ذات الحقول الغائبة تحت النفي أيضًا. لا تعتبر تحذيرًا أو اسمًا مجهولًا ضمان رفض للسياسة. فضّل شروط وجود ونوع وهوية إيجابية.</p>
+<p>الحد الأقصى لطول المصدر 131072 وحدة نص JavaScript؛ تسميه رسالة الخطأ bytes لكن التنفيذ يقيس طول النص. الحد 16384 رمزًا، وعمق المحلل 64. اجعل القواعد قصيرة كيلا تتجاوز العضوية ميزانية 256 خطوة. لا توجد قائمة عامة للحقول المسموحة؛ ليست onlyChanged ولا hasKey كذلك، والتحقق داخل عميل غير موثوق لا يوفرها.</p>
+<p>تستخرج tests/integration/rules-guide-examples.test.ts الأمثلة الكاملة من الدليلين وتنفذها بالتفويض الحقيقي ومحرك المستندات المحلي. شغّل corepack pnpm exec vitest run tests/integration/rules-guide-examples.test.ts عند تعديلها.</p></article>
+    <footer class="article-foot"><span>VELLUM v1 · التصميم الافتراضي الرسمي لـ shadcn/ui</span><span>مولَّد من docs/guides — لا تعدّل HTML مباشرة.</span></footer>
+  </main>
+  <aside class="toc"><div class="toc-title">في هذه الصفحة</div><a href="#الصياغة-وأول-سياسة-كاملة" class="toc-link toc-l2">الصياغة وأول سياسة كاملة</a><a href="#العوامل-والقيم-والأولوية" class="toc-link toc-l2">العوامل والقيم والأولوية</a><a href="#جميع-الدوال-المدمجة" class="toc-link toc-l2">جميع الدوال المدمجة</a><a href="#اختصارات-السياق" class="toc-link toc-l2">اختصارات السياق</a><a href="#قراءة-عامة-وأدوار-موثوقة-والتحقق-من-الحقول" class="toc-link toc-l2">قراءة عامة وأدوار موثوقة والتحقق من الحقول</a><a href="#العلاقات-والحقول-الثابتة" class="toc-link toc-l2">العلاقات والحقول الثابتة</a><a href="#الدوال-القابلة-لإعادة-الاستخدام" class="toc-link toc-l2">الدوال القابلة لإعادة الاستخدام</a><a href="#التجميع-والتحويل-العكسي-والمحاكاة" class="toc-link toc-l2">التجميع والتحويل العكسي والمحاكاة</a><a href="#الملاحظات-والأخطاء-الشائعة" class="toc-link toc-l2">الملاحظات والأخطاء الشائعة</a></aside>
+</div>
+<div class="search-overlay" id="searchOverlay" hidden>
+  <div class="search-box"><input id="searchInput" type="search" placeholder="ابحث في الأدلة والواجهات والأمثلة…" autocomplete="off"><button id="searchClose" type="button">إغلاق</button></div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+<script src="../assets/docs.js" defer></script>
+</body>
+</html>

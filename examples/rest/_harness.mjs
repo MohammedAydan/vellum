@@ -41,10 +41,13 @@ function loadDotEnv(file) {
 loadDotEnv(path.join(ROOT, ".env.phase5.local"));
 
 const BASE = process.env["VELLUM_API_BASE"] ?? "http://127.0.0.1:8080";
-const EMAIL = "visual@vellum.dev";
-const PASSWORD = "visual123";
+const EMAIL = process.env["VELLUM_EMAIL"];
+const PASSWORD = process.env["VELLUM_PASSWORD"];
 const PROJECT_ID =
-  process.env["VELLUM_PROJECT_ID"] ?? "1382468e-5dc0-44a8-9b68-5427a5b6ea5c";
+  process.env["VELLUM_PROJECT_ID"];
+if (!EMAIL || !PASSWORD || !PROJECT_ID) {
+  throw new Error("Set VELLUM_EMAIL, VELLUM_PASSWORD and VELLUM_PROJECT_ID for a disposable test project");
+}
 
 /** Tiny assertion helper so examples exit non-zero on any unexpected result. */
 export function check(condition, message) {

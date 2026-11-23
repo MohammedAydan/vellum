@@ -1,3 +1,4 @@
+import { docsPageSlugs } from './docs-pages.mjs';
 /**
  * Full real-browser UI audit — every page, every component, multiple viewports,
  * EN + AR, light + dark. Captures screenshots and reports every console error,
@@ -118,15 +119,7 @@ const adminRoutes = [
   ["auth-control", "/admin/auth"],
 ];
 
-const docsSlugs = [
-  "", "quickstart", "authentication", "crud", "field-transforms", "query", "pagination",
-  "indexes", "smart-indexing", "relationships", "realtime", "batch-and-transactions",
-  "end-user-auth", "security-rules", "security-rules-dsl", "sdks/javascript", "sdks/flutter",
-  "rest-api", "reference/rest-data-plane", "reference/rest-control-plane",
-  "reference/realtime-protocol", "reference/wire-format", "reference/errors",
-  "errors-and-limits", "reference/packages", "production-checklist", "deployment",
-  "live-verification", "security-and-defense", "metering-and-billing",
-];
+const docsSlugs = docsPageSlugs().map(slug => slug === 'index' ? '' : slug);
 
 const browser = await chromium.launch({ headless: true });
 

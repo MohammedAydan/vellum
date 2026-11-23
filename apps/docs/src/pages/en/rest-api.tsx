@@ -16,27 +16,23 @@ export default function Page() {
           every route.
         </P>
         <P>
-          There are two authentication models that are deliberately kept apart. The <strong>document
-          plane</strong> authenticates each call with an API key sent in a header. The <strong>control
-          plane</strong> authenticates operators and dashboard users with realm-bound session tokens.
-          A session token never authorizes a document read, and an API key never authorizes an admin
-          mutation.
+          The <strong>document plane</strong> authenticates each call with an API key sent in a header,
+          plus an optional EdDSA end-user bearer. An API key never authorizes anything outside the
+          document plane, and no other credential is accepted on it.
         </P>
         <Callout tone="info" title="Prefer an SDK for application code">
           <P>
             Use raw HTTP when calling from a language without an official SDK, or when debugging.
-            The endpoint-by-endpoint references cover{" "}
-            <PageLink slug="reference/rest-data-plane">data plane operations</PageLink> and{" "}
-            <PageLink slug="reference/rest-control-plane">control plane operations</PageLink>.
+            The endpoint-by-endpoint reference covers{" "}
+            <PageLink slug="reference/rest-data-plane">data plane operations</PageLink>.
           </P>
         </Callout>
       </Section>
 
-      <Section id="authentication" title="Two authentication models">
+      <Section id="authentication" title="Authentication">
         <P>
           Data plane calls are scoped by <code>projectId</code> in the URL, and the
-          API key you send must belong to that exact project. Control plane calls are
-          scoped by the session's realm and organization memberships instead.
+          API key you send must belong to that exact project.
         </P>
         <Table
           head={["Header", "Value", "Used for"]}
@@ -51,20 +47,11 @@ export default function Page() {
           An end-user token must be an EdDSA <code>vellum+enduser+jwt</code> verified against the
           project's Ed25519 configuration. There is no HS256 fallback: an invalid token returns{" "}
           <code>401 UNAUTHENTICATED</code> rather than silently degrading to an anonymous context. See{" "}
-          <PageLink slug="end-user-auth">End users &amp; the three realms</PageLink>.
+          <PageLink slug="end-user-auth">End-user authentication</PageLink>.
         </P>
-        <Table
-          head={["Realm", "Base path", "Session proof", "Who uses it"]}
-          rows={[
-            [<code>SUPER_ADMIN</code>, <code>/v1/admin/**</code>, "Realm-bound access token + vellum_admin_rt refresh cookie", "Platform operators"],
-            [<code>CUSTOMER_CONSOLE</code>, <code>/v1/console/**</code>, "Realm-bound access token + vellum_console_rt refresh cookie", "Customer dashboard"],
-            [<code>PROJECT_END_USER</code>, <code>/v1/projects/:projectId/auth/**</code>, "Project-scoped end-user JWT", "Application end users"],
-          ]}
-        />
         <P>
-          Each realm signs its own tokens and a token from one realm is rejected by the others.
-          Refresh cookies are <code>HttpOnly</code> with realm-specific names and paths, and refresh
-          tokens rotate as single-use SHA-256 hashes. See{" "}
+          End-user tokens rotate as single-use refresh hashes, and refresh cookies are{" "}
+          <code>HttpOnly</code> with project-specific names and paths. See{" "}
           <PageLink slug="authentication">Authentication</PageLink>.
         </P>
       </Section>
@@ -80,15 +67,11 @@ export default function Page() {
             ["Query", <code>/v1/projects/:projectId/query</code>, "API key + rules", "Structured where / orderBy / select / cursor query."],
             ["Batch", <code>/v1/projects/:projectId/batchWrite</code>, "API key + rules", "Up to 100 atomic mutations in one transaction."],
             [<PageLink slug="relationships">Relations</PageLink>, <>…/documents:referencedBy · …/documents:aggregate · …/documents:bulk-delete</>, "API key + rules", "Reverse lookups to referencing documents, grouped aggregates and reference-aware bulk delete."],
-            [<PageLink slug="relationships">Relation rules</PageLink>, <code>/v1/projects/:projectId/relation-rules</code>, "Console session", "GET/PUT per-project cascade, set_null and restrict referential-integrity rules."],
             [<PageLink slug="realtime">Realtime</PageLink>, <code>/v1/realtime</code>, "API key over WebSocket", "Durable subscribe/resume with watermarks and gap detection; opt-in relation includes."],
             ["Transactions", <><code>…/transactions:begin</code> / <code>…/transactions:commit</code></>, "API key + rules", "Issue an OCC token and commit a read-verify-write cycle."],
             ["Indexes", <><code>…/indexes</code> / <code>…/indexes/:indexId</code></>, "sk_ with indexes:manage", "List, register and delete composite indexes."],
-            ["Collections", <><code>…/collections</code> / <code>…/collections/:name</code></>, "pk_ reads, sk_ writes; console session", "Eight lifecycle endpoints: list, create, info, patch, clear, delete, import, export."],
-            ["Auth", <code>/v1/auth/**</code>, "Public / session", "Email sign-up and sign-in, session lookup, sign-out."],
-            ["Usage", <code>/v1/projects/:projectId/usage</code>, "Session", "Daily metering counters from project_usage_daily."],
-            [<PageLink slug="reference/rest-control-plane">Console</PageLink>, <code>/v1/console/**</code>, "Console session", "Dashboard control-plane reads and audited mutations."],
-            [<PageLink slug="reference/rest-control-plane">Admin</PageLink>, <code>/v1/admin/**</code>, "Super-admin session", "Cluster telemetry, tenants, audit logs, feature flags."],
+            ["Collections", <><code>…/collections</code> / <code>…/collections/:name</code></>, "pk_ reads, sk_ writes", "Eight lifecycle endpoints: list, create, info, patch, clear, delete, import, export."],
+            ["Auth", <code>/v1/projects/:projectId/auth/**</code>, "API key", "End-user email sign-up and sign-in, token refresh, sign-out, MFA."],
           ]}
         />
       </Section>
@@ -96,10 +79,8 @@ export default function Page() {
       <Section id="collections-lifecycle" title="Collections lifecycle">
         <P>
           Collections are persisted registry rows, not an inferred <code>DISTINCT</code> list. Eight
-          REST endpoints manage them on each of two surfaces: the public{" "}
-          <code>/v1/projects/:projectId/collections…</code> (API-key auth) and the
-          session-authenticated <code>/v1/console/projects/:projectId/collections…</code>{" "}
-          used by the Dashboard. Reads (list, single, export) accept a <code>pk_</code> key; writes
+          REST endpoints manage them under{" "}
+          <code>/v1/projects/:projectId/collections…</code> (API-key auth). Reads (list, single, export) accept a <code>pk_</code> key; writes
           (create, patch, clear, delete, import) require an <code>sk_</code> key. Listing defaults to{" "}
           <code>limit=50</code> — pass <code>?limit=500</code> to see all collections when more than
           50 exist. <strong>Clear</strong> removes every document but keeps the registration and
@@ -227,7 +208,6 @@ export default function Page() {
           head={["Read", "Why"]}
           rows={[
             [<PageLink slug="reference/rest-data-plane">Data plane REST API</PageLink>, "Exact request and response JSON for documents, query, batch, transactions and indexes."],
-            [<PageLink slug="reference/rest-control-plane">Control plane REST API</PageLink>, "Session-authenticated console, admin and end-user auth endpoints."],
             [<PageLink slug="reference/wire-format">Wire format &amp; paths</PageLink>, "Tagged values, $op transforms and path grammar."],
             [<PageLink slug="reference/realtime-protocol">Realtime WebSocket protocol</PageLink>, "Live change streams over /v1/realtime."],
           ]}

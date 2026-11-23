@@ -41,10 +41,14 @@ function loadDotEnv(file: string): void {
 loadDotEnv(path.join(ROOT, ".env.phase5.local"));
 
 const BASE = process.env["VELLUM_API_BASE"] ?? "http://127.0.0.1:8080";
-const EMAIL = "visual@vellum.dev";
-const PASSWORD = "visual123";
-const PROJECT_ID =
-  process.env["VELLUM_PROJECT_ID"] ?? "1382468e-5dc0-44a8-9b68-5427a5b6ea5c";
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Set ${name} for a disposable test project`);
+  return value;
+}
+const EMAIL = requiredEnv("VELLUM_EMAIL");
+const PASSWORD = requiredEnv("VELLUM_PASSWORD");
+const PROJECT_ID = requiredEnv("VELLUM_PROJECT_ID");
 
 export interface ApiReply<T = unknown> {
   status: number;

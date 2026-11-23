@@ -19,9 +19,8 @@ export default function Page() {
       <Section id="overview" title="نظرة عامة: خريطة الحزم">
         <P>
           يوزّع المستودع المنطق بأكمله على حزم مستقلة عن الأطر تحت{" "}
-          <code>packages/</code>، بينما لا تعدو تطبيقات <code>apps/api</code> و
-          <code>apps/dashboard</code> و<code>apps/admin</code> كونها محوّلات
-          توصيل رقيقة. لا تُقيَّم شجرة القواعد ولا تُجمَّع عبارات SQL ولا تُسلسَّل
+          <code>packages/</code>، بينما لا تعدو تطبيقات <code>apps/*</code> كونها
+          محوّلات توصيل رقيقة. لا تُقيَّم شجرة القواعد ولا تُجمَّع عبارات SQL ولا تُسلسَّل
           القيم الموسومة داخل معالجات المسارات أو مكوّنات الواجهة.
         </P>
         <Callout tone="warning" title="هذه حزم داخلية، لا مجموعة SDK عامة">
@@ -255,8 +254,7 @@ export default function Page() {
           تبعيات crypto أصلية خارج <code>node:crypto</code> و<code>nodemailer</code>:
           تجزئة كلمات المرور، وتشفير مفاتيح Ed25519 الخاصة، وتوقيع رموز الوصول
           بـ EdDSA، وجلسات التحديث مع التدوير وكشف إعادة التشغيل، ورموز TOTP
-          ورموز الاسترداد، وخدمات الجلسة المقيدة بالمجال (
-          <code>super_admin</code> و<code>customer_console</code>) عبر HMAC-SHA256.
+          ورموز الاسترداد، وخدمات الجلسة عبر HMAC-SHA256.
           من هنا تُوقَّع رموز المستخدم النهائي التي يقبلها مستوى المستندات؛ أمّا
           رموز HS256 المُزوَّرة فتُرفض هناك.
         </P>
@@ -392,8 +390,7 @@ export default function Page() {
           <strong>المسؤولية:</strong> نظام تصميم مبني على React 19 وTypeScript
           صارم وTailwind CSS 4 ومكوّنات Radix UI الوصولية، مع توجّه RTL أصيل عبر
           الخصائص المنطقية في CSS، وThemeProvider للوضعين الفاتح والداكن، ومعرض
-          Storybook. تستخدمه لوحتا <code>apps/dashboard</code> و
-          <code>apps/admin</code> لتوحيد اللغة البصرية، وهو حزمة واجهات لا علاقة
+          Storybook. تستخدمه تطبيقات الواجهة لتوحيد اللغة البصرية، وهو حزمة واجهات لا علاقة
           لها بمنطق المستندات.
         </P>
       </Section>

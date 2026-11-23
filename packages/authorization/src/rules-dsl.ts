@@ -607,10 +607,17 @@ class DslParser {
     }
   }
 
+  /** Path parameters in scope for the match block being parsed (`{userId}` -> `userId`). */
+  private activePathParams: ReadonlySet<string> = new Set<string>();
+
   private parseMatchBlockInner(parentPath: string, matchTok: Token): ParsedRule[] {
     this.expect("match");
     const path = this.parseMatchPath(matchTok);
     const fullPath = joinMatchPaths(parentPath, path);
+    const outerPathParams = this.activePathParams;
+    this.activePathParams = new Set(
+      Array.from(fullPath.matchAll(/\{([^}=]+)(?:=\*\*)?\}/g), (m) => m[1]!)
+    );
 
     this.expect("{");
     const nestedRules: ParsedRule[] = [];
@@ -635,6 +642,7 @@ class DslParser {
       this.fail(`Expected 'allow' or 'match' inside match block but found '${this.current().raw}'`);
     }
     this.expect("}");
+    this.activePathParams = outerPathParams;
 
     const rules: ParsedRule[] = [];
     if (ownAllow !== null && ownToken !== null) {
@@ -774,6 +782,12 @@ class DslParser {
     }
 
     const t = this.current();
+    // Quoted strings are always literals: 'null', 'true' and 'false' must not
+    // be read as keywords.
+    if (t.type === "string") {
+      this.next();
+      return { val: t.value };
+    }
     if (t.value === "true" || t.value === "false") {
       this.next();
       return t.value === "true";
@@ -782,9 +796,9 @@ class DslParser {
       this.next();
       return { val: null };
     }
-    if (t.type === "string" || t.type === "number") {
+    if (t.type === "number") {
       this.next();
-      return { val: t.type === "number" ? Number(t.value) : t.value };
+      return { val: Number(t.value) };
     }
     if (t.value === "-" || t.value === "+") {
       const signTok = this.next();
@@ -815,7 +829,9 @@ class DslParser {
     while (!this.at("]")) {
       if (this.current().type === "eof") this.fail("Unterminated array literal");
       const element = this.parsePrimary(params);
-      if (isVal(element)) {
+      if (typeof element === "boolean") {
+        values.push(element);
+      } else if (isVal(element)) {
         values.push(element.val);
       } else {
         this.warn("Array elements must be literals; a non-literal element was replaced with null", this.current());
@@ -829,6 +845,11 @@ class DslParser {
 
   private parseDottedPath(): InternalNode {
     const first = this.next();
+    // A bare identifier naming a path parameter (`userId` in `match /users/{userId}`)
+    // is the path binding, i.e. `path.userId`.
+    if (this.activePathParams.has(first.value) && !this.at(".")) {
+      return { var: `path.${first.value}` };
+    }
     const parts: string[] = [first.value];
     const pathToken = first;
     while (this.at(".") && this.peek(1).type === "ident") {

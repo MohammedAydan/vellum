@@ -1,3 +1,4 @@
+import { RelationshipCreation } from "../../relationship-creation";
 import {
   Api,
   Callout,
@@ -64,29 +65,9 @@ const includeRest = `curl -s -X POST \\
     "limit": 25
   }'`;
 
-const readRulesRest = `curl -s \\
-  "https://api.example.com/v1/projects/$PROJECT_ID/relation-rules" \\
-  -H "authorization: Bearer $CONSOLE_SESSION"
-# => { "projectId": "...", "version": 3, "rules": [ ... ] }`;
-
-const putRulesRest = `curl -s -X PUT \\
-  "https://api.example.com/v1/projects/$PROJECT_ID/relation-rules" \\
-  -H "authorization: Bearer $CONSOLE_SESSION" \\
-  -H "content-type: application/json" \\
-  -H "if-match: 3" \\
-  -d '{
-    "rules": [
-      { "collection": "orders", "field": "customerId",
-        "targetCollection": "users", "onDelete": "restrict" },
-      { "collection": "comments", "field": "postId",
-        "targetCollection": "posts", "onDelete": "cascade" }
-    ]
-  }'
-# => 409 ABORTED_CONFLICT when the version is stale`;
-
-const referencedByJs = `let cursor;
+const referencedByJs = `let cursor: string | undefined;
 do {
-  const page = await db.doc("users/u1").referencedBy({
+  const page: import("@vellumdb/sdk-js").ReferencedByPage = await db.doc("users/u1").referencedBy({
     collection: "orders",
     field: "customerId",
     limit: 25,
@@ -223,6 +204,7 @@ export default function Page() {
       description="علاقات $ref المحمّلة مسبقًا، والتجميع، ومجموعات OR، وعوامل النص، وupsert والحذف الجماعي ومدة صلاحية المستندات."
       eyebrow="المفاهيم الأساسية"
     >
+      <RelationshipCreation lang="ar" />
       <Section id="overview" title="نظرة عامة">
         <P>
           يضيف الإصدار V2 إمكانيات جديدة لمحرك الاستعلام: يمكنك تحميل المستندات المُشار إليها بـ{" "}
@@ -300,17 +282,9 @@ export default function Page() {
           ]}
         />
         <P>
-          تُدار القواعد لكل مشروع عبر نقطة relation-rules المصادَق عليها بجلسة الـ Console، وتُحمَّل
-          إلى محرك المستندات كـ <code>EngineContext.relationRules</code> مع بث إبطال بين النسخ عند كل
-          تغيير. الكتابة محمية بالتزامن التفاؤلي: مرّر <code>version</code> الحالية كـ{" "}
-          <code>expectedVersion</code> في الجسم أو في ترويسة <code>If-Match</code>.
+          تُدار القواعد لكل مشروع وتُحمَّل إلى محرك المستندات كـ{" "}
+          <code>EngineContext.relationRules</code> مع بث إبطال بين النسخ عند كل تغيير.
         </P>
-        <CodeTabs
-          tabs={[
-            { label: "قراءة القواعد", lang: "bash", code: readRulesRest },
-            { label: "استبدال القواعد", lang: "bash", code: putRulesRest },
-          ]}
-        />
       </Section>
 
       <Section id="reverse-lookup" title="البحث العكسي (referencedBy)">

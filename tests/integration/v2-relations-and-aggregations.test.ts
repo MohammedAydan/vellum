@@ -158,7 +158,6 @@ async function indexFieldsOf(collectionPath: string): Promise<IndexAdvisorIndex[
 describe("V2 relations", () => {
   it("resolves 20 parents -> 20 referenced users with one batch read per parent", async () => {
     const parents: string[] = [];
-    const before = memoryCounter.batchReadCalls;
     for (let i = 0; i < 20; i += 1) {
       const userPath = `${PREFIX}users/u${i}`;
       await put(userPath, { name: `User ${i}`, email: `u${i}@example.test` });
@@ -167,6 +166,9 @@ describe("V2 relations", () => {
       await put(parentPath, { title: `Post ${i}`, authorId: { $ref: userPath } });
     }
 
+    // Count only the read phase: writes with $ref values also batch-read their
+    // targets (reference validation), which is not what this test measures.
+    const before = memoryCounter.batchReadCalls;
     for (const path of parents) {
       const doc = await engine.getDocument({
         ...TENANT,

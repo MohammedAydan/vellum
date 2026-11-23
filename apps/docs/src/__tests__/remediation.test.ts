@@ -6,11 +6,13 @@ import { quickstartTypeScript, quickstartDart } from '../quickstart-examples';
 const root=resolve(import.meta.dirname,'../../../..');
 const read=(path:string)=>readFileSync(resolve(root,path),'utf8');
 describe('docs remediation contracts',()=>{
- it('pins beta installs to the same source revision and requires supported runtimes',()=>{
-   const ref=betaJavaScriptInstall.match(/git checkout ([a-f0-9]{40})/)?.[1];
-   expect(ref).toBeTruthy(); expect(betaDartInstall).toContain(`ref: ${ref}`);
-   expect(betaJavaScriptInstall).toContain('Node.js 22+');expect(betaDartInstall).toContain('Dart 3.4+');
-   expect(betaDartInstall).toContain('path: sdks/flutter');
+ it('uses published packages with supported runtimes instead of a stale source pin',()=>{
+   expect(betaJavaScriptInstall).toContain('npm install @vellumdb/sdk-js@0.0.1');
+   expect(betaDartInstall).toContain('vellum_flutter: ^0.0.1');
+   expect(betaJavaScriptInstall).toContain('Node.js 22+');
+   expect(betaDartInstall).toContain('Dart 3.4+');
+   expect(betaJavaScriptInstall).not.toContain('git clone');
+   expect(betaDartInstall).not.toContain('git:');
  });
  it('uses one executable Quickstart source with guaranteed lifecycle cleanup',()=>{
    for(const lang of ['en','ar']){
@@ -20,9 +22,8 @@ describe('docs remediation contracts',()=>{
    }
    for(const code of [quickstartTypeScript,quickstartDart]){expect(code).toContain('finally');expect(code).toContain('db.dispose()');}
  });
- it('aligns relation replacement conflict code in both languages',()=>{
+ it('documents optimistic-concurrency conflict handling in both languages',()=>{
    for(const lang of ['en','ar']){
-     const text=read(`apps/docs/src/pages/${lang}/relationships.tsx`);expect(text).toContain('409 ABORTED_CONFLICT');expect(text).not.toContain('409 FAILED_PRECONDITION');
      expect(read(`apps/docs/src/pages/${lang}/reference/errors.tsx`)).toContain('If-Match');
    }
  });

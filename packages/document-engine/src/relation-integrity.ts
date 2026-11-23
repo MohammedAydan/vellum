@@ -49,7 +49,7 @@ export async function evaluateRelationRulesForDelete(params: {
   } = params;
   // `tenant` is carried in `params` for parity with the other capability
   // call sites; the enclosing transaction already binds it for RLS.
-  if (rulesByCollection.size === 0 || depth > MAX_RELATION_DEPTH) return 0;
+  if (rulesByCollection.size === 0) return 0;
 
   const rowsBefore = pendingRows.size;
   let parsedDeleted = parsedByPath.get(deletedPath);
@@ -85,20 +85,16 @@ export async function evaluateRelationRulesForDelete(params: {
           collection,
           rule.field,
           deletedPath,
-          MAX_CASCADE_DEPENDENTS
+          MAX_CASCADE_DEPENDENTS + 1
         );
+        if (matches.length > MAX_CASCADE_DEPENDENTS) {
+          throw new VellumError("FAILED_PRECONDITION", "Relation operation exceeds the dependent limit; narrow the relation set before deleting");
+        }
         dbRows.push(...matches);
       }
     }
-    // The in-memory adapter's capability only matches plain strings and
-    // `{_ref}`; the engine additionally accepts `{ $ref }` / `{ $t: 'ref' }`.
-    // Merge a full scan for non-SQL handles so tests and local dev stay
-    // correct. Production SQL keeps the single index-backed statement.
-    if (typeof (tx as StorageTxHandle & { query?: unknown }).query !== "function") {
-      dbRows.push(...((await tx.listActiveDocumentsInCollection?.(collection)) ?? []));
-    }
     for (const row of dbRows) {
-      if (row.deletedAt !== null) continue;
+      if (row.deletedAt !== null || pendingRows.has(row.path)) continue;
       if (!byPath.has(row.path)) byPath.set(row.path, row);
     }
 
@@ -112,6 +108,9 @@ export async function evaluateRelationRulesForDelete(params: {
             parseReference(value, { field: rule.field, collection: deletedCollection }) === deletedPath
         );
         if (!referencesDeleted) continue;
+        if (depth > MAX_RELATION_DEPTH) {
+          throw new VellumError("FAILED_PRECONDITION", "Relation cascade exceeds the maximum depth; delete dependent documents first");
+        }
         if (rule.onDelete === "restrict") {
           // G1.5 side-channel hardening: never echo the blocking document's
           // path, the deleted path, or the reference field. A caller without

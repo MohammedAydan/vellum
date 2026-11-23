@@ -7,7 +7,7 @@ description: خريطة مختصرة لعائلات نقاط نهاية HTTP أ�
 
 # نظرة عامة على REST API
 
-واجهة HTTP مُركّبة تحت `/v1` وتُرجع JSON في كل استجابة، مع إرفاق `X-Request-Id`. تتم مصادقة نقاط نهاية مستوى المستندات بالترويسة `x-project-key`؛ أما نقاط نهاية Console فتستخدم رمز جلسة Bearer. تتوفر وثيقة OpenAPI 3.1 قابلة للقراءة آليًا على `GET /v1/openapi.json`.
+واجهة HTTP مُركّبة تحت `/v1` وتُرجع JSON في كل استجابة، مع إرفاق `X-Request-Id`. تتم مصادقة نقاط نهاية مستوى المستندات بالترويسة `x-project-key`؛ تتوفر وثيقة OpenAPI 3.1 قابلة للقراءة آليًا على `GET /v1/openapi.json`.
 
 :::note
 فضّل [SDK](./quickstart.md) لكود التطبيقات. استخدم HTTP الخام عند الاستدعاء من لغة لا يوجد لها SDK رسمي أو عند تصحيح الأخطاء. ويوجد المرجع الكامل لنقطة نهاية بنقطة نهاية في [مرجع HTTP API](./reference/rest-data-plane.md).
@@ -34,10 +34,7 @@ curl -fsS "https://api.example.com/v1/openapi.json" | jq '.paths | keys[]'
 | المعاملات | `/v1/.../transactions:begin`, `.../transactions:commit` | `x-project-key` + قواعد | إصدار رمز OCC وإتمام ذري. |
 | الفهارس | `/v1/.../indexes`, `/v1/.../indexes/:indexId` | مفتاح الخادم، `indexes:manage` | عرض وإنشاء وحذف الفهارس المركّبة. |
 | المجموعات | `/v1/.../collections` | `x-project-key` | عرض مسارات المجموعات الفعلية (مساعد لـ studio). |
-| المصادقة | `/v1/auth/sign-up/email`, `/v1/auth/sign-in/email`, `/v1/auth/session`, `/v1/auth/sign-out` | جلسة / عامة | مصادقة البريد الإلكتروني وإدارة الجلسة. |
-| MFA | `/v1/auth/mfa/status`, `/setup`, `/verify`, `/disable` | جلسة | تسجيل TOTP والتحقق منه. |
-| Console | `/v1/console/...` | رمز جلسة JWT + فحص مؤسسة | لوحات التحكم؛ تعديلات مستوى التحكم الخاضعة للتدقيق. |
-| مجموعات القواعد | `/v1/projects/:projectId/rulesets` | جلسة | نشر وقراءة مجموعات قواعد الأمان. |
+| مصادقة المستخدمين النهائيين | `/v1/projects/:projectId/auth/**` | مفتاح API | تسجيل ودخول المستخدمين النهائيين بالبريد، وتحديث الرموز، والخروج، وMFA. |
 | الوقت الفعلي | `/v1/realtime` (WebSocket) | إطار `auth` | تدفقات المستندات والاستعلامات الحية. |
 
 ## طلب خام
@@ -79,7 +76,7 @@ curl -X POST "https://api.example.com/v1/projects/<PROJECT_ID>/query" \
 ## الأخطاء الشائعة
 
 - **وضع المفتاح في URL.** أرسل `x-project-key` (أو `Authorization: Bearer`) في ترويسة دائمًا.
-- **الخلط بين واجهتي المصادقة.** نقاط نهاية المستندات تأخذ مفتاح API؛ ونقاط نهاية Console تأخذ رمز جلسة Bearer.
+- **الخلط بين بيانات الاعتماد.** نقاط نهاية المستندات تأخذ مفتاح API مع رمز مستخدم نهائي اختياري بتوقيع EdDSA؛ ولا يُقبل عليها أي اعتماد آخر.
 - **نسيان `X-Request-Id`.** التقطه في كل استجابة ليتمكن الدعم من ربط الحوادث بأمان.
 - **تخطي مواصفة OpenAPI.** `GET /v1/openapi.json` هو مخطط الطلب/الاستجابة الموثوق والمُحدَّث.
 

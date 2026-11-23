@@ -242,3 +242,13 @@ describe("hardening/relations — projection, plural inference and cycle stubs",
     expect(resolver.getStats().batchCallCount).toBe(1);
   });
 });
+
+
+describe("relation path contract", () => {
+  it("accepts an API-valid reference path longer than 1536 characters", () => {
+    const path = `${"c".repeat(1023)}/${"d".repeat(1024)}`;
+    expect(path).toHaveLength(2048);
+    expect(parseReference({ $ref: path }, { field: "author" })).toBe(path);
+    expect(parseReference({ $ref: path + "x" }, { field: "author" })).toBeNull();
+  });
+});

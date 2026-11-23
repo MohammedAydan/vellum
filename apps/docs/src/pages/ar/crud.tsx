@@ -130,6 +130,7 @@ final events = client.collection('users/u_123/events');`,
               label: "JS / TypeScript",
               lang: "ts",
               code: `import { fieldOp } from "@vellumdb/sdk-js";
+const user = db.collection("users").doc("u_123");
 
 // create — يفشل بـ ALREADY_EXISTS إذا كان المسار مشغولًا.
 await user.create({ name: "Ada", role: "admin" });
@@ -200,7 +201,9 @@ await client.deleteDoc('users/u_123');`,
             {
               label: "JS / TypeScript",
               lang: "ts",
-              code: `const snap = await user.get();
+              code: `const user = db.collection("users").doc("u_123");
+const expected = 1;
+const snap = await user.get();
 
 if (snap.version !== expected) {
   // عالج التعارض قبل إرسال الكتابة.

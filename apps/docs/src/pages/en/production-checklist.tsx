@@ -38,8 +38,7 @@ export default function Page() {
               <strong>Distinct per-realm signing secrets</strong>,
               <>
                 Provision unique, high-entropy values for <code>BETTER_AUTH_SECRET</code>,{" "}
-                <code>JWT_SECRET</code>, <code>CONSOLE_JWT_SECRET</code>,{" "}
-                <code>SUPER_ADMIN_JWT_SECRET</code>, <code>API_KEY_PEPPER</code>,{" "}
+                <code>JWT_SECRET</code>, <code>API_KEY_PEPPER</code>,{" "}
                 <code>CURSOR_HMAC_SECRET</code>, <code>SESSION_COOKIE_SECRET</code>, and{" "}
                 <code>MASTER_ENCRYPTION_KEY</code>. Never reuse secrets across realms.
               </>,

@@ -567,37 +567,33 @@ export default function Page() {
           المجموعة صفّ دائم في الجدول <IC>data_db.project_collections</IC> مع سياسات RLS مفعّلة
           وقسرية، وليست عرضاً عابراً ناتجاً عن <IC>DISTINCT</IC>. توجد المجموعة حتى وهي خالية،
           وتحتفظ بإعداداتها بعد حذف المستندات وبعد تحديث الصفحة أو إعادة تشغيل الخادم. نفس
-          نقاط النهاية الثماني متاحة على سطحين: مستوى البيانات العام الموضّح هنا، وسطح Console
-          الموثَّق بالجلسة أسفل <IC>/v1/console/projects/:projectId/collections…</IC>
-          والذي تستخدمه لوحة العميل.
+          نقاط النهاية الثماني متاحة على مستوى البيانات العام الموضّح هنا.
         </P>
         <Callout tone="danger" title="أنواع المفاتيح: pk_ للقراءة وsk_ للتعديل">
           <P>
             على السطح العام تقبل طلبات <IC>GET</IC> (السرد، القراءة، التصدير) مفتاحاً عاماً{" "}
             <IC>pk_</IC>. أما كل تعديل — الإنشاء والتعديل والمسح والحذف والاستيراد — فيتطلّب مفتاح
-            خادم <IC>sk_</IC> وإلا أجاب الخادم بـ <IC>403 PERMISSION_DENIED</IC>. نداءات Console
-            تستخدم رمز جلسة <IC>CUSTOMER_CONSOLE</IC> وتُسجَّل في سجل التدقيق المتسلسل المشفّر.
+            خادم <IC>sk_</IC> وإلا أجاب الخادم بـ <IC>403 PERMISSION_DENIED</IC>.
           </P>
         </Callout>
         <Table
-          head={["الطريقة", "اللاحقة", "المصادقة (عام / Console)", "الاستجابة"]}
+          head={["الطريقة", "اللاحقة", "المصادقة", "الاستجابة"]}
           rows={[
-            [<IC>GET</IC>, <IC>/collections</IC>, <><IC>pk_</IC>/<IC>sk_</IC> / جلسة</>, <><IC>{'{ collections: CollectionWithStats[], nextCursor }'}</IC></>],
-            [<IC>POST</IC>, <IC>/collections</IC>, <><IC>sk_</IC> / جلسة</>, <>201 <IC>CollectionRecord</IC></>],
-            [<IC>GET</IC>, <IC>/collections/:name</IC>, <><IC>pk_</IC>/<IC>sk_</IC> / جلسة</>, <><IC>CollectionWithStats | null</IC></>],
-            [<IC>PATCH</IC>, <IC>/collections/:name</IC>, <><IC>sk_</IC> / جلسة</>, <IC>CollectionWithStats</IC>],
-            [<IC>POST</IC>, <IC>/collections/:name/clear</IC>, <><IC>sk_</IC> / جلسة</>, <><IC>{'{ deletedCount, freedBytes }'}</IC></>],
-            [<IC>DELETE</IC>, <IC>/collections/:name</IC>, <><IC>sk_</IC> / جلسة</>, <><IC>{'{ deletedCollection, deletedDocuments, freedBytes }'}</IC></>],
-            [<IC>POST</IC>, <IC>/collections/:name/import</IC>, <><IC>sk_</IC> / جلسة</>, <><IC>{'{ importedCount, skippedCount, errors }'}</IC></>],
-            [<IC>GET</IC>, <IC>/collections/:name/export</IC>, <><IC>pk_</IC>/<IC>sk_</IC> / جلسة</>, <><IC>{'{ documents, nextCursor }'}</IC></>],
+            [<IC>GET</IC>, <IC>/collections</IC>, <><IC>pk_</IC>/<IC>sk_</IC></>, <><IC>{'{ collections: CollectionWithStats[], nextCursor }'}</IC></>],
+            [<IC>POST</IC>, <IC>/collections</IC>, <><IC>sk_</IC></>, <>201 <IC>CollectionRecord</IC></>],
+            [<IC>GET</IC>, <IC>/collections/:name</IC>, <><IC>pk_</IC>/<IC>sk_</IC></>, <><IC>CollectionWithStats | null</IC></>],
+            [<IC>PATCH</IC>, <IC>/collections/:name</IC>, <><IC>sk_</IC></>, <IC>CollectionWithStats</IC>],
+            [<IC>POST</IC>, <IC>/collections/:name/clear</IC>, <><IC>sk_</IC></>, <><IC>{'{ deletedCount, freedBytes }'}</IC></>],
+            [<IC>DELETE</IC>, <IC>/collections/:name</IC>, <><IC>sk_</IC></>, <><IC>{'{ deletedCollection, deletedDocuments, freedBytes }'}</IC></>],
+            [<IC>POST</IC>, <IC>/collections/:name/import</IC>, <><IC>sk_</IC></>, <><IC>{'{ importedCount, skippedCount, errors }'}</IC></>],
+            [<IC>GET</IC>, <IC>/collections/:name/export</IC>, <><IC>pk_</IC>/<IC>sk_</IC></>, <><IC>{'{ documents, nextCursor }'}</IC></>],
           ]}
         />
         <Api method="GET" path="/v1/projects/:projectId/collections">
           <P>
             معاملات الاستعلام: <IC>search</IC> (تطابق جزئي حتى 256 حرفاً)، و<IC>limit</IC> (من 1 إلى 500،
             <strong> الافتراضي 50</strong>)، و<IC>cursor</IC> (مؤشر مواربة من <IC>nextCursor</IC>). استخدم{" "}
-            <IC>?limit=500</IC> لرؤية كل المجموعات عند وجود أكثر من 50 مجموعة؛ ومستكشف البيانات في
-            اللوحة يرسل هذه القيمة دائماً.
+            <IC>?limit=500</IC> لرؤية كل المجموعات عند وجود أكثر من 50 مجموعة.
           </P>
           <Code
             lang="json"

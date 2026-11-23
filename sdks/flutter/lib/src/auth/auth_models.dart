@@ -50,9 +50,11 @@ class VellumUser {
       id: json['id'] is String ? json['id'] as String : '',
       email: json['email'] is String ? json['email'] as String : null,
       emailVerified: json['emailVerified'] == true,
-      displayName: json['displayName'] is String ? json['displayName'] as String : null,
+      displayName:
+          json['displayName'] is String ? json['displayName'] as String : null,
       photoUrl: json['photoUrl'] is String ? json['photoUrl'] as String : null,
-      phoneNumber: json['phoneNumber'] is String ? json['phoneNumber'] as String : null,
+      phoneNumber:
+          json['phoneNumber'] is String ? json['phoneNumber'] as String : null,
       phoneVerified: json['phoneVerified'] == true,
       isDisabled: json['isDisabled'] == true,
       isAnonymous: json['isAnonymous'] == true,
@@ -68,10 +70,15 @@ class VellumUser {
           : const <String, Object?>{},
       createdAt: json['createdAt'] is String ? json['createdAt'] as String : '',
       updatedAt: json['updatedAt'] is String ? json['updatedAt'] as String : '',
-      lastSignInAt: json['lastSignInAt'] is String ? json['lastSignInAt'] as String : null,
-      accessToken: json['accessToken'] is String ? json['accessToken'] as String : '',
-      refreshToken: json['refreshToken'] is String ? json['refreshToken'] as String : '',
-      tokenType: json['tokenType'] is String ? json['tokenType'] as String : 'Bearer',
+      lastSignInAt: json['lastSignInAt'] is String
+          ? json['lastSignInAt'] as String
+          : null,
+      accessToken:
+          json['accessToken'] is String ? json['accessToken'] as String : '',
+      refreshToken:
+          json['refreshToken'] is String ? json['refreshToken'] as String : '',
+      tokenType:
+          json['tokenType'] is String ? json['tokenType'] as String : 'Bearer',
       sessionId: json['sessionId'] is String ? json['sessionId'] as String : '',
       expiresAt: json['expiresAt'] is String ? json['expiresAt'] as String : '',
     );
@@ -80,8 +87,31 @@ class VellumUser {
   /// Parses a `{ user, accessToken, refreshToken, ... }` session response.
   factory VellumUser.fromSession(JsonMap session) {
     final Object? rawUser = session['user'];
-    final JsonMap userMap =
-        rawUser is Map ? rawUser.cast<String, Object?>() : <String, Object?>{};
+    if (rawUser is! Map ||
+        rawUser['id'] is! String ||
+        (rawUser['id'] as String).trim().isEmpty) {
+      throw const VellumException(
+          code: 'INVALID_AUTH_RESPONSE',
+          message: 'Invalid auth response: missing user.id',
+          statusCode: 502);
+    }
+    final JsonMap userMap = rawUser.cast<String, Object?>();
+    for (final field in [
+      'accessToken',
+      'refreshToken',
+      'sessionId',
+      'expiresAt'
+    ]) {
+      _requireAuthString(session[field], field);
+    }
+    if (DateTime.tryParse(session['expiresAt'] as String) == null ||
+        (session['tokenType'] != null && session['tokenType'] != 'Bearer')) {
+      throw const VellumException(
+          code: 'INVALID_AUTH_RESPONSE',
+          message:
+              'Invalid auth response: invalid session expiry or token type',
+          statusCode: 502);
+    }
     return VellumUser.fromJson(<String, Object?>{
       ...userMap,
       'accessToken': session['accessToken'],

@@ -1,3 +1,4 @@
+import { SdkEndpointNote } from "../../sdk-endpoint-note";
 import { quickstartTypeScript, quickstartDart } from "../../quickstart-examples";
 import { betaJavaScriptInstall, betaDartInstall } from "../../beta-install";
 import {
@@ -21,8 +22,9 @@ export default function Page() {
       description="Verify your API instance, install @vellumdb/sdk-js or vellum_flutter, run your first document writes and queries, and clean up client resources safely."
     >
 
+      <SdkEndpointNote />
       <Section id="beta-install" title="Beta installation">
-        <P>Public npm and pub.dev packages are pending release approval. Use this pinned Beta checkout or Git dependency. Repository access is required; no package publication is needed.</P>
+        <P>Version 0.0.1 is available on npm and pub.dev. Install the published Beta packages below. Repository access is not required.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />
         <Code lang="yaml" title="Flutter / Dart 3.4+" code={betaDartInstall} />
       </Section>

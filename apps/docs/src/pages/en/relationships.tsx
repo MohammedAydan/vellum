@@ -1,3 +1,4 @@
+import { RelationshipCreation } from "../../relationship-creation";
 import {
   Api,
   Callout,
@@ -64,29 +65,9 @@ const includeRest = `curl -s -X POST \\
     "limit": 25
   }'`;
 
-const readRulesRest = `curl -s \\
-  "https://api.example.com/v1/projects/$PROJECT_ID/relation-rules" \\
-  -H "authorization: Bearer $CONSOLE_SESSION"
-# => { "projectId": "...", "version": 3, "rules": [ ... ] }`;
-
-const putRulesRest = `curl -s -X PUT \\
-  "https://api.example.com/v1/projects/$PROJECT_ID/relation-rules" \\
-  -H "authorization: Bearer $CONSOLE_SESSION" \\
-  -H "content-type: application/json" \\
-  -H "if-match: 3" \\
-  -d '{
-    "rules": [
-      { "collection": "orders", "field": "customerId",
-        "targetCollection": "users", "onDelete": "restrict" },
-      { "collection": "comments", "field": "postId",
-        "targetCollection": "posts", "onDelete": "cascade" }
-    ]
-  }'
-# => 409 ABORTED_CONFLICT when the version is stale`;
-
-const referencedByJs = `let cursor;
+const referencedByJs = `let cursor: string | undefined;
 do {
-  const page = await db.doc("users/u1").referencedBy({
+  const page: import("@vellumdb/sdk-js").ReferencedByPage = await db.doc("users/u1").referencedBy({
     collection: "orders",
     field: "customerId",
     limit: 25,
@@ -224,6 +205,7 @@ export default function Page() {
       description="Eager-loaded $ref relations, aggregations, OR groups, V2 text operators, upsert, bulk delete and document TTL."
       eyebrow="Core concepts"
     >
+      <RelationshipCreation lang="en" />
       <Section id="overview" title="Overview">
         <P>
           V2 extends the query engine with relationships and advanced operations. You can eagerly load
@@ -302,18 +284,10 @@ export default function Page() {
           ]}
         />
         <P>
-          Rules are managed per project through the console-authenticated relation-rules endpoint and
-          hydrated into the document engine as <code>EngineContext.relationRules</code>, with a
-          cross-instance invalidation broadcast on every change. Writes are optimistic-concurrency
-          guarded: pass the current <code>version</code> as <code>expectedVersion</code> in the body or as
-          an <code>If-Match</code> header.
+          Rules are managed per project and hydrated into the document engine as{" "}
+          <code>EngineContext.relationRules</code>, with a cross-instance invalidation broadcast on every
+          change.
         </P>
-        <CodeTabs
-          tabs={[
-            { label: "Read rules", lang: "bash", code: readRulesRest },
-            { label: "Replace rules", lang: "bash", code: putRulesRest },
-          ]}
-        />
       </Section>
 
       <Section id="reverse-lookup" title="Reverse lookup (referencedBy)">

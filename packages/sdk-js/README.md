@@ -226,7 +226,7 @@ for await (const page of db.collection("events").orderBy("createdAt", "desc").pa
 
 ### `batchWriteChunked()`
 
-Automatically splits large write arrays into server-safe chunks (default `500` ops/chunk) with bounded concurrency (default `4`), progress callbacks, and `AbortSignal`:
+Automatically splits large write arrays into chunks (SDK default `500` ops/chunk; pass `chunkSize: 100` for the current API cap) with bounded concurrency (default `4`), progress callbacks, and `AbortSignal`:
 
 ```ts
 const operations = records.map((rec) => ({
@@ -237,7 +237,7 @@ const operations = records.map((rec) => ({
 }));
 
 const summary = await db.batchWriteChunked(operations, {
-  chunkSize: 500,
+  chunkSize: 100,
   concurrency: 4,
   signal: controller.signal,
   onProgress: ({ completedOperations, totalOperations, completedChunks, totalChunks }) => {
@@ -335,3 +335,16 @@ stopAuth();
 ## Modular Architecture & Tamper-Proofing
 
 `@vellumdb/sdk-js` is organized into focused domain folders under `src/` (`core/`, `cache/`, `auth/`, `realtime/`, `references/`, `batch/`, `client/`) exported cleanly from `src/index.ts`. Public facades, `fieldOp` sentinels, and snapshots are frozen with `Object.freeze`, credentials and caches are encapsulated behind `private readonly` fields with redacted `toJSON()`/`toString()`, and reads return prototype-safe defensive clones.
+
+## Endpoint and account scope
+
+Pass the API origin as `endpoint` (for example `https://api.example.com`),
+without `/v1`, `/auth`, or a project suffix. The SDK adds the project route.
+Dart's optional `baseUrl` is a full REST-prefix override, such as
+`https://api.example.com/v1/projects/PROJECT_ID`; it is not interchangeable
+with `endpoint`. Do not pass both. Project `db.auth` signup accepts
+`displayName`; Console signup creates a different account and requires `name`.
+Do not add Console fields to fix a wrong project URL.
+
+Use `pk_` keys only with suitable security rules and end-user authentication.
+Never bundle an `sk_` key into browser or mobile code.

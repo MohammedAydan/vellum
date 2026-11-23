@@ -312,7 +312,7 @@ await db.batchWrite([
 // Auto-chunked bulk write for thousands of operations
 const ac = new AbortController();
 const res = await db.batchWriteChunked(largeWriteArray, {
-  chunkSize: 500,     // default 500 ops/chunk
+  chunkSize: 100,     // default 500 ops/chunk
   concurrency: 4,     // default 4 concurrent HTTP chunks
   signal: ac.signal,
   onProgress: (p) => {
@@ -451,3 +451,16 @@ db.dispose?.();
 ```
 
 `dispose()` stops auth refresh timers, closes the multiplexed WebSocket transport, clears all listeners, purges the read cache, and releases in-flight maps.
+
+## Endpoint and account scope
+
+Pass the API origin as `endpoint` (for example `https://api.example.com`),
+without `/v1`, `/auth`, or a project suffix. The SDK adds the project route.
+Dart's optional `baseUrl` is a full REST-prefix override, such as
+`https://api.example.com/v1/projects/PROJECT_ID`; it is not interchangeable
+with `endpoint`. Do not pass both. Project `db.auth` signup accepts
+`displayName`; Console signup creates a different account and requires `name`.
+Do not add Console fields to fix a wrong project URL.
+
+Use `pk_` keys only with suitable security rules and end-user authentication.
+Never bundle an `sk_` key into browser or mobile code.

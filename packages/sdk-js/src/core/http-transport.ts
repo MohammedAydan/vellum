@@ -10,6 +10,7 @@
  * - Secret redaction (`private readonly` API key + safe `toJSON()`/`toString()`)
  */
 
+import { normalizeEndpoint, validateProjectConfig } from "./config.js";
 import type { IndexSuggestionEvent } from "../types.js";
 import { computeReconnectBackoffMs, createAbortError, parseRetryAfterMs, sleepWithSignal } from "./backoff.js";
 import { encodePathSegment, safeJsonParse, sanitizeAndClone } from "./safe-json.js";
@@ -96,6 +97,7 @@ async function parseResponsePayload(res: Response): Promise<unknown> {
 }
 
 export interface HttpAuthHooks {
+  getSessionEpoch?(): number;
   getValidAccessToken(): Promise<string | null>;
   hasRefreshToken(): boolean;
   refreshIfMatching(staleAccessToken: string | null): Promise<string | null>;
@@ -132,9 +134,10 @@ export class HttpTransport {
   private readonly seenIndexFingerprints = new Set<string>();
 
   public constructor(options: HttpTransportOptions) {
+    validateProjectConfig(options.projectId, options.apiKey);
     this.projectId = options.projectId;
     this.apiKey = options.apiKey;
-    this.endpoint = (options.endpoint ?? "http://localhost:8080").replace(/\/$/, "");
+    this.endpoint = normalizeEndpoint(options.endpoint);
     this.baseUrl = `${this.endpoint}/v1/projects/${encodePathSegment(options.projectId, "projectId")}`;
     this.customFetch = options.customFetch ?? globalThis.fetch;
 
@@ -145,7 +148,7 @@ export class HttpTransport {
 
     this.effectiveTimeoutMs = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 0;
     this.effectiveMaxRetries =
-      typeof maxRetries === "number" && maxRetries >= 0 ? Math.floor(maxRetries) : DEFAULT_MAX_RETRIES;
+      typeof maxRetries === "number" && Number.isFinite(maxRetries) && maxRetries >= 0 ? Math.floor(maxRetries) : DEFAULT_MAX_RETRIES;
     this.effectiveRetryBaseMs =
       typeof retryBaseDelayMs === "number" && retryBaseDelayMs > 0 ? retryBaseDelayMs : DEFAULT_RETRY_BASE_MS;
     this.effectiveRetryMaxMs =
@@ -328,7 +331,7 @@ export class HttpTransport {
       // Canonical alias plus the legacy header; both are always sent.
       "x-vellum-api-key": this.apiKey,
       "x-project-key": this.apiKey,
-      "content-type": "application/json",
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
       ...extraHeaders,
     };
 
@@ -340,6 +343,13 @@ export class HttpTransport {
       }
       if (token) headers["authorization"] = `Bearer ${token}`;
     }
+
+    const sessionEpoch = includeAuth ? authHooks?.getSessionEpoch?.() : undefined;
+    const assertCurrentSession = (): void => {
+      if (includeAuth && sessionEpoch !== authHooks?.getSessionEpoch?.()) {
+        throw Object.assign(new Error("Authentication session changed while request was pending"), { code: "SESSION_CHANGED" });
+      }
+    };
 
     const reqInit: RequestInit = {
       method,
@@ -356,6 +366,7 @@ export class HttpTransport {
     let res: Response | null = null;
 
     for (let attempt = 0; attempt <= this.effectiveMaxRetries; attempt += 1) {
+      assertCurrentSession();
       if (signal?.aborted) {
         throw createAbortError(signal);
       }
@@ -379,6 +390,7 @@ export class HttpTransport {
         throw err;
       }
 
+      assertCurrentSession();
       this.inspectIndexHeaders(res);
 
       // Reactive 401: coalesce concurrent 401s into a single refresh and replay once
@@ -394,6 +406,7 @@ export class HttpTransport {
         const sentAuth = currentHeaders["authorization"];
         const staleToken = typeof sentAuth === "string" && sentAuth.startsWith("Bearer ") ? sentAuth.slice(7) : null;
         const refreshedToken = await authHooks.refreshIfMatching(staleToken);
+        assertCurrentSession();
         if (signal?.aborted) {
           throw createAbortError(signal);
         }
@@ -431,6 +444,7 @@ export class HttpTransport {
       error?: { message?: string; code?: string; details?: Record<string, unknown>; requestId?: string };
     };
 
+    assertCurrentSession();
     if (!res.ok) {
       const err = new Error(payload?.error?.message ?? `HTTP ${res.status}`) as Error & {
         code?: string | undefined;
