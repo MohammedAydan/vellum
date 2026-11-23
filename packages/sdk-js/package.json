@@ -1,0 +1,50 @@
+{
+  "name": "@vellum/sdk-js",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run",
+    "test:security": "vitest run"
+  },
+  "dependencies": {
+    "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  },
+  "description": "Official JavaScript/TypeScript SDK for VELLUM: documents, queries, relations, realtime, and end-user auth.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MohammedAydan/vellum.git",
+    "directory": "packages/sdk-js"
+  },
+  "homepage": "https://github.com/MohammedAydan/vellum/tree/main/packages/sdk-js",
+  "bugs": "https://github.com/MohammedAydan/vellum/issues",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "vellum",
+    "document-database",
+    "database",
+    "sdk",
+    "realtime"
+  ]
+}
