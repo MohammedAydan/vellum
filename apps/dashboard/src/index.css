@@ -1,0 +1,16 @@
+/* The shared Tailwind v4 entry, theme tokens and base layer come from
+ * `@vellum/ui/styles.css` (imported once in main.tsx). This file only keeps
+ * dashboard-specific overrides. */
+
+/* @vellum/ui's DialogContent / AlertDialogContent center with BOTH Tailwind
+ * `-translate-x-1/2 -translate-y-1/2` (in Tailwind 4 these compile to the
+ * independent `translate` CSS property) AND an inline
+ * `transform: translate(-50%, -50%)`. The two compose, so every modal is
+ * shifted left/up by half its own size — fully usable on desktop only by
+ * accident and almost entirely off-screen on a phone. The inline transform
+ * is the intended single centering mechanism; neutralise the utility
+ * translate for this app until the shared primitive is corrected upstream. */
+[role="dialog"][data-state],
+[role="alertdialog"][data-state] {
+  translate: none !important;
+}

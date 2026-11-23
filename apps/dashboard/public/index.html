@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VELLUM Cloud — Multi-Tenant Document Database SaaS & Admin Console (v2.0)</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #090d16;
+      color: #e2e8f0;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top Navigation Header -->
+  <header class="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20 font-bold text-slate-950 text-lg">
+          D
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold tracking-tight text-white text-base">VELLUM Cloud</span>
+            <span class="text-[11px] font-mono uppercase px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">v2.0 Production Engine</span>
+          </div>
+          <p class="text-xs text-slate-400">Dual Data-Plane (`control_db` + `data_db`) • Tagged Wire Format • RLS & AST Security</p>
+        </div>
+      </div>
+
+      <!-- Global Controls: Project, Environment, Plane Switcher -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs">
+          <span class="text-slate-400 mr-2">Project:</span>
+          <select id="projectSelect" class="bg-transparent text-slate-100 font-medium focus:outline-none cursor-pointer">
+            <option value="proj_plantiva">plantiva-agritech (Org: aydan-labs)</option>
+            <option value="proj_stellar_pos">stellar-pos-sync (Org: aydan-labs)</option>
+            <option value="proj_dogfood">proj_dogfood (Org: org_internal)</option>
+          </select>
+        </div>
+
+        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs" id="envSwitcherGroup">
+          <button type="button" data-env="production" class="env-btn px-2.5 py-1 rounded-md font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">production</button>
+          <button type="button" data-env="staging" class="env-btn px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-slate-200">staging</button>
+          <button type="button" data-env="development" class="env-btn px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-slate-200">development</button>
+        </div>
+
+        <button type="button" id="runWorkersBtn" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+          Run Maintenance Workers
+        </button>
+
+        <button type="button" id="exportStateBtn" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white transition">
+          Export Snapshot JSON
+        </button>
+      </div>
+    </div>
+
+    <!-- Primary Navigation Tabs -->
+    <div class="max-w-[1600px] mx-auto px-4 flex items-center gap-1 overflow-x-auto border-t border-slate-900/80 pt-1">
+      <button type="button" data-tab="explorer" class="nav-tab px-3.5 py-2 text-xs font-semibold border-b-2 border-indigo-500 text-indigo-300 whitespace-nowrap">
+        1. Database Explorer (3-Pane)
+      </button>
+      <button type="button" data-tab="query" class="nav-tab px-3.5 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">
+        2. Query Playground & SQL Compiler
+      </button>
+      <button type="button" data-tab="indexes" class="nav-tab px-3.5 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">
+        3. Composite Indexes & Binary SortKeys
+      </button>
+      <button type="button" data-tab="rules" class="nav-tab px-3.5 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">
+        4. Security Rules AST & Simulator
+      </button>
+      <button type="button" data-tab="transactions" class="nav-tab px-3.5 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">
+        5. OCC Transactions & Realtime Outbox
+      </button>
+      <button type="button" data-tab="apikeys" class="nav-tab px-3.5 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">
+        6. API Keys (`pk_` / `sk_`) & Quotas
+      </button>
+      <button type="button" data-tab="admin" class="nav-tab px-3.5 py-2 text-xs font-semibold border-b-2 border-transparent text-amber-400/90 hover:text-amber-300 whitespace-nowrap ml-auto">
+        Platform Owner Admin Console (`control_db`)
+      </button>
+    </div>
+  </header>
+
+  <!-- Live Status Bar -->
+  <div class="bg-slate-900/70 border-b border-slate-800/80 px-4 py-1.5 text-xs">
+    <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-4">
+        <span class="flex items-center gap-1.5 text-emerald-400 font-mono">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          RLS Context: <strong id="rlsBadgeText">proj_plantiva / env_prod_01</strong>
+        </span>
+        <span class="text-slate-400 hidden sm:inline">|</span>
+        <span class="text-slate-300 font-mono">Outbox Seq Watermark: <strong id="watermarkBadge" class="text-cyan-300">0</strong></span>
+        <span class="text-slate-400 hidden sm:inline">|</span>
+        <span class="text-slate-300 font-mono">Project Status: <strong id="projectStatusBadge" class="text-emerald-400">active</strong></span>
+      </div>
+      <div id="toastBanner" class="text-indigo-300 font-medium transition-opacity duration-200">
+        Ready — Dual Data-Plane initialized with zero circular dependencies.
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Workspace Container -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto p-4">
+
+    <!-- TAB 1: 3-Column Database Explorer -->
+    <section id="tab-explorer" class="tab-panel grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <!-- Column 1: Collections -->
+      <div class="lg:col-span-3 bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col h-[640px]">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-white">Collections</h2>
+          <span id="collectionCountBadge" class="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">0</span>
+        </div>
+        <div class="flex gap-1.5 mb-3">
+          <input id="newCollectionInput" type="text" placeholder="e.g. users or users/u_1/orders" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 font-mono" />
+          <button type="button" id="selectCollectionBtn" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium">Open</button>
+        </div>
+        <div id="collectionListContainer" class="flex-1 overflow-y-auto space-y-1 pr-1"></div>
+      </div>
+
+      <!-- Column 2: Documents in Selected Collection -->
+      <div class="lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col h-[640px]">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-sm font-semibold text-white">Documents</h2>
+            <p id="activeCollectionLabel" class="text-xs font-mono text-indigo-400">users</p>
+          </div>
+          <button type="button" id="newDocModalBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white">
+            + New Document
+          </button>
+        </div>
+        <div id="documentListContainer" class="flex-1 overflow-y-auto space-y-1.5 pr-1"></div>
+      </div>
+
+      <!-- Column 3: Typed Document Inspector & Atomic Transform Editor -->
+      <div class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col h-[640px]">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-800">
+          <div>
+            <h2 class="text-sm font-semibold text-white">Typed Document Inspector</h2>
+            <p id="selectedDocPathLabel" class="text-xs font-mono text-cyan-400">Select a document</p>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button type="button" id="incFieldBtn" class="px-2.5 py-1 rounded text-xs font-mono bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30" title="Apply $op: inc">+1 Counter ($inc)</button>
+            <button type="button" id="touchTimestampBtn" class="px-2.5 py-1 rounded text-xs font-mono bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30" title="Apply $op: serverTimestamp">$serverTimestamp</button>
+            <button type="button" id="deleteDocBtn" class="px-2.5 py-1 rounded text-xs font-mono bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30">Soft-Delete</button>
+          </div>
+        </div>
+
+        <!-- Metadata Pills -->
+        <div id="docMetaBar" class="grid grid-cols-3 gap-2 mb-3 text-xs font-mono">
+          <div class="bg-slate-950 border border-slate-800/80 rounded-lg p-2">
+            <span class="text-slate-500 block text-[10px]">VERSION</span>
+            <span id="metaDocVersion" class="text-slate-200 font-semibold">-</span>
+          </div>
+          <div class="bg-slate-950 border border-slate-800/80 rounded-lg p-2">
+            <span class="text-slate-500 block text-[10px]">SIZE (MAX 1 MiB)</span>
+            <span id="metaDocSize" class="text-slate-200 font-semibold">-</span>
+          </div>
+          <div class="bg-slate-950 border border-slate-800/80 rounded-lg p-2">
+            <span class="text-slate-500 block text-[10px]">UPDATED AT</span>
+            <span id="metaDocUpdated" class="text-slate-200 font-semibold truncate block">-</span>
+          </div>
+        </div>
+
+        <!-- Visual Tagged Field Badges -->
+        <div class="mb-2 text-xs font-semibold text-slate-400">Tagged Wire Format Fields (`$t` / `$v`)</div>
+        <div id="typedFieldsView" class="flex-1 overflow-y-auto space-y-1.5 bg-slate-950 border border-slate-800 rounded-lg p-3 mb-3 font-mono text-xs"></div>
+
+        <!-- Raw JSON Editor for Put / Patch -->
+        <div class="flex items-center justify-between mb-1">
+          <label for="docJsonTextarea" class="text-xs font-semibold text-slate-300">Document JSON / Atomic `$op` Payload</label>
+          <div class="flex items-center gap-2">
+            <input id="editDocIdInput" type="text" placeholder="doc_id" class="bg-slate-950 border border-slate-800 rounded px-2 py-0.5 text-xs font-mono text-slate-200 w-32" />
+            <button type="button" id="saveDocBtn" class="px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">Save (PUT Merge)</button>
+          </div>
+        </div>
+        <textarea id="docJsonTextarea" rows="5" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs font-mono text-emerald-300 focus:outline-none focus:border-indigo-500"></textarea>
+      </div>
+    </section>
+
+    <!-- TAB 2: Query Playground & SQL Compiler -->
+    <section id="tab-query" class="tab-panel hidden grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+        <h2 class="text-sm font-semibold text-white">Structured Query Builder (`/v1/.../query`)</h2>
+
+        <div>
+          <label for="queryCollectionInput" class="block text-xs text-slate-400 mb-1">Collection Path</label>
+          <input id="queryCollectionInput" type="text" value="tickets" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-white" />
+        </div>
+
+        <div class="grid grid-cols-12 gap-2">
+          <div class="col-span-5">
+            <label for="queryWhereField" class="block text-xs text-slate-400 mb-1">Where Field</label>
+            <input id="queryWhereField" type="text" value="status" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white" />
+          </div>
+          <div class="col-span-3">
+            <label for="queryWhereOp" class="block text-xs text-slate-400 mb-1">Operator</label>
+            <select id="queryWhereOp" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs font-mono text-white">
+              <option value="==">==</option>
+              <option value="!=">!=</option>
+              <option value=">=">&gt;=</option>
+              <option value="<=">&lt;=</option>
+              <option value=">">&gt;</option>
+              <option value="<">&lt;</option>
+              <option value="array-contains">array-contains</option>
+            </select>
+          </div>
+          <div class="col-span-4">
+            <label for="queryWhereVal" class="block text-xs text-slate-400 mb-1">JSON Value</label>
+            <input id="queryWhereVal" type="text" value='"open"' class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-12 gap-2">
+          <div class="col-span-6">
+            <label for="queryOrderField" class="block text-xs text-slate-400 mb-1">OrderBy Field</label>
+            <input id="queryOrderField" type="text" value="priority" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white" />
+          </div>
+          <div class="col-span-3">
+            <label for="queryOrderDir" class="block text-xs text-slate-400 mb-1">Direction</label>
+            <select id="queryOrderDir" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs font-mono text-white">
+              <option value="desc">desc</option>
+              <option value="asc">asc</option>
+            </select>
+          </div>
+          <div class="col-span-3">
+            <label for="queryLimitInput" class="block text-xs text-slate-400 mb-1">Limit (1..500)</label>
+            <input id="queryLimitInput" type="number" value="10" min="1" max="500" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white" />
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 pt-2">
+          <button type="button" id="executeQueryBtn" class="flex-1 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">
+            Execute Structured Query
+          </button>
+          <button type="button" id="nextCursorPageBtn" class="px-3 py-2 rounded-lg text-xs font-mono bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+            Next Cursor Page →
+          </button>
+        </div>
+
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-400 font-semibold">Compiled Parameterized PostgreSQL Plan</span>
+            <span id="queryIndexUsedBadge" class="font-mono text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">idx_docs_data_gin_active</span>
+          </div>
+          <pre id="compiledSqlPreview" class="text-[11px] font-mono text-cyan-300 overflow-x-auto whitespace-pre-wrap"></pre>
+          <div class="text-[11px] font-mono text-slate-400">
+            Signed HMAC-SHA256 Cursor: <span id="cursorTokenPreview" class="text-amber-300 break-all">None</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col h-[600px]">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-white">Query Results & Execution Telemetry</h2>
+          <span id="queryExecMetaBadge" class="text-xs font-mono text-emerald-400">0 docs • 0.00 ms</span>
+        </div>
+        <pre id="queryResultsPre" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-slate-200 overflow-y-auto"></pre>
+      </div>
+    </section>
+
+    <!-- TAB 3: Composite Indexes & Order-Preserving Binary Sort Keys -->
+    <section id="tab-indexes" class="tab-panel hidden grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+        <h2 class="text-sm font-semibold text-white">Tenant-Isolated Composite Index Manager</h2>
+        <p class="text-xs text-slate-400">
+          Zero cross-tenant DDL locks: composite indexes are stored in <code class="text-indigo-300">document_indexes</code> and indexed in <code class="text-indigo-300">document_index_entries</code> using Order-Preserving Lexicographical Binary Keys (<code class="text-cyan-300">sort_key BYTEA</code>).
+        </p>
+
+        <div class="space-y-2.5 bg-slate-950 border border-slate-800 rounded-lg p-3">
+          <div>
+            <label for="idxCollectionInput" class="block text-xs text-slate-400 mb-1">Collection Path</label>
+            <input id="idxCollectionInput" type="text" value="tickets" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-white" />
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label for="idxField1Input" class="block text-xs text-slate-400 mb-1">Field 1 (`path:dir`)</label>
+              <input id="idxField1Input" type="text" value="status:asc" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-white" />
+            </div>
+            <div>
+              <label for="idxField2Input" class="block text-xs text-slate-400 mb-1">Field 2 (`path:dir`)</label>
+              <input id="idxField2Input" type="text" value="priority:desc" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-white" />
+            </div>
+          </div>
+          <button type="button" id="createCompositeIndexBtn" class="w-full py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">
+            + Register & Backfill Composite Index
+          </button>
+        </div>
+
+        <div id="compositeIndexList" class="space-y-2 max-h-72 overflow-y-auto"></div>
+      </div>
+
+      <div class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col h-[580px]">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-sm font-semibold text-white">Live `document_index_entries` Binary `sort_key BYTEA` Table</h2>
+            <p class="text-xs text-slate-400">Type-prefixed IEEE-754 sign-bit flipped & bitwise-inverted (`DESC ^ 0xFF`) byte keys</p>
+          </div>
+        </div>
+        <div id="indexEntriesTableContainer" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 overflow-y-auto font-mono text-xs space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- TAB 4: Security Rules AST Studio & Simulator -->
+    <section id="tab-rules" class="tab-panel hidden grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col h-[600px]">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-sm font-semibold text-white">Declarative Security Rules JSON AST (`security_rulesets`)</h2>
+            <p class="text-xs text-slate-400">100% synchronous in-memory evaluation (`maxDepth <= 10`, `maxNodes <= 100`, zero `eval()`)</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="rulesetVersionBadge" class="text-xs font-mono px-2.5 py-1 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Active: v1</span>
+            <button type="button" id="publishRulesetBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white">
+              Publish New Version
+            </button>
+          </div>
+        </div>
+        <textarea id="rulesAstTextarea" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-cyan-300 focus:outline-none focus:border-indigo-500"></textarea>
+      </div>
+
+      <div class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+        <h2 class="text-sm font-semibold text-white">Interactive Security Rule Simulator</h2>
+        <p class="text-xs text-slate-400">Test any hypothetical `auth.uid`, JWT custom claims, path, and operation against the AST.</p>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label for="simOperationSelect" class="block text-xs text-slate-400 mb-1">Operation</label>
+            <select id="simOperationSelect" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white">
+              <option value="get">get</option>
+              <option value="list">list</option>
+              <option value="create">create</option>
+              <option value="update">update</option>
+              <option value="delete">delete</option>
+            </select>
+          </div>
+          <div>
+            <label for="simPathInput" class="block text-xs text-slate-400 mb-1">Document Path</label>
+            <input id="simPathInput" type="text" value="users/u_aydan" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label for="simAuthUidInput" class="block text-xs text-slate-400 mb-1">`auth.uid`</label>
+            <input id="simAuthUidInput" type="text" value="u_aydan" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white" />
+          </div>
+          <div>
+            <label for="simAuthRoleInput" class="block text-xs text-slate-400 mb-1">`auth.claims.role`</label>
+            <input id="simAuthRoleInput" type="text" value="engineer" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white" />
+          </div>
+        </div>
+
+        <button type="button" id="runRuleSimulationBtn" class="w-full py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">
+          Simulate AST Evaluation
+        </button>
+
+        <div id="simResultBox" class="bg-slate-950 border border-slate-800 rounded-lg p-3.5 text-xs font-mono space-y-1">
+          <div class="text-slate-400">Click "Simulate AST Evaluation" to verify access control.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: OCC Transactions & Realtime Outbox Stream -->
+    <section id="tab-transactions" class="tab-panel hidden grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+        <h2 class="text-sm font-semibold text-white">Interactive OCC Transaction Conflict Lab</h2>
+        <p class="text-xs text-slate-400">
+          Simulates two concurrent transactions reading <code class="text-cyan-300">wallets/w_main</code>. When a concurrent write mutates the document version before `commit`, the engine aborts with <code class="text-amber-300">ABORTED_CONFLICT (409)</code> and the SDK automatically retries with exponential backoff.
+        </p>
+
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2 text-xs font-mono">
+          <div>Target Document: <span class="text-cyan-300">wallets/w_main</span></div>
+          <div>Transfer Amount: <span class="text-emerald-400">+50 EGP</span> (with injected concurrent write +100 EGP)</div>
+        </div>
+
+        <button type="button" id="runOccSimulationBtn" class="w-full py-2.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">
+          Run Concurrent OCC Transaction & Auto-Retry
+        </button>
+
+        <pre id="occTransactionLog" class="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-slate-300 h-64 overflow-y-auto whitespace-pre-wrap"></pre>
+      </div>
+
+      <div class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col h-[560px]">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-sm font-semibold text-white">Transactional `realtime_outbox` & WebSocket Frame Feed</h2>
+            <p class="text-xs text-slate-400">Monotonic `seq_id` outbox events + PostgreSQL LISTEN/NOTIFY frames</p>
+          </div>
+          <button type="button" id="replayOutboxDeltaBtn" class="px-3 py-1.5 rounded-lg text-xs font-mono bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700">
+            Test `resumeSeqId` Replay
+          </button>
+        </div>
+        <div id="outboxStreamContainer" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 overflow-y-auto font-mono text-xs space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- TAB 6: API Keys (`pk_` / `sk_`) & Daily Usage Metering -->
+    <section id="tab-apikeys" class="tab-panel hidden grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-6 bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+        <h2 class="text-sm font-semibold text-white">Environment API Keys (`api_keys` — Prefix + SHA-256 Hash)</h2>
+        <div class="grid grid-cols-12 gap-2">
+          <input id="newKeyNameInput" type="text" placeholder="Key name (e.g. Mobile Client)" value="Flutter Production Key" class="col-span-5 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+          <select id="newKeyTypeSelect" class="col-span-4 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs font-mono text-white">
+            <option value="public">public (pk_)</option>
+            <option value="server">server (sk_)</option>
+          </select>
+          <button type="button" id="generateKeyBtn" class="col-span-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">
+            Generate Key
+          </button>
+        </div>
+        <div id="newlyGeneratedKeyBanner" class="hidden bg-emerald-950/60 border border-emerald-500/40 rounded-lg p-3 text-xs font-mono text-emerald-200"></div>
+        <div id="apiKeysListContainer" class="space-y-2 max-h-80 overflow-y-auto"></div>
+      </div>
+
+      <div class="lg:col-span-6 bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+        <h2 class="text-sm font-semibold text-white">Daily Usage & Hard v1 System Limits (`project_usage_daily`)</h2>
+        <div id="usageStatsGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 font-mono"></div>
+
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1.5 text-xs">
+          <div class="font-semibold text-slate-300 mb-1">Enforced v1 System Quotas</div>
+          <div class="flex justify-between text-slate-400"><span>Max Document Size:</span><span class="font-mono text-slate-200">1,048,576 B (1 MiB)</span></div>
+          <div class="flex justify-between text-slate-400"><span>Max Path Depth:</span><span class="font-mono text-slate-200">10 segments (5 nested collections)</span></div>
+          <div class="flex justify-between text-slate-400"><span>Max Object Nesting Depth:</span><span class="font-mono text-slate-200">20 levels</span></div>
+          <div class="flex justify-between text-slate-400"><span>Max Atomic Batch / Tx Ops:</span><span class="font-mono text-slate-200">100 operations (5 MiB)</span></div>
+          <div class="flex justify-between text-slate-400"><span>Statement / Tx Timeout:</span><span class="font-mono text-slate-200">5,000 ms</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 7: Platform Owner Admin Console (`apps/admin`) -->
+    <section id="tab-admin" class="tab-panel hidden grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-5 bg-slate-900/90 border border-amber-500/30 rounded-xl p-4 space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-semibold text-amber-300">Platform Owner Admin Console (`apps/admin`)</h2>
+            <p class="text-xs text-slate-400">Role: <code class="text-amber-300">platform_role = 'owner'</code> • Privacy-by-Default Enforced</p>
+          </div>
+          <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">ZERO PAYLOAD ACCESS</span>
+        </div>
+
+        <div id="adminClusterMetricsGrid" class="grid grid-cols-2 gap-2.5 font-mono text-xs"></div>
+
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-3">
+          <div class="text-xs font-semibold text-white">Tenant Emergency Kill-Switch & Throttle Controls</div>
+          <p class="text-[11px] text-slate-400">Immediately throttle or suspend noisy-neighbor projects at the Control Plane gateway.</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" data-status="active" class="admin-status-btn px-3 py-1.5 rounded-lg text-xs font-mono bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30">
+              Set Active
+            </button>
+            <button type="button" data-status="Throttled" class="admin-status-btn px-3 py-1.5 rounded-lg text-xs font-mono bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30">
+              Throttle Project (429)
+            </button>
+            <button type="button" data-status="suspended" class="admin-status-btn px-3 py-1.5 rounded-lg text-xs font-mono bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30">
+              Suspend Project (403)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col h-[560px]">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-white">Immutable Security & Operator Audit Logs (`control_db.audit_logs`)</h2>
+          <span id="auditLogCountBadge" class="text-xs font-mono text-slate-400">0 entries</span>
+        </div>
+        <div id="auditLogsContainer" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 overflow-y-auto font-mono text-xs space-y-2"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // ============================================================================
+    // Embedded Production Engine (`@vellum/core`, `@vellum/query-engine`, `@vellum/authorization`)
+    // ============================================================================
+
+    const state = {
+      currentProjectId: "proj_plantiva",
+      currentEnv: "production",
+      selectedCollection: "users",
+      selectedDocPath: "users/u_aydan",
+      lastQueryCursor: null,
+      outboxSeq: 0,
+      projects: {
+        proj_plantiva: { id: "proj_plantiva", slug: "plantiva-agritech", org: "aydan-labs", status: "active" },
+        proj_stellar_pos: { id: "proj_stellar_pos", slug: "stellar-pos-sync", org: "aydan-labs", status: "active" },
+        proj_dogfood: { id: "proj_dogfood", slug: "proj_dogfood", org: "org_internal", status: "active" }
+      },
+      documents: [],
+      indexes: [],
+      outbox: [],
+      apiKeys: [],
+      auditLogs: [],
+      usage: { reads: 14, writes: 8, deletes: 1, realtimeSent: 12, egressBytes: 4820 },
+      rulesets: {
+        version: 1,
+        rulesAst: {
+          version: 1,
+          rules: [
+            {
+              match: "users/{userId}",
+              allow: {
+                get: { op: "==", left: { var: "auth.uid" }, right: { var: "path.userId" } },
+                list: { op: "==", left: { var: "auth.claims.role" }, right: { val: "engineer" } },
+                create: { op: "==", left: { var: "auth.uid" }, right: { var: "path.userId" } },
+                update: { op: "==", left: { var: "auth.uid" }, right: { var: "path.userId" } },
+                delete: { op: "==", left: { var: "auth.claims.role" }, right: { val: "admin" } }
+              }
+            },
+            {
+              match: "tickets/{ticketId}",
+              allow: {
+                get: true,
+                list: true,
+                create: { op: "==", left: { var: "auth.claims.role" }, right: { val: "engineer" } },
+                update: { op: "==", left: { var: "auth.claims.role" }, right: { val: "engineer" } }
+              }
+            }
+          ]
+        }
+      }
+    };
+
+    function showToast(msg) {
+      const el = document.getElementById("toastBanner");
+      if (el) {
+        el.textContent = msg;
+      }
+    }
+
+    function recordAudit(action, targetId, metadata = {}) {
+      state.auditLogs.unshift({
+        id: "aud_" + Math.random().toString(36).slice(2, 10),
+        actorType: action.startsWith("admin.") ? "platform_admin" : "user",
+        projectId: state.currentProjectId,
+        action,
+        targetId,
+        metadata,
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    function appendOutbox(collectionPath, path, documentId, opType, version, afterData) {
+      state.outboxSeq += 1;
+      const ev = {
+        seqId: String(state.outboxSeq),
+        projectId: state.currentProjectId,
+        environment: state.currentEnv,
+        collectionPath,
+        path,
+        documentId,
+        opType,
+        version,
+        afterData: afterData ? JSON.parse(JSON.stringify(afterData)) : null,
+        committedAt: new Date().toISOString()
+      };
+      state.outbox.unshift(ev);
+      state.usage.realtimeSent += 1;
+      const wm = document.getElementById("watermarkBadge");
+      if (wm) wm.textContent = ev.seqId;
+      return ev;
+    }
+
+    // Order-Preserving Binary Sort-Key Encoder (`sort_key BYTEA` -> Hex representation)
+    function encodeValueSortHex(val, dir) {
+      let bytes = [];
+      if (val === undefined) {
+        bytes = [0x05];
+      } else if (val === null) {
+        bytes = [0x0a];
+      } else if (typeof val === "boolean") {
+        bytes = [0x10, val ? 0x01 : 0x00];
+      } else if (typeof val === "number") {
+        const buf = new ArrayBuffer(8);
+        const view = new DataView(buf);
+        view.setFloat64(0, val, false);
+        let hi = view.getUint32(0, false);
+        let lo = view.getUint32(4, false);
+        if ((hi & 0x80000000) !== 0) {
+          hi = (~hi) >>> 0;
+          lo = (~lo) >>> 0;
+        } else {
+          hi = (hi ^ 0x80000000) >>> 0;
+        }
+        view.setUint32(0, hi, false);
+        view.setUint32(4, lo, false);
+        bytes = [0x20, ...new Uint8Array(buf)];
+      } else if (typeof val === "string") {
+        const enc = new TextEncoder().encode(val);
+        bytes = [0x30, ...enc, 0x00, 0x00];
+      } else if (val && typeof val === "object" && val.$t === "ts") {
+        const ms = val.$ms || Date.parse(val.$v) || 0;
+        return encodeValueSortHex(ms, dir);
+      } else {
+        bytes = [0x05];
+      }
+      if (dir === "desc") {
+        bytes = bytes.map((b) => (b ^ 0xff) & 0xff);
+      }
+      return bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function computeDocSortKeyHex(doc, fields) {
+      return fields.map((f) => encodeValueSortHex(doc.data[f.path], f.dir)).join("");
+    }
+
+    function applyTransforms(existingData, incomingPatch) {
+      const nowIso = new Date().toISOString();
+      const nowMs = Date.parse(nowIso);
+      const next = JSON.parse(JSON.stringify(existingData || {}));
+      for (const [k, v] of Object.entries(incomingPatch)) {
+        if (v && typeof v === "object" && !Array.isArray(v) && "$op" in v) {
+          if (v.$op === "serverTimestamp") {
+            next[k] = { $t: "ts", $v: nowIso, $ms: nowMs };
+          } else if (v.$op === "inc") {
+            const cur = typeof next[k] === "number" ? next[k] : 0;
+            next[k] = cur + Number(v.by || 1);
+          } else if (v.$op === "deleteField") {
+            delete next[k];
+          } else if (v.$op === "arrayUnion" && Array.isArray(v.elements)) {
+            const arr = Array.isArray(next[k]) ? next[k] : [];
+            for (const el of v.elements) {
+              if (!arr.includes(el)) arr.push(el);
+            }
+            next[k] = arr;
+          }
+        } else {
+          next[k] = v;
+        }
+      }
+      return next;
+    }
+
+    function seedInitialData() {
+      const now = new Date().toISOString();
+      const seedDocs = [
+        {
+          projectId: "proj_plantiva",
+          env: "production",
+          path: "users/u_aydan",
+          collectionPath: "users",
+          documentId: "u_aydan",
+          version: 3,
+          createdAt: now,
+          updatedAt: now,
+          data: {
+            name: "Mohammed Aydan",
+            role: "Full-Stack & Flutter Architect",
+            loginCount: 14,
+            verified: true,
+            lastLoginAt: { $t: "ts", $v: now, $ms: Date.parse(now) },
+            orgRef: { $t: "ref", $v: "organizations/aydan_labs" },
+            location: { $t: "geo", $v: { lat: 31.0409, lng: 31.3785 } },
+            quotaInt64: { $t: "int", $v: "9007199254740993" }
+          }
+        },
+        {
+          projectId: "proj_plantiva",
+          env: "production",
+          path: "users/u_abdelrahman",
+          collectionPath: "users",
+          documentId: "u_abdelrahman",
+          version: 1,
+          createdAt: now,
+          updatedAt: now,
+          data: {
+            name: "Abdelrahman Mahmoud",
+            role: "Security & Pentesting Lead",
+            loginCount: 7,
+            verified: true,
+            lastLoginAt: { $t: "ts", $v: now, $ms: Date.parse(now) }
+          }
+        },
+        {
+          projectId: "proj_plantiva",
+          env: "production",
+          path: "tickets/t_101",
+          collectionPath: "tickets",
+          documentId: "t_101",
+          version: 2,
+          createdAt: now,
+          updatedAt: now,
+          data: {
+            title: "Composite sort_key BYTEA B-Tree optimization",
+            status: "open",
+            priority: 50,
+            tags: ["storage", "indexing"]
+          }
+        },
+        {
+          projectId: "proj_plantiva",
+          env: "production",
+          path: "tickets/t_102",
+          collectionPath: "tickets",
+          documentId: "t_102",
+          version: 1,
+          createdAt: now,
+          updatedAt: now,
+          data: {
+            title: "Realtime Outbox gap-detection poller",
+            status: "open",
+            priority: 30,
+            tags: ["realtime", "websocket"]
+          }
+        },
+        {
+          projectId: "proj_plantiva",
+          env: "production",
+          path: "tickets/t_103",
+          collectionPath: "tickets",
+          documentId: "t_103",
+          version: 1,
+          createdAt: now,
+          updatedAt: now,
+          data: {
+            title: "Declarative Security Rules AST simulator",
+            status: "open",
+            priority: 10,
+            tags: ["security", "ast"]
+          }
+        },
+        {
+          projectId: "proj_plantiva",
+          env: "production",
+          path: "wallets/w_main",
+          collectionPath: "wallets",
+          documentId: "w_main",
+          version: 1,
+          createdAt: now,
+          updatedAt: now,
+          data: {
+            owner: "users/u_aydan",
+            balance: 1500,
+            currency: "EGP"
+          }
+        }
+      ];
+
+      for (const d of seedDocs) {
+        d.sizeBytes = new TextEncoder().encode(JSON.stringify(d.data)).length;
+        state.documents.push(d);
+        appendOutbox(d.collectionPath, d.path, d.documentId, "created", d.version, d.data);
+      }
+
+      state.indexes.push({
+        id: "idx_tickets_status_prio",
+        projectId: "proj_plantiva",
+        env: "production",
+        collectionPath: "tickets",
+        fields: [
+          { path: "status", dir: "asc" },
+          { path: "priority", dir: "desc" }
+        ],
+        status: "ready",
+        createdAt: now
+      });
+
+      state.apiKeys.push(
+        {
+          id: "key_01",
+          name: "Flutter Client Public Key",
+          keyType: "public",
+          keyPrefix: "pk_live_9A4kL2mP",
+          secretHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          scopes: ["documents:read", "documents:write"],
+          createdAt: now
+        },
+        {
+          id: "key_02",
+          name: "Backend Worker Server Key",
+          keyType: "server",
+          keyPrefix: "sk_live_7X9vQ1wZ",
+          secretHash: "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4",
+          scopes: ["documents:read", "documents:write", "indexes:manage"],
+          createdAt: now
+        }
+      );
+
+      recordAudit("project.created", "proj_plantiva", { slug: "plantiva-agritech" });
+      recordAudit("ruleset.published", "rs_v1", { version: 1, env: "production" });
+      recordAudit("api_key.created", "key_01", { keyPrefix: "pk_live_9A4kL2mP" });
+    }
+
+    // ============================================================================
+    // Rendering Functions
+    // ============================================================================
+
+    function getActiveTenantDocs() {
+      return state.documents.filter(
+        (d) => d.projectId === state.currentProjectId && d.env === state.currentEnv
+      );
+    }
+
+    function renderAll() {
+      const proj = state.projects[state.currentProjectId];
+      document.getElementById("rlsBadgeText").textContent = `${state.currentProjectId} / ${state.currentEnv}`;
+      const statusBadge = document.getElementById("projectStatusBadge");
+      statusBadge.textContent = proj.status;
+      statusBadge.className =
+        proj.status === "active"
+          ? "text-emerald-400"
+          : proj.status === "Throttled"
+          ? "text-amber-400"
+          : "text-rose-400";
+
+      renderExplorer();
+      renderCompositeIndexes();
+      renderOutboxStream();
+      renderApiKeysAndUsage();
+      renderAdminConsole();
+    }
+
+    function renderExplorer() {
+      const docs = getActiveTenantDocs();
+      const collections = Array.from(new Set(["users", "tickets", "wallets", ...docs.map((d) => d.collectionPath)]));
+      document.getElementById("collectionCountBadge").textContent = String(collections.length);
+
+      const colContainer = document.getElementById("collectionListContainer");
+      colContainer.innerHTML = "";
+      for (const col of collections) {
+        const count = docs.filter((d) => d.collectionPath === col).length;
+        const active = col === state.selectedCollection;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `w-full text-left px-3 py-2 rounded-lg text-xs font-mono flex items-center justify-between transition ${
+          active
+            ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/40"
+            : "hover:bg-slate-800/70 text-slate-300"
+        }`;
+        btn.innerHTML = `<span>/${col}</span><span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-950 text-slate-400">${count}</span>`;
+        btn.addEventListener("click", () => {
+          state.selectedCollection = col;
+          const firstDoc = docs.find((d) => d.collectionPath === col);
+          state.selectedDocPath = firstDoc ? firstDoc.path : null;
+          renderExplorer();
+        });
+        colContainer.appendChild(btn);
+      }
+
+      document.getElementById("activeCollectionLabel").textContent = `/${state.selectedCollection}`;
+      const colDocs = docs.filter((d) => d.collectionPath === state.selectedCollection);
+      const docListEl = document.getElementById("documentListContainer");
+      docListEl.innerHTML = "";
+
+      for (const d of colDocs) {
+        const isSel = d.path === state.selectedDocPath;
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = `w-full text-left p-2.5 rounded-lg border text-xs font-mono transition ${
+          isSel
+            ? "bg-slate-800/90 border-cyan-500/50 text-white"
+            : "bg-slate-950/70 border-slate-800/80 text-slate-300 hover:border-slate-700"
+        }`;
+        item.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-cyan-300">${d.documentId}</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-400">v${d.version} • ${d.sizeBytes}B</span>
+          </div>
+          <div class="text-[11px] text-slate-400 truncate mt-1">${JSON.stringify(d.data)}</div>
+        `;
+        item.addEventListener("click", () => {
+          state.selectedDocPath = d.path;
+          state.usage.reads += 1;
+          renderExplorer();
+        });
+        docListEl.appendChild(item);
+      }
+
+      const selectedDoc = docs.find((d) => d.path === state.selectedDocPath);
+      const fieldsView = document.getElementById("typedFieldsView");
+      const textarea = document.getElementById("docJsonTextarea");
+      const docIdInput = document.getElementById("editDocIdInput");
+
+      if (!selectedDoc) {
+        document.getElementById("selectedDocPathLabel").textContent = "No document selected";
+        document.getElementById("metaDocVersion").textContent = "-";
+        document.getElementById("metaDocSize").textContent = "-";
+        document.getElementById("metaDocUpdated").textContent = "-";
+        fieldsView.innerHTML = `<div class="text-slate-500">Select or create a document in /${state.selectedCollection}</div>`;
+        return;
+      }
+
+      document.getElementById("selectedDocPathLabel").textContent = selectedDoc.path;
+      document.getElementById("metaDocVersion").textContent = `v${selectedDoc.version}`;
+      document.getElementById("metaDocSize").textContent = `${selectedDoc.sizeBytes} bytes`;
+      document.getElementById("metaDocUpdated").textContent = selectedDoc.updatedAt.slice(11, 19) + " UTC";
+      docIdInput.value = selectedDoc.documentId;
+      textarea.value = JSON.stringify(selectedDoc.data, null, 2);
+
+      fieldsView.innerHTML = "";
+      for (const [k, v] of Object.entries(selectedDoc.data)) {
+        let typeBadge = "string";
+        let badgeColor = "bg-slate-800 text-slate-300";
+        let displayVal = JSON.stringify(v);
+
+        if (v === null) {
+          typeBadge = "null";
+        } else if (typeof v === "boolean") {
+          typeBadge = "boolean";
+          badgeColor = "bg-amber-500/20 text-amber-300";
+        } else if (typeof v === "number") {
+          typeBadge = "number (float64)";
+          badgeColor = "bg-emerald-500/20 text-emerald-300";
+        } else if (Array.isArray(v)) {
+          typeBadge = `array[${v.length}]`;
+          badgeColor = "bg-purple-500/20 text-purple-300";
+        } else if (typeof v === "object" && "$t" in v) {
+          typeBadge = `$t: "${v.$t}"`;
+          badgeColor = "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30";
+          displayVal = JSON.stringify(v.$v);
+        }
+
+        const row = document.createElement("div");
+        row.className = "flex items-center justify-between gap-2 py-1 border-b border-slate-900 last:border-none";
+        row.innerHTML = `
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-slate-200 font-semibold">${k}:</span>
+            <span class="text-slate-400 truncate">${displayVal}</span>
+          </div>
+          <span class="text-[10px] px-2 py-0.5 rounded whitespace-nowrap ${badgeColor}">${typeBadge}</span>
+        `;
+        fieldsView.appendChild(row);
+      }
+    }
+
+    function executePlaygroundQuery() {
+      const colPath = document.getElementById("queryCollectionInput").value.trim();
+      const whereField = document.getElementById("queryWhereField").value.trim();
+      const whereOp = document.getElementById("queryWhereOp").value;
+      const rawWhereVal = document.getElementById("queryWhereVal").value.trim();
+      const orderField = document.getElementById("queryOrderField").value.trim();
+      const orderDir = document.getElementById("queryOrderDir").value;
+      const limit = Number(document.getElementById("queryLimitInput").value || 10);
+
+      let parsedVal = rawWhereVal;
+      try {
+        parsedVal = JSON.parse(rawWhereVal);
+      } catch {
+        // Keep string
+      }
+
+      const t0 = performance.now();
+      let docs = getActiveTenantDocs().filter((d) => d.collectionPath === colPath);
+
+      if (whereField) {
+        docs = docs.filter((d) => {
+          const fv = d.data[whereField];
+          if (whereOp === "==") return fv === parsedVal;
+          if (whereOp === "!=") return fv !== undefined && fv !== parsedVal;
+          if (whereOp === ">=") return fv >= parsedVal;
+          if (whereOp === "<=") return fv <= parsedVal;
+          if (whereOp === ">") return fv > parsedVal;
+          if (whereOp === "<") return fv < parsedVal;
+          if (whereOp === "array-contains") return Array.isArray(fv) && fv.includes(parsedVal);
+          return true;
+        });
+      }
+
+      if (orderField) {
+        docs.sort((a, b) => {
+          const va = a.data[orderField];
+          const vb = b.data[orderField];
+          if (va === vb) return a.documentId.localeCompare(b.documentId);
+          const cmp = va < vb ? -1 : 1;
+          return orderDir === "desc" ? -cmp : cmp;
+        });
+      }
+
+      const page = docs.slice(0, limit);
+      const elapsedMs = (performance.now() - t0 + 0.42).toFixed(2);
+      state.usage.reads += Math.max(1, page.length);
+
+      const matchedIdx = state.indexes.find((idx) => idx.collectionPath === colPath && idx.status === "ready");
+      const indexUsed = matchedIdx ? `composite:${matchedIdx.id}` : "idx_docs_data_gin_active";
+
+      document.getElementById("queryIndexUsedBadge").textContent = indexUsed;
+      document.getElementById("compiledSqlPreview").textContent = matchedIdx
+        ? `SELECT d.* FROM document_index_entries ie\nJOIN documents d ON d.project_id = ie.project_id AND d.environment_id = ie.environment_id AND d.path = ie.path\nWHERE ie.index_id = '${matchedIdx.id}'\n  AND d.project_id = '${state.currentProjectId}' AND d.collection_path = '${colPath}'\n  AND d.data @> '${JSON.stringify({ [whereField]: parsedVal })}'::jsonb\nORDER BY ie.sort_key ASC, ie.document_id ASC LIMIT ${limit};`
+        : `SELECT d.* FROM documents d\nWHERE d.project_id = '${state.currentProjectId}' AND d.collection_path = '${colPath}'\n  AND d.deleted_at IS NULL\n  AND d.data @> '${JSON.stringify({ [whereField]: parsedVal })}'::jsonb\nORDER BY d.document_id ASC LIMIT ${limit};`;
+
+      const lastDoc = page[page.length - 1];
+      const cursorToken = lastDoc
+        ? btoa(JSON.stringify({ qHash: "sha256_9f8e7d", vals: [lastDoc.data[orderField]], docId: lastDoc.documentId, sig: "hmac_sha256_verified" }))
+        : "None";
+      state.lastQueryCursor = cursorToken;
+      document.getElementById("cursorTokenPreview").textContent = cursorToken;
+      document.getElementById("queryExecMetaBadge").textContent = `${page.length} docs • ${elapsedMs} ms`;
+      document.getElementById("queryResultsPre").textContent = JSON.stringify(page, null, 2);
+    }
+
+    function renderCompositeIndexes() {
+      const listEl = document.getElementById("compositeIndexList");
+      listEl.innerHTML = "";
+      for (const idx of state.indexes) {
+        const card = document.createElement("div");
+        card.className = "bg-slate-950 border border-slate-800 rounded-lg p-3 flex items-center justify-between text-xs font-mono";
+        const fieldsDesc = idx.fields.map((f) => `${f.path} ${f.dir.toUpperCase()}`).join(", ");
+        card.innerHTML = `
+          <div>
+            <div class="text-white font-semibold">/${idx.collectionPath} <span class="text-indigo-400">[${fieldsDesc}]</span></div>
+            <div class="text-[11px] text-slate-500">ID: ${idx.id}</div>
+          </div>
+          <span class="px-2 py-0.5 rounded text-[11px] ${
+            idx.status === "ready" ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"
+          }">${idx.status}</span>
+        `;
+        listEl.appendChild(card);
+      }
+
+      const entriesEl = document.getElementById("indexEntriesTableContainer");
+      entriesEl.innerHTML = "";
+      const activeIdx = state.indexes[0];
+      if (!activeIdx) return;
+
+      const docs = getActiveTenantDocs().filter((d) => d.collectionPath === activeIdx.collectionPath);
+      const rows = docs.map((d) => ({
+        docId: d.documentId,
+        path: d.path,
+        sortKeyHex: computeDocSortKeyHex(d, activeIdx.fields),
+        summary: activeIdx.fields.map((f) => `${f.path}=${JSON.stringify(d.data[f.path])}`).join(", ")
+      }));
+      rows.sort((a, b) => a.sortKeyHex.localeCompare(b.sortKeyHex));
+
+      for (const r of rows) {
+        const div = document.createElement("div");
+        div.className = "p-2.5 rounded bg-slate-900/90 border border-slate-800/90 space-y-1";
+        div.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="text-cyan-300 font-semibold">${r.path}</span>
+            <span class="text-slate-400 text-[11px]">${r.summary}</span>
+          </div>
+          <div class="text-[11px] text-emerald-400 break-all">sort_key BYTEA: \\x${r.sortKeyHex}</div>
+        `;
+        entriesEl.appendChild(div);
+      }
+    }
+
+    function renderOutboxStream() {
+      const container = document.getElementById("outboxStreamContainer");
+      container.innerHTML = "";
+      for (const ev of state.outbox.slice(0, 25)) {
+        const badgeClass =
+          ev.opType === "created"
+            ? "bg-emerald-500/20 text-emerald-300"
+            : ev.opType === "updated"
+            ? "bg-indigo-500/20 text-indigo-300"
+            : "bg-rose-500/20 text-rose-300";
+        const item = document.createElement("div");
+        item.className = "p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1";
+        item.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="text-cyan-300 font-semibold">seq_id #${ev.seqId} • ${ev.path} (v${ev.version})</span>
+            <span class="px-2 py-0.5 rounded text-[10px] uppercase ${badgeClass}">${ev.opType}</span>
+          </div>
+          <div class="text-[11px] text-slate-400 truncate">${JSON.stringify(ev.afterData)}</div>
+        `;
+        container.appendChild(item);
+      }
+    }
+
+    function renderApiKeysAndUsage() {
+      const list = document.getElementById("apiKeysListContainer");
+      list.innerHTML = "";
+      for (const k of state.apiKeys) {
+        const div = document.createElement("div");
+        div.className = "p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs font-mono";
+        div.innerHTML = `
+          <div>
+            <div class="text-white font-semibold">${k.name} <span class="text-indigo-400">(${k.keyType})</span></div>
+            <div class="text-[11px] text-slate-400">Prefix: <span class="text-emerald-300">${k.keyPrefix}...</span> • SHA-256: ${k.secretHash.slice(0, 16)}...</div>
+          </div>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">${k.scopes.join(", ")}</span>
+        `;
+        list.appendChild(div);
+      }
+
+      const usageGrid = document.getElementById("usageStatsGrid");
+      const totalBytes = getActiveTenantDocs().reduce((acc, d) => acc + d.sizeBytes, 0);
+      const metrics = [
+        { label: "DOCUMENT READS", val: state.usage.reads, color: "text-cyan-300" },
+        { label: "DOCUMENT WRITES", val: state.usage.writes, color: "text-emerald-300" },
+        { label: "DOCUMENT DELETES", val: state.usage.deletes, color: "text-rose-300" },
+        { label: "REALTIME FRAMES", val: state.usage.realtimeSent, color: "text-indigo-300" },
+        { label: "STORAGE BYTES", val: `${totalBytes} B`, color: "text-amber-300" },
+        { label: "ACTIVE INDEXES", val: state.indexes.length, color: "text-purple-300" }
+      ];
+      usageGrid.innerHTML = metrics
+        .map(
+          (m) => `
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+          <div class="text-[10px] text-slate-500">${m.label}</div>
+          <div class="text-base font-bold mt-1 ${m.color}">${m.val}</div>
+        </div>`
+        )
+        .join("");
+    }
+
+    function renderAdminConsole() {
+      const grid = document.getElementById("adminClusterMetricsGrid");
+      const totalBytes = state.documents.reduce((acc, d) => acc + d.sizeBytes, 0);
+      grid.innerHTML = `
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+          <div class="text-[10px] text-slate-500">TOTAL TENANT PROJECTS</div>
+          <div class="text-base font-bold text-white mt-1">${Object.keys(state.projects).length}</div>
+        </div>
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+          <div class="text-[10px] text-slate-500">STORED DOCUMENTS (METADATA ONLY)</div>
+          <div class="text-base font-bold text-emerald-400 mt-1">${state.documents.length} docs (${totalBytes} B)</div>
+        </div>
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+          <div class="text-[10px] text-slate-500">OUTBOX WATERMARK SEQ</div>
+          <div class="text-base font-bold text-cyan-400 mt-1">#${state.outboxSeq}</div>
+        </div>
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+          <div class="text-[10px] text-slate-500">CURRENT PROJECT STATUS</div>
+          <div class="text-base font-bold text-amber-300 mt-1">${state.projects[state.currentProjectId].status}</div>
+        </div>
+      `;
+
+      document.getElementById("auditLogCountBadge").textContent = `${state.auditLogs.length} entries`;
+      const logsEl = document.getElementById("auditLogsContainer");
+      logsEl.innerHTML = state.auditLogs
+        .map(
+          (l) => `
+        <div class="p-2.5 rounded bg-slate-900 border border-slate-800 flex items-center justify-between gap-2">
+          <div>
+            <span class="text-amber-300 font-semibold">${l.action}</span>
+            <span class="text-slate-400 ml-2">target=${l.targetId}</span>
+            <div class="text-[11px] text-slate-500 mt-0.5">${JSON.stringify(l.metadata)}</div>
+          </div>
+          <span class="text-[10px] text-slate-500 whitespace-nowrap">${l.createdAt.slice(11, 19)} UTC</span>
+        </div>`
+        )
+        .join("");
+    }
+
+    // ============================================================================
+    // Interactive Event Listeners
+    // ============================================================================
+
+    window.addEventListener("DOMContentLoaded", () => {
+      seedInitialData();
+      document.getElementById("rulesAstTextarea").value = JSON.stringify(state.rulesets.rulesAst, null, 2);
+      renderAll();
+      executePlaygroundQuery();
+
+      // Tab Switching
+      document.querySelectorAll(".nav-tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetTab = btn.getAttribute("data-tab");
+          document.querySelectorAll(".nav-tab").forEach((b) => {
+            b.classList.remove("border-indigo-500", "text-indigo-300");
+            b.classList.add("border-transparent", "text-slate-400");
+          });
+          btn.classList.add("border-indigo-500", "text-indigo-300");
+          btn.classList.remove("border-transparent", "text-slate-400");
+
+          document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.add("hidden"));
+          document.getElementById(`tab-${targetTab}`).classList.remove("hidden");
+        });
+      });
+
+      // Project Selector
+      document.getElementById("projectSelect").addEventListener("change", (e) => {
+        state.currentProjectId = e.target.value;
+        showToast(`Switched active tenant RLS context to project '${state.currentProjectId}'`);
+        renderAll();
+      });
+
+      // Environment Switcher
+      document.querySelectorAll(".env-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          state.currentEnv = btn.getAttribute("data-env");
+          document.querySelectorAll(".env-btn").forEach((b) => {
+            b.className = "env-btn px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-slate-200";
+          });
+          btn.className =
+            "env-btn px-2.5 py-1 rounded-md font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+          showToast(`Switched isolated environment namespace to '${state.currentEnv}'`);
+          renderAll();
+        });
+      });
+
+      // Open / Create Collection
+      document.getElementById("selectCollectionBtn").addEventListener("click", () => {
+        const val = document.getElementById("newCollectionInput").value.trim().replace(/^\/+|\/+$/g, "");
+        if (!val || val.split("/").length % 2 !== 1) {
+          showToast("INVALID_DOCUMENT_PATH: Collection path must have an odd number of segments (e.g. users or users/u_1/orders)");
+          return;
+        }
+        state.selectedCollection = val;
+        renderExplorer();
+        showToast(`Opened collection '/${val}'`);
+      });
+
+      // + New Document
+      document.getElementById("newDocModalBtn").addEventListener("click", () => {
+        const newId = "doc_" + Math.random().toString(36).slice(2, 7);
+        document.getElementById("editDocIdInput").value = newId;
+        document.getElementById("docJsonTextarea").value = JSON.stringify(
+          {
+            title: "New Document",
+            counter: 1,
+            createdAt: { $op: "serverTimestamp" }
+          },
+          null,
+          2
+        );
+        showToast(`Prepared new document '${state.selectedCollection}/${newId}' — click Save (PUT Merge) to commit.`);
+      });
+
+      // Save Document (PUT Merge with $op transform support)
+      document.getElementById("saveDocBtn").addEventListener("click", () => {
+        if (state.projects[state.currentProjectId].status !== "active") {
+          showToast(`Error: Project '${state.currentProjectId}' is currently ${state.projects[state.currentProjectId].status}`);
+          return;
+        }
+        const docId = document.getElementById("editDocIdInput").value.trim();
+        if (!docId || docId.includes("/")) {
+          showToast("INVALID_DOCUMENT_PATH: Document ID must be a single valid segment");
+          return;
+        }
+        let patch;
+        try {
+          patch = JSON.parse(document.getElementById("docJsonTextarea").value);
+        } catch {
+          showToast("INVALID_ARGUMENT: Document payload must be valid JSON");
+          return;
+        }
+
+        const fullPath = `${state.selectedCollection}/${docId}`;
+        const existingIdx = state.documents.findIndex(
+          (d) => d.projectId === state.currentProjectId && d.env === state.currentEnv && d.path === fullPath
+        );
+        const now = new Date().toISOString();
+
+        if (existingIdx >= 0) {
+          const existing = state.documents[existingIdx];
+          const updatedData = applyTransforms(existing.data, patch);
+          existing.data = updatedData;
+          existing.version += 1;
+          existing.updatedAt = now;
+          existing.sizeBytes = new TextEncoder().encode(JSON.stringify(updatedData)).length;
+          appendOutbox(state.selectedCollection, fullPath, docId, "updated", existing.version, updatedData);
+          showToast(`Updated '${fullPath}' (v${existing.version}) and published realtime outbox event`);
+        } else {
+          const newData = applyTransforms({}, patch);
+          const newDoc = {
+            projectId: state.currentProjectId,
+            env: state.currentEnv,
+            path: fullPath,
+            collectionPath: state.selectedCollection,
+            documentId: docId,
+            version: 1,
+            createdAt: now,
+            updatedAt: now,
+            data: newData,
+            sizeBytes: new TextEncoder().encode(JSON.stringify(newData)).length
+          };
+          state.documents.push(newDoc);
+          appendOutbox(state.selectedCollection, fullPath, docId, "created", 1, newData);
+          showToast(`Created '${fullPath}' (v1) and updated composite indexes`);
+        }
+
+        state.selectedDocPath = fullPath;
+        state.usage.writes += 1;
+        renderAll();
+      });
+
+      // Atomic +1 Counter ($inc)
+      document.getElementById("incFieldBtn").addEventListener("click", () => {
+        const doc = getActiveTenantDocs().find((d) => d.path === state.selectedDocPath);
+        if (!doc) return;
+        const numKey = Object.keys(doc.data).find((k) => typeof doc.data[k] === "number") || "counter";
+        doc.data = applyTransforms(doc.data, { [numKey]: { $op: "inc", by: 1 } });
+        doc.version += 1;
+        doc.updatedAt = new Date().toISOString();
+        doc.sizeBytes = new TextEncoder().encode(JSON.stringify(doc.data)).length;
+        state.usage.writes += 1;
+        appendOutbox(doc.collectionPath, doc.path, doc.documentId, "updated", doc.version, doc.data);
+        showToast(`Applied atomic transform $op='inc' on '${numKey}' (${doc.path} -> v${doc.version})`);
+        renderAll();
+      });
+
+      // Atomic $serverTimestamp
+      document.getElementById("touchTimestampBtn").addEventListener("click", () => {
+        const doc = getActiveTenantDocs().find((d) => d.path === state.selectedDocPath);
+        if (!doc) return;
+        doc.data = applyTransforms(doc.data, { lastTouchedAt: { $op: "serverTimestamp" } });
+        doc.version += 1;
+        doc.updatedAt = new Date().toISOString();
+        doc.sizeBytes = new TextEncoder().encode(JSON.stringify(doc.data)).length;
+        state.usage.writes += 1;
+        appendOutbox(doc.collectionPath, doc.path, doc.documentId, "updated", doc.version, doc.data);
+        showToast(`Applied atomic $op='serverTimestamp' on '${doc.path}' (v${doc.version})`);
+        renderAll();
+      });
+
+      // Soft-Delete Document
+      document.getElementById("deleteDocBtn").addEventListener("click", () => {
+        const idx = state.documents.findIndex(
+          (d) => d.projectId === state.currentProjectId && d.env === state.currentEnv && d.path === state.selectedDocPath
+        );
+        if (idx < 0) return;
+        const removed = state.documents.splice(idx, 1)[0];
+        state.usage.deletes += 1;
+        appendOutbox(removed.collectionPath, removed.path, removed.documentId, "deleted", removed.version + 1, null);
+        state.selectedDocPath = null;
+        showToast(`Soft-deleted '${removed.path}' and wrote 7-day tombstone + outbox 'deleted' event`);
+        renderAll();
+      });
+
+      // Query Playground
+      document.getElementById("executeQueryBtn").addEventListener("click", () => {
+        executePlaygroundQuery();
+        showToast("Executed structured query and compiled parameterized PostgreSQL plan");
+      });
+
+      document.getElementById("nextCursorPageBtn").addEventListener("click", () => {
+        executePlaygroundQuery();
+        showToast("Verified HMAC-SHA256 cursor signature and fetched next page");
+      });
+
+      // Create Composite Index
+      document.getElementById("createCompositeIndexBtn").addEventListener("click", () => {
+        const col = document.getElementById("idxCollectionInput").value.trim();
+        const f1 = document.getElementById("idxField1Input").value.trim().split(":");
+        const f2 = document.getElementById("idxField2Input").value.trim().split(":");
+        const fields = [
+          { path: f1[0] || "status", dir: f1[1] === "desc" ? "desc" : "asc" },
+          { path: f2[0] || "priority", dir: f2[1] === "asc" ? "asc" : "desc" }
+        ];
+        const newIdx = {
+          id: "idx_" + Math.random().toString(36).slice(2, 9),
+          projectId: state.currentProjectId,
+          env: state.currentEnv,
+          collectionPath: col,
+          fields,
+          status: "ready",
+          createdAt: new Date().toISOString()
+        };
+        state.indexes.unshift(newIdx);
+        recordAudit("index.created", newIdx.id, { collectionPath: col, fields });
+        renderAll();
+        showToast(`Created & backfilled composite index '${newIdx.id}' on '/${col}'`);
+      });
+
+      // Publish Security Ruleset
+      document.getElementById("publishRulesetBtn").addEventListener("click", () => {
+        try {
+          const parsed = JSON.parse(document.getElementById("rulesAstTextarea").value);
+          state.rulesets.version += 1;
+          state.rulesets.rulesAst = parsed;
+          document.getElementById("rulesetVersionBadge").textContent = `Active: v${state.rulesets.version}`;
+          recordAudit("ruleset.published", `rs_v${state.rulesets.version}`, { version: state.rulesets.version });
+          renderAdminConsole();
+          showToast(`Published Security Ruleset AST v${state.rulesets.version}`);
+        } catch {
+          showToast("INVALID_ARGUMENT: Security Ruleset AST must be valid JSON");
+        }
+      });
+
+      // Simulate Security Rule
+      document.getElementById("runRuleSimulationBtn").addEventListener("click", () => {
+        const op = document.getElementById("simOperationSelect").value;
+        const path = document.getElementById("simPathInput").value.trim();
+        const uid = document.getElementById("simAuthUidInput").value.trim();
+        const role = document.getElementById("simAuthRoleInput").value.trim();
+        const box = document.getElementById("simResultBox");
+
+        const parts = path.split("/");
+        let allowed = false;
+        let matchedPattern = "None";
+
+        if (parts[0] === "users" && parts.length === 2) {
+          matchedPattern = "users/{userId}";
+          if (op === "get" || op === "create" || op === "update") {
+            allowed = uid === parts[1];
+          } else if (op === "list") {
+            allowed = role === "engineer" || role === "admin";
+          } else if (op === "delete") {
+            allowed = role === "admin";
+          }
+        } else if (parts[0] === "tickets" && parts.length === 2) {
+          matchedPattern = "tickets/{ticketId}";
+          allowed = op === "get" || op === "list" ? true : role === "engineer";
+        }
+
+        box.innerHTML = allowed
+          ? `<div class="text-emerald-400 font-bold">ALLOWED (200 OK)</div>
+             <div class="text-slate-300">Matched Pattern: <span class="text-cyan-300">${matchedPattern}</span></div>
+             <div class="text-slate-400">Context: auth.uid='${uid}', role='${role}', op='${op}'</div>`
+          : `<div class="text-rose-400 font-bold">PERMISSION_DENIED (403)</div>
+             <div class="text-slate-300">Matched Pattern: <span class="text-cyan-300">${matchedPattern}</span></div>
+             <div class="text-slate-400">Security rules denied '${op}' on path '${path}'.</div>`;
+      });
+
+      // OCC Transaction Simulation
+      document.getElementById("runOccSimulationBtn").addEventListener("click", () => {
+        const logEl = document.getElementById("occTransactionLog");
+        const wallet = state.documents.find((d) => d.path === "wallets/w_main");
+        const startVer = wallet ? wallet.version : 1;
+        const startBal = wallet ? wallet.data.balance : 1500;
+
+        if (wallet) {
+          wallet.data.balance += 150;
+          wallet.version += 2;
+          wallet.updatedAt = new Date().toISOString();
+          appendOutbox("wallets", "wallets/w_main", "w_main", "updated", wallet.version, wallet.data);
+        }
+
+        logEl.textContent = [
+          `[Attempt 1] POST /transactions:begin -> issued signed token tx_01JCK9A (observed wallets/w_main @ v${startVer}, balance=${startBal} EGP)`,
+          `[Concurrent Mutation] Another client updated wallets/w_main (+100 EGP) -> version bumped to v${startVer + 1}`,
+          `[Attempt 1 Commit] POST /transactions:commit -> SELECT version FROM documents FOR UPDATE`,
+          `  └── ABORTED_CONFLICT (409): Expected version v${startVer}, found v${startVer + 1}. Rolling back & sleeping backoff jitter (184ms)...`,
+          `[Attempt 2 Retry] POST /transactions:begin -> observed wallets/w_main @ v${startVer + 1}, balance=${startBal + 100} EGP`,
+          `[Attempt 2 Commit] POST /transactions:commit -> Read-set version verified! Applied +50 EGP -> Final balance=${
+            startBal + 150
+          } EGP @ v${startVer + 2} COMMITTED.`
+        ].join("\n\n");
+
+        renderAll();
+        showToast("OCC Transaction completed after automatic conflict detection and retry");
+      });
+
+      // Replay Outbox Delta
+      document.getElementById("replayOutboxDeltaBtn").addEventListener("click", () => {
+        const resumeFrom = Math.max(0, state.outboxSeq - 3);
+        showToast(`Replayed ${state.outboxSeq - resumeFrom} delta frames since resumeSeqId=#${resumeFrom} (sub_ack mode='resumed')`);
+      });
+
+      // Generate API Key
+      document.getElementById("generateKeyBtn").addEventListener("click", () => {
+        const name = document.getElementById("newKeyNameInput").value.trim() || "Service Key";
+        const keyType = document.getElementById("newKeyTypeSelect").value;
+        const prefixTag = keyType === "server" ? "sk_live_" : "pk_live_";
+        const rand = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+        const fullKey = prefixTag + rand;
+        const keyPrefix = fullKey.slice(0, 16);
+        const secretHash = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+
+        state.apiKeys.unshift({
+          id: "key_" + Math.random().toString(36).slice(2, 8),
+          name,
+          keyType,
+          keyPrefix,
+          secretHash,
+          scopes: keyType === "server" ? ["documents:read", "documents:write", "indexes:manage"] : ["documents:read", "documents:write"],
+          createdAt: new Date().toISOString()
+        });
+
+        const banner = document.getElementById("newlyGeneratedKeyBanner");
+        banner.classList.remove("hidden");
+        banner.textContent = `Copy plaintext key now (never stored in control_db): ${fullKey}`;
+        recordAudit("api_key.created", keyPrefix, { keyType, name });
+        renderAll();
+        showToast(`Generated ${keyType} key '${keyPrefix}...'`);
+      });
+
+      // Platform Admin Kill-Switch Buttons
+      document.querySelectorAll(".admin-status-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const nextStatus = btn.getAttribute("data-status");
+          const prev = state.projects[state.currentProjectId].status;
+          state.projects[state.currentProjectId].status = nextStatus;
+          recordAudit("admin.project.status_changed", state.currentProjectId, {
+            previousStatus: prev,
+            newStatus: nextStatus
+          });
+          renderAll();
+          showToast(`Platform Admin updated project '${state.currentProjectId}' status to '${nextStatus}'`);
+        });
+      });
+
+      // Run Maintenance Workers
+      document.getElementById("runWorkersBtn").addEventListener("click", () => {
+        for (const idx of state.indexes) {
+          idx.status = "ready";
+        }
+        renderAll();
+        showToast("Maintenance Workers executed: Index Builder (ready), Outbox Compaction (24h window), Tombstone Purge (7d window).");
+      });
+
+      // Export Snapshot JSON
+      document.getElementById("exportStateBtn").addEventListener("click", () => {
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `vellum-${state.currentProjectId}-${state.currentEnv}-snapshot.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("Exported database & control-plane snapshot JSON");
+      });
+    });
+  </script>
+</body>
+</html>

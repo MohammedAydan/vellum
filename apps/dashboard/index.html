@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="%BASE_URL%favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VELLUM — Developer Dashboard</title>
+  </head>
+  <body class="min-h-screen bg-background text-foreground antialiased selection:bg-primary/20">
+    <div id="root"></div>
+    <!--
+      Runtime API base override. A host page may inject
+      <meta name="vellum:api-base-url" content="https://api.example.com"> before
+      this script runs; copy it to the global the app reads. Never blocks render
+      and performs no fetch — an unreachable API still yields a normal UI with
+      an error state.
+    -->
+    <script>
+      (function () {
+        try {
+          var meta = document.querySelector('meta[name="vellum:api-base-url"]');
+          var value = meta && meta.getAttribute("content");
+          if (value && value.trim() && !window.__VELLUM_API_BASE_URL__) {
+            window.__VELLUM_API_BASE_URL__ = value.trim();
+          }
+        } catch (_) {
+          /* bootstrap must never prevent the app from loading */
+        }
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
