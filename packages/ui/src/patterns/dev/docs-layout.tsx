@@ -87,7 +87,7 @@ export function DocsShell({
           <span className="hidden sm:inline">Vellum <span className="font-medium text-muted-foreground">/ Docs</span></span>
         </a>
         <span className="version-pill rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-primary">
-          v0.0.1
+          v0.0.2
         </span>
 
         <div className="ms-1 min-w-0 flex-1 sm:w-64">

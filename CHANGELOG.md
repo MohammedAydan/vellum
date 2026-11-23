@@ -1,6 +1,57 @@
 # Changelog
 
-## Unreleased
+## 0.0.2
+
+Security and reliability fixes across the platform, plus JS/Flutter SDK parity work. Every package and SDK remains on one shared version.
+
+### Breaking (server): provider sign-in requires a secret key
+
+- `POST /v1/projects/:p/auth/sign-in/provider` now requires a secret (`sk_`) server key and returns `403 PERMISSION_DENIED` when called with a publishable (`pk_`) key. The server never verified provider identities itself: `providerUserId`, `email` and `emailVerified` are claims only a trusted backend may assert.
+- **Impact:** client-side `signInWithOAuth()` called with a publishable key stops working in both SDKs (`@vellumdb/sdk-js` and `vellum_flutter`) when the API is redeployed with this release. The SDK methods and signatures are unchanged.
+- **Migration:** move provider sign-in into your own backend. Verify the identity with the provider there, then call `/auth/sign-in/provider` with your secret key. Linking a provider identity to an existing account by email now also requires the backend to assert a verified email, and users with a verified second factor receive an MFA challenge instead of an immediate session.
+
+### Security fixes
+
+- Control plane: the legacy `/v1` control-plane routes now require a console or super-admin session in production and enforce organization membership (write role for mutations) on project creation, API key list/create and ruleset get/publish. Creating an API key no longer returns the stored secret digest. Anonymous access remains available outside production for local development and examples.
+- End users can no longer self-assign `customClaims` or `phoneVerified`.
+- MFA recovery codes are burned after a successful challenge, and MFA tickets allow bounded challenge retries before being consumed.
+- Revoked sessions can no longer be resurrected through the refresh grace window, and replay identity stays stable across end-user token refresh.
+- End-user auth is throttled per account (IP-independent), attempts are counted before the handler runs so parallel requests cannot exceed the window, and the hourly sign-up slot is reserved atomically. Sign-in and sign-up guards are separated.
+- Realtime enforces the snapshot authorization projection and API key revocation.
+- Security rules: an unauthenticated identity never equals `null` in rule comparisons; relation rules fire when `targetCollection` is null (treated as unscoped); rules match slash-less paths and keep boolean array literals; quoted keyword strings parse as string literals in the rules DSL.
+- Relations enforce SQL reference parity and fail closed at cascade limits.
+- Storage: memory rollback races and unsafe driver fallback removed.
+
+### SDK (JavaScript) — `@vellumdb/sdk-js`
+
+- Fixed a cross-auth-session cache leak: cached reads and in-flight async work are isolated per auth session. Signing out or switching users clears cached reads and ends session subscriptions, and stale requests fail with `SESSION_CHANGED` instead of serving another user's data.
+- Fixed a realtime crash: closing a socket that is still CONNECTING no longer crashes the host process with an unhandled `error` event (hit by rapid subscribe/unsubscribe cycles and heartbeat timeouts).
+- A 2xx response with an unparseable body now throws `MALFORMED_RESPONSE` instead of silently returning an empty result. Error responses keep the status-derived fallback.
+- `create`/`set`/`update`/`delete` accept an `idempotencyKey` option, sent as the `Idempotency-Key` header the API dedupes on; its presence makes the write retriable on transient failures (Flutter parity).
+- `doc()` rejects collection paths with a clear error.
+- Endpoint origins are validated and collection clear bodies are encoded.
+- Validated document reference creation.
+
+### SDK (Flutter/Dart) — `vellum_flutter`
+
+- Auth sessions are validated and cached state is isolated across auth changes.
+- Active realtime credentials are renewed after token refresh instead of subscriptions silently losing authorization.
+- Project URLs are validated and collection clear requests send valid bodies.
+
+### Engine and API
+
+- Blind writes retry on contended CAS conflicts instead of returning 409.
+- Mutation idempotency headers are honored and replay races are serialized.
+- Non-object document write bodies are rejected instead of corrupting data.
+- Numeric types are preserved in fallback ordering and cursor seeks; collection export forwards pagination options; composite indexes created with the legacy field shape are matched.
+- Shutdown signal handlers are registered only when the API runs as the entrypoint.
+
+### Documentation
+
+- End-user auth guide (English and Arabic): provider sign-in documented as secret-key only with the 403 behavior; access-JWT revocation semantics documented.
+- Rules syntax and access semantics documented from verified behavior; relation creation explained with tested SDK examples.
+
+## 0.0.1
 
 ### Version alignment (0.0.1)
 

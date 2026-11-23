@@ -190,7 +190,7 @@ export default function Page() {
 
       <SdkEndpointNote arabic />
       <Section id="beta-install" title="تثبيت النسخة التجريبية">
-      <P>الإصدار 0.0.1 متاح على npm وpub.dev. ثبّت الحزم المنشورة أدناه، ولا تحتاج إلى نسخة من المستودع.</P>
+      <P>الإصدار 0.0.2 متاح على npm وpub.dev. ثبّت الحزم المنشورة أدناه، ولا تحتاج إلى نسخة من المستودع.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />
         <Code lang="yaml" title="Flutter / Dart 3.4+" code={betaDartInstall} />
       </Section>
