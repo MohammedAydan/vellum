@@ -55,7 +55,7 @@ A server key carries explicit scopes. Required scope by operation:
 The `*` scope grants everything. A public key cannot manage composite indexes. A missing scope yields `PERMISSION_DENIED` (403); a missing or invalid key yields `UNAUTHENTICATED` (401).
 
 ```ts
-import { createClient } from "@vellum/sdk-js";
+import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",

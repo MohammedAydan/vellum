@@ -13,9 +13,9 @@ VELLUM uses **keyset cursor pagination** backed by HMAC-signed opaque cursors an
 
 ## Manual Cursor Pagination (`startAfter` / `startAt`)
 
-Every `QuerySnapshot` returns `nextCursor: string | null`. Pass it to `startAfter(cursor)` for the next exclusive page (or `startAt(cursor)` in `@vellum/sdk-js` for an inclusive boundary):
+Every `QuerySnapshot` returns `nextCursor: string | null`. Pass it to `startAfter(cursor)` for the next exclusive page (or `startAt(cursor)` in `@vellumdb/sdk-js` for an inclusive boundary):
 
-### TypeScript (`@vellum/sdk-js`)
+### TypeScript (`@vellumdb/sdk-js`)
 
 ```ts
 let cursor: string | null = null;

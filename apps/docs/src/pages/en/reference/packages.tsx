@@ -14,7 +14,7 @@ export default function Page() {
           exports can change between releases, and a few paths — notably{" "}
           <code>@vellum/core</code> tagged-value constructors and{" "}
           <code>@vellum/query-engine</code> cursors — are wire-format critical. Application
-          code should depend on <PageLink slug="sdks/javascript">@vellum/sdk-js</PageLink>,{" "}
+          code should depend on <PageLink slug="sdks/javascript">@vellumdb/sdk-js</PageLink>,{" "}
           <PageLink slug="sdks/flutter">vellum_flutter</PageLink>, or plain HTTP instead.
         </P>
         <Callout tone="warning" title="Layering rule">
@@ -46,7 +46,7 @@ export default function Page() {
             [<code>@vellum/document-engine</code>, "Document core: CRUD, atomic field transforms, batchWrite, structured query and PostgreSQL-backed OCC transactions.", "Engine"],
             [<code>@vellum/realtime</code>, "WebSocket hub, subscription matcher, gap-detecting outbox poller and the dedicated LISTEN/NOTIFY bus. No broker.", "Realtime"],
             [<code>@vellum/observability</code>, "Structured JSON logging with secret redaction, sliding-window rate limiting and request-id generation.", "Platform"],
-            [<code>@vellum/sdk-js</code>, "Official TypeScript/JavaScript client SDK: createClient, references, queries, auth, batch/transactions and realtime snapshots.", "SDK"],
+            [<code>@vellumdb/sdk-js</code>, "Official TypeScript/JavaScript client SDK: createClient, references, queries, auth, batch/transactions and realtime snapshots.", "SDK"],
             [<code>@vellum/ui</code>, "Private shadcn-based React component library, design tokens and RTL-aware English/Arabic i18n shared by the dashboards.", "UI"],
           ]}
         />
@@ -175,7 +175,7 @@ export default function Page() {
           rows={[
             [<code>@vellum/realtime</code>, "RealtimeGatewayHub (subscribe/resume, fan-out, slow-consumer guard), OutboxPoller (500-row batches, gap detection), createPgNotifyBus on the vellum_outbox channel, and createPgRealtimeInfrastructure. One dedicated, non-pooled LISTEN client."],
             [<code>@vellum/observability</code>, "createLogger / StructuredLogger, redactSensitiveData, SlidingWindowRateLimiter (default 100 RPS) and generateRequestId."],
-            [<code>@vellum/sdk-js</code>, "createClient and the public document, query, auth, batch, transaction and snapshots API. This is the supported JS/TS entry point."],
+            [<code>@vellumdb/sdk-js</code>, "createClient and the public document, query, auth, batch, transaction and snapshots API. This is the supported JS/TS entry point."],
             [<code>@vellum/ui</code>, "Shared React primitives, composed app-shell components, domain components and RTL-aware i18n. Private to the frontends."],
           ]}
         />

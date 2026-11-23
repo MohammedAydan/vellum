@@ -5,14 +5,14 @@ Accepted
 
 ## Context
 Specification Sections 3, 13, and 14 originally mentioned Next.js 15 (App Router) for both the Customer Developer Dashboard (`apps/dashboard`) and Platform Owner Admin Console (`apps/admin`). However, the project direction explicitly overrides this with:
-> "UI / Dashboards — React + Vite + TanStack (overrides spec's Next.js) ... Customer Dashboard — React 19 + Vite 6 + TanStack Router/Query + shadcn/ui + Tailwind 4 (`apps/dashboard`) ... Admin Dashboard — same stack (`apps/admin`). Rule: `apps/dashboard` and `apps/admin` are SPAs served statically. All data operations go through `apps/api` via `@vellum/sdk-js`."
+> "UI / Dashboards — React + Vite + TanStack (overrides spec's Next.js) ... Customer Dashboard — React 19 + Vite 6 + TanStack Router/Query + shadcn/ui + Tailwind 4 (`apps/dashboard`) ... Admin Dashboard — same stack (`apps/admin`). Rule: `apps/dashboard` and `apps/admin` are SPAs served statically. All data operations go through `apps/api` via `@vellumdb/sdk-js`."
 
 ## Decision
 We adopt **Vite 6 + React 19 + TanStack Router + TanStack Query + Tailwind CSS 4 + shadcn/ui** for both `apps/dashboard` and `apps/admin`:
 1. Both dashboards will be built as client-side Single-Page Applications (SPAs) and output static assets (`dist/`).
 2. Routing will be strictly typed and file-based using `@tanstack/react-router`.
 3. All asynchronous data fetching, caching, and optimistic mutations will be orchestrated via `@tanstack/react-query`.
-4. Dashboards will communicate with the backend exclusively via `apps/api` using `@vellum/sdk-js` and standard HTTP/REST endpoints configured via `VITE_API_BASE_URL`.
+4. Dashboards will communicate with the backend exclusively via `apps/api` using `@vellumdb/sdk-js` and standard HTTP/REST endpoints configured via `VITE_API_BASE_URL`.
 5. Next.js 15 runtime and server components are entirely removed from `apps/dashboard` and `apps/admin`.
 
 ## Consequences

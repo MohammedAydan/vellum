@@ -20,7 +20,7 @@
 </header>
 <div class="layout">
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellumdb/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
     <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
   </aside>
   <main class="main">
@@ -29,7 +29,7 @@
 <p>Field transforms let the server compute a field value atomically, avoiding a read-modify-write race. The SDK exposes five helpers under <code class="inline-code">fieldOp</code>; on the wire each becomes a sentinel object with a <code class="inline-code">$op</code> key.</p>
 <div class="code-block">
   <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
-  <pre><code class="hl-code"><span class="hl-keyword">import</span> { fieldOp } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/sdk-js&quot;</span>;</code></pre>
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> { fieldOp } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellumdb/sdk-js&quot;</span>;</code></pre>
 </div>
 <h2 id="scenario">Scenario<a class="anchor" href="#scenario" aria-label="Link to section">#</a></h2>
 <p>Several users can &quot;like&quot; a post at the same time, and you want an accurate <code class="inline-code">likeCount</code> without coordinating clients. You use <code class="inline-code">increment(1)</code> to bump the counter atomically and <code class="inline-code">arrayUnion</code> to record unique reactor ids — the server applies both in one transaction, so no update is lost.</p>
@@ -180,9 +180,16 @@
 } <span class="hl-keyword">finally</span> {
   <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
 }</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
-       <pre class="cb-out"><code class="hl-text">=== Atomic Field Transforms ===
-{&quot;before&quot;:{&quot;tags&quot;:[&quot;launch&quot;],&quot;likes&quot;:10,&quot;history&quot;:[&quot;featured&quot;],&quot;scratch&quot;:&quot;temporary&quot;}}
-{&quot;likes&quot;:15,&quot;tags&quot;:[&quot;launch&quot;,&quot;release&quot;,&quot;news&quot;],&quot;removedFieldAbsent&quot;:true,&quot;serverTimestampWireType&quot;:&quot;ts&quot;}</code></pre>
+       <pre class="cb-out"><code class="hl-text">/tmp/vellum-new/examples/ts/_harness.ts:138
+    throw new Error(`harness: sign-in failed with HTTP ${token.status}`);
+          ^
+
+Error: harness: sign-in failed with HTTP 404
+    at harness (/tmp/vellum-new/examples/ts/_harness.ts:138:11)
+    at process.processTicksAndRejections (node:internal/process/task_&lt;redacted&gt;:103:5)
+    at async &lt;anonymous&gt; (/tmp/vellum-new/examples/ts/field-transforms.ts:13:11)
+
+Node.js v22.23.5</code></pre>
 </div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
   <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
   <pre><code class="hl-code"><span class="hl-comment">/**
@@ -233,9 +240,16 @@
 } <span class="hl-keyword">finally</span> {
   <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
 }</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
-       <pre class="cb-out"><code class="hl-text">=== Atomic Field Transforms ===
-{&quot;before&quot;:{&quot;tags&quot;:[&quot;launch&quot;],&quot;likes&quot;:10,&quot;history&quot;:[&quot;featured&quot;],&quot;scratch&quot;:&quot;temporary&quot;}}
-{&quot;likes&quot;:15,&quot;tags&quot;:[&quot;launch&quot;,&quot;release&quot;,&quot;news&quot;],&quot;removedFieldAbsent&quot;:true,&quot;serverTimestampWireType&quot;:&quot;ts&quot;}</code></pre>
+       <pre class="cb-out"><code class="hl-text">file:///tmp/vellum-new/examples/rest/_harness.mjs:84
+    throw new Error(`harness: sign-in failed with HTTP ${token.status}`);
+          ^
+
+Error: harness: sign-in failed with HTTP 404
+    at harness (file:///tmp/vellum-new/examples/rest/_harness.mjs:84:11)
+    at process.processTicksAndRejections (node:internal/process/task_&lt;redacted&gt;:103:5)
+    at async file:///tmp/vellum-new/examples/rest/field-transforms.mjs:11:11
+
+Node.js v22.23.5</code></pre>
 </div></div></div>
 </div>
 <h2 id="what-to-read-next">What to read next<a class="anchor" href="#what-to-read-next" aria-label="Link to section">#</a></h2>

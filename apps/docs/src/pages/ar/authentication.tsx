@@ -147,7 +147,7 @@ curl "https://api.example.com/v1/projects/<PROJECT_ID>/documents/users/u_123" \\
             {
               label: "TypeScript",
               lang: "ts",
-              code: `import { createClient } from "@vellum/sdk-js";
+              code: `import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",

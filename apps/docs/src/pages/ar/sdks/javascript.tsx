@@ -14,7 +14,7 @@ import {
 
 const install = betaJavaScriptInstall;
 
-const createBrowser = `import { createClient, BrowserLocalStorage } from "@vellum/sdk-js";
+const createBrowser = `import { createClient, BrowserLocalStorage } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.vellum.dev",
@@ -28,7 +28,7 @@ const db = createClient({
   warnOnMissingIndexes: true,
 });`;
 
-const createServer = `import { createClient } from "@vellum/sdk-js";
+const createServer = `import { createClient } from "@vellumdb/sdk-js";
 
 const adminDb = createClient({
   endpoint: process.env.VELLUM_ENDPOINT!,
@@ -38,7 +38,7 @@ const adminDb = createClient({
   maxRetries: 3,
 });`;
 
-const crudTs = `import { createClient, type DocDataConverter } from "@vellum/sdk-js";
+const crudTs = `import { createClient, type DocDataConverter } from "@vellumdb/sdk-js";
 
 interface User {
   id: string;
@@ -84,7 +84,7 @@ if (snap.exists) {
 }
 await ref.delete();`;
 
-const fieldOps = `import { fieldOp } from "@vellum/sdk-js";
+const fieldOps = `import { fieldOp } from "@vellumdb/sdk-js";
 
 await db.doc("counters/c_1").update({
   hits: fieldOp.increment(1),
@@ -229,7 +229,7 @@ export default function Page() {
   return (
     <Doc
       title="حزمة JavaScript / TypeScript"
-      description="الدليل العملي الكامل لحزمة @vellum/sdk-js المحصّنة: إعداد العميل، المهلة وإعادة المحاولة، الذاكرة المؤقتة المحدودة، المحوّلات المُنَمّطة، التدفقات، الدفعات المقسّمة، المعاملات، والمصادقة."
+      description="الدليل العملي الكامل لحزمة @vellumdb/sdk-js المحصّنة: إعداد العميل، المهلة وإعادة المحاولة، الذاكرة المؤقتة المحدودة، المحوّلات المُنَمّطة، التدفقات، الدفعات المقسّمة، المعاملات، والمصادقة."
       eyebrow="المجموعات البرمجية"
     >
 
@@ -240,7 +240,7 @@ export default function Page() {
       </Section>
       <Section id="install-and-setup" title="التثبيت وإعداد العميل">
         <P>
-          <code>@vellum/sdk-js</code> هي الحزمة الرسمية لـ Node.js (22+) والمتصفحات. تعمل كغلاف مُنمّط
+          <code>@vellumdb/sdk-js</code> هي الحزمة الرسمية لـ Node.js (22+) والمتصفحات. تعمل كغلاف مُنمّط
           وخفيف فوق واجهة <code>/v1</code> مع دعم مدمج للمهل (<code>AbortController</code>)، وإعادة المحاولة
           للعمليات المتكررة الآمنة (Idempotent)، وتجميع طلبات القراءة المتزامنة، وذاكرة LRU/TTL اختيارية،
           ومستشار الفهارس.
@@ -352,7 +352,7 @@ export default function Page() {
 
       <Section id="modular-architecture" title="البنية المعيارية والحماية ضد التلاعب">
         <P>
-          حزمة <code>@vellum/sdk-js</code> مقسّمة إلى مجلدات وملفات متخصصة داخل{" "}
+          حزمة <code>@vellumdb/sdk-js</code> مقسّمة إلى مجلدات وملفات متخصصة داخل{" "}
           <code>src/</code> (<code>core/</code>، <code>cache/</code>، <code>auth/</code>،{" "}
           <code>realtime/</code>، <code>references/</code>، <code>batch/</code>، و{" "}
           <code>client/</code>) مع نقطة تصدير موحّدة نظيفة. جميع الواجهات العامة ورموز{" "}

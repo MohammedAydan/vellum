@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Types and Interfaces
+ * @vellumdb/sdk-js - Types and Interfaces
  * Specification Section 12.1
  */
 

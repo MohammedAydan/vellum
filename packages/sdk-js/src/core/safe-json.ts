@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Prototype-pollution safe JSON parsing, defensive cloning,
+ * @vellumdb/sdk-js - Prototype-pollution safe JSON parsing, defensive cloning,
  * and URL path segment validation/encoding.
  *
  * Zero external dependencies; uses only standard ECMAScript & Web APIs.
@@ -79,7 +79,7 @@ export function safeJsonParse<T = unknown>(text: string): T {
  */
 export function encodePathSegment(segment: string, label = "path segment"): string {
   if (typeof segment !== "string" || segment.length === 0) {
-    throw new Error(`@vellum/sdk-js: invalid ${label} (must be a non-empty string)`);
+    throw new Error(`@vellumdb/sdk-js: invalid ${label} (must be a non-empty string)`);
   }
   if (
     segment === "." ||
@@ -90,7 +90,7 @@ export function encodePathSegment(segment: string, label = "path segment"): stri
     segment.includes("#") ||
     /[\x00-\x1f\x7f]/.test(segment)
   ) {
-    throw new Error(`@vellum/sdk-js: invalid ${label} (disallowed traversal or control characters)`);
+    throw new Error(`@vellumdb/sdk-js: invalid ${label} (disallowed traversal or control characters)`);
   }
   // Reject percent-encoded traversal tricks like %2e%2e or %2f or %5c.
   let decoded = segment;
@@ -106,7 +106,7 @@ export function encodePathSegment(segment: string, label = "path segment"): stri
     decoded.includes("\\") ||
     /[\x00-\x1f\x7f]/.test(decoded)
   ) {
-    throw new Error(`@vellum/sdk-js: invalid ${label} (disallowed encoded traversal characters)`);
+    throw new Error(`@vellumdb/sdk-js: invalid ${label} (disallowed encoded traversal characters)`);
   }
   return encodeURIComponent(segment);
 }
@@ -119,10 +119,10 @@ export function encodePathSegment(segment: string, label = "path segment"): stri
  */
 export function encodeResourcePath(rawPath: string, label = "resource path"): string {
   if (typeof rawPath !== "string" || rawPath.length === 0) {
-    throw new Error(`@vellum/sdk-js: invalid ${label} (must be a non-empty string)`);
+    throw new Error(`@vellumdb/sdk-js: invalid ${label} (must be a non-empty string)`);
   }
   if (rawPath.startsWith("/") || rawPath.endsWith("/") || rawPath.includes("//")) {
-    throw new Error(`@vellum/sdk-js: invalid ${label} (empty path segment)`);
+    throw new Error(`@vellumdb/sdk-js: invalid ${label} (empty path segment)`);
   }
   const segments = rawPath.split("/");
   return segments.map((seg) => encodePathSegment(seg, label)).join("/");

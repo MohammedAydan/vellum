@@ -86,7 +86,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("@vellum/sdk-js V2 - QueryBuilder relations and filters", () => {
+describe("@vellumdb/sdk-js V2 - QueryBuilder relations and filters", () => {
   it("serializes shorthand include entries as { field }", async () => {
     const { db, calls } = makeClient(defaultHandler);
     await db.collection("orders").include(["authorId"]).get();
@@ -178,7 +178,7 @@ function dbBase() {
   return createClient({ projectId, apiKey, customFetch: (async () => new Response("{}")) as unknown as typeof fetch }).collection("orders");
 }
 
-describe("@vellum/sdk-js V2 - Aggregations", () => {
+describe("@vellumdb/sdk-js V2 - Aggregations", () => {
   it("count() posts documents:aggregate with a single count metric and returns a number", async () => {
     const { db, calls } = makeClient(defaultHandler);
     const result = await db.collection("orders").where("status", "==", "open").count();
@@ -233,7 +233,7 @@ describe("@vellum/sdk-js V2 - Aggregations", () => {
   });
 });
 
-describe("@vellum/sdk-js V2 - Bulk delete", () => {
+describe("@vellumdb/sdk-js V2 - Bulk delete", () => {
   it("deleteWhere() posts filters and an optional limit and returns deletedCount", async () => {
     const { db, calls } = makeClient(defaultHandler);
     const result = await db
@@ -258,7 +258,7 @@ describe("@vellum/sdk-js V2 - Bulk delete", () => {
   });
 });
 
-describe("@vellum/sdk-js V2 - DocumentReference writes and reads", () => {
+describe("@vellumdb/sdk-js V2 - DocumentReference writes and reads", () => {
   it("set() sends merge, ifVersion, ttlSeconds, expiresAt and upsert", async () => {
     const { db, calls } = makeClient(defaultHandler);
     await db
@@ -377,7 +377,7 @@ function suggestionHeaders(fingerprint?: string): Record<string, string> {
   };
 }
 
-describe("@vellum/sdk-js V2 - Index suggestion logger", () => {
+describe("@vellumdb/sdk-js V2 - Index suggestion logger", () => {
   it("warns once for two responses with the same fingerprint", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const fingerprint = "fp-once-3a-001";

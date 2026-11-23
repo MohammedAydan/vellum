@@ -2,7 +2,7 @@
  * Silent refresh & refresh-token concurrency — integration suite.
  *
  * Hermetic by default: boots the real @vellum/api app via createVellumPlatform()
- * with in-memory planes and exercises the real HTTP routes plus the @vellum/sdk-js
+ * with in-memory planes and exercises the real HTTP routes plus the @vellumdb/sdk-js
  * client. Live Neon is not required, so no PHASE5_REAL gating is necessary.
  *
  * Covers:
@@ -19,7 +19,7 @@
 import crypto from "node:crypto";
 import { describe, it, expect } from "vitest";
 import { createVellumPlatform } from "../../apps/api/src/index.js";
-import { createClient } from "@vellum/sdk-js";
+import { createClient } from "@vellumdb/sdk-js";
 import { generateProjectApiKey } from "@vellum/authorization";
 import { generateEd25519KeyPair } from "@vellum/auth";
 

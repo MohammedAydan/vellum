@@ -7,7 +7,7 @@ description: What VELLUM is, how its two PostgreSQL data planes fit together, an
 
 # VELLUM Documentation
 
-VELLUM is a multi-tenant document database built entirely on PostgreSQL/JSONB. You get hierarchical collections, typed JSON documents, structured queries with cursor pagination, atomic field transforms, optimistic-concurrency transactions, and realtime WebSocket streams — through a small TypeScript SDK (`@vellum/sdk-js`) or plain HTTP.
+VELLUM is a multi-tenant document database built entirely on PostgreSQL/JSONB. You get hierarchical collections, typed JSON documents, structured queries with cursor pagination, atomic field transforms, optimistic-concurrency transactions, and realtime WebSocket streams — through a small TypeScript SDK (`@vellumdb/sdk-js`) or plain HTTP.
 
 There is **one stateful runtime dependency: PostgreSQL**. No Redis, no message broker, and no separate cache service. Realtime is built on PostgreSQL `LISTEN/NOTIFY` plus a durable outbox; caching and rate limits use short-lived in-process state with PostgreSQL backing where durability matters; transactions are native PostgreSQL transactions.
 
@@ -21,7 +21,7 @@ Imagine you are building a multi-tenant task manager. Each customer (tenant) get
 
 ```ts
 // One client, one tenant scope: every request carries projectId.
-import { createClient } from "@vellum/sdk-js";
+import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   projectId: "<YOUR_PROJECT_ID>",

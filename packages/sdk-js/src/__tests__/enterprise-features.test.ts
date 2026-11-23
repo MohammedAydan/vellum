@@ -46,7 +46,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("@vellum/sdk-js enterprise - streaming pagination (pages & stream)", () => {
+describe("@vellumdb/sdk-js enterprise - streaming pagination (pages & stream)", () => {
   it("streams multi-page query results via cursors without duplicating documents", async () => {
     const receivedCursors: Array<string | null> = [];
     const mockFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
@@ -168,7 +168,7 @@ describe("@vellum/sdk-js enterprise - streaming pagination (pages & stream)", ()
   });
 });
 
-describe("@vellum/sdk-js enterprise - auto-chunked bulk writes", () => {
+describe("@vellumdb/sdk-js enterprise - auto-chunked bulk writes", () => {
   it("chunks large write arrays with bounded concurrency and preserves result order", async () => {
     let inFlight = 0;
     let peakInFlight = 0;
@@ -242,7 +242,7 @@ describe("@vellum/sdk-js enterprise - auto-chunked bulk writes", () => {
   });
 });
 
-describe("@vellum/sdk-js enterprise - typed data converters (withConverter<T>)", () => {
+describe("@vellumdb/sdk-js enterprise - typed data converters (withConverter<T>)", () => {
   interface UserModel {
     id: string;
     fullName: string;
@@ -334,7 +334,7 @@ describe("@vellum/sdk-js enterprise - typed data converters (withConverter<T>)",
   });
 });
 
-describe("@vellum/sdk-js enterprise - bounded LRU/TTL read cache & invalidation", () => {
+describe("@vellumdb/sdk-js enterprise - bounded LRU/TTL read cache & invalidation", () => {
   it("evicts least-recently-used entries and expires entries past TTL", () => {
     let now = 1_000;
     const cache = new BoundedReadCache<{ v: number }>({
@@ -449,7 +449,7 @@ describe("@vellum/sdk-js enterprise - bounded LRU/TTL read cache & invalidation"
   });
 });
 
-describe("@vellum/sdk-js enterprise - single-flight in-flight read coalescing", () => {
+describe("@vellumdb/sdk-js enterprise - single-flight in-flight read coalescing", () => {
   it("coalesces duplicate concurrent doc.get() calls into one HTTP GET with independent clones", async () => {
     let getCalls = 0;
     let releaseFetch!: () => void;
@@ -497,7 +497,7 @@ describe("@vellum/sdk-js enterprise - single-flight in-flight read coalescing", 
   });
 });
 
-describe("@vellum/sdk-js enterprise - per-request AbortSignal composition", () => {
+describe("@vellumdb/sdk-js enterprise - per-request AbortSignal composition", () => {
   it("aborts in-flight requests via caller AbortSignal without retrying and preserves timeoutMs", async () => {
     let fetchCalls = 0;
     const mockFetch = ((_url: string | URL | Request, init?: RequestInit) =>
@@ -534,7 +534,7 @@ describe("@vellum/sdk-js enterprise - per-request AbortSignal composition", () =
   });
 });
 
-describe("@vellum/sdk-js enterprise - realtime connection-state observability", () => {
+describe("@vellumdb/sdk-js enterprise - realtime connection-state observability", () => {
   it("tracks disconnected -> connecting -> connected -> reconnecting -> connected -> disconnected", async () => {
     const sockets: MockSocket[] = [];
     const db = createClient({

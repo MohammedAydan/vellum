@@ -16,7 +16,7 @@
     "@vellum/api-contract": "workspace:*",
     "@vellum/authorization": "workspace:*",
     "@vellum/core": "workspace:*",
-    "@vellum/sdk-js": "workspace:*",
+    "@vellumdb/sdk-js": "workspace:*",
     "@vellum/ui": "workspace:*",
     "@hookform/resolvers": "^3.9.1",
     "@tanstack/react-query": "^5.62.7",

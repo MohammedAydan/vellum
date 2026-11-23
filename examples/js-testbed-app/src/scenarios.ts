@@ -1,7 +1,7 @@
 /**
  * The 20 live scenarios shared by the CLI runner and the HTTP dashboard.
  *
- * Every assertion hits the real API through `@vellum/sdk-js` or global `fetch`.
+ * Every assertion hits the real API through `@vellumdb/sdk-js` or global `fetch`.
  * There are no mocks, no simulations and no skips. The only network call that
  * never reaches a server is the single-flight accounting wrapper, which merely
  * counts real `/auth/token/refresh` requests.
@@ -9,7 +9,7 @@
  * No credential material is ever returned in a result or written to a log.
  */
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { createClient } from "@vellum/sdk-js";
+import { createClient } from "@vellumdb/sdk-js";
 import type {
   AuthState,
   AuthStorage,
@@ -17,7 +17,7 @@ import type {
   VellumClient,
   VellumAuthUser,
   QuerySnapshot,
-} from "@vellum/sdk-js";
+} from "@vellumdb/sdk-js";
 import { type BootstrapResult } from "./bootstrap.js";
 
 const ALICE_PASSWORD = "LiveTestbed1";

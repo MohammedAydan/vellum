@@ -75,7 +75,7 @@ export default function Page() {
             {
               label: "JS / TypeScript",
               lang: "ts",
-              code: `import { createClient } from "@vellum/sdk-js";
+              code: `import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   projectId: "<YOUR_PROJECT_ID>",
@@ -129,7 +129,7 @@ final events = client.collection('users/u_123/events');`,
             {
               label: "JS / TypeScript",
               lang: "ts",
-              code: `import { fieldOp } from "@vellum/sdk-js";
+              code: `import { fieldOp } from "@vellumdb/sdk-js";
 
 // create — يفشل بـ ALREADY_EXISTS إذا كان المسار مشغولًا.
 await user.create({ name: "Ada", role: "admin" });

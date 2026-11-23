@@ -33,7 +33,7 @@
 | # | Document | Coverage |
 | :-: | :--- | :--- |
 | 05 | **[Public HTTP REST API & Realtime WebSocket Wire Protocol](./05-http-and-realtime-api.md)** | Complete `/v1` REST endpoint reference, `/health` & `/ready` probes, `$op` transforms, native RFC 6455 `/v1/realtime` wire frames (`auth_ack`, `initial_sync`, `resume_complete`, `mutation`, `ping`/`pong`), PostgreSQL `LISTEN/NOTIFY` + `OutboxPoller`, and backpressure/rate-limit caps. |
-| 08 | **[JavaScript / TypeScript SDK Guide](./08-sdk-js-guide.md)** | `@vellum/sdk-js`: `AuthStorage`, `db.auth`, silent refresh, CRUD, queries/cursors, batch/OCC, realtime subscriptions, and index warnings. |
+| 08 | **[JavaScript / TypeScript SDK Guide](./08-sdk-js-guide.md)** | `@vellumdb/sdk-js`: `AuthStorage`, `db.auth`, silent refresh, CRUD, queries/cursors, batch/OCC, realtime subscriptions, and index warnings. |
 | 09 | **[Flutter / Dart SDK Guide](./09-sdk-flutter-guide.md)** | `vellum_flutter`: `AuthTokenStorage`, `authStateChanges`, MFA, 45 s refresh + single-flight, CRUD/query/watch, and index warnings. |
 
 ---

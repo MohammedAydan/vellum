@@ -4,7 +4,7 @@
     "file": "quickstart.ts",
     "title": "Quickstart",
     "group": "Getting Started",
-    "description": "Health checks, then create, read, update and delete one document with @vellum/sdk-js.",
+    "description": "Health checks, then create, read, update and delete one document with @vellumdb/sdk-js.",
     "rest": "rest/quickstart.mjs",
     "dart": "flutter/quickstart.dart"
   },

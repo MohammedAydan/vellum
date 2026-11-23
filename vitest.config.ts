@@ -29,7 +29,7 @@ export default defineConfig({
       "@vellum/observability": path.resolve(__dirname, "packages/observability/src/index.ts"),
       "@vellum/security": path.resolve(__dirname, "packages/security/src/index.ts"),
       "@vellum/billing": path.resolve(__dirname, "packages/billing/src/index.ts"),
-      "@vellum/sdk-js": path.resolve(__dirname, "packages/sdk-js/src/index.ts"),
+      "@vellumdb/sdk-js": path.resolve(__dirname, "packages/sdk-js/src/index.ts"),
       "@vellum/ui": path.resolve(__dirname, "packages/ui/src/index.ts"),
       "@vellum/api": path.resolve(__dirname, "apps/api/src/index.ts"),
       "@vellum/dashboard": path.resolve(__dirname, "apps/dashboard/src/index.ts"),

@@ -1,4 +1,4 @@
-export const quickstartTypeScript = `import { createClient, fieldOp } from "@vellum/sdk-js";
+export const quickstartTypeScript = `import { createClient, fieldOp } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: process.env.VELLUM_ENDPOINT ?? "http://localhost:8080",

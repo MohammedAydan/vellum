@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - CollectionReference
+ * @vellumdb/sdk-js - CollectionReference
  *
  * Extends `QueryBuilder<T>` with document addressing (`doc()`, `add()`),
  * typed converter attachment (`withConverter<U>()`), and collection lifecycle

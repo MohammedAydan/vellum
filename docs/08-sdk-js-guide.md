@@ -1,6 +1,6 @@
-# JavaScript / TypeScript SDK Guide (`@vellum/sdk-js`)
+# JavaScript / TypeScript SDK Guide (`@vellumdb/sdk-js`)
 
-Complete engineering guide for `@vellum/sdk-js` v0.0.1 — grounded directly in `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`.
+Complete engineering guide for `@vellumdb/sdk-js` v0.0.1 — grounded directly in `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`.
 
 > **Security Note**: The document plane is API-key scoped with an optional end-user EdDSA bearer token. Use publishable `pk_` keys in browsers and reserve secret `sk_` keys strictly for trusted server environments.
 
@@ -9,9 +9,9 @@ Complete engineering guide for `@vellum/sdk-js` v0.0.1 — grounded directly in 
 ## 1. Installation & Initialization
 
 ```bash
-npm install @vellum/sdk-js
+npm install @vellumdb/sdk-js
 # or
-pnpm add @vellum/sdk-js
+pnpm add @vellumdb/sdk-js
 ```
 
 All public APIs, types, storage adapters, and transport helpers are exported from the package root:
@@ -25,7 +25,7 @@ import {
   MemoryAuthStorage,
   RealtimeTransport,
   toRealtimeUrl,
-} from "@vellum/sdk-js";
+} from "@vellumdb/sdk-js";
 import type {
   ClientConfig,
   VellumClient,
@@ -36,7 +36,7 @@ import type {
   ConnectionState,
   AuthState,
   MfaRequiredResult,
-} from "@vellum/sdk-js";
+} from "@vellumdb/sdk-js";
 ```
 
 ### Creating a Production Client
@@ -141,7 +141,7 @@ await userRef.delete({ ifVersion: snap.version + 2 });
 `withConverter<U>(converter)` is available on `CollectionReference`, `DocumentReference`, and `QueryBuilder` (pass `null` to strip an existing converter):
 
 ```ts
-import type { DocDataConverter } from "@vellum/sdk-js";
+import type { DocDataConverter } from "@vellumdb/sdk-js";
 
 interface Order {
   id: string;

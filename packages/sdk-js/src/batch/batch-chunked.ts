@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Auto-Chunked Bulk Writes
+ * @vellumdb/sdk-js - Auto-Chunked Bulk Writes
  *
  * Splits arbitrarily large write arrays into server-safe `batchWrite` chunks
  * (default 500 ops/batch) with bounded concurrency (default 4) and full

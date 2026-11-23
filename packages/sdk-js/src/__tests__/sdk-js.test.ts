@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createClient, fieldOp, computeReconnectBackoffMs } from "../index.js";
 
-describe("@vellum/sdk-js - Field Operations", () => {
+describe("@vellumdb/sdk-js - Field Operations", () => {
   it("generates correct atomic field transform payloads", () => {
     expect(fieldOp.serverTimestamp()).toEqual({ $op: "serverTimestamp" });
     expect(fieldOp.increment(5)).toEqual({ $op: "inc", by: 5 });
@@ -13,7 +13,7 @@ describe("@vellum/sdk-js - Field Operations", () => {
   });
 });
 
-describe("@vellum/sdk-js - Full-Jitter Reconnect Backoff", () => {
+describe("@vellumdb/sdk-js - Full-Jitter Reconnect Backoff", () => {
   it("scales with attempt number and respects maximum cap", () => {
     const fixedRandom = () => 1.0; // returns maximum jitter for deterministic testing
     const b0 = computeReconnectBackoffMs(0, 500, 30_000, fixedRandom);
@@ -30,7 +30,7 @@ describe("@vellum/sdk-js - Full-Jitter Reconnect Backoff", () => {
   });
 });
 
-describe("@vellum/sdk-js - Client API", () => {
+describe("@vellumdb/sdk-js - Client API", () => {
   it("throws if projectId or apiKey are missing", () => {
     expect(() => createClient({ projectId: "", apiKey: "k" })).toThrow("required");
     expect(() => createClient({ projectId: "p", apiKey: "" })).toThrow("required");
@@ -129,7 +129,7 @@ describe("@vellum/sdk-js - Client API", () => {
   });
 });
 
-describe("@vellum/sdk-js - Realtime subscribe frames", () => {
+describe("@vellumdb/sdk-js - Realtime subscribe frames", () => {
   it("omits null spec members and opaque cursors from WS query subscriptions", async () => {
     const frames: Array<Record<string, unknown>> = [];
     const db = createClient({

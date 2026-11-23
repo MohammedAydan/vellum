@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Hardened HTTP Transport
+ * @vellumdb/sdk-js - Hardened HTTP Transport
  *
  * Encapsulates:
  * - Per-request `AbortController` timeout composed with caller `AbortSignal`
@@ -298,7 +298,7 @@ export class HttpTransport {
       }
       if (timedOut) {
         const timeoutErr = new Error(
-          `@vellum/sdk-js: request timed out after ${this.effectiveTimeoutMs}ms`
+          `@vellumdb/sdk-js: request timed out after ${this.effectiveTimeoutMs}ms`
         ) as Error & { code?: string; status?: number };
         timeoutErr.code = "REQUEST_TIMEOUT";
         throw timeoutErr;
@@ -424,7 +424,7 @@ export class HttpTransport {
     }
 
     if (!res) {
-      throw new Error("@vellum/sdk-js: request failed without a response");
+      throw new Error("@vellumdb/sdk-js: request failed without a response");
     }
 
     const payload = (await parseResponsePayload(res)) as {

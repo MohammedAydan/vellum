@@ -33,7 +33,7 @@ It provides hierarchical collections, typed JSONB documents, a 13-operator param
 ```mermaid
 flowchart LR
     subgraph Clients["Clients & Unified Single-Origin Frontend (:3000)"]
-        SDK["@vellum/sdk-js · vellum_flutter · REST / WS"]
+        SDK["@vellumdb/sdk-js · vellum_flutter · REST / WS"]
         UI["Dashboard (/) · Admin (/admin/) · Docs (/docs/)"]
     end
 
@@ -157,7 +157,7 @@ Every query compiles in `packages/query-engine/src/compiler.ts` to parameterized
 | `packages/realtime` | `RealtimeGatewayHub`, `OutboxPoller`, and PostgreSQL `LISTEN/NOTIFY` bus |
 | `packages/api-contract`, `observability` | Generated OpenAPI contract and shared API types; logging and tracing hooks |
 | `packages/ui` | `@vellum/ui`, the shared React design system used by the dashboard, admin and docs apps |
-| `packages/sdk-js` & `sdks/flutter` | Official TypeScript/JavaScript (`@vellum/sdk-js`) and Flutter/Dart (`vellum_flutter`) SDKs |
+| `packages/sdk-js` & `sdks/flutter` | Official TypeScript/JavaScript (`@vellumdb/sdk-js`) and Flutter/Dart (`vellum_flutter`) SDKs |
 | `examples/` | Runnable TS, REST and Dart examples plus live testbed apps (see [examples/README.md](./examples/README.md)) |
 | `tests/` | Contract, security, integration, Playwright e2e, real-HTTP/PostgreSQL e2e, load and Dart verification suites |
 | `deploy/` | Hardened `docker-compose.prod.yml`, `Dockerfile.api`, `Dockerfile.frontend`, `Caddyfile`, Railway, Render, Vercel, Cloudflare |

@@ -268,7 +268,7 @@ export default function Page() {
             {
               label: "TypeScript",
               lang: "ts",
-              code: `import { createClient } from "@vellum/sdk-js";
+              code: `import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   projectId: "<PROJECT_ID>",

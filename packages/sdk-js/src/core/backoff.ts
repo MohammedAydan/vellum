@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Backoff, Retry-After & AbortSignal Sleep Helpers
+ * @vellumdb/sdk-js - Backoff, Retry-After & AbortSignal Sleep Helpers
  * Specification Section 9.3:
  * t_sleep = random(0, min(t_max, t_0 * 2^attempt)), where t_0 = 500ms, t_max = 30,000ms.
  */
@@ -72,8 +72,8 @@ export function createAbortError(signal?: AbortSignal): Error & { code: string }
     typedReason instanceof Error
       ? typedReason.message
       : typeof reason === "string" && reason.length > 0
-        ? `@vellum/sdk-js: request aborted (${reason})`
-        : "@vellum/sdk-js: request aborted";
+        ? `@vellumdb/sdk-js: request aborted (${reason})`
+        : "@vellumdb/sdk-js: request aborted";
   const err = new Error(message) as Error & { code: string };
   err.name = "AbortError";
   err.code = "REQUEST_ABORTED";

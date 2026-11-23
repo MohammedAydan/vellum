@@ -2,12 +2,12 @@
 title: Quickstart
 order: 2
 group: Getting started
-description: Install @vellum/sdk-js or vellum_flutter, initialize a hardened client, and run your first create, read, atomic update, and delete.
+description: Install @vellumdb/sdk-js or vellum_flutter, initialize a hardened client, and run your first create, read, atomic update, and delete.
 ---
 
 # Quickstart
 
-Get your first document into and out of VELLUM in under three minutes using either **TypeScript/JavaScript (`@vellum/sdk-js`)** or **Flutter/Dart (`vellum_flutter`)**.
+Get your first document into and out of VELLUM in under three minutes using either **TypeScript/JavaScript (`@vellumdb/sdk-js`)** or **Flutter/Dart (`vellum_flutter`)**.
 
 ## Prerequisites
 
@@ -16,18 +16,18 @@ Get your first document into and out of VELLUM in under three minutes using eith
 
 ---
 
-## TypeScript / JavaScript (`@vellum/sdk-js`)
+## TypeScript / JavaScript (`@vellumdb/sdk-js`)
 
 ### 1. Install
 
 ```bash
-npm install @vellum/sdk-js
+npm install @vellumdb/sdk-js
 ```
 
 ### 2. Initialize, Write, Read, Update & Clean Up
 
 ```ts
-import { createClient, fieldOp } from "@vellum/sdk-js";
+import { createClient, fieldOp } from "@vellumdb/sdk-js";
 
 const db = createClient({
   projectId: process.env.VELLUM_PROJECT_ID!,

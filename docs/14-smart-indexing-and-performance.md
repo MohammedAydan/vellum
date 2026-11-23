@@ -35,7 +35,7 @@ When no ready index covers a query:
 - The HTTP response includes two CORS-exposed headers:
   - `x-vellum-index-url`: `${VELLUM_DASHBOARD_BASE_URL}/orgs/${orgId}/projects/${projectId}/indexes?suggest=${base64url}`
   - `x-vellum-index-suggestion`: Decoded JSON `IndexSuggestionPayload` (validated strictly up to 8 KiB by `decodeSuggestPayload()`).
-- Both `@vellum/sdk-js` and `vellum_flutter` inspect `x-vellum-index-*` headers before consuming response bodies and print a deduplicated clickable console warning (configurable via `warnOnMissingIndexes` and `onIndexSuggestion`).
+- Both `@vellumdb/sdk-js` and `vellum_flutter` inspect `x-vellum-index-*` headers before consuming response bodies and print a deduplicated clickable console warning (configurable via `warnOnMissingIndexes` and `onIndexSuggestion`).
 - Fire-and-forget recording persists hit counts and timing stats to `control_db.project_index_recommendations` (migration `0006`), surfaced in the dashboard's **Smart Index Advisor** queue:
 
 | Method | Endpoint | Purpose |

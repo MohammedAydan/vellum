@@ -18,7 +18,7 @@
 import "./_live-env.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import crypto from "node:crypto";
-import { createClient, type VellumClient } from "@vellum/sdk-js";
+import { createClient, type VellumClient } from "@vellumdb/sdk-js";
 import { startNodeApiServer } from "../../apps/api/src/node-server.js";
 import {
   createRawPgClient,

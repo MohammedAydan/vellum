@@ -12,7 +12,7 @@ import {
   UL,
 } from "../../ui";
 
-const loopJs = `import { createClient } from "@vellum/sdk-js";
+const loopJs = `import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",

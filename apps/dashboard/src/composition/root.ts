@@ -5,7 +5,7 @@
  * UI routes, providers, and tests depend on a single explicit port contract.
  */
 
-import type { VellumClient } from "@vellum/sdk-js";
+import type { VellumClient } from "@vellumdb/sdk-js";
 import {
   apiFetch,
   compileProjectRules,

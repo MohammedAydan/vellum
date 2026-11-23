@@ -1,4 +1,4 @@
-# `@vellum/sdk-js`
+# `@vellumdb/sdk-js`
 
 Official TypeScript & JavaScript SDK for **VELLUM** — a PostgreSQL-backed, multi-tenant document database with strong consistency, cursor pagination, real-time WebSocket sync, and end-user EdDSA authentication.
 
@@ -22,9 +22,9 @@ Built for **Node.js 18+**, modern **browsers**, and **edge runtimes** with zero 
 ## Installation
 
 ```bash
-npm install @vellum/sdk-js
+npm install @vellumdb/sdk-js
 # or
-pnpm add @vellum/sdk-js
+pnpm add @vellumdb/sdk-js
 ```
 
 ---
@@ -32,7 +32,7 @@ pnpm add @vellum/sdk-js
 ## Quick Start
 
 ```ts
-import { createClient, fieldOp } from "@vellum/sdk-js";
+import { createClient, fieldOp } from "@vellumdb/sdk-js";
 
 const db = createClient({
   projectId: "proj_01j9...",
@@ -103,7 +103,7 @@ db.dispose?.();
 Attach a `DocDataConverter<T>` to a `CollectionReference`, `DocumentReference`, or `QueryBuilder` for full compile-time safety across reads, writes, streaming, and realtime snapshots:
 
 ```ts
-import type { DocDataConverter } from "@vellum/sdk-js";
+import type { DocDataConverter } from "@vellumdb/sdk-js";
 
 interface Invoice {
   id: string;
@@ -334,4 +334,4 @@ stopAuth();
 
 ## Modular Architecture & Tamper-Proofing
 
-`@vellum/sdk-js` is organized into focused domain folders under `src/` (`core/`, `cache/`, `auth/`, `realtime/`, `references/`, `batch/`, `client/`) exported cleanly from `src/index.ts`. Public facades, `fieldOp` sentinels, and snapshots are frozen with `Object.freeze`, credentials and caches are encapsulated behind `private readonly` fields with redacted `toJSON()`/`toString()`, and reads return prototype-safe defensive clones.
+`@vellumdb/sdk-js` is organized into focused domain folders under `src/` (`core/`, `cache/`, `auth/`, `realtime/`, `references/`, `batch/`, `client/`) exported cleanly from `src/index.ts`. Public facades, `fieldOp` sentinels, and snapshots are frozen with `Object.freeze`, credentials and caches are encapsulated behind `private readonly` fields with redacted `toJSON()`/`toString()`, and reads return prototype-safe defensive clones.

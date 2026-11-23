@@ -266,12 +266,12 @@ importers:
       '@vellum/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@vellum/sdk-js':
-        specifier: workspace:*
-        version: link:../../packages/sdk-js
       '@vellum/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@vellumdb/sdk-js':
+        specifier: workspace:*
+        version: link:../../packages/sdk-js
       better-auth:
         specifier: ^1.7.25
         version: 1.7.25(drizzle-orm@0.38.4(@neondatabase/serverless@0.10.4)(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.9)(pg@8.23.1)(react@19.3.1))(pg@8.23.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vitest@2.1.9(@types/node@26.6.6)(lightningcss@1.33.0))
@@ -382,7 +382,7 @@ importers:
 
   examples/js-testbed-app:
     dependencies:
-      '@vellum/sdk-js':
+      '@vellumdb/sdk-js':
         specifier: workspace:*
         version: link:../../packages/sdk-js
 

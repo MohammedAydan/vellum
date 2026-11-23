@@ -10,7 +10,7 @@ description: All atomic fieldOp sentinels, how they are applied, their ordering,
 Field transforms let the server compute a field value atomically, avoiding a read-modify-write race. The SDK exposes five helpers under `fieldOp`; on the wire each becomes a sentinel object with a `$op` key.
 
 ```ts
-import { fieldOp } from "@vellum/sdk-js";
+import { fieldOp } from "@vellumdb/sdk-js";
 ```
 
 ## Scenario

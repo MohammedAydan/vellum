@@ -131,7 +131,7 @@ export type OrGroups = z.infer<typeof OrGroupsSchema>;
 
 /**
  * Accepts both canonical `direction` and the SDK shorthand `dir` (emitted by
- * `@vellum/sdk-js` and `vellum_flutter`), normalizing to `direction`.
+ * `@vellumdb/sdk-js` and `vellum_flutter`), normalizing to `direction`.
  */
 export const QueryOrderBySchema = z.preprocess(
   (raw) => {

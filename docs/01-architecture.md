@@ -24,7 +24,7 @@ VELLUM is a multi-tenant, PostgreSQL-native document database service engineered
 ```mermaid
 flowchart TB
     subgraph Clients["Clients & Consoles"]
-        SDK["@vellum/sdk-js · vellum_flutter · REST/WS"]
+        SDK["@vellumdb/sdk-js · vellum_flutter · REST/WS"]
         Dash["Customer Dashboard (/)"]
         Admin["Super-Admin Console (/admin/)"]
         Docs["Developer Docs (/docs/)"]
@@ -141,7 +141,7 @@ Request ──▶ Validate projectId UUID (fail-fast before pool checkout)
 | `packages/realtime` | `RealtimeGatewayHub`, `OutboxPoller`, and `PgNotifyBus` (`LISTEN/NOTIFY` bridge). |
 | `packages/security` | Security Fortress guards: payload guard, query-cost guard, SSRF guard, CSRF/headers, threat detector, and HKDF HMAC-SHA256 hash chain. |
 | `packages/billing` | O(1) in-memory metering, `QuotaGuard`, double-entry billing ledger, and Stripe webhook verifier. |
-| `packages/sdk-js` & `sdks/flutter` | Official TypeScript/JavaScript (`@vellum/sdk-js`) and Flutter/Dart (`vellum_flutter`) client SDKs. |
+| `packages/sdk-js` & `sdks/flutter` | Official TypeScript/JavaScript (`@vellumdb/sdk-js`) and Flutter/Dart (`vellum_flutter`) client SDKs. |
 
 ---
 

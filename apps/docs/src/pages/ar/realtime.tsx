@@ -96,7 +96,7 @@ export default function Page() {
             {
               label: "JavaScript / TypeScript",
               lang: "ts",
-              code: `import { createClient } from "@vellum/sdk-js";
+              code: `import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",

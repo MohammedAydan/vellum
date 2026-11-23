@@ -1,7 +1,7 @@
 # `@vellum/js-testbed-app`
 
 A standalone, no-build TypeScript application that exercises **20 real live
-scenarios** through `@vellum/sdk-js` against a running Document Database API.
+scenarios** through `@vellumdb/sdk-js` against a running Document Database API.
 There are no mocks, no simulations and no skips: every assertion talks to the
 real HTTP API and real WebSocket gateway. The same scenario functions are used
 by the CLI and the dashboard.
@@ -10,7 +10,7 @@ by the CLI and the dashboard.
 
 - A running API with real control/data database planes.
 - Node 22+ and pnpm via Corepack (installed at the repo root).
-- `@vellum/sdk-js` built once (`corepack pnpm --filter @vellum/sdk-js build`) so
+- `@vellumdb/sdk-js` built once (`corepack pnpm --filter @vellumdb/sdk-js build`) so
   its `dist/` type declarations are available.
 
 ## Configuration

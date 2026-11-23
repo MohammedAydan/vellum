@@ -59,7 +59,7 @@ Accepted only where the engine opts in — `PATCH`, `PUT` with `merge:true`, `ba
 | `arrayRemove` | `elements: any[]` | Removes all occurrences matching any element | `INVALID_ARGUMENT` if `elements` missing |
 | `deleteField` | — | Removes the target property from its parent map | — |
 
-Client helpers: JS `fieldOp` (`@vellum/sdk-js`) and Dart `FieldOp` / `FieldValue` (`vellum_flutter`). The Zod schema (`TaggedFieldTransformSchema`) uses `$v` for the payload (`increment`/`arrayUnion`/`arrayRemove`) while the core validator accepts `by`/`value` and `elements`; the wire examples above follow the core validator used by the engine.
+Client helpers: JS `fieldOp` (`@vellumdb/sdk-js`) and Dart `FieldOp` / `FieldValue` (`vellum_flutter`). The Zod schema (`TaggedFieldTransformSchema`) uses `$v` for the payload (`increment`/`arrayUnion`/`arrayRemove`) while the core validator accepts `by`/`value` and `elements`; the wire examples above follow the core validator used by the engine.
 
 ## Path grammar
 

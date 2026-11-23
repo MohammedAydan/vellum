@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Immutable QueryBuilder
+ * @vellumdb/sdk-js - Immutable QueryBuilder
  *
  * Supports all 13 filter operators (including V2 `contains_ci`, `starts_with_ci`,
  * `text_search`), disjunctive `or()`, eager `include()`, dot-path `select()`,

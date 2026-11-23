@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Pure end-user auth & JWT helpers.
+ * @vellumdb/sdk-js - Pure end-user auth & JWT helpers.
  *
  * JWT payloads are decoded with a small hand-rolled base64url decoder with a
  * strict payload size cap. No `eval`, `new Function`, or any other dynamic code
@@ -81,7 +81,7 @@ export function isTokenExpiring(token: string, skewMs = 60_000): boolean {
 /** Read a required string field from an untrusted response body. */
 export function requiredString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`@vellum/sdk-js: invalid auth response (missing '${field}')`);
+    throw new Error(`@vellumdb/sdk-js: invalid auth response (missing '${field}')`);
   }
   return value;
 }
@@ -89,7 +89,7 @@ export function requiredString(value: unknown, field: string): string {
 /** Normalize untrusted response data into a public end-user record. */
 export function parseAuthUser(value: unknown): VellumAuthUser {
   if (!isRecord(value)) {
-    throw new Error("@vellum/sdk-js: invalid auth response (missing 'user')");
+    throw new Error("@vellumdb/sdk-js: invalid auth response (missing 'user')");
   }
   return {
     id: requiredString(value["id"], "user.id"),
@@ -112,7 +112,7 @@ export function parseAuthUser(value: unknown): VellumAuthUser {
 /** Parse a session response (`{ user, accessToken, refreshToken, ... }`). */
 export function parseSessionResponse(value: unknown): AuthState {
   if (!isRecord(value)) {
-    throw new Error("@vellum/sdk-js: invalid auth response");
+    throw new Error("@vellumdb/sdk-js: invalid auth response");
   }
   const user = parseAuthUser(value["user"]);
   return {
@@ -138,7 +138,7 @@ export function parseMfaRequiredResponse(value: Record<string, unknown>): MfaReq
 }
 
 export function parseTotpEnrollmentResponse(value: unknown): TotpEnrollmentResult {
-  if (!isRecord(value)) throw new Error("@vellum/sdk-js: invalid MFA enrollment response");
+  if (!isRecord(value)) throw new Error("@vellumdb/sdk-js: invalid MFA enrollment response");
   return {
     secret: requiredString(value["secret"], "secret"),
     otpauthUri: requiredString(value["otpauthUri"], "otpauthUri"),
@@ -149,7 +149,7 @@ export function parseTotpEnrollmentResponse(value: unknown): TotpEnrollmentResul
 }
 
 export function parseActionTokenResponse(value: unknown): ActionTokenResult {
-  if (!isRecord(value)) throw new Error("@vellum/sdk-js: invalid auth response");
+  if (!isRecord(value)) throw new Error("@vellumdb/sdk-js: invalid auth response");
   const result: ActionTokenResult = { success: true };
   if (typeof value["devToken"] === "string") result.devToken = value["devToken"];
   if (typeof value["expiresAt"] === "string") result.expiresAt = value["expiresAt"];
@@ -157,13 +157,13 @@ export function parseActionTokenResponse(value: unknown): ActionTokenResult {
 }
 
 export function parseEmailVerifyConfirmResponse(value: unknown): EmailVerifyConfirmResult {
-  if (!isRecord(value)) throw new Error("@vellum/sdk-js: invalid auth response");
+  if (!isRecord(value)) throw new Error("@vellumdb/sdk-js: invalid auth response");
   const result: EmailVerifyConfirmResult = { success: true };
   if (value["user"] !== undefined) result.user = parseAuthUser(value["user"]);
   return result;
 }
 
 export function parseSuccessResponse(value: unknown): SuccessResult {
-  if (!isRecord(value)) throw new Error("@vellum/sdk-js: invalid auth response");
+  if (!isRecord(value)) throw new Error("@vellumdb/sdk-js: invalid auth response");
   return { success: true };
 }

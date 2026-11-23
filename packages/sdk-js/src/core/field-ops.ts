@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Declarative Atomic Field Operations
+ * @vellumdb/sdk-js - Declarative Atomic Field Operations
  * Specification Section 12.1
  *
  * Both the `fieldOp` helper namespace and every returned sentinel object are

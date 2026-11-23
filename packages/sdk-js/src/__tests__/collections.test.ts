@@ -42,7 +42,7 @@ const COLLECTION: CollectionInfo = {
   metadata: { owner: "team" },
 };
 
-describe("@vellum/sdk-js - Collections lifecycle", () => {
+describe("@vellumdb/sdk-js - Collections lifecycle", () => {
   it("listCollections maps stats and builds the query string", async () => {
     const { fetch, calls } = mockFetch(() => ({ payload: { collections: [COLLECTION], nextCursor: "cur_1" } }));
     const db = client(fetch);

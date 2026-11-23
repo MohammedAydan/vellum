@@ -122,9 +122,9 @@ Vellum API Gateway (Node 22 + Hono + RFC 6455 WS)
         <CodeTabs
           tabs={[
             {
-              label: "TypeScript (@vellum/sdk-js)",
+              label: "TypeScript (@vellumdb/sdk-js)",
               lang: "ts",
-              code: `import { createClient, fieldOp } from "@vellum/sdk-js";
+              code: `import { createClient, fieldOp } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",

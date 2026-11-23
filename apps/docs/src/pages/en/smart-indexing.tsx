@@ -74,7 +74,7 @@ export default function Page() {
 
       <Section id="sdk-integration" title="SDK advisor hooks &amp; deduplication">
         <P>
-          Both <code>@vellum/sdk-js</code> and <code>vellum_flutter</code> inspect{" "}
+          Both <code>@vellumdb/sdk-js</code> and <code>vellum_flutter</code> inspect{" "}
           <code>x-vellum-index-*</code> headers automatically, deduplicate suggestions by{" "}
           <code>fingerprint</code> so each missing index is logged only once per process, and redact
           any accidental secrets before printing.
@@ -83,9 +83,9 @@ export default function Page() {
         <CodeTabs
           tabs={[
             {
-              label: "TypeScript (@vellum/sdk-js)",
+              label: "TypeScript (@vellumdb/sdk-js)",
               lang: "ts",
-              code: `import { createClient } from "@vellum/sdk-js";
+              code: `import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",
@@ -125,7 +125,7 @@ const db = createClient({
           To keep p99 latency low without introducing Redis, VELLUM pairs bounded in-process LRU
           caches on the server (<code>indexDefHashCache</code>, <code>splitPathCache</code>, API key
           cache, ruleset cache) with PostgreSQL <code>pg_notify</code> invalidation across API
-          replicas. On the client side, <code>@vellum/sdk-js</code> offers{" "}
+          replicas. On the client side, <code>@vellumdb/sdk-js</code> offers{" "}
           <code>BoundedReadCache</code> (default <code>ttlMs: 30_000</code>,{" "}
           <code>maxEntries: 1_000</code>) with O(1) per-path invalidation on writes and realtime
           mutations, plus single-flight read coalescing (<code>dedupeReads</code> in JS,{" "}

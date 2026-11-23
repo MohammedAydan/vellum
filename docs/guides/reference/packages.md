@@ -10,7 +10,7 @@ description: Internal package-by-package API surface for the framework-agnostic 
 This is an internal reference for the monorepo libraries under `packages/*`. Signatures are transcribed from each package's `src/index.ts` and its source files. For the customer-facing libraries use [JavaScript SDK](../sdks/javascript.md) and [Flutter SDK](../sdks/flutter.md) instead.
 
 :::warning Internal packages — not the public SDK
-The libraries below are **internal building blocks** used by `apps/api` and the SDKs. They are not a supported public product surface: their exports can change between releases, and some paths (notably `@vellum/core` tagged-value constructors and `@vellum/query-engine` cursors) are wire-format critical. Application code should depend on `@vellum/sdk-js` or plain HTTP, not on these packages directly.
+The libraries below are **internal building blocks** used by `apps/api` and the SDKs. They are not a supported public product surface: their exports can change between releases, and some paths (notably `@vellum/core` tagged-value constructors and `@vellum/query-engine` cursors) are wire-format critical. Application code should depend on `@vellumdb/sdk-js` or plain HTTP, not on these packages directly.
 :::
 
 ## Architectural boundary rules

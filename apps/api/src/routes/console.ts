@@ -692,7 +692,7 @@ export function createConsoleRoutes(platform: VellumPlatformContext) {
       (body.fields as Array<Parameters<typeof normalizeIndexFieldSpec>[0]>).map(normalizeIndexFieldSpec)
     );
     invalidateProjectIndexCache(projectId);
-    // Deep-linked suggestions from `@vellum/sdk-js` / `vellum_flutter` carry the
+    // Deep-linked suggestions from `@vellumdb/sdk-js` / `vellum_flutter` carry the
     // advisor fingerprint in the create body. Mark the matching recommendations
     // applied so the dashboard queue never re-suggests an index we just created.
     if (typeof body.fingerprint === "string" && body.fingerprint.length > 0) {

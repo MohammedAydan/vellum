@@ -58,7 +58,7 @@ export default function Page() {
         <CodeTabs
           tabs={[
             {
-              label: "TypeScript (@vellum/sdk-js)",
+              label: "TypeScript (@vellumdb/sdk-js)",
               lang: "ts",
               code: `await db.runTransaction(async (tx) => {
   const fromRef = db.doc("accounts/acct_a");

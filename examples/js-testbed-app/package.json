@@ -3,13 +3,13 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Standalone live testbed that exercises @vellum/sdk-js against a real Document Database API",
+  "description": "Standalone live testbed that exercises @vellumdb/sdk-js against a real Document Database API",
   "scripts": {
     "verify:live": "tsx src/verify-live.ts",
     "dev": "tsx src/server.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@vellum/sdk-js": "workspace:*"
+    "@vellumdb/sdk-js": "workspace:*"
   }
 }

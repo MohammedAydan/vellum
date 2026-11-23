@@ -20,7 +20,7 @@
 </header>
 <div class="layout">
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellumdb/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
     <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
   </aside>
   <main class="main">
@@ -39,7 +39,7 @@
 <h2 id="document-and-collection-references">Document and collection references<a class="anchor" href="#document-and-collection-references" aria-label="Link to section">#</a></h2>
 <div class="code-block">
   <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
-  <pre><code class="hl-code"><span class="hl-keyword">import</span> { createClient } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellum/sdk-js&quot;</span>;
+  <pre><code class="hl-code"><span class="hl-keyword">import</span> { createClient } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellumdb/sdk-js&quot;</span>;
 
 <span class="hl-keyword">const</span> db = <span class="hl-fn">createClient</span>({ projectId: <span class="hl-string">&quot;&lt;YOUR_PROJECT_ID&gt;&quot;</span>, apiKey: <span class="hl-string">&quot;&lt;YOUR_API_KEY&gt;&quot;</span> });
 
@@ -241,13 +241,16 @@ console<span class="hl-property">.log</span>(snap<span class="hl-property">.path
 } <span class="hl-keyword">finally</span> {
   <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
 }</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
-       <pre class="cb-out"><code class="hl-text">=== Document CRUD &amp; Optimistic Concurrency ===
-{&quot;operation&quot;:&quot;create profile&quot;,&quot;version&quot;:1,&quot;data&quot;:{&quot;note&quot;:&quot;imported&quot;,&quot;email&quot;:&quot;ada@example.com&quot;,&quot;status&quot;:&quot;active&quot;,&quot;loginCount&quot;:0,&quot;displayName&quot;:&quot;Ada Lovelace&quot;}}
-{&quot;operation&quot;:&quot;set(merge) verify status&quot;,&quot;version&quot;:2,&quot;data&quot;:{&quot;note&quot;:&quot;imported&quot;,&quot;email&quot;:&quot;ada@example.com&quot;,&quot;status&quot;:&quot;verified&quot;,&quot;loginCount&quot;:0,&quot;displayName&quot;:&quot;Ada Lovelace&quot;}}
-{&quot;operation&quot;:&quot;set(replace) minimal profile&quot;,&quot;version&quot;:3,&quot;data&quot;:{&quot;displayName&quot;:&quot;Ada L.&quot;}}
-{&quot;operation&quot;:&quot;update(ifVersion=3) loginCount&quot;,&quot;version&quot;:4,&quot;loginCount&quot;:7}
-{&quot;operation&quot;:&quot;update(ifVersion=3) from stale tab&quot;,&quot;code&quot;:&quot;FAILED_PRECONDITION&quot;,&quot;status&quot;:412}
-{&quot;operation&quot;:&quot;delete(ifVersion=4)&quot;,&quot;status&quot;:404,&quot;code&quot;:&quot;NOT_FOUND&quot;}</code></pre>
+       <pre class="cb-out"><code class="hl-text">/tmp/vellum-new/examples/ts/_harness.ts:138
+    throw new Error(`harness: sign-in failed with HTTP ${token.status}`);
+          ^
+
+Error: harness: sign-in failed with HTTP 404
+    at harness (/tmp/vellum-new/examples/ts/_harness.ts:138:11)
+    at process.processTicksAndRejections (node:internal/process/task_&lt;redacted&gt;:103:5)
+    at async &lt;anonymous&gt; (/tmp/vellum-new/examples/ts/crud.ts:14:11)
+
+Node.js v22.23.5</code></pre>
 </div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
   <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
   <pre><code class="hl-code"><span class="hl-comment">/**
@@ -322,13 +325,16 @@ console<span class="hl-property">.log</span>(snap<span class="hl-property">.path
 } <span class="hl-keyword">finally</span> {
   <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
 }</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
-       <pre class="cb-out"><code class="hl-text">=== Document CRUD &amp; Optimistic Concurrency ===
-{&quot;operation&quot;:&quot;create profile&quot;,&quot;version&quot;:1,&quot;data&quot;:{&quot;note&quot;:&quot;imported&quot;,&quot;email&quot;:&quot;ada@example.com&quot;,&quot;status&quot;:&quot;active&quot;,&quot;loginCount&quot;:0,&quot;displayName&quot;:&quot;Ada Lovelace&quot;}}
-{&quot;operation&quot;:&quot;set(merge) verify status&quot;,&quot;version&quot;:2,&quot;data&quot;:{&quot;note&quot;:&quot;imported&quot;,&quot;email&quot;:&quot;ada@example.com&quot;,&quot;status&quot;:&quot;verified&quot;,&quot;loginCount&quot;:0,&quot;displayName&quot;:&quot;Ada Lovelace&quot;}}
-{&quot;operation&quot;:&quot;set(replace) minimal profile&quot;,&quot;version&quot;:3,&quot;data&quot;:{&quot;displayName&quot;:&quot;Ada L.&quot;}}
-{&quot;operation&quot;:&quot;update(ifVersion=3) loginCount&quot;,&quot;version&quot;:4,&quot;loginCount&quot;:7}
-{&quot;operation&quot;:&quot;update(ifVersion=3) from stale tab&quot;,&quot;code&quot;:&quot;FAILED_PRECONDITION&quot;,&quot;status&quot;:412}
-{&quot;operation&quot;:&quot;delete(ifVersion=4)&quot;,&quot;status&quot;:404,&quot;code&quot;:&quot;NOT_FOUND&quot;}</code></pre>
+       <pre class="cb-out"><code class="hl-text">file:///tmp/vellum-new/examples/rest/_harness.mjs:84
+    throw new Error(`harness: sign-in failed with HTTP ${token.status}`);
+          ^
+
+Error: harness: sign-in failed with HTTP 404
+    at harness (file:///tmp/vellum-new/examples/rest/_harness.mjs:84:11)
+    at process.processTicksAndRejections (node:internal/process/task_&lt;redacted&gt;:103:5)
+    at async file:///tmp/vellum-new/examples/rest/crud.mjs:12:11
+
+Node.js v22.23.5</code></pre>
 </div></div></div>
 </div>
 <h2 id="what-to-read-next">What to read next<a class="anchor" href="#what-to-read-next" aria-label="Link to section">#</a></h2>

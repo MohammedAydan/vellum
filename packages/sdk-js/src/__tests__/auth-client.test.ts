@@ -147,7 +147,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("@vellum/sdk-js - auth storage", () => {
+describe("@vellumdb/sdk-js - auth storage", () => {
   it("defaults to memory storage in Node and to browser storage when available", () => {
     vi.stubGlobal("window", undefined);
     expect(resolveAuthStorage(null)).toBeInstanceOf(MemoryAuthStorage);
@@ -189,7 +189,7 @@ describe("@vellum/sdk-js - auth storage", () => {
   });
 });
 
-describe("@vellum/sdk-js - signOut and getUser", () => {
+describe("@vellumdb/sdk-js - signOut and getUser", () => {
   it("revokes only the current session by default and clears local state", async () => {
     const storage: AuthStorage = new MemoryAuthStorage();
     const { calls, fetch } = recorder(({ url }) => {
@@ -268,7 +268,7 @@ describe("@vellum/sdk-js - signOut and getUser", () => {
   });
 });
 
-describe("@vellum/sdk-js - positional auth API", () => {
+describe("@vellumdb/sdk-js - positional auth API", () => {
   it("accepts both object and positional forms for the required methods", async () => {
     const { calls, fetch } = recorder(({ url }) => {
       if (url.endsWith("/auth/sign-up/email")) return json(session());
@@ -307,7 +307,7 @@ describe("@vellum/sdk-js - positional auth API", () => {
   });
 });
 
-describe("@vellum/sdk-js - realtime re-authentication after token rotation", () => {
+describe("@vellumdb/sdk-js - realtime re-authentication after token rotation", () => {
   it("sends a fresh auth frame to test-hub connections when the token rotates", async () => {
     const frames: Array<Record<string, unknown>> = [];
     const { fetch } = recorder(({ url }) => {

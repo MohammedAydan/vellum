@@ -44,7 +44,7 @@ description: المسارات القياسية، ومراجع المستندات
 ## مراجع المستندات والمجموعات
 
 ```ts
-import { createClient } from "@vellum/sdk-js";
+import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({ projectId: "<YOUR_PROJECT_ID>", apiKey: "<YOUR_API_KEY>" });
 

@@ -44,7 +44,7 @@ Exceeding the depth limit raises `INVALID_DOCUMENT_PATH` (400). Over-long segmen
 ## Document and collection references
 
 ```ts
-import { createClient } from "@vellum/sdk-js";
+import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({ projectId: "<YOUR_PROJECT_ID>", apiKey: "<YOUR_API_KEY>" });
 

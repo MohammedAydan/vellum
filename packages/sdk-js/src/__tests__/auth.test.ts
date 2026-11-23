@@ -66,7 +66,7 @@ function headersOf(call: RecordedCall | undefined): Record<string, string> {
   return (call?.init?.headers ?? {}) as Record<string, string>;
 }
 
-describe("@vellum/sdk-js - end-user auth", () => {
+describe("@vellumdb/sdk-js - end-user auth", () => {
   it("sign-up returns tokens and establishes currentUser", async () => {
     const { calls, fetch } = recorder(({ url }) => {
       if (url.endsWith("/auth/sign-up/email")) return json(session(FUTURE_TOKEN));

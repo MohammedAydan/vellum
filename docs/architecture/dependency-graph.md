@@ -22,7 +22,7 @@ for k, v in pkgs.items():
 ```
 @vellum/admin -> ['@vellum/api-contract', '@vellum/core', '@vellum/database-control', '@vellum/ui']
 @vellum/api -> ['@vellum/api-contract', '@vellum/auth', '@vellum/authorization', '@vellum/billing', '@vellum/core', '@vellum/database-control', '@vellum/database-data', '@vellum/document-engine', '@vellum/observability', '@vellum/query-engine', '@vellum/realtime', '@vellum/security', '@vellum/storage']
-@vellum/dashboard -> ['@vellum/api-contract', '@vellum/authorization', '@vellum/core', '@vellum/sdk-js', '@vellum/ui']
+@vellum/dashboard -> ['@vellum/api-contract', '@vellum/authorization', '@vellum/core', '@vellumdb/sdk-js', '@vellum/ui']
 @vellum/docs -> ['@vellum/ui']
 @vellum/api-contract -> ['@vellum/core']
 @vellum/auth -> ['@vellum/core', '@vellum/database-control', '@vellum/document-engine', '@vellum/storage']
@@ -35,7 +35,7 @@ for k, v in pkgs.items():
 @vellum/observability -> ['@vellum/core']
 @vellum/query-engine -> ['@vellum/core', '@vellum/database-data']
 @vellum/realtime -> ['@vellum/api-contract', '@vellum/auth', '@vellum/authorization', '@vellum/core', '@vellum/query-engine', '@vellum/storage']
-@vellum/sdk-js -> ['@vellum/core']
+@vellumdb/sdk-js -> ['@vellum/core']
 @vellum/security -> []
 @vellum/storage -> ['@vellum/core', '@vellum/database-data', '@vellum/query-engine']
 @vellum/ui -> []
@@ -54,7 +54,7 @@ graph TD
   obs["@vellum/observability (T1)"] --> core
   dbCtrl["@vellum/database-control (T1)"] --> core
   dbData["@vellum/database-data (T1)"] --> core
-  sdkJs["@vellum/sdk-js (T1)"] --> core
+  sdkJs["@vellumdb/sdk-js (T1)"] --> core
 
   queryEng["@vellum/query-engine (T2)"] --> core
   queryEng --> dbData
@@ -113,7 +113,7 @@ graph TD
 
 * **Tier 0 (Zero-Dep Foundations):** `@vellum/core`, `@vellum/security`, `@vellum/ui`
 
-* **Tier 1 (Contracts, Schema & Leaf Clients):** `@vellum/api-contract`, `@vellum/observability`, `@vellum/database-control`, `@vellum/database-data`, `@vellum/sdk-js`
+* **Tier 1 (Contracts, Schema & Leaf Clients):** `@vellum/api-contract`, `@vellum/observability`, `@vellum/database-control`, `@vellum/database-data`, `@vellumdb/sdk-js`
 
 * **Tier 2 (Domain Guards & Query Compiler):** `@vellum/query-engine`, `@vellum/authorization`, `@vellum/billing`
 

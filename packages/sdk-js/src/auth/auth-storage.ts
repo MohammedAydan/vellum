@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Pluggable end-user auth session storage.
+ * @vellumdb/sdk-js - Pluggable end-user auth session storage.
  *
  * Session material (access + refresh tokens) is sensitive. Stores are allowed
  * to persist it when the host platform offers a suitable secured location, but
@@ -36,7 +36,7 @@ export const DEFAULT_AUTH_STORAGE_KEY = "vellum.auth.session.v1";
  * with the same field parsers used at the network boundary before trusting them.
  */
 function parseStoredSession(value: unknown): AuthState {
-  if (!isRecord(value)) throw new Error("@vellum/sdk-js: invalid stored session");
+  if (!isRecord(value)) throw new Error("@vellumdb/sdk-js: invalid stored session");
   const user = parseAuthUser(value);
   return {
     ...user,

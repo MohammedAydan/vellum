@@ -82,7 +82,7 @@ Every first-party client performs a **pre-flight refresh 45 seconds before `exp`
 
 | Client | Storage | Refresh endpoint | Single-flight |
 | :--- | :--- | :--- | :--- |
-| `@vellum/sdk-js` (`VellumAuthClient`) | `AuthStorage` (browser `localStorage` or memory) | `POST /auth/token/refresh` | `refreshInFlightPromise` |
+| `@vellumdb/sdk-js` (`VellumAuthClient`) | `AuthStorage` (browser `localStorage` or memory) | `POST /auth/token/refresh` | `refreshInFlightPromise` |
 | `vellum_flutter` (`VellumAuth`) | `AuthTokenStorage` (memory default; secure storage hook) | `POST /auth/token/refresh` | `_inFlightRefresh` |
 | Customer dashboard (`apiFetch` / `consoleFetch`) | `vellum_auth_session` | `/v1/console/auth/refresh` | per-client mutex |
 | Admin dashboard (`adminFetch`) | `vellum_admin_session` | `/v1/admin/auth/session/refresh` | per-client mutex |

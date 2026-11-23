@@ -11,7 +11,7 @@ import {
   UL,
 } from "../../ui";
 
-const sdkJs = `import { createClient } from "@vellum/sdk-js";
+const sdkJs = `import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   projectId: "<YOUR_PROJECT_ID>",
@@ -156,7 +156,7 @@ export default function Page() {
         <P>
           تفحص كلتا الحزمتين ترويسات المستشار في كل استجابة HTTP وتطبعان تحذيراً يقتصر على الحقول المولّدة
           من الخادم فقط (مع إخفاء أي مفاتيح أو رموز سرية). تُمنع التحذيرات المكررة عبر مجموعة بصمات محدودة
-          على مستوى العملية (تتسع حتى 1,000 بصمة في <code>@vellum/sdk-js</code>).
+          على مستوى العملية (تتسع حتى 1,000 بصمة في <code>@vellumdb/sdk-js</code>).
         </P>
         <CodeTabs
           tabs={[

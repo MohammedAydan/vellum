@@ -55,7 +55,7 @@ curl "https://api.example.com/v1/projects/<PROJECT_ID>/documents/users/u_123" \
 النطاق `*` يمنح كل شيء. لا يمكن للمفتاح العام إدارة الفهارس المركّبة. غياب النطاق يُنتج `PERMISSION_DENIED` (403)؛ وغياب المفتاح أو بطلانه يُنتج `UNAUTHENTICATED` (401).
 
 ```ts
-import { createClient } from "@vellum/sdk-js";
+import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",

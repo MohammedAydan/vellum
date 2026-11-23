@@ -18,7 +18,7 @@ export default function Page() {
     <Doc
       eyebrow="Get started"
       title="Quickstart"
-      description="Verify your API instance, install @vellum/sdk-js or vellum_flutter, run your first document writes and queries, and clean up client resources safely."
+      description="Verify your API instance, install @vellumdb/sdk-js or vellum_flutter, run your first document writes and queries, and clean up client resources safely."
     >
 
       <Section id="beta-install" title="Beta installation">
@@ -110,7 +110,7 @@ curl -fsS http://localhost:8080/v1/health/ready`}
         <CodeTabs
           tabs={[
             {
-              label: "TypeScript (@vellum/sdk-js)",
+              label: "TypeScript (@vellumdb/sdk-js)",
               lang: "ts",
               code: quickstartTypeScript,
             },
@@ -157,7 +157,7 @@ curl -fsS http://localhost:8080/v1/health/ready`}
 
       <Section id="dispose-best-practices" title="5. Client lifecycle &amp; dispose() best practices">
         <Callout tone="warning" title="Always call dispose() when tearing down a client">
-          Both <code>@vellum/sdk-js</code> and <code>vellum_flutter</code> manage proactive JWT
+          Both <code>@vellumdb/sdk-js</code> and <code>vellum_flutter</code> manage proactive JWT
           refresh timers, WebSocket realtime transports, and in-memory read caches. In CLI scripts,
           serverless handlers, widget <code>State.dispose()</code> hooks, or test suites, always
           call <code>db.dispose()</code> (or <code>db.close()</code> in Flutter) so open timers and

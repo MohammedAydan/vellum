@@ -27,7 +27,7 @@ export default function Page() {
             {
               label: "JS / TypeScript",
               lang: "ts",
-              code: `import { fieldOp } from "@vellum/sdk-js";`,
+              code: `import { fieldOp } from "@vellumdb/sdk-js";`,
             },
             {
               label: "Flutter / Dart",
@@ -91,7 +91,7 @@ export default function Page() {
             {
               label: "JS / TypeScript",
               lang: "ts",
-              code: `import { createClient, fieldOp } from "@vellum/sdk-js";
+              code: `import { createClient, fieldOp } from "@vellumdb/sdk-js";
 
 const db = createClient({
   projectId: "<YOUR_PROJECT_ID>",

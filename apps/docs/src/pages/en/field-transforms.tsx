@@ -35,7 +35,7 @@ export default function Page() {
         </P>
         <CodeTabs
           tabs={[
-            { label: "TypeScript", lang: "ts", code: `import { fieldOp } from "@vellum/sdk-js";` },
+            { label: "TypeScript", lang: "ts", code: `import { fieldOp } from "@vellumdb/sdk-js";` },
             {
               label: "Flutter / Dart",
               lang: "dart",
@@ -102,7 +102,7 @@ export default function Page() {
             {
               label: "TypeScript",
               lang: "ts",
-              code: `import { createClient, fieldOp } from "@vellum/sdk-js";
+              code: `import { createClient, fieldOp } from "@vellumdb/sdk-js";
 
 const db = createClient({ projectId: "<YOUR_PROJECT_ID>", apiKey: "<YOUR_API_KEY>" });
 

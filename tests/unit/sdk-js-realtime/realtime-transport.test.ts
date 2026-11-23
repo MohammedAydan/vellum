@@ -1,5 +1,5 @@
 /**
- * Unit tests for @vellum/sdk-js native realtime transport .
+ * Unit tests for @vellumdb/sdk-js native realtime transport .
  * Uses an in-memory fake WebSocket — no network, no Redis.
  */
 import { describe, it, expect } from "vitest";

@@ -19,10 +19,10 @@ Choose the right write primitive for your consistency and throughput requirement
 
 ## Atomic Batch Writes & Auto-Chunked Bulk Writes
 
-### TypeScript (`@vellum/sdk-js`)
+### TypeScript (`@vellumdb/sdk-js`)
 
 ```ts
-import { fieldOp } from "@vellum/sdk-js";
+import { fieldOp } from "@vellumdb/sdk-js";
 
 // 1. Single atomic batch (<= 500 operations)
 await db.batchWrite([
@@ -82,7 +82,7 @@ await client.writeBatchChunked(
 
 Transactions acquire a server `transactionToken` (`POST /transactions:begin`), track read versions via `tx.get(...)`, stage mutations (`create`, `set`, `update`, `delete`), and commit atomically (`POST /transactions:commit`). If a concurrent writer modifies a read document, the server responds with `ABORTED_CONFLICT` (`409`) and the SDK automatically retries with jittered backoff up to `maxAttempts` (default `5`).
 
-### TypeScript (`@vellum/sdk-js`)
+### TypeScript (`@vellumdb/sdk-js`)
 
 ```ts
 const { result } = await db.runTransaction(

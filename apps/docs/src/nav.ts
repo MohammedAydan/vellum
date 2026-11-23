@@ -59,7 +59,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: t("SDKs", "المجموعات البرمجية"),
     items: [
-      { slug: "sdks/javascript", title: t("JavaScript / TypeScript", "JavaScript / TypeScript"), desc: t("Exported symbols of @vellum/sdk-js — client, references, queries, auth and realtime.", "الرموز المُصدَّرة في @vellum/sdk-js — العميل، والمراجع، والاستعلام والمصادقة والوقت الفعلي."), keywords: ["npm", "typescript", "sdk"] },
+      { slug: "sdks/javascript", title: t("JavaScript / TypeScript", "JavaScript / TypeScript"), desc: t("Exported symbols of @vellumdb/sdk-js — client, references, queries, auth and realtime.", "الرموز المُصدَّرة في @vellumdb/sdk-js — العميل، والمراجع، والاستعلام والمصادقة والوقت الفعلي."), keywords: ["npm", "typescript", "sdk"] },
       { slug: "sdks/flutter", title: t("Flutter / Dart", "Flutter / Dart"), desc: t("Using vellum_flutter — client setup, CRUD, queries, pagination, realtime and auth.", "استخدام vellum_flutter — إعداد العميل، CRUD، الاستعلام، الترقيم والوقت الفعلي والمصادقة."), keywords: ["dart", "flutter", "sdk"] },
     ],
   },

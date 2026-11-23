@@ -59,7 +59,7 @@ description: الأنواع الموسومة المعيارية $t/$v، وتحو
 | `arrayRemove` | `elements: any[]` | يزيل كل التطابقات لأي عنصر | `INVALID_ARGUMENT` إن كان `elements` مفقودًا |
 | `deleteField` | — | يزيل الخاصية المستهدفة من خريطتها الأصلية | — |
 
-مساعدات العميل: `fieldOp` في JS (`@vellum/sdk-js`) و`FieldOp` / `FieldValue` في Dart (`vellum_flutter`). يستخدم مخطط Zod (`TaggedFieldTransformSchema`) الحقل `$v` للحمولة (`increment`/`arrayUnion`/`arrayRemove`) بينما يقبل مُتحقِّق النواة `by`/`value` و`elements`؛ وتتبع أمثلة الإرسال أعلاه مُتحقِّق النواة الذي يستخدمه المحرك.
+مساعدات العميل: `fieldOp` في JS (`@vellumdb/sdk-js`) و`FieldOp` / `FieldValue` في Dart (`vellum_flutter`). يستخدم مخطط Zod (`TaggedFieldTransformSchema`) الحقل `$v` للحمولة (`increment`/`arrayUnion`/`arrayRemove`) بينما يقبل مُتحقِّق النواة `by`/`value` و`elements`؛ وتتبع أمثلة الإرسال أعلاه مُتحقِّق النواة الذي يستخدمه المحرك.
 
 ## قواعد المسارات
 

@@ -13,8 +13,8 @@ export default function Page() {
   return (
     <Doc
       eyebrow="SDKs"
-      title="JavaScript / TypeScript SDK (@vellum/sdk-js)"
-      description="Complete reference for @vellum/sdk-js—typed converters, streaming pagination, auto-chunked bulk writes, BoundedReadCache, single-flight read deduplication, AbortSignal, realtime connectionState, and dispose()."
+      title="JavaScript / TypeScript SDK (@vellumdb/sdk-js)"
+      description="Complete reference for @vellumdb/sdk-js—typed converters, streaming pagination, auto-chunked bulk writes, BoundedReadCache, single-flight read deduplication, AbortSignal, realtime connectionState, and dispose()."
     >
 
       <Section id="beta-install" title="Beta installation">
@@ -23,7 +23,7 @@ export default function Page() {
         <Code lang="yaml" title="Flutter / Dart 3.4+" code={betaDartInstall} />
       </Section>
       <P>
-        <code>@vellum/sdk-js</code> is a zero-dependency TypeScript client for Node.js 22+, edge
+        <code>@vellumdb/sdk-js</code> is a zero-dependency TypeScript client for Node.js 22+, edge
         runtimes, and modern browsers. It speaks the canonical v1 tagged wire format, handles
         proactive JWT refresh, and multiplexes WebSocket realtime subscriptions over a single
         transport.
@@ -32,8 +32,8 @@ export default function Page() {
       <Section id="client-setup" title="Client configuration (createClient)">
         <Code
           lang="ts"
-          title="Initialize a hardened @vellum/sdk-js client"
-          code={`import { createClient, BoundedReadCache } from "@vellum/sdk-js";
+          title="Initialize a hardened @vellumdb/sdk-js client"
+          code={`import { createClient, BoundedReadCache } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",
@@ -74,7 +74,7 @@ const db = createClient({
         <Code
           lang="ts"
           title="Typed converter on collection, query, and document references"
-          code={`import type { DocDataConverter } from "@vellum/sdk-js";
+          code={`import type { DocDataConverter } from "@vellumdb/sdk-js";
 
 interface User {
   id: string;
@@ -171,10 +171,10 @@ db.dispose();`}
 
       <Section id="modular-architecture" title="Modular architecture &amp; tamper-proofing">
         <P>
-          <code>@vellum/sdk-js</code> is structured into focused domain modules under{" "}
+          <code>@vellumdb/sdk-js</code> is structured into focused domain modules under{" "}
           <code>src/</code> (<code>core/</code>, <code>cache/</code>, <code>auth/</code>,{" "}
           <code>realtime/</code>, <code>references/</code>, <code>batch/</code>, and{" "}
-          <code>client/</code>) re-exported cleanly from <code>@vellum/sdk-js</code>. All public
+          <code>client/</code>) re-exported cleanly from <code>@vellumdb/sdk-js</code>. All public
           facades, <code>fieldOp</code> sentinels, and snapshots are frozen via{" "}
           <code>Object.freeze</code>, internal caches and credentials remain encapsulated behind{" "}
           <code>private readonly</code> fields with redacted <code>toJSON()</code>/<code>toString()</code>,

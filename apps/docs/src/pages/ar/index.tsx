@@ -13,7 +13,7 @@ export default function Page() {
           <code>PostgreSQL</code> و<code>JSONB</code>. تمنحك مجموعات هرمية (Collections &amp;
           Subcollections)، ومستندات JSON مُنمّطة، واستعلامات مهيكلة بترقيم صفحي يعتمد على المؤشرات
           الموقّعة (Signed Cursors)، وتحويلات حقول ذرية، ومعاملات تزامن متفائل (OCC)، وبثّاً حيّاً عبر{" "}
-          <code>WebSocket</code> — من خلال حزم برمجية رسمية لـ TypeScript (<code>@vellum/sdk-js</code>) و
+          <code>WebSocket</code> — من خلال حزم برمجية رسمية لـ TypeScript (<code>@vellumdb/sdk-js</code>) و
           Flutter/Dart (<code>vellum_flutter</code>) أو مباشرة عبر REST HTTP.
         </P>
         <P>
@@ -25,7 +25,7 @@ export default function Page() {
         <Code
           lang="ts"
           title="أول عميل مرتبط بمشروعك"
-          code={`import { createClient } from "@vellum/sdk-js";
+          code={`import { createClient } from "@vellumdb/sdk-js";
 
 // عميل واحد بنطاق مستأجر واحد: كل طلب يحمل projectId تلقائياً.
 const db = createClient({

@@ -1,7 +1,7 @@
 /**
  * End-to-End Integration Test Suite (`tests/integration/api-sdk-realtime.test.ts`)
  * Verifies:
- * 1. Full HTTP REST API & TypeScript SDK (@vellum/sdk-js) CRUD lifecycle
+ * 1. Full HTTP REST API & TypeScript SDK (@vellumdb/sdk-js) CRUD lifecycle
  * 2. Atomic Field Transforms (increment, serverTimestamp, arrayUnion, arrayRemove, deleteField)
  * 3. Structured Queries with cursor pagination (startAfter) & Composite Index creation + Background Worker backfill
  * 4. Interactive OCC Transactions & automatic conflict retry on concurrent writes
@@ -12,7 +12,7 @@ import { describe, it, expect } from "vitest";
 import { createVellumPlatform } from "@vellum/api";
 import { CustomerDashboardService } from "@vellum/dashboard";
 import { PlatformAdminService } from "@vellum/admin";
-import { createClient, fieldOp } from "@vellum/sdk-js";
+import { createClient, fieldOp } from "@vellumdb/sdk-js";
 import {
   decryptPrivateKey,
   generateEd25519KeyPair,

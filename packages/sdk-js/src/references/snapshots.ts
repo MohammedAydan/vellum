@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Immutable Document & Query Snapshots
+ * @vellumdb/sdk-js - Immutable Document & Query Snapshots
  *
  * Snapshot metadata objects (`id`, `path`, `version`, `exists`, `redactedRefs`)
  * are frozen (`Object.freeze`) so callers cannot tamper with SDK snapshot state,

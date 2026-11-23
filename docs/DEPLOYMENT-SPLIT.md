@@ -35,7 +35,7 @@ frontend resolves it with `VITE_API_BASE_URL` at build time, with an optional
 - **The frontend is static-only.** It does not ship database drivers or server
   secrets, and its source may not import `apps/api`, `packages/database-control`,
   `packages/database-data`, `packages/storage`, or `packages/document-engine`.
-  It may import `@vellum/api-contract`, `@vellum/core`, `@vellum/sdk-js`,
+  It may import `@vellum/api-contract`, `@vellum/core`, `@vellumdb/sdk-js`,
   `@vellum/ui`, and `@vellum/authorization`.
 - **The legacy root-level `api/` function directory must stay absent.** Because
   `vellum-console` uses the repository root as its `rootDirectory`, a root `api/`

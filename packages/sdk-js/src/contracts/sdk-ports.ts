@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Contract-First SDK Port Interfaces
+ * @vellumdb/sdk-js - Contract-First SDK Port Interfaces
  *
  * Explicit boundary contracts for HTTP transport, auth session storage,
  * realtime WebSocket transport, and bounded document read caching.

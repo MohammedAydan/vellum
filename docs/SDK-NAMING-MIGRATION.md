@@ -6,12 +6,12 @@ Vellum is the product name. New application code should use the canonical SDK na
 
 ```ts
 // Preferred
-import { VellumClient, VellumAuthClient } from '@vellum/sdk-js';
-import type { VellumClientConfig } from '@vellum/sdk-js';
+import { VellumClient, VellumAuthClient } from '@vellumdb/sdk-js';
+import type { VellumClientConfig } from '@vellumdb/sdk-js';
 
 // Still supported, with deprecated class aliases
-import { VellumClient, VellumAuthClient } from '@vellum/sdk-js';
-import type { VellumClientConfig } from '@vellum/sdk-js';
+import { VellumClient, VellumAuthClient } from '@vellumdb/sdk-js';
+import type { VellumClientConfig } from '@vellumdb/sdk-js';
 ```
 
 `VellumClient === VellumClient` and `VellumAuthClient === VellumAuthClient`. Type aliases retain their existing structure. No constructor options or request formats change.

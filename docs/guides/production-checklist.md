@@ -2,7 +2,7 @@
 title: Production Checklist
 order: 14
 group: Operations
-description: Hardening checklist for deploying VELLUM with @vellum/sdk-js and vellum_flutter — keys, auth storage, timeouts, retries, caching, streaming, realtime, and lifecycle disposal.
+description: Hardening checklist for deploying VELLUM with @vellumdb/sdk-js and vellum_flutter — keys, auth storage, timeouts, retries, caching, streaming, realtime, and lifecycle disposal.
 ---
 
 # Production Checklist
@@ -15,7 +15,7 @@ Verify every item below before shipping a VELLUM-backed application to productio
 
 - [ ] **Key separation**: Use publishable keys (`pk_...`) in browser and Flutter clients; keep secret keys (`sk_...`) strictly on trusted backend servers.
 - [ ] **Default-deny Security Rules**: Ensure every user-accessible collection enforces `auth.uid` ownership or role claims rather than relying on client filtering.
-- [ ] **No raw credentials in logs**: `vellum_flutter` automatically redacts `pk_`/`sk_`, `Bearer`, and JWTs in `toString()`, and `@vellum/sdk-js` never logs tokens or exposes them in `db.auth.toJSON()`. Still avoid dumping raw `AuthState` / `VellumUser` objects to telemetry sinks.
+- [ ] **No raw credentials in logs**: `vellum_flutter` automatically redacts `pk_`/`sk_`, `Bearer`, and JWTs in `toString()`, and `@vellumdb/sdk-js` never logs tokens or exposes them in `db.auth.toJSON()`. Still avoid dumping raw `AuthState` / `VellumUser` objects to telemetry sinks.
 - [ ] **Path validation**: Both SDKs reject `..`, `%2e%2e`, `%2f`, `\`, `?`, `#`, and control characters in document/collection segments — still validate user-supplied IDs at your API boundary.
 
 ---

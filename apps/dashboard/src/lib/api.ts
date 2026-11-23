@@ -1,4 +1,4 @@
-import { createClient, type VellumClient } from "@vellum/sdk-js";
+import { createClient, type VellumClient } from "@vellumdb/sdk-js";
 import {
   clearStoredSession,
   getSessionEpoch,

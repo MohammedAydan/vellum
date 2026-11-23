@@ -4,7 +4,7 @@ import http from "node:http";
 import type { Socket, AddressInfo } from "node:net";
 import { hashApiKey, type ApiKeyRecord } from "@vellum/authorization";
 import { RealtimeGatewayHub } from "@vellum/realtime";
-import { createClient, type RealtimeSnapshot } from "@vellum/sdk-js";
+import { createClient, type RealtimeSnapshot } from "@vellumdb/sdk-js";
 import { attachRealtimeWebSocketServer } from "../../apps/api/src/ws-rfc6455.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PgControlPlaneStore } from "@vellum/database-control/adapters";

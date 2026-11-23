@@ -29,7 +29,7 @@ export default function Page() {
           قابلة للتغيير بين الإصدارات، وبعض مساراتها — مثل مُنشئات القيم الموسومة
           في <code>@vellum/core</code> ومؤشرات <code>@vellum/query-engine</code> —
           حسّاسة لتنسيق الإرسال. يجب أن تعتمد تطبيقات العمل على{" "}
-          <code>@vellum/sdk-js</code> أو على HTTP المباشر، لا على هذه الحزم مباشرة.
+          <code>@vellumdb/sdk-js</code> أو على HTTP المباشر، لا على هذه الحزم مباشرة.
         </Callout>
         <Table
           head={["الطبقة", "الحزم", "الدور المعماري"]}
@@ -69,7 +69,7 @@ export default function Page() {
             [
               "التوصيل",
               <>
-                <code>@vellum/sdk-js</code> · <code>@vellum/ui</code>
+                <code>@vellumdb/sdk-js</code> · <code>@vellum/ui</code>
               </>,
               "عميل JavaScript الرسمي، ونظام التصميم المشترك لواجهات المنصات.",
             ],
@@ -366,7 +366,7 @@ export default function Page() {
       </Section>
 
       <Section id="delivery" title="طبقة التوصيل">
-        <H3 id="sdk-js">@vellum/sdk-js</H3>
+        <H3 id="sdk-js">@vellumdb/sdk-js</H3>
         <P>
           <strong>المسؤولية:</strong> عميل TypeScript/JavaScript الرسمي: إنشاء
           العميل والمراجع، والاستعلام والترقيم، والتحويلات الحقلية، والمصادقة،

@@ -16,7 +16,7 @@
 ### SDK naming compatibility
 
 - The JavaScript client implementation now lives in `client/vellum-client.ts`. The old source path remains a re-export shim; neither source path is a supported package subpath export.
-- Import `VellumClient` and `VellumAuthClient` from `@vellum/sdk-js` in new code. Existing root exports `VellumClient`, `VellumAuthClient` and the `Vellum*` type aliases remain available. Class aliases refer to the same constructors, not wrappers.
+- Import `VellumClient` and `VellumAuthClient` from `@vellumdb/sdk-js` in new code. Existing root exports `VellumClient`, `VellumAuthClient` and the `Vellum*` type aliases remain available. Class aliases refer to the same constructors, not wrappers.
 - In Flutter/Dart, use `package:vellum_flutter/vellum_flutter.dart` and the `Vellum*` names. The `vellum_flutter.dart` compatibility barrel and existing `Vellum*` typedefs remain available without a removal date. No new Dart analyzer deprecation diagnostics are introduced in this release.
 - No aliases are removed here. Removal, if needed, requires a separate major-version change with migration notes. This release does not rename npm/pub package IDs, HTTP headers, wire fields, SQL roles, stored keys, cookies, or existing persisted identifiers.
 

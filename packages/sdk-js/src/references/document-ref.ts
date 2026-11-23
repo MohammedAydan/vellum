@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - DocumentReference
+ * @vellumdb/sdk-js - DocumentReference
  *
  * Immutable, typed handle to a single document path supporting CRUD,
  * `withConverter<U>()`, bounded read cache + single-flight GET coalescing,

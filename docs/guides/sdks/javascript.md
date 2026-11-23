@@ -1,13 +1,13 @@
 ---
-title: JavaScript SDK (@vellum/sdk-js)
+title: JavaScript SDK (@vellumdb/sdk-js)
 order: 2
 group: SDKs
-description: Exported-symbol reference for @vellum/sdk-js — client, references, query builder, streaming, caching, chunked batches, realtime transport, and EdDSA auth.
+description: Exported-symbol reference for @vellumdb/sdk-js — client, references, query builder, streaming, caching, chunked batches, realtime transport, and EdDSA auth.
 ---
 
-# JavaScript SDK (`@vellum/sdk-js`)
+# JavaScript SDK (`@vellumdb/sdk-js`)
 
-Complete API reference for `@vellum/sdk-js` v0.0.1 derived from `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`. For narrative walkthroughs see [Quickstart](../quickstart.md), [Query](../query.md), [Pagination](../pagination.md), [Realtime](../realtime.md), and [Batch Writes & Transactions](../batch-and-transactions.md).
+Complete API reference for `@vellumdb/sdk-js` v0.0.1 derived from `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`. For narrative walkthroughs see [Quickstart](../quickstart.md), [Query](../query.md), [Pagination](../pagination.md), [Realtime](../realtime.md), and [Batch Writes & Transactions](../batch-and-transactions.md).
 
 ```ts
 import {
@@ -21,7 +21,7 @@ import {
   computeReconnectBackoffMs,
   computeDecorrelatedJitterMs,
   parseRetryAfterMs,
-} from "@vellum/sdk-js";
+} from "@vellumdb/sdk-js";
 ```
 
 ---
@@ -138,4 +138,4 @@ for await (const doc of db
 
 ## Modular Architecture & Tamper-Proofing
 
-`@vellum/sdk-js` separates concerns across `src/core/`, `src/cache/`, `src/auth/`, `src/realtime/`, `src/references/`, `src/batch/`, and `src/client/`. Facades, `fieldOp` sentinels, and snapshots are frozen with `Object.freeze`, credentials are redacted in `toJSON()`/`toString()`, and `data()`/cache reads return prototype-safe clones.
+`@vellumdb/sdk-js` separates concerns across `src/core/`, `src/cache/`, `src/auth/`, `src/realtime/`, `src/references/`, `src/batch/`, and `src/client/`. Facades, `fieldOp` sentinels, and snapshots are frozen with `Object.freeze`, credentials are redacted in `toJSON()`/`toString()`, and `data()`/cache reads return prototype-safe clones.

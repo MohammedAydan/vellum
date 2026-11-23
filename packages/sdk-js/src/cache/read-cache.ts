@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Bounded LRU + TTL Document Read Cache
+ * @vellumdb/sdk-js - Bounded LRU + TTL Document Read Cache
  *
  * Zero external dependencies. Uses insertion-ordered `Map` for O(1) LRU
  * recency promotion and eviction, paired with a secondary per-path index for

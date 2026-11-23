@@ -137,7 +137,7 @@ export default function Page() {
             {
               label: "TypeScript",
               lang: "ts",
-              code: `import { createClient } from "@vellum/sdk-js";
+              code: `import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   projectId: "<YOUR_PROJECT_ID>",
@@ -224,7 +224,7 @@ final user = await client.getDoc('users/u_123');`,
             {
               label: "TypeScript",
               lang: "ts",
-              code: `import { createClient, fieldOp } from "@vellum/sdk-js";
+              code: `import { createClient, fieldOp } from "@vellumdb/sdk-js";
 
 const db = createClient({ projectId: "<YOUR_PROJECT_ID>", apiKey: "<YOUR_API_KEY>" });
 const user = db.collection("users").doc("u_123");

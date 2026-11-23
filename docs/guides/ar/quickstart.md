@@ -2,12 +2,12 @@
 title: البدء السريع
 order: 2
 group: البداية
-description: ثبّت @vellum/sdk-js، وأنشئ عميلًا، ونفّذ أول عملية كتابة وقراءة وحذف.
+description: ثبّت @vellumdb/sdk-js، وأنشئ عميلًا، ونفّذ أول عملية كتابة وقراءة وحذف.
 ---
 
 # البدء السريع
 
-يُدخلك هذا الدليل في عالم VELLUM خلال دقائق قليلة: كتابة مستند وقراءته مجددًا. نستخدم SDK الرسمي بلغة TypeScript/JavaScript وهو `@vellum/sdk-js`.
+يُدخلك هذا الدليل في عالم VELLUM خلال دقائق قليلة: كتابة مستند وقراءته مجددًا. نستخدم SDK الرسمي بلغة TypeScript/JavaScript وهو `@vellumdb/sdk-js`.
 
 ## السيناريو
 
@@ -16,7 +16,7 @@ description: ثبّت @vellum/sdk-js، وأنشئ عميلًا، ونفّذ أو
 ## 1. ثبّت SDK
 
 ```bash
-npm install @vellum/sdk-js
+npm install @vellumdb/sdk-js
 ```
 
 الحزمة هي ESM (`type: module`) وتستهدف Node 22+ أو متصفحًا حديثًا. وتتضمن تعريفات TypeScript الخاصة بها، لذا لا حاجة إلى حزمة `@types` منفصلة.
@@ -30,7 +30,7 @@ npm install @vellum/sdk-js
 ## 3. أنشئ عميلًا
 
 ```ts
-import { createClient } from "@vellum/sdk-js";
+import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: process.env.VELLUM_ENDPOINT ?? "http://localhost:8080",

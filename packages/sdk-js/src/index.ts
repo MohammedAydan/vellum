@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Canonical Barrel Export
+ * @vellumdb/sdk-js - Canonical Barrel Export
  */
 
 export * from "./types.js";

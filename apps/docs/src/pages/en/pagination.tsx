@@ -110,7 +110,7 @@ LIMIT $limitPlusOne;`}
       <Section id="sdk-streaming" title="Streaming pages &amp; documents in the SDKs">
         <P>
           You can pass <code>nextCursor</code> manually to <code>.startAfter(cursor)</code>, or use
-          the built-in lazy async iterators in <code>@vellum/sdk-js</code> and{" "}
+          the built-in lazy async iterators in <code>@vellumdb/sdk-js</code> and{" "}
           <code>vellum_flutter</code> that follow cursors automatically and guard against duplicate
           or empty cursor loops.
         </P>

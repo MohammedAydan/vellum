@@ -49,7 +49,7 @@ export default function Page() {
             {
               label: "JavaScript / TypeScript",
               lang: "ts",
-              code: `import { createClient, fieldOp } from "@vellum/sdk-js";
+              code: `import { createClient, fieldOp } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",
@@ -95,7 +95,7 @@ await batch.commit();`,
         <H3 id="batch-chunked">الكتابة الدفعية الضخمة (batchWriteChunked في TypeScript)</H3>
         <P>
           عندما تحتاج إلى كتابة مئات أو آلاف العمليات دون خرق سقف الـ 100 عملية لكل دفعة، توفّر حزمة{" "}
-          <code>@vellum/sdk-js</code> الدالة <code>batchWriteChunked()</code> التي تقسّم العمليات تلقائياً
+          <code>@vellumdb/sdk-js</code> الدالة <code>batchWriteChunked()</code> التي تقسّم العمليات تلقائياً
           إلى دفعات آمنة مع تحكم بالتزامن (<code>concurrency</code>)، وتقارير تقدّم (<code>onProgress</code>)،
           ودعم الإلغاء عبر <code>AbortSignal</code>:
         </P>
@@ -179,7 +179,7 @@ console.log(summary.totalOperations, summary.totalChunks);`}
             {
               label: "JavaScript / TypeScript",
               lang: "ts",
-              code: `import { createClient } from "@vellum/sdk-js";
+              code: `import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",

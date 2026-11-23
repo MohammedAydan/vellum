@@ -2,7 +2,7 @@
 
 > **Status:** current as of the V2 engine (Phases 1–4). Every signature, endpoint and
 > limit below is taken from the shipped code. All examples use methods that actually
-> exist in `@vellum/sdk-js`, `vellum_flutter` and the `/v1` REST API.
+> exist in `@vellumdb/sdk-js`, `vellum_flutter` and the `/v1` REST API.
 >
 > Companion guides: [03 — Query Compiler](./03-query-and-indexing.md),
 > [13 — Security Rules DSL](./13-security-rules-dsl.md),
@@ -113,7 +113,7 @@ interface DocumentSnapshot<T> {
 **JavaScript / TypeScript**
 
 ```ts
-import { createClient } from "@vellum/sdk-js";
+import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   projectId: "proj_01JCK9X2P8",

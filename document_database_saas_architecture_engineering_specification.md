@@ -138,7 +138,7 @@ Every database instance exposes two connection URLs per plane:
 ```text
                        ┌────────────────────────────────────────┐
                        │              Client SDKs               │
-                       │  @vellum/sdk-js   │   vellum_flutter     │
+                       │  @vellumdb/sdk-js   │   vellum_flutter     │
                        └────────┬─────────┴──────────┬──────────┘
                                 │ HTTPS (REST)       │ WSS (Realtime)
                        ┌────────▼────────────────────▼──────────┐
@@ -708,10 +708,10 @@ All endpoints require headers:
 
 ## 12. SDK Architecture (TypeScript & Flutter)
 
-### 12.1 TypeScript SDK (`@vellum/sdk-js`)
+### 12.1 TypeScript SDK (`@vellumdb/sdk-js`)
 
 ```ts
-import { createClient, fieldOp } from "@vellum/sdk-js";
+import { createClient, fieldOp } from "@vellumdb/sdk-js";
 
 const db = createClient({
   projectId: "proj_01J...",

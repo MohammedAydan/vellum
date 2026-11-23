@@ -13,7 +13,7 @@ import {
   UL,
 } from "../../ui";
 
-const basicQueryJs = `import { createClient } from "@vellum/sdk-js";
+const basicQueryJs = `import { createClient } from "@vellumdb/sdk-js";
 
 const db = createClient({
   endpoint: "https://api.example.com",

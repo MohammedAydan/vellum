@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - VellumClient Composition Root
+ * @vellumdb/sdk-js - VellumClient Composition Root
  * Specification Section 12.1 & 9.3
  *
  * Composes `HttpTransport`, `VellumAuthClient`, `BoundedReadCache`,
@@ -188,7 +188,7 @@ function toCollectionInfo(value: unknown): CollectionInfo | null {
 /** Strict variant used where the server is contractually expected to return a row. */
 function mapCollectionInfo(value: unknown): CollectionInfo {
   const info = toCollectionInfo(value);
-  if (!info) throw new Error("@vellum/sdk-js: invalid collection response");
+  if (!info) throw new Error("@vellumdb/sdk-js: invalid collection response");
   return info;
 }
 
@@ -248,7 +248,7 @@ export class VellumClient implements VellumClientInterface {
 
   public constructor(config: ClientConfig) {
     if (!config.projectId || !config.apiKey) {
-      throw new Error("@vellum/sdk-js: 'projectId' and 'apiKey' are required");
+      throw new Error("@vellumdb/sdk-js: 'projectId' and 'apiKey' are required");
     }
 
     this.projectId = config.projectId;
@@ -809,7 +809,7 @@ export class VellumClient implements VellumClientInterface {
         throw err;
       }
     }
-    throw new Error("@vellum/sdk-js: runTransaction reached max attempts without commit");
+    throw new Error("@vellumdb/sdk-js: runTransaction reached max attempts without commit");
   }
 
   /* --------------------------------------------------------------------- */

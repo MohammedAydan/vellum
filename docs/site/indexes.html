@@ -20,7 +20,7 @@
 </header>
 <div class="layout">
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellum/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
+    <div class="sidebar-inner"><div class="nav-group"><div class="nav-group-title">Getting started</div><ul><li><a href="index.html" class="nav-link nav-home">Documentation Home</a></li><li><a href="quickstart.html" class="nav-link">Quickstart</a></li><li><a href="authentication.html" class="nav-link">Authentication</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Reference</div><ul><li><a href="reference/rest-control-plane.html" class="nav-link">Control Plane &amp; Console REST API</a></li><li><a href="reference/rest-data-plane.html" class="nav-link">Public Data Plane REST API</a></li><li><a href="reference/realtime-protocol.html" class="nav-link">Realtime WebSocket Protocol</a></li><li><a href="reference/wire-format.html" class="nav-link">Tagged Wire Format &amp; Path Grammar</a></li><li><a href="reference/errors.html" class="nav-link">Canonical Error Codes &amp; Retry Guidance</a></li><li><a href="reference/packages.html" class="nav-link">Package APIs</a></li><li><a href="errors-and-limits.html" class="nav-link">Errors &amp; Limits</a></li><li><a href="rest-api.html" class="nav-link">REST API Orientation</a></li></ul></div><div class="nav-group"><div class="nav-group-title">SDKs</div><ul><li><a href="sdks/flutter.html" class="nav-link">Flutter SDK (vellum_flutter)</a></li><li><a href="sdks/javascript.html" class="nav-link">JavaScript SDK (@vellumdb/sdk-js)</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Core concepts</div><ul><li><a href="crud.html" class="nav-link">CRUD &amp; Document Paths</a></li><li><a href="field-transforms.html" class="nav-link">Field Transforms</a></li><li><a href="query.html" class="nav-link">Query</a></li><li><a href="pagination.html" class="nav-link">Pagination</a></li><li><a href="indexes.html" class="nav-link">Composite Indexes</a></li><li><a href="realtime.html" class="nav-link">Realtime</a></li><li><a href="batch-and-transactions.html" class="nav-link">Batch Writes &amp; Transactions</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Authentication</div><ul><li><a href="end-user-auth.html" class="nav-link">End-User Authentication &amp; the Three Realms</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Security</div><ul><li><a href="security-rules.html" class="nav-link">Security Rules</a></li></ul></div><div class="nav-group"><div class="nav-group-title">Operations</div><ul><li><a href="production-checklist.html" class="nav-link">Production Checklist</a></li><li><a href="deployment.html" class="nav-link">Deployment &amp; Hosting</a></li></ul></div></div>
     <div class="sidebar-foot">Examples are executed against the live API and rendered as inert text. No code runs in this site.</div>
   </aside>
   <main class="main">
@@ -212,14 +212,16 @@ curl -s <span class="hl-string">&quot;https://api.example.com/v1/projects/&lt;PR
 } <span class="hl-keyword">finally</span> {
   <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
 }</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
-       <pre class="cb-out"><code class="hl-text">=== Composite Indexes ===
-{&quot;createStatus&quot;:201,&quot;outcome&quot;:&quot;created&quot;}
-{&quot;listed&quot;:true,&quot;foundInListing&quot;:true}
-{&quot;query&quot;:&quot;team == red ORDER BY score ASC&quot;,&quot;ids&quot;:[&quot;p1&quot;,&quot;p2&quot;],&quot;indexUsed&quot;:&quot;idx_docs_data_gin_active&quot;}
-{&quot;deleted&quot;:true}
-[VELLUM Index Advisor] Slow/unindexed query detected on &quot;ex_indexes_mwo4fgll24jw&quot;.
-Reason: Composite index needed for equality filter on [team] + sort on [score ASC, documentId ASC]
-Create this index in 1 click: http://localhost:3000/orgs/d29c31e0-e93f-402c-8499-74909e9bfb0a/projects/1382468e-5dc0-44a8-9b68-5427a5b6ea5c/envs/development/indexes?suggest=eyJvcmdJZCI6ImQyOWMzMWUwLWU5M2YtNDAyYy04NDk5LTc0OTA5ZTliZmIwYSIsInByb2plY3RJZCI6IjEzODI0NjhlLTVkYzAtNDRhOC05YjY4LTU0MjdhNWI2ZWE1YyIsImVudmlyb25tZW50SWQiOiIxYWMyN2Q4OS0zNWJhLTQwMmUtODc0Ny0zMjBhMTA5MjY0M2QiLCJlbnYiOiJkZXZlbG9wbWVudCIsImNvbGxlY3Rpb25QYXRoIjoiZXhfaW5kZXhlc19td280ZmdsbDI0anciLCJmaWVsZHMiOlt7InBhdGgiOiJ0ZWFtIiwiZGlyIjoiYXNjIn0seyJwYXRoIjoic2NvcmUiLCJkaXIiOiJhc2MifSx7InBhdGgiOiJkb2N1bWVudElkIiwiZGlyIjoiYXNjIn1dLCJmaW5nZXJwcmludCI6ImViM2Q3NGNjYzNjYWQyNjQ1OGE4NjA0YjM5ODA1YzY1Y2NmZjJmMDRmM2U0NjNjZGU4MGFlYzBlMTI4NjdmMTgiLCJyZWFzb24iOiJDb21wb3NpdGUgaW5kZXggbmVlZGVkIGZvciBlcXVhbGl0eSBmaWx0ZXIgb24gW3RlYW1dICsgc29ydCBvbiBbc2NvcmUgQVNDLCBkb2N1bWVudElkIEFTQ10ifQ</code></pre>
+       <pre class="cb-out"><code class="hl-text">/tmp/vellum-new/examples/ts/_harness.ts:138
+    throw new Error(`harness: sign-in failed with HTTP ${token.status}`);
+          ^
+
+Error: harness: sign-in failed with HTTP 404
+    at harness (/tmp/vellum-new/examples/ts/_harness.ts:138:11)
+    at process.processTicksAndRejections (node:internal/process/task_&lt;redacted&gt;:103:5)
+    at async &lt;anonymous&gt; (/tmp/vellum-new/examples/ts/indexes.ts:13:11)
+
+Node.js v22.23.5</code></pre>
 </div></div><div class="et-panel" data-example-panel="rest" role="tabpanel" hidden><div class="code-block with-output">
   <div class="cb-head"><span class="cb-lang">JS</span><span class="cb-badge cb-verified" title="Source was executed against the live API">✓ VERIFIED SOURCE</span><button class="cb-copy" type="button">Copy</button></div>
   <pre><code class="hl-code"><span class="hl-comment">/**
@@ -286,11 +288,16 @@ Create this index in 1 click: http://localhost:3000/orgs/d29c31e0-e93f-402c-8499
 } <span class="hl-keyword">finally</span> {
   <span class="hl-keyword">await</span> h<span class="hl-property">.cleanup</span>();
 }</code></pre><div class="cb-head"><span class="cb-lang cb-terminal">OUTPUT · captured from a real run</span><button class="cb-copy" type="button">Copy</button></div>
-       <pre class="cb-out"><code class="hl-text">=== Composite Indexes ===
-{&quot;createStatus&quot;:201,&quot;outcome&quot;:&quot;created&quot;}
-{&quot;listed&quot;:true,&quot;foundInListing&quot;:true}
-{&quot;query&quot;:&quot;team == red ORDER BY score ASC&quot;,&quot;ids&quot;:[&quot;p1&quot;,&quot;p2&quot;],&quot;indexUsed&quot;:&quot;idx_docs_data_gin_active&quot;}
-{&quot;deleted&quot;:true}</code></pre>
+       <pre class="cb-out"><code class="hl-text">file:///tmp/vellum-new/examples/rest/_harness.mjs:84
+    throw new Error(`harness: sign-in failed with HTTP ${token.status}`);
+          ^
+
+Error: harness: sign-in failed with HTTP 404
+    at harness (file:///tmp/vellum-new/examples/rest/_harness.mjs:84:11)
+    at process.processTicksAndRejections (node:internal/process/task_&lt;redacted&gt;:103:5)
+    at async file:///tmp/vellum-new/examples/rest/indexes.mjs:11:11
+
+Node.js v22.23.5</code></pre>
 </div></div></div>
 </div>
 <h2 id="what-to-read-next">What to read next<a class="anchor" href="#what-to-read-next" aria-label="Link to section">#</a></h2>

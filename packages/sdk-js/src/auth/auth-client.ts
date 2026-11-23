@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - End-user authentication state machine.
+ * @vellumdb/sdk-js - End-user authentication state machine.
  *
  * Owns the signed-in session, silent token refresh (single-flight), reactive
  * 45 s pre-flight expiry, listener notification, and pluggable session
@@ -228,7 +228,7 @@ export class VellumAuthClient {
     }
     const user = this.state.currentUserValue;
     if (this.state.disposed || !user || !user.refreshToken) {
-      throw new Error("@vellum/sdk-js: cannot refresh without a signed-in user");
+      throw new Error("@vellumdb/sdk-js: cannot refresh without a signed-in user");
     }
     const epochAtStart = this.state.sessionEpoch;
     const task = (async (): Promise<AuthState> => {
@@ -242,7 +242,7 @@ export class VellumAuthClient {
         false
       );
       if (this.state.disposed || this.state.sessionEpoch !== epochAtStart) {
-        throw new Error("@vellum/sdk-js: session changed while refreshing token");
+        throw new Error("@vellumdb/sdk-js: session changed while refreshing token");
       }
       const latestUser = this.state.currentUserValue ?? user;
       const next: AuthState = {
@@ -459,7 +459,7 @@ export class VellumAuthClient {
       // the only supported way to change a password. Fail loudly rather than
       // silently dropping credential material.
       throw new Error(
-        "@vellum/sdk-js: updateProfile cannot change a password; " +
+        "@vellumdb/sdk-js: updateProfile cannot change a password; " +
           "use sendPasswordResetEmail() followed by confirmPasswordReset()"
       );
     }

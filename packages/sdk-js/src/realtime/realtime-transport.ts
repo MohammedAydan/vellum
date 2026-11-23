@@ -1,5 +1,5 @@
 /**
- * @vellum/sdk-js - Native RFC 6455 Realtime Transport 
+ * @vellumdb/sdk-js - Native RFC 6455 Realtime Transport 
  *
  * Node: the `ws` package. Browser: the global `WebSocket`.
  * PostgreSQL-native server. Single multiplexed connection, auth handshake, heartbeat,
@@ -144,7 +144,7 @@ async function defaultWebSocketFactory(url: string): Promise<WebSocketLike> {
   if (!isNodeRuntime()) {
     const GlobalWebSocket = (globalThis as { WebSocket?: new (url: string) => WebSocketLike }).WebSocket;
     if (typeof GlobalWebSocket !== "function") {
-      throw new Error("@vellum/sdk-js: no WebSocket implementation available in this runtime");
+      throw new Error("@vellumdb/sdk-js: no WebSocket implementation available in this runtime");
     }
     return new GlobalWebSocket(url);
   }
@@ -250,7 +250,7 @@ export class RealtimeTransport {
   public connect(): Promise<void> {
     if (this.internal.stateValue === "authenticated") return Promise.resolve();
     if (this.internal.intentionallyClosed) {
-      return Promise.reject(new Error("@vellum/sdk-js: realtime transport is closed"));
+      return Promise.reject(new Error("@vellumdb/sdk-js: realtime transport is closed"));
     }
     return new Promise<void>((resolve, reject) => {
       this.internal.connectWaiters.push({ resolve, reject });
@@ -321,7 +321,7 @@ export class RealtimeTransport {
     this.clearConnectTimer();
     this.subscriptions.clear();
     this.internal.outboundQueue = [];
-    this.flushWaitersReject(new Error("@vellum/sdk-js: realtime transport closed before authentication"));
+    this.flushWaitersReject(new Error("@vellumdb/sdk-js: realtime transport closed before authentication"));
     const socket = this.internal.socket;
     this.internal.socket = null;
     this.setState("closed");
@@ -341,7 +341,7 @@ export class RealtimeTransport {
     this.clearConnectTimer();
     this.internal.connectTimer = setTimeout(() => {
       if (this.internal.stateValue === "connecting") {
-        this.failConnection(new Error("@vellum/sdk-js: realtime connection timed out"));
+        this.failConnection(new Error("@vellumdb/sdk-js: realtime connection timed out"));
       }
     }, this.connectTimeoutMs);
     this.internal.connectTimer.unref?.();
@@ -395,7 +395,7 @@ export class RealtimeTransport {
       // is still correct because getAuthToken may mint a fresh token.
       this.setState("reconnecting");
       this.flushWaitersReject(
-        new Error(`@vellum/sdk-js: realtime connection closed (code ${String(event.code ?? 1006)})`)
+        new Error(`@vellumdb/sdk-js: realtime connection closed (code ${String(event.code ?? 1006)})`)
       );
       this.scheduleReconnect();
     };

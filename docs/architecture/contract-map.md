@@ -13,7 +13,7 @@
 | `@vellum/realtime` | `src/contracts/realtime-port.ts` (**create**) | `RealtimePubSubPort`, `OutboxPollerPort`, `RealtimeGatewayPort` | `PgNotifyPubSub`, `OutboxPoller`, `RealtimeGatewayHub` | 
 | `@vellum/document-engine` | `src/contracts/engine-port.ts` (**create**) | `DocumentEnginePort` | `DocumentEngine` | 
 | `@vellum/observability` | `src/contracts/observability-port.ts` (**create**) | `LoggerPort`, `RateLimiterPort` | `StructuredLogger`, `SlidingWindowRateLimiter` | 
-| `@vellum/sdk-js` | `src/contracts/sdk-ports.ts` (**create**) | `HttpTransportPort`, `AuthStoragePort`, `RealtimeTransportPort`, `ReadCachePort` | `HttpTransport`, `BrowserAuthStorage`/`MemoryAuthStorage`, `RealtimeTransport`, `ReadCache` | 
+| `@vellumdb/sdk-js` | `src/contracts/sdk-ports.ts` (**create**) | `HttpTransportPort`, `AuthStoragePort`, `RealtimeTransportPort`, `ReadCachePort` | `HttpTransport`, `BrowserAuthStorage`/`MemoryAuthStorage`, `RealtimeTransport`, `ReadCache` | 
 | `apps/api` | `src/composition/root.ts` (exists — enforce as sole root) | `ApiContainer` (`singleton` | `request-scoped` | `transient`) | Wires all concrete adapters; `apps/api/src/index.ts` & `routes/health.ts` depend only on `ApiContainer` ports | 
 | `apps/dashboard` / `apps/admin` | `src/composition/root.ts` (**create** per app) | `DashboardApiPort`, `AdminApiPort` | Single typed HTTP adapter (`src/lib/api.ts`), zero raw `fetch()` in routes | 
 | `sdks/flutter` | `lib/src/contracts/ports.dart` (exists — align to `JsonMap`), `lib/di.dart` (**create**) | `JsonMap`, `VellumResult<T, E>`, `VellumClientPort`, `VellumAuthPort`, `VellumRealtimePort`, `TokenStoragePort`, `HttpClientPort` | `VellumClient`, `VellumAuthClient`, `VellumRealtimeManager`, `MemoryTokenStorage` | 

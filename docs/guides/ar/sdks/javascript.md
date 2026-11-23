@@ -1,13 +1,13 @@
 ---
-title: JavaScript SDK (@vellum/sdk-js)
+title: JavaScript SDK (@vellumdb/sdk-js)
 order: 2
 group: المجموعات البرمجية
-description: مرجع تقني شامل لحزمة @vellum/sdk-js — إعداد العميل، CRUD، الاستعلامات والتجميعات، التدفق بالمؤشر، الدفعات المقسّمة، التخزين المؤقت، الوقت الفعلي ومصادقة EdDSA.
+description: مرجع تقني شامل لحزمة @vellumdb/sdk-js — إعداد العميل، CRUD، الاستعلامات والتجميعات، التدفق بالمؤشر، الدفعات المقسّمة، التخزين المؤقت، الوقت الفعلي ومصادقة EdDSA.
 ---
 
-# JavaScript SDK (`@vellum/sdk-js`)
+# JavaScript SDK (`@vellumdb/sdk-js`)
 
-المرجع التقني الشامل لحزمة `@vellum/sdk-js` الإصدار `0.0.1`، المستند بالكامل إلى الواجهات الفعلية في `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`.
+المرجع التقني الشامل لحزمة `@vellumdb/sdk-js` الإصدار `0.0.1`، المستند بالكامل إلى الواجهات الفعلية في `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`.
 
 تعمل الحزمة على **Node.js 18+** والمتصفحات الحديثة وبيئات Edge، مع دعم كامل لـ TypeScript الصارم.
 
@@ -16,9 +16,9 @@ description: مرجع تقني شامل لحزمة @vellum/sdk-js — إعداد
 ## التثبيت وتهيئة العميل (`createClient`)
 
 ```bash
-npm install @vellum/sdk-js
+npm install @vellumdb/sdk-js
 # أو
-pnpm add @vellum/sdk-js
+pnpm add @vellumdb/sdk-js
 ```
 
 ```ts
@@ -27,8 +27,8 @@ import {
   fieldOp,
   BrowserLocalStorage,
   MemoryAuthStorage,
-} from "@vellum/sdk-js";
-import type { VellumClient, DocDataConverter } from "@vellum/sdk-js";
+} from "@vellumdb/sdk-js";
+import type { VellumClient, DocDataConverter } from "@vellumdb/sdk-js";
 
 const db: VellumClient = createClient({
   projectId: "proj_01j9...",
@@ -229,4 +229,4 @@ offState();
 
 ## البنية المعيارية والحماية ضد التلاعب
 
-حزمة `@vellum/sdk-js` مقسّمة إلى مجلدات متخصصة (`src/core/`، `src/cache/`، `src/auth/`، `src/realtime/`، `src/references/`، `src/batch/`، `src/client/`) مع تجميد الواجهات العامة و`fieldOp` واللقطات بـ `Object.freeze` وإخفاء الأسرار في `toJSON()` و`toString()`.
+حزمة `@vellumdb/sdk-js` مقسّمة إلى مجلدات متخصصة (`src/core/`، `src/cache/`، `src/auth/`، `src/realtime/`، `src/references/`، `src/batch/`، `src/client/`) مع تجميد الواجهات العامة و`fieldOp` واللقطات بـ `Object.freeze` وإخفاء الأسرار في `toJSON()` و`toString()`.

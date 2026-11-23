@@ -13,7 +13,7 @@ VELLUM delivers low-latency document and query updates over a **single multiplex
 
 ## Protocol & Transport Guarantees
 
-| Capability | `@vellum/sdk-js` | `vellum_flutter` |
+| Capability | `@vellumdb/sdk-js` | `vellum_flutter` |
 | --- | --- | --- |
 | Connection multiplexing | Single `RealtimeTransport` shared across all `onSnapshot` subscriptions | Single `VellumRealtimeTransport` managed by `VellumRealtimeManager` |
 | Reconnect backoff | Decorrelated jitter (`500ms` base, `30_000ms` cap) | Decorrelated jitter (`500ms` base, `30_000ms` cap) |
@@ -24,7 +24,7 @@ VELLUM delivers low-latency document and query updates over a **single multiplex
 
 ---
 
-## Subscribing in TypeScript (`@vellum/sdk-js`)
+## Subscribing in TypeScript (`@vellumdb/sdk-js`)
 
 ### Connection State Observability
 

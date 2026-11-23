@@ -137,7 +137,7 @@ const data = {
             {
               label: "SDK helpers",
               lang: "ts",
-              code: `import { fieldOp } from "@vellum/sdk-js";
+              code: `import { fieldOp } from "@vellumdb/sdk-js";
 
 await db.collection("posts").doc("p1").update({
   views: fieldOp.increment(1),

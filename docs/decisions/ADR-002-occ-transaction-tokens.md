@@ -26,7 +26,7 @@ We implement a **Dual-Mode OCC Transaction State Model**:
    - Target documents in the read-set are locked via PostgreSQL `SELECT path, version FROM documents WHERE ... FOR UPDATE`.
    - If any locked row's `version` has mutated since read time, the engine immediately aborts with `ABORTED_CONFLICT (409)`.
    - Otherwise, all writes are applied, `document_index_entries` updated, `realtime_outbox` inserted, and the transaction commits atomically.
-4. Client SDKs (`@vellum/sdk-js` and `vellum_flutter`) must implement automatic exponential backoff retry on receiving `ABORTED_CONFLICT`.
+4. Client SDKs (`@vellumdb/sdk-js` and `vellum_flutter`) must implement automatic exponential backoff retry on receiving `ABORTED_CONFLICT`.
 
 ## Consequences
 

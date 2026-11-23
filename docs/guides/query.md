@@ -7,7 +7,7 @@ description: All 13 filter operators, disjunctive or() groups, eager include() r
 
 # Query
 
-VELLUM compiles declarative queries into parameterized PostgreSQL queries over `JSONB` with composite index validation and automatic index-advisor feedback. Both `@vellum/sdk-js` and `vellum_flutter` expose an immutable, chainable query builder.
+VELLUM compiles declarative queries into parameterized PostgreSQL queries over `JSONB` with composite index validation and automatic index-advisor feedback. Both `@vellumdb/sdk-js` and `vellum_flutter` expose an immutable, chainable query builder.
 
 ---
 
@@ -24,7 +24,7 @@ VELLUM compiles declarative queries into parameterized PostgreSQL queries over `
 
 ## Filters, Disjunctive `or()`, `include()` & `select()`
 
-### TypeScript (`@vellum/sdk-js`)
+### TypeScript (`@vellumdb/sdk-js`)
 
 ```ts
 const snapshot = await db
@@ -97,7 +97,7 @@ for (final doc in snapshot.docs) {
 
 Run `count`, `sum`, `avg`, `min`, and `max` directly in PostgreSQL without transferring raw documents over the wire.
 
-### TypeScript (`@vellum/sdk-js`)
+### TypeScript (`@vellumdb/sdk-js`)
 
 ```ts
 // Scalar shortcuts

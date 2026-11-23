@@ -95,7 +95,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("@vellum/sdk-js hardening - HTTP transport resilience & path safety", () => {
+describe("@vellumdb/sdk-js hardening - HTTP transport resilience & path safety", () => {
   it("aborts hung requests with REQUEST_TIMEOUT via AbortController", async () => {
     const mockFetch = ((_url: string | URL | Request, init?: RequestInit) =>
       new Promise<Response>((_resolve, reject) => {
@@ -194,7 +194,7 @@ describe("@vellum/sdk-js hardening - HTTP transport resilience & path safety", (
   });
 });
 
-describe("@vellum/sdk-js hardening - Auth coalescing, redaction, and disposal", () => {
+describe("@vellumdb/sdk-js hardening - Auth coalescing, redaction, and disposal", () => {
   it("coalesces parallel 401 responses into a single token refresh", async () => {
     let refreshCalls = 0;
     const mockFetch = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -246,7 +246,7 @@ describe("@vellum/sdk-js hardening - Auth coalescing, redaction, and disposal", 
   });
 });
 
-describe("@vellum/sdk-js hardening - Realtime WebSocket resilience", () => {
+describe("@vellumdb/sdk-js hardening - Realtime WebSocket resilience", () => {
   it("computes decorrelated jitter within [base, max]", () => {
     const d1 = computeDecorrelatedJitterMs(500, 500, 30_000, () => 1);
     expect(d1).toBe(1500);
@@ -322,7 +322,7 @@ describe("@vellum/sdk-js hardening - Realtime WebSocket resilience", () => {
   });
 });
 
-describe("@vellum/sdk-js hardening - Prototype-pollution safety & defensive copies", () => {
+describe("@vellumdb/sdk-js hardening - Prototype-pollution safety & defensive copies", () => {
   it("strips __proto__, constructor, and prototype from parsed JSON and WS frames", () => {
     const payload = '{"name":"Alice","__proto__":{"polluted":true},"nested":{"constructor":{"x":1},"prototype":{"y":2},"ok":1}}';
     const parsed = safeJsonParse<Record<string, unknown>>(payload);
