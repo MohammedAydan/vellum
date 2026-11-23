@@ -466,3 +466,27 @@ html[dir="rtl"] .toc-help-buttons, html[dir="rtl"] .search-foot { flex-direction
 .code-block > div:first-child { background: var(--surface); }
 .code-block .code-tab { color: var(--text-soft); }
 .code-block .code-tab.is-active { color: var(--text); background: var(--surface-2); }
+
+/* Bind navigation to the docs theme attribute as well as the shared provider.
+ * Dedicated tokens avoid dark-class utility values leaking into a light frame
+ * during theme changes or external embedding. Keep small nav text AA-readable. */
+:root[data-theme="light"] {
+  --docs-nav-text: #334155;
+  --docs-nav-muted: #3f4d63;
+  --docs-nav-active: #7c4700;
+}
+:root[data-theme="dark"] {
+  --docs-nav-text: #c3cede;
+  --docs-nav-muted: #adb9cd;
+  --docs-nav-active: #ffb300;
+}
+.docs-app .nav-link {
+  color: var(--docs-nav-text, var(--text-soft));
+  transition-property: background-color, border-color;
+}
+.docs-app .nav-link.is-active { color: var(--docs-nav-active, var(--accent)); }
+.docs-app .toc-link, .docs-app .nav-group-title {
+  color: var(--docs-nav-muted, var(--muted));
+  transition-property: background-color, border-color;
+}
+.docs-app .nav-link:hover, .docs-app .toc-link:hover { color: var(--docs-nav-active, var(--accent)); }

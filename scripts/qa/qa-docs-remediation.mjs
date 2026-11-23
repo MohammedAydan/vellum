@@ -7,6 +7,22 @@ const base=process.env.DOCS_BASE_URL||'http://127.0.0.1:5175';
 const dir=process.env.DOCS_EVIDENCE||'/downloads/docs-after';mkdirSync(dir,{recursive:true});
 const browser=await chromium.launch();const failures=[];const pages={};const bodies=[];let count=0;
 function check(ok,msg){if(!ok)failures.push(msg);}
+// Drive the shared provider, not just one of its DOM hooks. ThemeBridge mirrors
+// this state to data-theme; waiting for all hooks avoids mixed-theme captures.
+async function setTheme(page, theme) {
+ const current=await page.locator('html').getAttribute('data-theme');
+ if(current!==theme)await page.locator('#themeToggle').click();
+ await page.waitForFunction(t=>document.documentElement.dataset.theme===t &&
+   document.documentElement.classList.contains(t) &&
+   !document.documentElement.classList.contains(t==='light'?'dark':'light'),theme);
+ await page.evaluate(()=>document.fonts.ready);
+ await page.waitForTimeout(200); // shared transition-colors is 150ms
+}
+async function checkNavigationContrast(page, label) {
+ const report=await new AxeBuilder({page}).include('.nav-link').include('.nav-group-title').include('.toc-link').withRules(['color-contrast']).analyze();
+ for(const violation of report.violations)failures.push(`${label} navigation contrast ${JSON.stringify(violation.nodes.map(node=>node.target))}`);
+}
+
 const slugs = docsPageSlugs();
 for(const lang of ['en','ar']) {
  const context=await browser.newContext(); const page=await context.newPage();page.on('pageerror',e=>failures.push(`${lang} runtime: ${e.message}`));
@@ -16,7 +32,7 @@ for(const lang of ['en','ar']) {
   await page.goto(base+path);await page.waitForSelector('h1.doc-h1');
   const data=await page.evaluate(()=>({ids:[...document.querySelectorAll('[id]')].map(x=>x.id),hrefs:[...document.querySelectorAll('a[href]')].map(x=>x.getAttribute('href')),sections:[...document.querySelectorAll('h2.doc-h2')].map(x=>x.id)}));pages[path]=data;
   for(const width of [320,390])for(const theme of ['light','dark']){
-   await page.setViewportSize({width,height:900});await page.evaluate(t=>{document.documentElement.dataset.theme=t;document.documentElement.classList.toggle('dark',t==='dark');},theme);
+   await page.setViewportSize({width,height:900});await setTheme(page,theme);
    const widths=await page.evaluate(()=>({outer:document.documentElement.scrollWidth,viewport:innerWidth}));check(widths.outer<=widths.viewport,`${path} ${width} ${theme} overflow ${widths.outer}`);count++;
   }
   // Collect actual rendered bodies in every tab, without executing shell snippets.
@@ -33,8 +49,9 @@ for(const lang of ['en','ar']) {
  }
  // Interaction and pixels, including search Tab/Shift+Tab and opener restoration.
  for(const width of [320,390,768,1440])for(const theme of ['light','dark']){
-  await page.setViewportSize({width,height:900});await page.goto(`${base}/docs/${lang==='ar'?'ar/':''}quickstart/`);await page.waitForSelector('h1');await page.evaluate(t=>{document.documentElement.dataset.theme=t;document.documentElement.classList.toggle('dark',t==='dark');},theme);
+  await page.setViewportSize({width,height:900});await page.goto(`${base}/docs/${lang==='ar'?'ar/':''}quickstart/`);await page.waitForSelector('h1');await setTheme(page,theme);
   const search=page.locator('button.search-trigger');check(await search.isVisible(),`${width} ${lang} search hidden`);
+  if(width>=1024)await checkNavigationContrast(page,`${width} ${lang} ${theme}`);
   await page.screenshot({path:`${dir}/${width}-${lang}-${theme}.png`});
   // Radix close-autofocus runs after unmount; wait for the exact trigger, not a fixed sleep.
   if(width<1024){const menu=page.locator('header button').first();await menu.click();const dialog=page.getByRole('dialog');check(await dialog.isVisible(),`${width} ${lang} drawer`);await page.screenshot({path:`${dir}/drawer-${width}-${lang}-${theme}.png`});await page.keyboard.press('Escape');await page.waitForFunction(trigger => !document.querySelector('[role=dialog]') && document.activeElement === trigger, await menu.elementHandle(), {timeout: 3000}).catch(()=>{});check(await menu.evaluate(x=>document.activeElement===x),`${width} ${lang} menu focus restore`);await menu.click();await page.getByRole('dialog').getByRole('link').filter({hasText:lang==='ar'?'البدء السريع':'Quickstart'}).first().click();check(await page.getByRole('dialog').count()===0,`${lang} drawer route close`);await menu.click();await page.mouse.click(lang==='ar'?2:width-2,500);check(await page.getByRole('dialog').count()===0,`${lang} backdrop close`);}
