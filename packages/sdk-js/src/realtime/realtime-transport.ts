@@ -101,6 +101,24 @@ function dataToText(data: unknown): string | null {
   return null;
 }
 
+/**
+ * Close a socket whose listeners are no longer needed. `ws` (Node) emits an
+ * asynchronous `error` event when close() races a still-CONNECTING socket;
+ * with every listener detached that event crashes the host process. Swallow
+ * late errors on intentionally closed sockets.
+ */
+function closeSocketQuietly(socket: WebSocketLike, code?: number, reason?: string): void {
+  detachSocketListeners(socket);
+  socket.onerror = () => {
+    // Intentional close: swallow the async CONNECTING-close error emitted by `ws`.
+  };
+  try {
+    socket.close(code, reason);
+  } catch {
+    // best effort
+  }
+}
+
 function detachSocketListeners(socket: WebSocketLike): void {
   socket.onopen = null;
   socket.onmessage = null;
@@ -326,12 +344,7 @@ export class RealtimeTransport {
     this.internal.socket = null;
     this.setState("closed");
     if (socket) {
-      detachSocketListeners(socket);
-      try {
-        socket.close(1000, "client closed");
-      } catch {
-        // best effort
-      }
+      closeSocketQuietly(socket, 1000, "client closed");
     }
   }
 
@@ -355,12 +368,7 @@ export class RealtimeTransport {
     }
 
     if (this.internal.intentionallyClosed) {
-      detachSocketListeners(socket);
-      try {
-        socket.close(1000, "client closed");
-      } catch {
-        // best effort
-      }
+      closeSocketQuietly(socket, 1000, "client closed");
       return;
     }
 
@@ -449,15 +457,10 @@ export class RealtimeTransport {
       if (Date.now() - this.internal.lastPongAt > this.pongTimeoutMs) {
         // Dead/half-open socket: proactively detach, transition to reconnecting,
         // and schedule backoff even if `socket.close()` never fires `onclose`.
-        detachSocketListeners(socket);
+        closeSocketQuietly(socket, 1001, "heartbeat timeout");
         this.internal.socket = null;
         this.clearHeartbeat();
         this.setState("reconnecting");
-        try {
-          socket.close(1001, "heartbeat timeout");
-        } catch {
-          // best effort
-        }
         this.scheduleReconnect();
         return;
       }
@@ -540,12 +543,7 @@ export class RealtimeTransport {
     if (this.internal.socket) {
       const socket = this.internal.socket;
       this.internal.socket = null;
-      detachSocketListeners(socket);
-      try {
-        socket.close();
-      } catch {
-        // best effort
-      }
+      closeSocketQuietly(socket);
     }
     this.clearConnectTimer();
     this.clearHeartbeat();
