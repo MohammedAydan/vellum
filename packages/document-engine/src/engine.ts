@@ -527,7 +527,15 @@ export class DocumentEngine implements DocumentEnginePort {
       getRelationRules?: (projectId: string) => readonly RelationRule[] | null;
     };
     const rules = store.getRelationRules?.(ctx.projectId);
-    return Array.isArray(rules) ? rules : [];
+    if (!Array.isArray(rules)) return [];
+    // The control plane persists an omitted targetCollection as SQL NULL. A null
+    // must mean "unscoped" (fires for any target collection), exactly like
+    // undefined, or the rule silently never fires.
+    return rules.map((rule) =>
+      (rule as { targetCollection?: string | null }).targetCollection === null
+        ? ({ ...rule, targetCollection: undefined } as RelationRule)
+        : rule
+    );
   }
 
   private resolveApiKey(ctx: EngineContext): ApiKeyRecord {
