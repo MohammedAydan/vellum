@@ -7,6 +7,7 @@ export * from "./contracts/sdk-ports.js";
 export * from "./core/safe-json.js";
 export * from "./core/backoff.js";
 export * from "./core/field-ops.js";
+export * from "./core/reference.js";
 export * from "./core/http-transport.js";
 export * from "./cache/read-cache.js";
 export * from "./auth/jwt-utils.js";
