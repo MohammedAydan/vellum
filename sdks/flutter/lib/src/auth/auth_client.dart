@@ -2,9 +2,9 @@
 part of '../../vellum_flutter.dart';
 
 String _requireAuthString(Object? value, String field) {
-  if (value is! String || value.isEmpty) {
+  if (value is! String || value.trim().isEmpty) {
     throw VellumException(
-      code: 'INVALID_ARGUMENT',
+      code: 'INVALID_AUTH_RESPONSE',
       message: 'Invalid auth response: missing $field',
       statusCode: 502,
     );
@@ -33,7 +33,8 @@ int? _jwtExpirySeconds(String token) {
 bool _isTokenExpiringWithin(String token, Duration skew) {
   final exp = _jwtExpirySeconds(token);
   if (exp == null) return false;
-  return exp * 1000 - skew.inMilliseconds <= DateTime.now().millisecondsSinceEpoch;
+  return exp * 1000 - skew.inMilliseconds <=
+      DateTime.now().millisecondsSinceEpoch;
 }
 
 /// Reactive end-user auth, wired into the owning [VellumClient]'s REST and WS.
@@ -41,7 +42,8 @@ class VellumAuth implements VellumAuthPort {
   final VellumClient client;
   final TokenStoragePort storage;
 
-  final StreamController<VellumUser?> _authController = StreamController<VellumUser?>.broadcast();
+  final StreamController<VellumUser?> _authController =
+      StreamController<VellumUser?>.broadcast();
   VellumUser? _currentUser;
   Future<VellumUser?>? _inFlightRefresh;
   Timer? _refreshTimer;
@@ -122,12 +124,27 @@ class VellumAuth implements VellumAuthPort {
   }) async {
     if (_disposed) return;
     if (expectedEpoch != null && _sessionEpoch != expectedEpoch) return;
+    if (_currentUser?.id != user?.id ||
+        _currentUser?.accessToken != user?.accessToken) {
+      client.clearCache();
+    }
+    if (_currentUser?.id != user?.id) client.realtime.dispose();
     _currentUser = user;
     _scheduleRefresh();
     if (emit && !_authController.isClosed) _authController.add(user);
     await storage.writeAccessToken(user?.accessToken);
     await storage.writeRefreshToken(user?.refreshToken);
     await storage.writeUser(user?.toJson());
+  }
+
+  void _requireCurrentEpoch(int expectedEpoch) {
+    if (_disposed || _sessionEpoch != expectedEpoch) {
+      throw const VellumException(
+        code: 'AUTH_STATE_CHANGED',
+        message: 'Auth state changed while the request was in flight',
+        statusCode: 409,
+      );
+    }
   }
 
   void _scheduleRefresh() {
@@ -138,7 +155,8 @@ class VellumAuth implements VellumAuthPort {
     if (user == null) return;
     final exp = _jwtExpirySeconds(user.accessToken);
     if (exp == null) return;
-    final delayMs = max(0, exp * 1000 - 45000 - DateTime.now().millisecondsSinceEpoch);
+    final delayMs =
+        max(0, exp * 1000 - 45000 - DateTime.now().millisecondsSinceEpoch);
     _refreshTimer = Timer(Duration(milliseconds: delayMs), () {
       _refreshTimer = null;
       if (_disposed) return;
@@ -154,7 +172,8 @@ class VellumAuth implements VellumAuthPort {
     final user = _currentUser;
     if (user == null) return null;
     if (!forceRefresh &&
-        !_isTokenExpiringWithin(user.accessToken, const Duration(seconds: 45))) {
+        !_isTokenExpiringWithin(
+            user.accessToken, const Duration(seconds: 45))) {
       return user.accessToken;
     }
 
@@ -194,13 +213,15 @@ class VellumAuth implements VellumAuthPort {
         failedToken.isNotEmpty &&
         user.accessToken.isNotEmpty &&
         user.accessToken != failedToken &&
-        !_isTokenExpiringWithin(user.accessToken, const Duration(seconds: 45))) {
+        !_isTokenExpiringWithin(
+            user.accessToken, const Duration(seconds: 45))) {
       return user.accessToken;
     }
     return getIdToken(forceRefresh: true);
   }
 
-  Future<VellumUser?> _performRefresh(VellumUser user, int expectedEpoch) async {
+  Future<VellumUser?> _performRefresh(
+      VellumUser user, int expectedEpoch) async {
     if (_disposed || _sessionEpoch != expectedEpoch) return null;
     // No bearer on the refresh call: that would recurse into getIdToken.
     final res = await client.request(
@@ -211,13 +232,15 @@ class VellumAuth implements VellumAuthPort {
     );
     // Abort if signOut(), dispose(), or a new sign-in occurred while in flight.
     if (_disposed || _sessionEpoch != expectedEpoch) return null;
-    final next = VellumUser.fromJson(<String, Object?>{
-      ...user.toJson(),
+    final next = VellumUser.fromSession(<String, Object?>{
+      'user': user.toJson(),
       'accessToken': _requireAuthString(res['accessToken'], 'accessToken'),
       'refreshToken': _requireAuthString(res['refreshToken'], 'refreshToken'),
       'tokenType': res['tokenType'] is String ? res['tokenType'] : 'Bearer',
-      'sessionId': res['sessionId'] is String ? res['sessionId'] : user.sessionId,
-      'expiresAt': res['expiresAt'] is String ? res['expiresAt'] : user.expiresAt,
+      'sessionId':
+          res.containsKey('sessionId') ? res['sessionId'] : user.sessionId,
+      'expiresAt':
+          res.containsKey('expiresAt') ? res['expiresAt'] : user.expiresAt,
     });
     // Refresh changes the token material that consumers hold, so emit the new
     // state to keep every authStateChanges listener in sync.
@@ -236,6 +259,7 @@ class VellumAuth implements VellumAuthPort {
     JsonMap? metadata,
     JsonMap? customClaims,
   }) async {
+    final expectedEpoch = _sessionEpoch;
     final res = await client.request(
       'POST',
       '/auth/sign-up/email',
@@ -250,6 +274,7 @@ class VellumAuth implements VellumAuthPort {
       },
       includeAuth: false,
     );
+    _requireCurrentEpoch(expectedEpoch);
     final user = VellumUser.fromSession(res);
     _sessionEpoch++;
     await _setCurrentUser(user);
@@ -261,12 +286,14 @@ class VellumAuth implements VellumAuthPort {
     required String email,
     required String password,
   }) async {
+    final expectedEpoch = _sessionEpoch;
     final res = await client.request(
       'POST',
       '/auth/sign-in/email',
       body: <String, Object?>{'email': email, 'password': password},
       includeAuth: false,
     );
+    _requireCurrentEpoch(expectedEpoch);
     if (res['mfaRequired'] == true) {
       // No session was issued: currentUser is deliberately left untouched.
       return VellumMfaRequired(
@@ -288,6 +315,7 @@ class VellumAuth implements VellumAuthPort {
     String? displayName,
     JsonMap? metadata,
   }) async {
+    final expectedEpoch = _sessionEpoch;
     final res = await client.request(
       'POST',
       '/auth/sign-in/anonymous',
@@ -297,6 +325,7 @@ class VellumAuth implements VellumAuthPort {
       },
       includeAuth: false,
     );
+    _requireCurrentEpoch(expectedEpoch);
     final user = VellumUser.fromSession(res);
     _sessionEpoch++;
     await _setCurrentUser(user);
@@ -315,6 +344,7 @@ class VellumAuth implements VellumAuthPort {
     String? photoUrl,
     JsonMap? metadata,
   }) async {
+    final expectedEpoch = _sessionEpoch;
     final res = await client.request(
       'POST',
       '/auth/sign-in/provider',
@@ -331,6 +361,7 @@ class VellumAuth implements VellumAuthPort {
       },
       includeAuth: false,
     );
+    _requireCurrentEpoch(expectedEpoch);
     final user = VellumUser.fromSession(res);
     _sessionEpoch++;
     await _setCurrentUser(user);
@@ -344,12 +375,13 @@ class VellumAuth implements VellumAuthPort {
   /// mutations such as [updateProfile] do emit an auth-state transition.
   @override
   Future<VellumUser> getUser() async {
+    final expectedEpoch = _sessionEpoch;
     final res = await client.request('GET', '/auth/user');
+    _requireCurrentEpoch(expectedEpoch);
     final rawUser = res['user'];
-    final userMap = rawUser is Map
-        ? rawUser.cast<String, Object?>()
-        : <String, Object?>{};
-    if (userMap.isEmpty && _currentUser == null) {
+    if (rawUser is! Map ||
+        rawUser['id'] is! String ||
+        (rawUser['id'] as String).trim().isEmpty) {
       throw const VellumException(
         code: 'INVALID_AUTH_RESPONSE',
         message: 'Invalid auth response: missing user',
@@ -358,7 +390,7 @@ class VellumAuth implements VellumAuthPort {
     }
     final user = VellumUser.fromJson(<String, Object?>{
       ...(_currentUser?.toJson() ?? <String, Object?>{}),
-      ...userMap,
+      ...rawUser.cast<String, Object?>(),
     });
     await _setCurrentUser(user, emit: false);
     return user;
@@ -370,6 +402,7 @@ class VellumAuth implements VellumAuthPort {
     required String code,
     String? factorType,
   }) async {
+    final expectedEpoch = _sessionEpoch;
     final res = await client.request(
       'POST',
       '/auth/mfa/challenge',
@@ -380,6 +413,7 @@ class VellumAuth implements VellumAuthPort {
       },
       includeAuth: false,
     );
+    _requireCurrentEpoch(expectedEpoch);
     final user = VellumUser.fromSession(res);
     _sessionEpoch++;
     await _setCurrentUser(user);
@@ -404,7 +438,8 @@ class VellumAuth implements VellumAuthPort {
 
   @override
   Future<void> confirmTotpMfa({required String code}) async {
-    await client.request('POST', '/auth/mfa/verify', body: <String, Object?>{'code': code});
+    await client.request('POST', '/auth/mfa/verify',
+        body: <String, Object?>{'code': code});
   }
 
   /// Sends a password-reset email.
@@ -494,6 +529,7 @@ class VellumAuth implements VellumAuthPort {
     JsonMap? customClaims,
     String? password,
   }) async {
+    final expectedEpoch = _sessionEpoch;
     // `password` is deliberately not forwarded: UpdateProfileRequestSchema
     // strips unknown keys, so sending it would invalidate an otherwise valid
     // patch. The reset flow is the supported way to change a password.
@@ -514,11 +550,19 @@ class VellumAuth implements VellumAuthPort {
       if (customClaims != null) 'customClaims': customClaims,
     };
     final res = await client.request('PATCH', '/auth/user', body: patch);
+    _requireCurrentEpoch(expectedEpoch);
     final rawUser = res['user'];
-    final userMap = rawUser is Map ? rawUser.cast<String, Object?>() : <String, Object?>{};
+    if (rawUser is! Map ||
+        rawUser['id'] is! String ||
+        (rawUser['id'] as String).trim().isEmpty) {
+      throw const VellumException(
+          code: 'INVALID_AUTH_RESPONSE',
+          message: 'Invalid auth response: missing user.id',
+          statusCode: 502);
+    }
     final user = VellumUser.fromJson(<String, Object?>{
       ...(_currentUser?.toJson() ?? <String, Object?>{}),
-      ...userMap,
+      ...rawUser.cast<String, Object?>(),
     });
     await _setCurrentUser(user);
     return user;
@@ -536,6 +580,8 @@ class VellumAuth implements VellumAuthPort {
     // Advance epoch immediately so any in-flight refresh cannot resurrect the
     // session while sign-out is executing or after it completes.
     _sessionEpoch++;
+    client.clearCache();
+    client.realtime.dispose();
     _refreshTimer?.cancel();
     _refreshTimer = null;
     _inFlightRefresh = null;
@@ -562,6 +608,8 @@ class VellumAuth implements VellumAuthPort {
   void dispose() {
     _disposed = true;
     _sessionEpoch++;
+    client.clearCache();
+    client.realtime.dispose();
     _refreshTimer?.cancel();
     _refreshTimer = null;
     _inFlightRefresh = null;
