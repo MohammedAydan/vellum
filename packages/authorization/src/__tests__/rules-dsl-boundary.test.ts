@@ -33,7 +33,7 @@ function rulesetFrom(source: string): SecurityRulesetRecord {
     createdBy: null,
     createdAt: "",
     rulesAst: ast,
-  } as SecurityRulesetRecord;
+  } as unknown as SecurityRulesetRecord;
 }
 
 describe("rules DSL output through real authorization", () => {
