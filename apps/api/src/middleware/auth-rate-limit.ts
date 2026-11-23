@@ -121,12 +121,17 @@ async function defaultKey(c: Context): Promise<string> {
   return `${requestIp(c)}|${email || authenticatedIdentity(c)}`;
 }
 
+function releaseSlot(bucket: RateBucket, ts: number): void {
+  const index = bucket.events.indexOf(ts);
+  if (index !== -1) bucket.events.splice(index, 1);
+}
+
 /**
  * Sliding-window limiter for authentication endpoints.
  *
- * Runs the handler first, then (a) counts failed responses — or every request
- * when `countAll` is set — and (b) throws `TOO_MANY_REQUESTS` once the number
- * of events inside the window exceeds `max`. `Retry-After` is written before
+ * Rejects with `TOO_MANY_REQUESTS` once `max` events are inside the window,
+ * before the handler runs. Each attempt reserves a slot up front; only failed
+ * responses keep it — or every request when `countAll` is set. `Retry-After` is written before
  * throwing so it survives Hono's `onError` replacement of `c.res`.
  */
 export function authRateLimit(options: AuthRateLimitOptions): MiddlewareHandler {
@@ -161,18 +166,18 @@ export function authRateLimit(options: AuthRateLimitOptions): MiddlewareHandler 
       });
     }
 
-    await next();
-
-    const shouldCount = countAll || c.res.status >= 400;
-    if (!shouldCount) return;
-
+    // Reserve the slot synchronously (no await between the check above and
+    // this push) so concurrent attempts are counted while in flight and cannot
+    // all pass one remaining slot. Attempts that turn out not to count
+    // (successes in failure-only mode) release their slot afterwards.
     bucket.events.push(now);
     bucket.lastSeen = now;
-    if (bucket.events.length > max) {
-      c.header("Retry-After", String(retryAfterSeconds));
-      throw new VellumError("TOO_MANY_REQUESTS", "Too many attempts. Please try again later.", {
-        retryAfterSeconds,
-      });
+    try {
+      await next();
+    } catch (error) {
+      if (!countAll) releaseSlot(bucket, now);
+      throw error;
     }
+    if (!countAll && c.res.status < 400) releaseSlot(bucket, now);
   };
 }
