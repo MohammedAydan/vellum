@@ -92,13 +92,9 @@ Never log raw `pk_`/`sk_` keys, bearer JWTs, or database URLs. The structured lo
 - **Using a `*` scope for convenience.** An over-scoped server key defeats least privilege; grant only what the service needs.
 - **Forgetting to rotate.** Create the replacement first, move clients, then revoke — never revoke before the new key is deployed.
 
-## Verified examples
-
-:::example-tabs auth
-
 ## What to read next
 
-- [End-User Authentication & the Three Realms](./end-user-auth.md) — realm isolation, refresh rotation, profile projection, WS auth, rate limits.
+- [End-User Authentication](./end-user-auth.md) — credential isolation, refresh rotation, profile projection, WS auth, rate limits.
 - [JavaScript SDK](./sdks/javascript.md) · [Flutter SDK](./sdks/flutter.md) — the auth façades and silent refresh in both clients.
 - [Security rules](./security-rules.md) — the deny-by-default AST evaluated for public keys.
 - [REST API](./rest-api.md) — how the key is sent on each endpoint.
