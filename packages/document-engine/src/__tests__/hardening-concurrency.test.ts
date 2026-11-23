@@ -3,12 +3,10 @@
  *
  * HARNESS NOTE
  * ------------
- * PostgreSQL serialises conflicting `SELECT ... FOR UPDATE` row locks. The
- * in-memory adapter has no row locks, so OCC tests use `SerializedDataPlaneStore`
- * (a promise-mutex wrapper around `withTransaction`) to emulate that DB-level
- * serialisation deterministically. The non-OCC CAS tests intentionally use the
- * plain adapter so both writers can pass the read phase before either writes —
- * the exact window `conditionalPutDocument` is designed to close.
+ * The memory store serializes top-level transactions to prevent snapshot
+ * rollback from erasing concurrent committed writes. Parallel stale-version
+ * writes therefore fail at the precondition boundary, while the SQL integration
+ * suites exercise real compare-and-swap contention.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -135,9 +133,9 @@ describe("hardening/concurrency — non-OCC TOCTOU", () => {
     expect(results.every((r) => r.status === "fulfilled")).toBe(true);
   });
 
-  it("two parallel ifVersion:5 updates: exactly one wins, other ABORTED_CONFLICT", async () => {
-    // Plain adapter: both writers observe version 5 before either commits, so
-    // the loser can only be rejected by the compare-and-swap at write time.
+  it("two serialized ifVersion:5 updates: exactly one wins, other FAILED_PRECONDITION", async () => {
+    // The second transaction starts after the first commits, so it sees the
+    // fresh version and fails the caller's stale precondition.
     const { engine } = createFixture();
     const doc = await engine.createDocument({ ...TENANT, path: "counters/cas", data: { n: 1 } });
     // Bump to version 5 (four further writes).
@@ -167,7 +165,7 @@ describe("hardening/concurrency — non-OCC TOCTOU", () => {
       }),
     ]);
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-    expect(reasons(results)).toEqual(["ABORTED_CONFLICT"]);
+    expect(reasons(results)).toEqual(["FAILED_PRECONDITION"]);
   });
 
   it("a sequential ifVersion mismatch still reports FAILED_PRECONDITION", async () => {
