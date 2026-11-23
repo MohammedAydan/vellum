@@ -1,0 +1,350 @@
+name: CI
+
+on:
+  push:
+    pull_request:
+      branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # pnpm is provided by Corepack; no external broker service is needed because
+      # realtime uses PostgreSQL LISTEN/NOTIFY + the durable outbox.
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+          corepack pnpm --version
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      # The two independent projects are built with the canonical scripts that
+      # production Vercel uses. Together they build every package and app, so
+      # typecheck/test on a clean checkout are deterministic (no stale `dist`).
+      - name: Build backend and console (canonical split build)
+        run: |
+          corepack pnpm build:api
+          corepack pnpm build:console
+
+      - name: Check generated contract artifacts
+        run: corepack pnpm codegen:check
+
+      - name: Check version alignment across project and SDKs
+        run: corepack pnpm version:check
+
+      - name: Typecheck
+        run: corepack pnpm typecheck
+
+      - name: Lint
+        run: corepack pnpm lint
+
+      - name: Unit and integration tests
+        run: corepack pnpm test
+
+      - name: Security tests
+        run: corepack pnpm test:security
+
+  dart-sdk:
+    name: Dart SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Analyze and test Flutter/Dart SDK
+        run: cd sdks/flutter && dart pub get && dart analyze --fatal-infos && dart test
+
+      - name: Analyze standard Dart testbed and shared console runner
+        run: cd examples/flutter_testbed_app && dart pub get && dart analyze --fatal-infos && dart test test/runner_compatibility_test.dart
+
+  # PROOF OF INDEPENDENCE: the backend project builds from apps/api alone, with
+  # no frontend assets. Its Vercel function entry point must live under apps/api.
+  backend-build:
+    name: Backend independent build (vellum-api)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+          corepack pnpm --version
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Build backend only
+        run: corepack pnpm build:api
+
+      - name: Assert backend-only artifacts
+        run: |
+          test -f apps/api/dist/runtime/vercel.js
+          test -f 'apps/api/api/server/[...path].ts'
+          echo "Backend build artifacts present (vercel runtime + Vercel entry)."
+
+  # PROOF OF INDEPENDENCE: the frontend is a static-only project. It must not
+  # ship any /api/server function files; it talks to the API over /v1 via CORS.
+  frontend-build:
+    name: Frontend independent build (vellum-console)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+          corepack pnpm --version
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Build frontend only
+        run: corepack pnpm build:console
+
+      - name: Assert static-only frontend artifacts
+        run: |
+          test -f dist-frontend/index.html
+          test -f dist-frontend/admin/index.html
+          test -f dist-frontend/docs/index.html
+          if find dist-frontend -type f -path '*/api/server/*' | grep -q .; then
+            echo "ERROR: dist-frontend contains /api/server function files (must be static only)"
+            find dist-frontend -type f -path '*/api/server/*'
+            exit 1
+          fi
+          echo "Frontend build artifacts present and static-only (no /api/server functions)."
+
+  # Cheap, install-free guardrail: fails if the two deployables become entangled.
+  split-boundaries:
+    name: Split boundaries (verify-split)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify backend/frontend split
+        run: node scripts/verify-split.mjs
+
+  edge-bundles:
+    name: Edge bundles (Vercel + Cloudflare)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      # Cloudflare + Vercel share the same backend core; only the backend needs
+      # building here, using the canonical script from production.
+      - name: Build backend (canonical split build)
+        run: corepack pnpm build:api
+
+      # The API has one core and three delivery adapters (Node, Vercel,
+      # Cloudflare). Verify the edge bundle compiles without deploying.
+      - name: Cloudflare Worker dry-run build
+        run: npx --yes wrangler@latest deploy --dry-run --outdir /tmp/vellum-wrangler-out
+
+      # The canonical entry lives under apps/api. The legacy root-level `api/`
+      # directory must stay absent so the FRONTEND project (repo root) is not
+      # discovered as a serverless Function; `split-boundaries` enforces that.
+      - name: Vercel entry point present (backend-owned only)
+        run: |
+          test -f 'apps/api/api/server/[...path].ts'
+          test -f apps/api/dist/runtime/vercel.js
+
+  # Measured coverage. Hermetic: live PostgreSQL suites
+  # (tests/e2e-real, tests/integration) are excluded by the `test:coverage`
+  # script, and tests/security/live-tenant-isolation.test.ts self-skips when
+  # PHASE5_REAL is unset. PostgreSQL is the only stateful service anywhere in
+  # this workflow; there is deliberately no Redis/broker service.
+  coverage:
+    name: Coverage (Node 22)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      # Coverage instruments packages/* and apps/*, so build both deployables.
+      - name: Build backend and console (canonical split build)
+        run: |
+          corepack pnpm build:api
+          corepack pnpm build:console
+
+      - name: Run coverage and write real numbers to evidence
+        run: |
+          set -o pipefail
+          corepack pnpm test:coverage | tee test-results/docs/coverage.txt
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: ignore
+
+  # Migration matrix. PostgreSQL is the only
+  # stateful service — there is deliberately no Redis/broker service here.
+  postgres-matrix:
+    name: Verify migrations (Node 22 / PostgreSQL ${{ matrix.postgres }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["16", "18"]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: vellum
+          POSTGRES_PASSWORD: vellum
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vellum"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CONTROL_DATABASE_URL: postgresql://vellum:vellum@127.0.0.1:5432/control_db
+      DATA_DATABASE_URL: postgresql://vellum:vellum@127.0.0.1:5432/data_db
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Build backend and console (canonical split build)
+        run: |
+          corepack pnpm build:api
+          corepack pnpm build:console
+
+      - name: Create the two physical planes
+        run: |
+          PGPASSWORD=vellum psql -h 127.0.0.1 -U vellum -d postgres -c 'CREATE DATABASE control_db'
+          PGPASSWORD=vellum psql -h 127.0.0.1 -U vellum -d postgres -c 'CREATE DATABASE data_db'
+
+      - name: Apply migrations before boot (advisory-lock runner)
+        run: corepack pnpm db:migrate
+
+      - name: Shared-cluster role convergence and least-privilege regression
+        run: corepack pnpm exec vitest run tests/integration/shared-cluster-remediation.test.ts
+        env:
+          VELLUM_DISPOSABLE_PG_URL: postgresql://vellum:vellum@127.0.0.1:5432/postgres
+
+      - name: Verify 4 RLS-protected data-plane tables
+        run: |
+          COUNT=$(PGPASSWORD=vellum psql -h 127.0.0.1 -U vellum -d data_db -tAc \
+            "SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind='r' AND relrowsecurity AND relname IN ('documents','document_indexes','document_index_entries','realtime_outbox')")
+          echo "RLS-protected data-plane tables: $COUNT"
+          test "$COUNT" -eq 4
+
+      - name: Verify project_relation_rules migration (0012)
+        run: |
+          COUNT=$(psql "$CONTROL_DATABASE_URL" -tAc \
+            "SELECT count(*) FROM pg_tables WHERE tablename IN ('project_relation_rules','project_relation_rules_meta')")
+          echo "relation-rules control-plane tables: $COUNT"
+          test "$COUNT" -eq 2
+          psql "$CONTROL_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          -- Exercise the expected constraints.
+          DO $$
+          DECLARE
+            org_id uuid; proj_id uuid; dup_caught boolean := false;
+          BEGIN
+            INSERT INTO organizations (id, slug, name, billing_email)
+            VALUES (gen_random_uuid(), 'rr-ci-org', 'RR CI Org', 'rr-ci@example.com')
+            RETURNING id INTO org_id;
+            INSERT INTO projects (id, organization_id, slug, name)
+            VALUES (gen_random_uuid(), org_id, 'rr-ci-proj', 'RR CI Proj')
+            RETURNING id INTO proj_id;
+            INSERT INTO project_relation_rules_meta (project_id, version) VALUES (proj_id, 3);
+            INSERT INTO project_relation_rules (project_id, collection, field, on_delete, version)
+            VALUES (proj_id, 'posts', 'authorId', 'cascade', 4);
+            -- on_delete CHECK rejects invalid actions.
+            BEGIN
+              INSERT INTO project_relation_rules (project_id, collection, field, on_delete, version)
+              VALUES (proj_id, 'posts', 'editorId', 'explode', 4);
+            EXCEPTION WHEN check_violation THEN
+              dup_caught := true;
+            END;
+            ASSERT dup_caught, 'on_delete CHECK did not fire';
+            -- UNIQUE (project_id, collection, field) rejects duplicate edges.
+            dup_caught := false;
+            BEGIN
+              INSERT INTO project_relation_rules (project_id, collection, field, on_delete, version)
+              VALUES (proj_id, 'posts', 'authorId', 'restrict', 5);
+            EXCEPTION WHEN unique_violation THEN
+              dup_caught := true;
+            END;
+            ASSERT dup_caught, 'UNIQUE (project_id, collection, field) did not fire';
+            RAISE NOTICE 'project_relation_rules constraints verified';
+          END $$;
+          SQL
+
+      - name: Relations PostgreSQL integration (required, no silent skip)
+        run: RELATIONS_PG_TEST=1 corepack pnpm exec vitest run tests/integration/relation-rules-pg.test.ts
+
+      - name: Admin PostgreSQL regression (required, no silent skip)
+        run: ADMIN_PG_REAL=1 corepack pnpm exec vitest run apps/api/src/routes/__tests__/admin-remediation.test.ts
+
+      - name: Typecheck / lint / test
+        run: corepack pnpm typecheck && corepack pnpm lint && corepack pnpm test

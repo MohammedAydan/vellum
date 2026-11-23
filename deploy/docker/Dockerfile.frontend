@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1
+# Production frontend image: builds the unified dist-frontend tree and serves it
+# through the zero-dependency gateway (HTTP + WS) on port 3000.
+#
+# Build-time: none required — VITE_API_BASE_URL defaults to same-origin /v1.
+# Runtime environment (set by compose or `docker run -e`):
+#   PORT=3000                 gateway listen port
+#   API_UPSTREAM=http://api:8080   /v1 HTTP + WebSocket proxy target
+# Set VITE_API_BASE_URL at build time only for a split-origin Vercel-style deploy.
+
+FROM node:22-alpine AS base
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+RUN corepack enable \
+ && node -e "const m=Number(process.versions.node.split('.')[0]); if(m!==22) throw new Error('Node 22 required, got '+process.versions.node)"
+
+FROM base AS build
+WORKDIR /app
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
+# Workspace manifests must exist before the frozen-lockfile install. The docs
+# build also needs docs/, examples/ and scripts/ from the repository root.
+COPY apps ./apps
+COPY packages ./packages
+COPY examples ./examples
+COPY docs ./docs
+COPY scripts ./scripts
+RUN pnpm install --frozen-lockfile
+COPY . .
+RUN corepack pnpm build:frontend
+
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV API_UPSTREAM=http://api:8080
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+RUN apk add --no-cache tini \
+ && addgroup -S -g 1001 vellum \
+ && adduser -S -G vellum -u 1001 vellum
+COPY --from=build --chown=vellum:vellum /app/dist-frontend ./dist-frontend
+# The gateway imports only node:* modules; build-unified-frontend.mjs and
+# docs-dev-server.mjs are build/dev-only and deliberately not copied here.
+COPY --from=build --chown=vellum:vellum /app/scripts/dev/frontend-gateway.mjs ./scripts/dev/frontend-gateway.mjs
+USER vellum
+EXPOSE 3000
+STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["node", "scripts/dev/frontend-gateway.mjs", "--mode=prod"]

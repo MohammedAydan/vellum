@@ -1,0 +1,58 @@
+# syntax=docker/dockerfile:1
+# Production API image: Node 22 + pnpm, non-root, PostgreSQL-only (Zero-Redis).
+#
+# Required runtime environment — supply with `docker run --env-file .env` or
+# compose `env_file`; NEVER bake values into the image or this file:
+#   NODE_ENV=production
+#   DATABASE_MODE=postgres
+#   CONTROL_DATABASE_URL, DATA_DATABASE_URL   external Neon/Postgres URLs
+#   PORT=8080 / API_PORT=8080, API_HOST=0.0.0.0
+#   BETTER_AUTH_SECRET, JWT_SECRET, API_KEY_PEPPER,
+#   CURSOR_HMAC_SECRET, SESSION_COOKIE_SECRET, MASTER_ENCRYPTION_KEY
+#   CONSOLE_JWT_SECRET, SUPER_ADMIN_JWT_SECRET   distinct; required in production
+#   CORS_ALLOWED_ORIGINS                        comma-separated allowed origins
+# No cache or message-broker service is needed: PostgreSQL is the only stateful
+# runtime dependency.
+
+FROM node:22-alpine AS base
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+RUN corepack enable \
+ && node -e "const m=Number(process.versions.node.split('.')[0]); if(m!==22) throw new Error('Node 22 required, got '+process.versions.node)"
+
+FROM base AS build
+WORKDIR /app
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
+# Workspace manifests must exist before the frozen-lockfile install.
+COPY apps ./apps
+COPY packages ./packages
+COPY examples ./examples
+RUN pnpm install --frozen-lockfile
+COPY . .
+# Build the API together with every workspace package it depends on.
+RUN pnpm -r --filter @vellum/api... build
+
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=8080
+ENV API_HOST=0.0.0.0
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+RUN apk add --no-cache tini \
+ && addgroup -S -g 1001 vellum \
+ && adduser -S -G vellum -u 1001 vellum
+# pnpm workspace links resolve through node_modules into the package folders,
+# so carry the built dist trees together with node_modules and manifests.
+COPY --from=build --chown=vellum:vellum /app/package.json /app/pnpm-workspace.yaml /app/tsconfig.base.json ./
+COPY --from=build --chown=vellum:vellum /app/apps ./apps
+COPY --from=build --chown=vellum:vellum /app/packages ./packages
+COPY --from=build --chown=vellum:vellum /app/examples ./examples
+COPY --from=build --chown=vellum:vellum /app/node_modules ./node_modules
+USER vellum
+EXPOSE 8080
+STOPSIGNAL SIGTERM
+# Liveness never depends on PostgreSQL; readiness is /v1/health/ready.
+HEALTHCHECK --interval=15s --timeout=3s --start-period=15s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/v1/health/live || exit 1
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["node", "apps/api/dist/node-server.js"]

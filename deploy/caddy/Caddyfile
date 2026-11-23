@@ -1,0 +1,45 @@
+# VELLUM_DOMAIN is supplied by the environment (docker-compose passes the
+# resolved value to the caddy service). Set it to the apex domain, e.g.
+# VELLUM_DOMAIN=example.com. The site blocks below read VELLUM_DOMAIN only.
+# Both site blocks rely on Caddy's automatic HTTPS (ACME): no `http://` prefix
+# and no manually provisioned certificates are required. Ports 80/443 must be
+# publicly reachable for certificate issuance.
+
+api.{$VELLUM_DOMAIN} {
+	header {
+		-Server
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		X-Permitted-Cross-Domain-Policies none
+	}
+
+	reverse_proxy api:8080
+}
+
+{$VELLUM_DOMAIN} {
+	header {
+		-Server
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		X-Permitted-Cross-Domain-Policies none
+		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+	}
+
+	# Same-origin API calls (dashboard/admin default to /v1). reverse_proxy
+	# forwards WebSocket upgrades too, so realtime subscriptions work here.
+	handle /v1/* {
+		reverse_proxy api:8080
+	}
+
+	# Dashboard at /, Admin Console at /admin/, docs at /docs/ — all served by
+	# the unified frontend gateway.
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

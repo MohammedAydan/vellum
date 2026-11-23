@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  control_db:
+    image: postgres:16-alpine
+    container_name: vellum_control_db
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_USER: vellum_control
+      POSTGRES_PASSWORD: vellum_control_local_pw
+      POSTGRES_DB: control_db
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - control_db_data:/var/lib/postgresql/data
+      - ../packages/database-control/migrations/0001_init_control_plane.sql:/docker-entrypoint-initdb.d/0001_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vellum_control -d control_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  data_db:
+    image: postgres:16-alpine
+    container_name: vellum_data_db
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_USER: vellum_admin
+      POSTGRES_PASSWORD: vellum_data_local_pw
+      POSTGRES_DB: data_db
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - data_db_data:/var/lib/postgresql/data
+      - ../packages/database-data/migrations/0001_init_data_plane.sql:/docker-entrypoint-initdb.d/0001_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vellum_admin -d data_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  control_db_data:
+  data_db_data:

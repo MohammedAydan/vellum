@@ -1,0 +1,60 @@
+name: E2E
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    services:
+      control-db:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: vellum, POSTGRES_PASSWORD: vellum, POSTGRES_DB: control_db }
+        ports: ["5432:5432"]
+      data-db:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: vellum, POSTGRES_PASSWORD: vellum, POSTGRES_DB: data_db }
+        ports: ["5433:5432"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+          corepack pnpm --version
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: corepack pnpm exec playwright install --with-deps chromium
+
+      # Playwright previews apps/dashboard/dist and apps/admin/dist directly, so
+      # use the same canonical frontend build as production (vellum-console).
+      # The backend build is included because shared packages are built through
+      # it; neither build deploys or requires secrets.
+      - name: Build backend and frontends (canonical split build)
+        run: |
+          corepack pnpm build:api
+          corepack pnpm build:console
+
+      - name: Run Playwright E2E suite
+        run: corepack pnpm test:e2e
+        env:
+          DATABASE_MODE: memory
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-results
+          path: |
+            test-results/
+            playwright-report/

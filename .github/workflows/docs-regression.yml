@@ -1,0 +1,61 @@
+name: Developer docs regression
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vellum
+          POSTGRES_PASSWORD: vellum
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vellum"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CONTROL_DATABASE_URL: postgresql://vellum:vellum@127.0.0.1:5432/docs_control
+      DATA_DATABASE_URL: postgresql://vellum:vellum@127.0.0.1:5432/docs_data
+      DATABASE_MODE: postgres
+      NODE_ENV: development
+      DOCS_EVIDENCE: test-results/docs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dart-lang/setup-dart@v1
+      - run: corepack enable && corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm build
+      - name: Create isolated databases and apply unmodified migrations
+        run: |
+          psql postgresql://vellum:vellum@127.0.0.1:5432/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE docs_control'
+          psql postgresql://vellum:vellum@127.0.0.1:5432/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE docs_data'
+          corepack pnpm db:migrate
+      - run: cd examples/flutter && dart pub get && dart analyze --fatal-infos
+      - run: corepack pnpm exec playwright install --with-deps chromium
+      - name: Live Dart examples, displayed requests and bilingual browser regressions
+        run: |
+          corepack pnpm --filter @vellum/docs dev > /tmp/docs-vite.log 2>&1 &
+          DOCS_PID=$!
+          trap 'kill "$DOCS_PID" || true' EXIT
+          for attempt in $(seq 1 30); do curl -fsS http://127.0.0.1:5175/docs/ && break || sleep 2; done
+          corepack pnpm exec tsx scripts/qa/run-docs-live.ts
+          node scripts/qa/qa-docs-remediation.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: docs-regression-evidence
+          path: test-results/docs
+      - name: Cleanup isolated databases
+        if: always()
+        run: |
+          psql postgresql://vellum:vellum@127.0.0.1:5432/postgres -v ON_ERROR_STOP=1 -c 'DROP DATABASE IF EXISTS docs_control WITH (FORCE)'
+          psql postgresql://vellum:vellum@127.0.0.1:5432/postgres -v ON_ERROR_STOP=1 -c 'DROP DATABASE IF EXISTS docs_data WITH (FORCE)'

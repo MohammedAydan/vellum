@@ -1,0 +1,16 @@
+# Cloudflare Worker deployment for the unified VELLUM API.
+# The Worker runs the same Hono app + RealtimeGatewayHub as Node/Vercel, using
+# Neon's driver for both planes and the durable outbox for cross-instance events.
+name = "vellum-api"
+main = "apps/api/dist/runtime/cloudflare.js"
+compatibility_date = "2026-11-21"
+compatibility_flags = ["nodejs_compat"]
+
+# Secrets (set with `wrangler secret put NAME`):
+#   CONTROL_DATABASE_URL, DATA_DATABASE_URL, JWT_SECRET, CURSOR_HMAC_SECRET,
+#   TX_HMAC_SECRET, API_KEY_PEPPER, CONSOLE_JWT_SECRET,
+#   SUPER_ADMIN_JWT_SECRET, CORS_ALLOWED_ORIGINS
+# Never commit real values.
+
+[observability]
+enabled = true

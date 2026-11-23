@@ -1,0 +1,42 @@
+name: Nightly Load Tests
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+          corepack pnpm --version
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - uses: grafana/setup-k6-action@v1
+
+      - name: Verify k6 binary
+        run: k6 version
+
+      # No fake local benchmark and no external broker dependency: durable load
+      # runs need staging secrets and the PostgreSQL outbox/LISTEN-NOTIFY stack.
+      - name: Load test placeholder
+        run: echo "Nightly durable load requires staging secrets; no fake local benchmark is run."
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-results
+          path: tests/load/results/
