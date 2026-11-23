@@ -29,6 +29,8 @@ Refresh tokens are opaque 32-byte values; only SHA-256 hashes are stored. Rotati
 
 Both client SDKs pre-flight refresh 45 s before `exp`, deduplicate with a single-flight mutex, and react to a `401` with one forced refresh plus one transparent replay.
 
+**Revocation semantics (known limitation):** admin revoke, password reset and sign-out revoke *sessions and refresh tokens immediately*. Access JWTs are stateless (verified by signature + `exp` without a store lookup), so an already-issued access token stays valid until it expires. The TTL defaults to **1 hour** and is configurable per project via `accessTokenTtlSeconds` in the auth config — lower it for projects where revoke must take effect faster. Per-request session checks were rejected to keep document reads free of a control-plane lookup.
+
 ## Automatic user projection
 
 With `enable_user_projection` on (default), auth writes `users/{uid}` via `DocumentEngine.setDocument` with `system_bypass` (`bypassRules: true`) and `merge: true`. The document is re-synced after sign-up, `updateProfile`, email-verification confirmation, and claims changes — all live-verified.
