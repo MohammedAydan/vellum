@@ -81,6 +81,15 @@ export type OutboxMutation = Omit<OutboxEvent, "seqId" | "committedAt" | "projec
 
 export type IndexFieldItem = IndexFieldSpec;
 
+export interface IndexBuilderOptions {
+  /** Only build indexes of this project. */
+  projectId?: string | undefined;
+  /** Only build this index. */
+  indexId?: string | undefined;
+  /** Stop (leaving the index `building`, resumable) after this many ms. */
+  deadlineMs?: number | undefined;
+}
+
 export interface CompositeIndexRecord {
   id: string;
   projectId: string;
@@ -274,7 +283,11 @@ export interface StorageAdapter extends AuthOperations {
   listCompositeIndexes(ctx: TenantContext): Promise<CompositeIndexRecord[]>;
   deleteCompositeIndex(ctx: TenantContext, indexId: string): Promise<boolean>;
   queryOutboxSince(ctx: TenantContext, afterSeqId?: string): Promise<OutboxEvent[]>;
-  runIndexBuilderWorker(): Promise<{ builtCount: number }>;
+  /**
+   * Builds `building` composite indexes. Resumable and time-boxable so it can
+   * run inside a serverless request (`deadlineMs`) and be retried until done.
+   */
+  runIndexBuilderWorker(options?: IndexBuilderOptions): Promise<{ builtCount: number; pendingCount: number }>;
   runOutboxCompactionWorker(retentionHours?: number): Promise<{ purgedCount: number }>;
   runTombstonePurgeWorker(retentionDays?: number): Promise<{ purgedCount: number }>;
   /** V2: batched physical purge of expired live rows (default batch size 500). */

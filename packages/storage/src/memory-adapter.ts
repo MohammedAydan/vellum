@@ -42,6 +42,7 @@ import type {
   OutboxMutation,
   IndexFieldItem,
   CompositeIndexRecord,
+  IndexBuilderOptions,
   CompositeIndexEntry,
   TxHandle,
   StorageAdapter,
@@ -943,10 +944,14 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
     );
   }
 
-  public async runIndexBuilderWorker(): Promise<{ builtCount: number }> {
+  public async runIndexBuilderWorker(
+    options: IndexBuilderOptions = {}
+  ): Promise<{ builtCount: number; pendingCount: number }> {
     let builtCount = 0;
     for (const idx of this.indexes.values()) {
       if (idx.status !== "building") continue;
+      if (options.projectId !== undefined && idx.projectId !== options.projectId) continue;
+      if (options.indexId !== undefined && idx.id !== options.indexId) continue;
       try {
         await this.runInTenantTransaction(idx.projectId, async (tx) => {
           const docs = (await tx.listActiveDocumentsInCollection?.(idx.collectionPath)) ?? [];
@@ -974,7 +979,7 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
         idx.updatedAt = new Date().toISOString();
       }
     }
-    return { builtCount };
+    return { builtCount, pendingCount: 0 };
   }
 
   public async runOutboxCompactionWorker(cutoffEpochMs = Date.now() - 24 * 3600 * 1000): Promise<{ purgedCount: number }> {

@@ -62,6 +62,7 @@ import type { DocumentEngine, BatchMutation, IncludeSpec } from "@vellum/documen
 import type { StructuredLogger, SlidingWindowRateLimiter } from "@vellum/observability";
 import type { ThreatDetector } from "@vellum/security";
 import type { UsageMeteringEngine, QuotaGuard } from "@vellum/billing";
+import { listIndexesReconciled, refreshIndexRecord } from "./index-build.js";
 import { unwrapProject } from "./project-lookup.js";
 import { attachFortressMiddleware } from "./middleware/fortress.js";
 import { createFortressRoutes } from "./routes/fortress.js";
@@ -728,9 +729,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
       authContext,
     });
 
-    const indexes = await platform.dataStore.listCompositeIndexes({
-      projectId,
-    });
+    const indexes = await listIndexesReconciled(platform, projectId);
     return c.json({ indexes });
   });
 
@@ -761,6 +760,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
       (body.fields as Array<Parameters<typeof normalizeIndexFieldSpec>[0]>).map(normalizeIndexFieldSpec)
     );
     invalidateProjectIndexCache(projectId);
+    const built = await refreshIndexRecord(platform, projectId, created);
     // The dashboard deep-link carries the advisor fingerprint. Mark it applied
     // so the same suggestion is not recorded again after the index is created.
     if (typeof body.fingerprint === "string" && body.fingerprint.length > 0) {
@@ -772,7 +772,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
         });
       }
     }
-    return c.json(created, 201);
+    return c.json(built, 201);
   });
 
   app.delete("/v1/projects/:projectId/indexes/:indexId", async (c) => {

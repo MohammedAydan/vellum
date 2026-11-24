@@ -8,6 +8,7 @@
  * no rules evaluation, SQL, or wire serialization is implemented here.
  */
 
+import { listIndexesReconciled, refreshIndexRecord } from "../index-build.js";
 import { Hono, type Context } from "hono";
 import { VellumError, SYSTEM_LIMITS, normalizeIndexFieldSpec, parseCollectionPath } from "@vellum/core";
 import {
@@ -687,7 +688,7 @@ function requireDocumentData(body: unknown): Record<string, unknown> {
     const projectId = c.req.param("projectId");
     await engineContext(c, projectId);
     return c.json({
-      indexes: await dataStore.listCompositeIndexes({ projectId }),
+      indexes: await listIndexesReconciled(platform, projectId),
     });
   });
 
@@ -705,6 +706,7 @@ function requireDocumentData(body: unknown): Record<string, unknown> {
       (body.fields as Array<Parameters<typeof normalizeIndexFieldSpec>[0]>).map(normalizeIndexFieldSpec)
     );
     invalidateProjectIndexCache(projectId);
+    const built = await refreshIndexRecord(platform, projectId, created);
     // Deep-linked suggestions from `@vellumdb/sdk-js` / `vellum_flutter` carry the
     // advisor fingerprint in the create body. Mark the matching recommendations
     // applied so the dashboard queue never re-suggests an index we just created.
@@ -719,7 +721,7 @@ function requireDocumentData(body: unknown): Record<string, unknown> {
       projectId,
       targetId: body.collectionPath as string,
     });
-    return c.json(created, 201);
+    return c.json(built, 201);
   });
 
   routes.delete("/console/projects/:projectId/indexes/:indexId", async (c) => {
