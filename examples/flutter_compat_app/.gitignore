@@ -1,0 +1,10 @@
+.dart_tool/
+build/
+pubspec.lock
+android/
+ios/
+web/
+linux/
+macos/
+windows/
+.metadata
