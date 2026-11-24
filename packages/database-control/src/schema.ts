@@ -162,6 +162,43 @@ export const projectUsageDaily = pgTable(
   })
 );
 
+/**
+ * Durable auth throttles (migration 0015): sliding-window rate-limit events
+ * and MFA bad-code lockout counters, shared by every API instance. Bucket
+ * keys are opaque hashes or ids — never raw credentials, emails or IPs.
+ */
+export const authThrottleEvents = pgTable(
+  "auth_throttle_events",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    scope: text("scope").notNull(),
+    subject: text("subject").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    scopeSubjectCreatedIdx: index("idx_auth_throttle_events_scope_subject_created").on(
+      table.scope,
+      table.subject,
+      table.createdAt
+    ),
+    createdAtIdx: index("idx_auth_throttle_events_created_at").on(table.createdAt),
+  })
+);
+
+export const authFailureCounters = pgTable(
+  "auth_failure_counters",
+  {
+    scope: text("scope").notNull(),
+    subject: text("subject").notNull(),
+    failures: integer("failures").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.scope, table.subject] }),
+    expiresAtIdx: index("idx_auth_failure_counters_expires_at").on(table.expiresAt),
+  })
+);
+
 export const auditLogs = pgTable(
   "audit_logs",
   {

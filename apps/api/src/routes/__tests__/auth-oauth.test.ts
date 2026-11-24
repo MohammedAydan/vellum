@@ -3,7 +3,6 @@ import { createHash, createSign, generateKeyPairSync, randomBytes } from "node:c
 import { generateProjectApiKey } from "@vellum/authorization";
 import { generateTotpCode } from "@vellum/auth";
 import { createVellumPlatform } from "../../index.js";
-import { clearAuthRateLimitState } from "../../middleware/auth-rate-limit.js";
 import { clearOAuthKeyCache } from "../../auth/oauth/providers.js";
 
 const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -109,7 +108,6 @@ async function runFlow(f: Awaited<ReturnType<typeof fixture>>, provider: string)
 
 describe("OAuth sign-in (mock Google and GitHub)", () => {
   beforeEach(() => {
-    clearAuthRateLimitState();
     clearOAuthKeyCache();
     installFetch();
     mock.githubEmails = [{ email: "Dev@Example.com", primary: true, verified: true }];

@@ -13,6 +13,7 @@ export * from "./env-file.js";
 export * from "./index-recommendations.js";
 export * from "./security-repository.js";
 export * from "./billing-repository.js";
+export * from "./throttle-repository.js";
 export * from "./relation-rules.js";
 
 // Type-only re-exports for concrete adapter classes; import runtime classes from `./adapters.js`.

@@ -140,6 +140,10 @@ export interface AggregateResult {
 
 export interface ControlStoreLike {
   getActiveRuleset(projectId: string): unknown;
+  /**
+   * Durable metering; PostgreSQL-backed stores apply the deltas atomically and
+   * return a promise, which the engine always awaits.
+   */
   incrementUsage(
     projectId: string,
     usage: {
@@ -149,7 +153,7 @@ export interface ControlStoreLike {
       storageBytesDelta?: number;
       egressBytes?: number;
     }
-  ): void;
+  ): unknown | Promise<unknown>;
 }
 
 export interface RealtimeHubLike {

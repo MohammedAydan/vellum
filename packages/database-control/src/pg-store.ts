@@ -3,10 +3,12 @@
  * PostgreSQL-backed Control Plane repository (`control_db`).
  *
  * ## Design
- * The public API server needs *synchronous* control-plane reads:
- * `@vellum/document-engine` calls `getActiveRuleset()` and `incrementUsage()` inside
- * synchronous code paths, and `verifyApiKey()` reads `apiKeysByPrefix` directly.
- * Therefore this repository is **read-through-cached**:
+ * The public API server still has *synchronous* control-plane reads:
+ * `@vellum/document-engine` calls `getActiveRuleset()` inside synchronous code
+ * paths and the legacy `verifyApiKey()` reads `apiKeysByPrefix` directly.
+ * Therefore this repository is **read-through-cached** for those metadata reads.
+ * Metering is different: `incrementUsage()` is async and writes straight to
+ * PostgreSQL with an atomic upsert — there is no in-process usage buffer.
  *
  *  - `initialize()` hydrates an in-process mirror of the control-plane tables
  *    (users, organizations, memberships, projects, api keys, rulesets,
@@ -66,6 +68,7 @@ import {
   createPgSecurityRepository,
   type SecurityRepository,
 } from "./security-repository.js";
+import { PgThrottleRepository, type ThrottleRepository } from "./throttle-repository.js";
 import {
   createPgBillingRepository,
   type BillingRepository,
@@ -110,16 +113,8 @@ export interface PgControlPlaneStoreOptions {
 const SYNC_CACHE_MAX_ENTRIES = 2_000;
 const SYNC_CACHE_TTL_MS = 10_000;
 
-interface PendingUsageDelta {
-  projectId: string;
-  usageDate: string;
-  documentReads: number;
-  documentWrites: number;
-  documentDeletes: number;
-  realtimeMessagesSent: number;
-  egressBytes: number;
-  storageBytesDelta: number;
-}
+/** Throttle events outlive the longest window (signup budget, 1h) by a wide margin. */
+const THROTTLE_EVENT_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 function safeCounterDelta(value: number | undefined): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return 0;
@@ -178,6 +173,8 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
   public readonly security: SecurityRepository;
   /** Billing repository (plans, subscriptions, rollups, ledger, invoices). */
   public readonly billing: BillingRepository;
+  /** Durable auth throttles (sliding windows, signup budget, MFA lockouts). */
+  public readonly throttle: ThrottleRepository;
   private readonly ownsPool: boolean;
   private readonly statementTimeoutMs: number;
   private readonly auditLogCacheLimit: number;
@@ -218,7 +215,6 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
     updatedAt: new Date(0).toISOString(),
   };
 
-  private readonly pendingUsage = new Map<string, PendingUsageDelta>();
   private readonly dirtyApiKeyLastUsed = new Set<string>();
   private writeChain: Promise<void> = Promise.resolve();
   private flushChain: Promise<void> = Promise.resolve();
@@ -277,6 +273,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
     // Pool is assigned above; field initializers cannot reference `this.pool`.
     this.security = createPgSecurityRepository(this.pool);
     this.billing = createPgBillingRepository(this.pool);
+    this.throttle = new PgThrottleRepository(this.pool);
   }
 
   // ---------------------------------------------------------------- lifecycle
@@ -535,27 +532,8 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
         };
         nextUsage.set(`${record.projectId}:${record.usageDate}`, record);
       }
-      // Re-apply unflushed local deltas so a refresh never zeroes in-flight counts.
-      for (const [key, delta] of this.pendingUsage) {
-        const base = nextUsage.get(key) ?? {
-          projectId: delta.projectId,
-          usageDate: delta.usageDate,
-          documentReads: 0,
-          documentWrites: 0,
-          documentDeletes: 0,
-          realtimeMessagesSent: 0,
-          egressBytes: 0,
-          storageBytes: 0,
-          updatedAt: new Date().toISOString(),
-        };
-        base.documentReads += delta.documentReads;
-        base.documentWrites += delta.documentWrites;
-        base.documentDeletes += delta.documentDeletes;
-        base.realtimeMessagesSent += delta.realtimeMessagesSent;
-        base.egressBytes += delta.egressBytes;
-        base.storageBytes = Math.max(0, base.storageBytes + delta.storageBytesDelta);
-        nextUsage.set(key, base);
-      }
+      // Metering is written to PostgreSQL on every call, so the rows just
+      // read are authoritative — no local delta overlay to re-apply.
       reconcileMapInPlace(this.usageDaily, nextUsage);
 
       this.auditLogs.length = 0;
@@ -751,7 +729,13 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
     return record;
   }
 
-  public incrementUsage(projectId: string, deltas: UsageDeltas = {}): UsageDailyRecord {
+  /**
+   * Durable, atomic metering: one INSERT ... ON CONFLICT upsert applies the
+   * deltas under a row lock, so concurrent API instances never lose counts and
+   * no 5-second write-behind window can drop them on a crash. The local mirror
+   * is updated from the RETURNING row so synchronous readers stay fresh.
+   */
+  public async incrementUsage(projectId: string, deltas: UsageDeltas = {}): Promise<UsageDailyRecord> {
     const usageDate = new Date().toISOString().slice(0, 10);
     const key = `${projectId}:${usageDate}`;
     const reads = safeCounterDelta(deltas.documentReads);
@@ -761,45 +745,71 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
     const egress = safeCounterDelta(deltas.egressBytes);
     const storageDelta = safeSignedDelta(deltas.storageBytesDelta);
 
-    const current = this.usageDaily.get(key) ?? {
-      projectId,
-      usageDate,
-      documentReads: 0,
-      documentWrites: 0,
-      documentDeletes: 0,
-      realtimeMessagesSent: 0,
-      egressBytes: 0,
-      storageBytes: 0,
-      updatedAt: new Date().toISOString(),
-    };
-    current.documentReads += reads;
-    current.documentWrites += writes;
-    current.documentDeletes += deletes;
-    current.realtimeMessagesSent += realtime;
-    current.egressBytes += egress;
-    current.storageBytes = Math.max(0, current.storageBytes + storageDelta);
-    current.updatedAt = new Date().toISOString();
-    this.usageDaily.set(key, current);
+    if (!UUID_RE.test(projectId)) {
+      // The old flush-time guard, kept: non-UUID project ids (offline/test
+      // fixtures) have no row to upsert, so only the mirror moves.
+      this.logger?.warn("Skipping durable metering for a non-UUID project identifier", {
+        projectId,
+      });
+      const current = this.usageDaily.get(key) ?? {
+        projectId,
+        usageDate,
+        documentReads: 0,
+        documentWrites: 0,
+        documentDeletes: 0,
+        realtimeMessagesSent: 0,
+        egressBytes: 0,
+        storageBytes: 0,
+        updatedAt: new Date().toISOString(),
+      };
+      current.documentReads += reads;
+      current.documentWrites += writes;
+      current.documentDeletes += deletes;
+      current.realtimeMessagesSent += realtime;
+      current.egressBytes += egress;
+      current.storageBytes = Math.max(0, current.storageBytes + storageDelta);
+      current.updatedAt = new Date().toISOString();
+      this.usageDaily.set(key, current);
+      return current;
+    }
 
-    const pending = this.pendingUsage.get(key) ?? {
-      projectId,
-      usageDate,
-      documentReads: 0,
-      documentWrites: 0,
-      documentDeletes: 0,
-      realtimeMessagesSent: 0,
-      egressBytes: 0,
-      storageBytesDelta: 0,
+    const { rows } = await this.pool.query(
+      `INSERT INTO project_usage_daily (
+         project_id, usage_date, document_reads, document_writes, document_deletes,
+         realtime_messages_sent, egress_bytes, storage_bytes, updated_at
+       )
+       VALUES ($1::uuid, $2::date, $3, $4, $5, $6, $7, GREATEST(0, $8::bigint), now())
+       ON CONFLICT (project_id, usage_date) DO UPDATE SET
+         document_reads = project_usage_daily.document_reads + EXCLUDED.document_reads,
+         document_writes = project_usage_daily.document_writes + EXCLUDED.document_writes,
+         document_deletes = project_usage_daily.document_deletes + EXCLUDED.document_deletes,
+         realtime_messages_sent =
+           project_usage_daily.realtime_messages_sent + EXCLUDED.realtime_messages_sent,
+         egress_bytes = project_usage_daily.egress_bytes + EXCLUDED.egress_bytes,
+         storage_bytes = GREATEST(0, project_usage_daily.storage_bytes + $8::bigint),
+         updated_at = now()
+       RETURNING project_id AS "projectId", usage_date::text AS "usageDate",
+                 document_reads AS "documentReads", document_writes AS "documentWrites",
+                 document_deletes AS "documentDeletes",
+                 realtime_messages_sent AS "realtimeMessagesSent",
+                 egress_bytes AS "egressBytes", storage_bytes AS "storageBytes",
+                 updated_at AS "updatedAt"`,
+      [projectId, usageDate, reads, writes, deletes, realtime, egress, storageDelta]
+    );
+    const row = rows[0] as UsageDailyRecord;
+    const record: UsageDailyRecord = {
+      projectId: row.projectId,
+      usageDate: String(row.usageDate),
+      documentReads: Number(row.documentReads),
+      documentWrites: Number(row.documentWrites),
+      documentDeletes: Number(row.documentDeletes),
+      realtimeMessagesSent: Number(row.realtimeMessagesSent),
+      egressBytes: Number(row.egressBytes),
+      storageBytes: Number(row.storageBytes),
+      updatedAt: iso(row.updatedAt),
     };
-    pending.documentReads += reads;
-    pending.documentWrites += writes;
-    pending.documentDeletes += deletes;
-    pending.realtimeMessagesSent += realtime;
-    pending.egressBytes += egress;
-    pending.storageBytesDelta += storageDelta;
-    this.pendingUsage.set(key, pending);
-
-    return current;
+    this.usageDaily.set(key, record);
+    return record;
   }
 
   /** Records that an API key authenticated a request (flushed by `flush()`). */
@@ -812,7 +822,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
 
   // ------------------------------------------------------------- flush
 
-  /** Persists buffered metering counters and API-key `last_used_at` timestamps. */
+  /** Persists dirty API-key `last_used_at` timestamps and prunes expired throttle rows. */
   public flush(): Promise<void> {
     const work = this.flushChain.then(() => this.executeFlush());
     this.flushChain = work.then(
@@ -823,103 +833,14 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
   }
 
   private async executeFlush(): Promise<void> {
-    const usage = Array.from(this.pendingUsage.values());
-    this.pendingUsage.clear();
-
-    const validUsage: PendingUsageDelta[] = [];
-    for (const delta of usage) {
-      if (!UUID_RE.test(delta.projectId)) {
-        this.logger?.warn("Skipping metering flush for a non-UUID project identifier", {
-          projectId: delta.projectId,
-        });
-        continue;
-      }
-      validUsage.push(delta);
-    }
-
-    if (validUsage.length > 0) {
-      try {
-        await this.pool.query(
-          `WITH incoming AS (
-             SELECT
-               t.project_id, t.usage_date, t.document_reads, t.document_writes,
-               t.document_deletes, t.realtime_messages_sent, t.egress_bytes, t.storage_bytes_delta
-             FROM unnest(
-               $1::uuid[], $2::date[], $3::bigint[], $4::bigint[],
-               $5::bigint[], $6::bigint[], $7::bigint[], $8::bigint[]
-             ) AS t(
-               project_id, usage_date, document_reads, document_writes,
-               document_deletes, realtime_messages_sent, egress_bytes, storage_bytes_delta
-             )
-           ),
-           updated AS (
-             UPDATE project_usage_daily AS p SET
-               document_reads = p.document_reads + i.document_reads,
-               document_writes = p.document_writes + i.document_writes,
-               document_deletes = p.document_deletes + i.document_deletes,
-               realtime_messages_sent = p.realtime_messages_sent + i.realtime_messages_sent,
-               egress_bytes = p.egress_bytes + i.egress_bytes,
-               storage_bytes = GREATEST(0, p.storage_bytes + i.storage_bytes_delta),
-               updated_at = now()
-             FROM incoming AS i
-             WHERE p.project_id = i.project_id AND p.usage_date = i.usage_date
-             RETURNING p.project_id, p.usage_date
-           )
-           INSERT INTO project_usage_daily (
-             project_id, usage_date, document_reads, document_writes,
-             document_deletes, realtime_messages_sent, egress_bytes, storage_bytes, updated_at
-           )
-           SELECT
-             i.project_id, i.usage_date, i.document_reads, i.document_writes,
-             i.document_deletes, i.realtime_messages_sent, i.egress_bytes,
-             GREATEST(0, i.storage_bytes_delta), now()
-           FROM incoming AS i
-           WHERE NOT EXISTS (
-             SELECT 1 FROM updated AS u
-              WHERE u.project_id = i.project_id AND u.usage_date = i.usage_date
-           )
-           ON CONFLICT (project_id, usage_date) DO UPDATE SET
-             document_reads = project_usage_daily.document_reads + EXCLUDED.document_reads,
-             document_writes = project_usage_daily.document_writes + EXCLUDED.document_writes,
-             document_deletes = project_usage_daily.document_deletes + EXCLUDED.document_deletes,
-             realtime_messages_sent =
-               project_usage_daily.realtime_messages_sent + EXCLUDED.realtime_messages_sent,
-             egress_bytes = project_usage_daily.egress_bytes + EXCLUDED.egress_bytes,
-             storage_bytes = GREATEST(
-               0, project_usage_daily.storage_bytes + EXCLUDED.storage_bytes
-             ),
-             updated_at = now()`,
-          [
-            validUsage.map((d) => d.projectId),
-            validUsage.map((d) => d.usageDate),
-            validUsage.map((d) => d.documentReads),
-            validUsage.map((d) => d.documentWrites),
-            validUsage.map((d) => d.documentDeletes),
-            validUsage.map((d) => d.realtimeMessagesSent),
-            validUsage.map((d) => d.egressBytes),
-            validUsage.map((d) => d.storageBytesDelta),
-          ]
-        );
-      } catch (err: unknown) {
-        // Re-queue failed deltas so transient DB outages never lose metering data.
-        for (const delta of validUsage) {
-          const key = `${delta.projectId}:${delta.usageDate}`;
-          const existing = this.pendingUsage.get(key);
-          if (existing) {
-            existing.documentReads += delta.documentReads;
-            existing.documentWrites += delta.documentWrites;
-            existing.documentDeletes += delta.documentDeletes;
-            existing.realtimeMessagesSent += delta.realtimeMessagesSent;
-            existing.egressBytes += delta.egressBytes;
-            existing.storageBytesDelta += delta.storageBytesDelta;
-          } else {
-            this.pendingUsage.set(key, delta);
-          }
-        }
-        this.logger?.warn("Metering flush failed", {
-          reason: safeErrorReason(err),
-        });
-      }
+    // Drop throttle rows that can never count again: rate-limit events past
+    // the retention horizon and expired MFA lockout counters.
+    try {
+      await this.throttle.pruneExpiredThrottleState(THROTTLE_EVENT_RETENTION_MS);
+    } catch (err: unknown) {
+      this.logger?.warn("Throttle state pruning failed", {
+        reason: safeErrorReason(err),
+      });
     }
 
     const dirtyKeys = Array.from(this.dirtyApiKeyLastUsed);
