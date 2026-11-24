@@ -1,0 +1,82 @@
+/**
+ * Integration: TypeScript SDK realtime over Server-Sent Events (default transport),
+ * served by the in-process API. No WebSocket upgrade is involved.
+ */
+import { describe, expect, it } from "vitest";
+import { createVellumPlatform } from "../../apps/api/src/index.js";
+import { CustomerDashboardService } from "../../apps/dashboard/src/index.js";
+import { createClient } from "../../packages/sdk-js/src/index.js";
+import type { RealtimeSnapshot } from "../../packages/sdk-js/src/index.js";
+
+function harness() {
+  const platform = createVellumPlatform();
+  const dashboard = new CustomerDashboardService({ platform });
+  const user = platform.controlStore.createUser({ email: "sse@vellum.dev", name: "SSE", platformRole: "customer" });
+  const org = platform.controlStore.createOrganization({
+    slug: "sse-org",
+    name: "SSE Org",
+    billingEmail: "sse@vellum.dev",
+    ownerUserId: user.id,
+  });
+  const { project } = platform.controlStore.createProject({
+    organizationId: org.id,
+    slug: "sse-proj",
+    name: "SSE Project",
+    actorUserId: user.id,
+  });
+  const { plaintextKeyOnce: apiKey } = dashboard.createProjectApiKey({
+    projectId: project.id,
+    name: "SSE Server Key",
+    keyType: "server",
+    scopes: ["documents:read", "documents:write"],
+    actorUserId: user.id,
+  });
+  const client = createClient({
+    projectId: project.id,
+    apiKey,
+    endpoint: "http://127.0.0.1:9",
+    customFetch: (url, init) => platform.fetch(new Request(url, init)),
+    realtimeTransportOptions: { heartbeatIntervalMs: 60_000, connectTimeoutMs: 5000 },
+  });
+  return { platform, client };
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) throw new Error("waitFor timed out");
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
+describe("sdk-js realtime over SSE", () => {
+  it("delivers create, update and delete quickly and survives adding a second subscription", async () => {
+    const { platform, client } = harness();
+    const snaps: RealtimeSnapshot<Record<string, unknown>>[] = [];
+    const ref = client.collection("tickets").doc("t1");
+    const off = ref.onSnapshot((s) => snaps.push(s));
+    await waitFor(() => snaps.length > 0);
+
+    const other: RealtimeSnapshot<Record<string, unknown>>[] = [];
+    const off2 = client.collection("tickets").doc("t2").onSnapshot((s) => other.push(s));
+    await waitFor(() => other.length > 0);
+
+    const has = (op: (c: { doc: { path: string; data(): Record<string, unknown> } }) => boolean) =>
+      snaps.some((s) => s.changes.some((c) => c.doc.path === "tickets/t1" && op(c as never)));
+
+    const t0 = Date.now();
+    await ref.create({ n: 1 });
+    await waitFor(() => has((c) => c.doc.data()["n"] === 1));
+    const latency = Date.now() - t0;
+    expect(latency).toBeLessThan(1000);
+
+    await ref.update({ n: 2 });
+    await waitFor(() => has((c) => c.doc.data()["n"] === 2));
+    await ref.delete();
+    await waitFor(() => snaps.some((s) => s.changes.some((c) => c.type === "removed" && c.doc.path === "tickets/t1")));
+
+    off();
+    off2();
+    platform.metering.stop();
+  }, 20_000);
+});
