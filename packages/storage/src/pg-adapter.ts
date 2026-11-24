@@ -30,6 +30,7 @@ import type {
   OutboxMutation,
   IndexFieldItem,
   CompositeIndexRecord,
+  IndexBuilderOptions,
   TxHandle,
   StorageAdapter,
   QueriedDocument,
@@ -257,7 +258,11 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
     );
   }
 
-  public async runIndexBuilderWorker(): Promise<{ builtCount: number }> {
+  public async runIndexBuilderWorker(
+    options: IndexBuilderOptions = {}
+  ): Promise<{ builtCount: number; pendingCount: number }> {
+    const deadline = options.deadlineMs !== undefined ? Date.now() + options.deadlineMs : Infinity;
+    let pendingCount = 0;
     const client = await this.directPool.connect();
     let builtCount = 0;
     let fatalError: Error | undefined;
@@ -267,8 +272,11 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
                 collection_path AS "collectionPath", fields
            FROM document_indexes
           WHERE status = 'building'
+            AND ($1::uuid IS NULL OR project_id = $1::uuid)
+            AND ($2::uuid IS NULL OR id = $2::uuid)
           ORDER BY created_at ASC
-          LIMIT 10`
+          LIMIT 10`,
+        [options.projectId ?? null, options.indexId ?? null]
       );
 
       for (const rawIdx of buildingIndexes) {
@@ -279,8 +287,19 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
           fields: IndexFieldItem[];
         };
         try {
-          let lastDocId = "";
+          // Resume where a previous (time-boxed or interrupted) run stopped:
+          // entries are written in ascending document_id order.
+          const { rows: resumeRows } = await client.query(
+            `SELECT max(document_id) AS last FROM document_index_entries WHERE index_id = $1::uuid`,
+            [idx.id]
+          );
+          let lastDocId = (resumeRows[0] as { last: string | null } | undefined)?.last ?? "";
+          let timedOut = false;
           while (true) {
+            if (Date.now() >= deadline) {
+              timedOut = true;
+              break;
+            }
             const { rows: batchDocs } = await client.query(
               `SELECT path, collection_path AS "collectionPath", document_id AS "documentId",
                       data, created_at::text AS "createdAt", updated_at::text AS "updatedAt"
@@ -318,6 +337,10 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
             lastDocId = lastEntry.documentId;
           }
 
+          if (timedOut) {
+            pendingCount += 1;
+            continue;
+          }
           await client.query(
             `UPDATE document_indexes SET status = 'ready', updated_at = now() WHERE id = $1::uuid`,
             [idx.id]
@@ -336,7 +359,7 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
           }
         }
       }
-      return { builtCount };
+      return { builtCount, pendingCount };
     } catch (err: unknown) {
       if (fatalError === undefined) {
         fatalError = err instanceof Error ? err : new Error(String(err));
