@@ -15,14 +15,14 @@ class _FlutterSecureKeyValue implements SecureKeyValue {
   final FlutterSecureStorage _store;
 
   @override
-  Future<String?> read(String key) => _store.read(key);
+  Future<String?> read(String key) => _store.read(key: key);
 
   @override
   Future<void> write(String key, String value) =>
-      _store.write(key, value);
+      _store.write(key: key, value: value);
 
   @override
-  Future<void> delete(String key) => _store.delete(key);
+  Future<void> delete(String key) => _store.delete(key: key);
 }
 
 /// Session storage backed by the platform secure store, with a graceful

@@ -1,6 +1,7 @@
 name: vellum_flutter_secure_storage
 description: Persistent, encrypted session storage for vellum_flutter (Keychain, Keystore, libsecret, Windows Credential, WebCrypto). Add it and sessions survive restarts, with no code and no native setup.
 version: 0.0.2
+publish_to: none # switch to hosted vellum_flutter before the first publish
 homepage: https://github.com/MohammedAydan/vellum
 repository: https://github.com/MohammedAydan/vellum/tree/main/sdks/flutter_secure_storage
 issue_tracker: https://github.com/MohammedAydan/vellum/issues
