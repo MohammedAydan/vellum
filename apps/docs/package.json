@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5175 --host 0.0.0.0",
-    "build": "tsc --noEmit && vite build --outDir dist --emptyOutDir",
+    "build": "tsc --noEmit && vite build --outDir dist --emptyOutDir && node scripts/build-ai-docs.mjs",
     "preview": "vite preview --outDir dist",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
