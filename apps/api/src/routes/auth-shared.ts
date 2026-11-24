@@ -10,6 +10,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Context } from "hono";
 import { VellumError } from "@vellum/core";
 import { generateEd25519KeyPair } from "@vellum/auth";
+import { mergeOAuthProviders } from "../auth/oauth/config.js";
 import { verifyApiKey, type ApiKeyRecord } from "@vellum/authorization";
 import type {
   ProjectAuthConfig,
@@ -155,7 +156,7 @@ export function applyAuthConfigPatch(
   if (patch.passwordRequireSymbol !== undefined) input.passwordRequireSymbol = patch.passwordRequireSymbol;
   if (patch.accessTokenTtlSeconds !== undefined) input.accessTokenTtlSeconds = patch.accessTokenTtlSeconds;
   if (patch.refreshTokenTtlDays !== undefined) input.refreshTokenTtlDays = patch.refreshTokenTtlDays;
-  if (patch.oauthProviders !== undefined) input.oauthProviders = patch.oauthProviders;
+  if (patch.oauthProviders !== undefined) input.oauthProviders = mergeOAuthProviders(base.oauthProviders, patch.oauthProviders, masterKey());
   if (patch.customSmtpConfigEncrypted !== undefined) input.customSmtpConfigEncrypted = patch.customSmtpConfigEncrypted;
   return input;
 }

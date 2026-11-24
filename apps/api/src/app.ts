@@ -312,6 +312,14 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     authRateLimit({ max: 30, windowMs: 15 * 60 * 1000, countAll: true, scope: "enduser-anonymous", keyFrom: endUserIpKey })
   );
 
+  // OAuth: start and exchange count every request; 60 / 15 min per (project, ip).
+  for (const path of ["oauth/:provider/start", "oauth/exchange", "oauth/google/id-token"]) {
+    app.use(
+      `/v1/projects/:projectId/auth/${path}`,
+      authRateLimit({ max: 60, windowMs: 15 * 60 * 1000, countAll: true, scope: `enduser-${path}`, keyFrom: endUserIpKey })
+    );
+  }
+
   // 5 requests / 15 min — every request counts (no account enumeration).
   app.use(
     "/v1/projects/:projectId/auth/password/reset",

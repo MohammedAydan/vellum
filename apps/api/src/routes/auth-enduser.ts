@@ -40,8 +40,24 @@ import {
   TokenRefreshRequestSchema,
   UpdateProfileRequestSchema,
 } from "@vellum/api-contract";
+import { verifyApiKey } from "@vellum/authorization";
 import type { ProjectAuthConfig } from "@vellum/database-control";
 import type { AuthUserRecord, UpdateAuthUserInput } from "@vellum/storage";
+import {
+  buildAuthorizeUrl,
+  completeAuthorization,
+  getProvider,
+  randomUrlToken,
+  s256,
+  verifyGoogleIdToken,
+} from "../auth/oauth/providers.js";
+import {
+  isRedirectAllowed,
+  openState,
+  redirectAllowlist,
+  resolveProviderCredentials,
+  sealState,
+} from "../auth/oauth/config.js";
 import type { VellumPlatformContext } from "../app.js";
 import {
   actorMetadata,
@@ -62,6 +78,9 @@ import {
 const TOKEN_TYPE_PASSWORD_RESET = "password_reset";
 const TOKEN_TYPE_EMAIL_VERIFICATION = "email_verification";
 const TOKEN_TYPE_MFA_CHALLENGE = "mfa_challenge";
+const TOKEN_TYPE_OAUTH_EXCHANGE = "oauth_exchange";
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const OAUTH_CODE_TTL_MS = 2 * 60 * 1000;
 const ACTION_TOKEN_TTL_MS = 60 * 60 * 1000;
 const MFA_TICKET_TTL_MS = 5 * 60 * 1000;
 
@@ -314,6 +333,113 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     }
   }
 
+  interface ProviderSignInInput {
+    provider: string;
+    providerUserId?: string | undefined;
+    idToken?: string | undefined;
+    accessToken?: string | undefined;
+    email?: string | undefined;
+    emailVerified?: boolean | undefined;
+    displayName?: string | undefined;
+    photoUrl?: string | null | undefined;
+    metadata?: Record<string, unknown> | undefined;
+  }
+
+  /** Shared by the server-key endpoint and the verified OAuth flows. */
+  async function resolveProviderUser(
+    tenant: AuthTenant,
+    config: ProjectAuthConfig,
+    body: ProviderSignInInput
+  ): Promise<{ user: AuthUserRecord; providerUserId: string }> {
+    const configured = config.oauthProviders[body.provider];
+    if (configured && typeof configured === "object" && (configured as Record<string, unknown>)["enabled"] === false) {
+      throw new VellumError("PERMISSION_DENIED", `Identity provider '${body.provider}' is disabled`);
+    }
+    const providerUserId =
+      body.providerUserId ?? sha256(body.idToken ?? body.accessToken ?? "").slice(0, 64);
+    const existingIdentity = await storage.getAuthIdentityByProvider(tenant.ctx, body.provider, providerUserId);
+    const now = new Date().toISOString();
+    let user: AuthUserRecord;
+    if (existingIdentity) {
+      const found = await storage.getAuthUserById(tenant.ctx, existingIdentity.userId);
+      if (!found) throw new VellumError("UNAUTHENTICATED", "The linked end-user no longer exists");
+      if (found.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
+      user = { ...found, lastSignInAt: now };
+    } else {
+      if (!body.email) {
+        throw new VellumError("INVALID_ARGUMENT", "An email is required when registering via an identity provider");
+      }
+      const byEmail = await storage.getAuthUserByEmail(tenant.ctx, body.email);
+      if (byEmail) {
+        // Never link a new provider identity to an existing account on an
+        // unverified email claim.
+        if (body.emailVerified !== true) {
+          throw new VellumError(
+            "ALREADY_EXISTS",
+            "An account with this email exists; the provider must assert a verified email to link it"
+          );
+        }
+        if (byEmail.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
+        user = { ...byEmail, lastSignInAt: now };
+      } else {
+        await checkRegistrationGuards(tenant, config);
+        const email = body.email;
+        user = await createWithSignupSlot(config, tenant, () =>
+          storage.createAuthUser(tenant.ctx, {
+            email,
+            emailVerified: body.emailVerified ?? false,
+            displayName: body.displayName ?? null,
+            photoUrl: body.photoUrl ?? null,
+            ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
+          })
+        );
+        await projectIfEnabled(tenant, config, user);
+      }
+    }
+    return { user, providerUserId };
+  }
+
+  async function finishProviderSignIn(
+    tenant: AuthTenant,
+    config: ProjectAuthConfig,
+    c: Context,
+    user: AuthUserRecord,
+    body: ProviderSignInInput,
+    providerUserId: string
+  ): Promise<Record<string, unknown>> {
+    const now = new Date().toISOString();
+    // Provider sign-in must not bypass a verified second factor.
+    const mfa = config.enableTotpMfa ? await storage.getAuthMfa(tenant.ctx, user.id) : null;
+    if (mfa?.verified) {
+      const { token, expiresAt } = await persistActionToken(
+        tenant,
+        user.id,
+        TOKEN_TYPE_MFA_CHALLENGE,
+        MFA_TICKET_TTL_MS
+      );
+      return ({ mfaRequired: true, mfaTicket: token, factors: ["totp"], expiresAt });
+    }
+    await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
+    await storage.upsertAuthIdentity(tenant.ctx, {
+      userId: user.id,
+      provider: body.provider,
+      providerUserId,
+      identityData: { email: body.email ?? user.email, provider: body.provider },
+      lastSignInAt: now,
+    });
+    return await issueSession(tenant, user, c);
+  }
+
+  async function signInWithProviderIdentity(
+    tenant: AuthTenant,
+    config: ProjectAuthConfig,
+    c: Context,
+    body: ProviderSignInInput
+  ): Promise<Record<string, unknown>> {
+    const { user, providerUserId } = await resolveProviderUser(tenant, config, body);
+    return finishProviderSignIn(tenant, config, c, user, body, providerUserId);
+  }
+
   // -------------------------------------------------------------------- SIGN-UP
 
   routes.post("/sign-up/email", async (c) => {
@@ -432,71 +558,211 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     checkAccessGuards(config);
 
     const body = parseOrThrow(SignInProviderRequestSchema, await c.req.json());
-    const configured = config.oauthProviders[body.provider];
-    if (configured && typeof configured === "object" && (configured as Record<string, unknown>)["enabled"] === false) {
-      throw new VellumError("PERMISSION_DENIED", `Identity provider '${body.provider}' is disabled`);
+    return c.json(await signInWithProviderIdentity(tenant, config, c, body));
+  });
+
+  // ---------------------------------------------------------------- OAUTH (Google, GitHub)
+
+  function publicBaseUrl(c: Context): string {
+    const fixed = process.env["VELLUM_PUBLIC_URL"];
+    if (fixed) return fixed.replace(/\/+$/, "");
+    const host = c.req.header("x-forwarded-host") ?? c.req.header("host");
+    const proto = c.req.header("x-forwarded-proto") ?? new URL(c.req.url).protocol.replace(":", "");
+    return host ? `${proto}://${host}` : new URL(c.req.url).origin;
+  }
+
+  function callbackUrlFor(c: Context, projectId: string, provider: string): string {
+    return `${publicBaseUrl(c)}/v1/projects/${projectId}/auth/oauth/${provider}/callback`;
+  }
+
+  function redirectWith(target: string, params: Record<string, string | null>): Response {
+    const url = new URL(target);
+    for (const [k, v] of Object.entries(params)) if (v !== null) url.searchParams.set(k, v);
+    return new Response(null, { status: 302, headers: { location: url.toString(), "cache-control": "no-store" } });
+  }
+
+  routes.get("/oauth/:provider/start", async (c) => {
+    const tenant = resolveAuthTenant(c, platform);
+    const providerId = c.req.param("provider") ?? "";
+    const provider = getProvider(providerId);
+    // A browser navigation cannot send headers, so the publishable key travels in the query.
+    const apiKey = c.req.query("apiKey") ?? "";
+    const keyRecord = apiKey ? verifyApiKey(apiKey, platform.controlStore, platform.apiKeyPepper) : null;
+    if (!keyRecord || keyRecord.projectId !== tenant.projectId) {
+      throw new VellumError("UNAUTHENTICATED", "A valid project apiKey query parameter is required");
     }
-    const providerUserId =
-      body.providerUserId ?? sha256(body.idToken ?? body.accessToken ?? "").slice(0, 64);
-    const existingIdentity = await storage.getAuthIdentityByProvider(tenant.ctx, body.provider, providerUserId);
+    const config = await ensureAuthConfig(platform, tenant.projectId);
+    checkAccessGuards(config);
+    const creds = resolveProviderCredentials(config.oauthProviders, providerId, masterKey());
+    if (!creds.enabled || !creds.clientId || !creds.clientSecret) {
+      throw new VellumError("PERMISSION_DENIED", `Sign-in with ${providerId} is not enabled for this project`);
+    }
+    const redirectUri = c.req.query("redirectUri") ?? "";
+    if (!isRedirectAllowed(redirectAllowlist(config.oauthProviders), redirectUri)) {
+      throw new VellumError("INVALID_ARGUMENT", "redirectUri is not in this project's allowed redirect list");
+    }
+    const challenge = c.req.query("codeChallenge") ?? "";
+    if (!/^[A-Za-z0-9_-]{43}$/.test(challenge)) {
+      throw new VellumError("INVALID_ARGUMENT", "codeChallenge must be a base64url SHA-256 (S256) challenge");
+    }
+    const clientState = c.req.query("state") ?? null;
+    if (clientState !== null && clientState.length > 512) {
+      throw new VellumError("INVALID_ARGUMENT", "state is too long");
+    }
+    const verifier = randomUrlToken(48);
+    const nonce = randomUrlToken(16);
+    const state = sealState(
+      {
+        p: tenant.projectId,
+        provider: providerId,
+        redirectUri,
+        clientChallenge: challenge,
+        clientState,
+        verifier,
+        nonce,
+        exp: Date.now() + OAUTH_STATE_TTL_MS,
+      },
+      masterKey()
+    );
+    const location = buildAuthorizeUrl(provider, {
+      clientId: creds.clientId,
+      callbackUrl: callbackUrlFor(c, tenant.projectId, providerId),
+      state,
+      codeChallenge: s256(verifier),
+      nonce,
+    });
+    return new Response(null, { status: 302, headers: { location, "cache-control": "no-store" } });
+  });
+
+  routes.get("/oauth/:provider/callback", async (c) => {
+    const tenant = resolveAuthTenant(c, platform);
+    const providerId = c.req.param("provider") ?? "";
+    const provider = getProvider(providerId);
+    const flow = openState(c.req.query("state") ?? "", masterKey());
+    if (flow.p !== tenant.projectId || flow.provider !== providerId) {
+      throw new VellumError("UNAUTHENTICATED", "Sign-in session expired or invalid. Please try again.");
+    }
+    const config = await ensureAuthConfig(platform, tenant.projectId);
+    // The allowlist is re-checked: it may have changed since the flow began.
+    if (!isRedirectAllowed(redirectAllowlist(config.oauthProviders), flow.redirectUri)) {
+      throw new VellumError("INVALID_ARGUMENT", "redirectUri is no longer allowed for this project");
+    }
+    const fail = (error: string, description: string) =>
+      redirectWith(flow.redirectUri, { error, error_description: description, state: flow.clientState });
+    const providerError = c.req.query("error");
+    if (providerError) return fail("access_denied", "The sign-in was cancelled or denied");
+    const code = c.req.query("code");
+    if (!code) return fail("invalid_request", "Missing authorization code");
+    try {
+      checkAccessGuards(config);
+      const creds = resolveProviderCredentials(config.oauthProviders, providerId, masterKey());
+      if (!creds.enabled || !creds.clientId || !creds.clientSecret) {
+        return fail("access_denied", `Sign-in with ${providerId} is not enabled`);
+      }
+      const profile = await completeAuthorization(provider, creds, {
+        code,
+        callbackUrl: callbackUrlFor(c, tenant.projectId, providerId),
+        codeVerifier: flow.verifier,
+        nonce: flow.nonce,
+        audiences: creds.audiences,
+      });
+      if (!profile.email || !profile.emailVerified) {
+        return fail("access_denied", `${providerId} did not return a verified email address`);
+      }
+      const input: ProviderSignInInput = {
+        provider: providerId,
+        providerUserId: profile.providerUserId,
+        email: profile.email,
+        emailVerified: true,
+        displayName: profile.displayName ?? undefined,
+        photoUrl: profile.photoUrl,
+      };
+      const { user, providerUserId } = await resolveProviderUser(tenant, config, input);
+      const now = new Date().toISOString();
+      await storage.upsertAuthIdentity(tenant.ctx, {
+        userId: user.id,
+        provider: providerId,
+        providerUserId,
+        identityData: { email: profile.email, provider: providerId },
+        lastSignInAt: now,
+      });
+      // One-time code, bound to the client's PKCE challenge: useless without the verifier.
+      const oneTime = newOpaqueToken();
+      await storage.saveAuthToken(tenant.ctx, {
+        userId: user.id,
+        tokenHash: sha256(`${oneTime}:${flow.clientChallenge}`),
+        tokenType: TOKEN_TYPE_OAUTH_EXCHANGE,
+        expiresAt: new Date(Date.now() + OAUTH_CODE_TTL_MS).toISOString(),
+      });
+      return redirectWith(flow.redirectUri, { vellum_code: oneTime, state: flow.clientState });
+    } catch (error) {
+      if (error instanceof VellumError) {
+        const denied = error.code === "PERMISSION_DENIED" || error.code === "ALREADY_EXISTS" || error.code === "QUOTA_EXCEEDED";
+        return fail(denied ? "access_denied" : "server_error", error.message);
+      }
+      platform.logger.warn("OAuth callback failed", { provider: providerId });
+      return fail("server_error", "Sign-in failed. Please try again.");
+    }
+  });
+
+  routes.post("/oauth/exchange", async (c) => {
+    const tenant = resolveAuthTenant(c, platform);
+    requireProjectApiKey(c, platform, tenant);
+    const config = await ensureAuthConfig(platform, tenant.projectId);
+    checkAccessGuards(config);
+    const body = (await c.req.json().catch(() => ({}))) as { code?: unknown; codeVerifier?: unknown };
+    if (typeof body.code !== "string" || typeof body.codeVerifier !== "string" || body.codeVerifier.length < 43) {
+      throw new VellumError("INVALID_ARGUMENT", "code and codeVerifier are required");
+    }
+    const record = await storage.consumeAuthToken(
+      tenant.ctx,
+      sha256(`${body.code}:${s256(body.codeVerifier)}`),
+      TOKEN_TYPE_OAUTH_EXCHANGE
+    );
+    const user = await storage.getAuthUserById(tenant.ctx, record.userId);
+    if (!user) throw new VellumError("UNAUTHENTICATED", "The linked end-user no longer exists");
+    if (user.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
     const now = new Date().toISOString();
-    let user: AuthUserRecord;
-    if (existingIdentity) {
-      const found = await storage.getAuthUserById(tenant.ctx, existingIdentity.userId);
-      if (!found) throw new VellumError("UNAUTHENTICATED", "The linked end-user no longer exists");
-      if (found.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
-      user = { ...found, lastSignInAt: now };
-    } else {
-      if (!body.email) {
-        throw new VellumError("INVALID_ARGUMENT", "An email is required when registering via an identity provider");
-      }
-      const byEmail = await storage.getAuthUserByEmail(tenant.ctx, body.email);
-      if (byEmail) {
-        // Never link a new provider identity to an existing account on an
-        // unverified email claim.
-        if (body.emailVerified !== true) {
-          throw new VellumError(
-            "ALREADY_EXISTS",
-            "An account with this email exists; the provider must assert a verified email to link it"
-          );
-        }
-        if (byEmail.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
-        user = { ...byEmail, lastSignInAt: now };
-      } else {
-        await checkRegistrationGuards(tenant, config);
-        const email = body.email;
-        user = await createWithSignupSlot(config, tenant, () =>
-          storage.createAuthUser(tenant.ctx, {
-            email,
-            emailVerified: body.emailVerified ?? false,
-            displayName: body.displayName ?? null,
-            photoUrl: body.photoUrl ?? null,
-            ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
-          })
-        );
-        await projectIfEnabled(tenant, config, user);
-      }
-    }
-    // Provider sign-in must not bypass a verified second factor.
     const mfa = config.enableTotpMfa ? await storage.getAuthMfa(tenant.ctx, user.id) : null;
     if (mfa?.verified) {
-      const { token, expiresAt } = await persistActionToken(
-        tenant,
-        user.id,
-        TOKEN_TYPE_MFA_CHALLENGE,
-        MFA_TICKET_TTL_MS
-      );
+      const { token, expiresAt } = await persistActionToken(tenant, user.id, TOKEN_TYPE_MFA_CHALLENGE, MFA_TICKET_TTL_MS);
       return c.json({ mfaRequired: true, mfaTicket: token, factors: ["totp"], expiresAt });
     }
     await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
-    await storage.upsertAuthIdentity(tenant.ctx, {
-      userId: user.id,
-      provider: body.provider,
-      providerUserId,
-      identityData: { email: body.email ?? user.email, provider: body.provider },
-      lastSignInAt: now,
+    return c.json(await issueSession(tenant, { ...user, lastSignInAt: now }, c));
+  });
+
+  /** Native Google (google_sign_in, Google Identity Services): the app sends a Google ID token. */
+  routes.post("/oauth/google/id-token", async (c) => {
+    const tenant = resolveAuthTenant(c, platform);
+    requireProjectApiKey(c, platform, tenant);
+    const config = await ensureAuthConfig(platform, tenant.projectId);
+    checkAccessGuards(config);
+    const creds = resolveProviderCredentials(config.oauthProviders, "google", masterKey());
+    if (!creds.enabled || creds.audiences.length === 0) {
+      throw new VellumError("PERMISSION_DENIED", "Sign-in with google is not enabled for this project");
+    }
+    const body = (await c.req.json().catch(() => ({}))) as { idToken?: unknown; nonce?: unknown };
+    if (typeof body.idToken !== "string" || body.idToken.length === 0) {
+      throw new VellumError("INVALID_ARGUMENT", "idToken is required");
+    }
+    const profile = await verifyGoogleIdToken(body.idToken, {
+      audiences: creds.audiences,
+      ...(typeof body.nonce === "string" ? { nonce: body.nonce } : {}),
     });
-    return c.json(await issueSession(tenant, user, c));
+    if (!profile.email || !profile.emailVerified) {
+      throw new VellumError("PERMISSION_DENIED", "google did not return a verified email address");
+    }
+    return c.json(
+      await signInWithProviderIdentity(tenant, config, c, {
+        provider: "google",
+        providerUserId: profile.providerUserId,
+        email: profile.email,
+        emailVerified: true,
+        displayName: profile.displayName ?? undefined,
+        photoUrl: profile.photoUrl,
+      })
+    );
   });
 
   // -------------------------------------------------------------------- TOKENS
