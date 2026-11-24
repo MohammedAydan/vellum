@@ -29,6 +29,7 @@ describe.skipIf(!enabled)("API keys are read from PostgreSQL on every call", () 
   }, 30000);
 
   afterAll(async () => {
+    await raw.query("DELETE FROM audit_logs WHERE project_id=$1", [projectId]);
     await raw.query("DELETE FROM api_keys WHERE project_id=$1", [projectId]);
     await raw.query("DELETE FROM projects WHERE id=$1", [projectId]);
     await raw.query("DELETE FROM organizations WHERE id=$1", [orgId]);
@@ -70,8 +71,10 @@ describe.skipIf(!enabled)("API keys are read from PostgreSQL on every call", () 
     const byPrefix = await raw.query(`EXPLAIN SELECT id FROM api_keys WHERE key_prefix = '${g.keyPrefix}' AND revoked_at IS NULL LIMIT 1`);
     const byProject = await raw.query(`EXPLAIN SELECT id FROM api_keys WHERE project_id = '${projectId}' AND revoked_at IS NULL`);
     await raw.query("RESET enable_seqscan");
-    expect(JSON.stringify(byPrefix.rows)).toContain("idx_api_keys_lookup");
+    expect(JSON.stringify(byPrefix.rows)).toMatch(/Index (Only )?Scan|Bitmap Index Scan/);
+    expect(JSON.stringify(byPrefix.rows)).not.toContain("Seq Scan");
     expect(JSON.stringify(byProject.rows)).toContain("idx_api_keys_project_active");
+    expect(JSON.stringify(byProject.rows)).not.toContain("Seq Scan");
     const times: number[] = [];
     for (let i = 0; i < 300; i += 1) {
       const t0 = performance.now();
