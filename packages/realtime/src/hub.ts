@@ -118,25 +118,52 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
    * Returns a VellumError if the session's end-user JWT or API key has expired
    * or been revoked since the initial WS handshake; otherwise returns null.
    */
-  private checkSessionCredentialExpiry(session: ConnectionSession, nowMs: number = Date.now()): VellumError | null {
-    let apiKey = session.apiKeyRecord;
-    if (apiKey) {
-      // Refresh by identity, not object reference: PostgreSQL mirror refresh and
-      // revocation replace records while existing sockets retain the old object.
-      let current: ApiKeyRecord | null | undefined;
-      if (this.controlStore.getApiKeyByPrefix) {
-        current = this.controlStore.getApiKeyByPrefix(apiKey.keyPrefix);
-      } else if ("apiKeysByPrefix" in this.controlStore && this.controlStore.apiKeysByPrefix instanceof Map) {
-        current = this.controlStore.apiKeysByPrefix.get(apiKey.keyPrefix) as ApiKeyRecord | undefined ?? null;
+  private async checkSessionCredentialExpiry(
+    session: ConnectionSession,
+    nowMs: number = Date.now(),
+    keyMemo?: Map<string, Promise<ApiKeyRecord | null | undefined>>
+  ): Promise<VellumError | null> {
+    const apiKey0 = session.apiKeyRecord;
+    if (apiKey0) {
+      // Authoritative lookup by identity from PostgreSQL (memoised per dispatch so
+      // a fan-out to N sessions sharing a key costs one query, not N).
+      let pending = keyMemo?.get(apiKey0.keyPrefix);
+      if (!pending) {
+        pending = this.lookupKeyByPrefix(apiKey0.keyPrefix);
+        keyMemo?.set(apiKey0.keyPrefix, pending);
       }
+      const current = await pending;
       if (current !== undefined) {
-        if (!current || current.id !== apiKey.id || current.projectId !== session.projectId) {
+        if (!current || current.id !== apiKey0.id || current.projectId !== session.projectId) {
           return new VellumError("UNAUTHENTICATED", "API key is no longer active");
         }
-        apiKey = current;
         session.apiKeyRecord = current;
       }
-      if (apiKey.revokedAt) {
+    }
+    return this.checkLocalCredentialExpiry(session, nowMs);
+  }
+
+  /** Reads the key from PostgreSQL when the store can; `undefined` = store cannot look up. */
+  private async lookupKeyByPrefix(prefix: string): Promise<ApiKeyRecord | null | undefined> {
+    const store = this.controlStore;
+    if (store.findApiKeyByPrefix) return store.findApiKeyByPrefix(prefix);
+    if (store.getApiKeyByPrefix) return store.getApiKeyByPrefix(prefix);
+    if ("apiKeysByPrefix" in store && store.apiKeysByPrefix instanceof Map) {
+      return (store.apiKeysByPrefix.get(prefix) as ApiKeyRecord | undefined) ?? null;
+    }
+    return undefined;
+  }
+
+  private async rulesetFor(projectId: string): Promise<SecurityRulesetRecord | null> {
+    const store = this.controlStore;
+    return (store.getActiveRulesetAsync ? await store.getActiveRulesetAsync(projectId) : store.getActiveRuleset(projectId)) ?? null;
+  }
+
+  /** Local checks on the session's held credentials (no I/O). */
+  private checkLocalCredentialExpiry(session: ConnectionSession, nowMs: number): VellumError | null {
+    const apiKey = session.apiKeyRecord;
+    if (apiKey) {
+    if (apiKey.revokedAt) {
         return new VellumError("UNAUTHENTICATED", "API key has been revoked");
       }
       if (apiKey.expiresAt) {
@@ -171,7 +198,9 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     }
     const token = rawToken.replace(/^Bearer\s+/i, "").trim();
     if (!token) throw new VellumError("UNAUTHENTICATED", "Empty end-user access token");
-    const config = this.controlStore.getAuthConfig?.(projectId);
+    const config = this.controlStore.getAuthConfigAsync
+      ? await this.controlStore.getAuthConfigAsync(projectId)
+      : this.controlStore.getAuthConfig?.(projectId);
     if (!config?.jwtPublicKeyPem) {
       throw new VellumError(
         "UNAUTHENTICATED",
@@ -267,7 +296,9 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     if (frame.type === "auth") {
       // The control plane may return either a bare project record or a
       // `{ project }` wrapper; accept both defensively and verify the id.
-      const lookup = this.controlStore.getProject(frame.projectId);
+      const lookup = this.controlStore.getProjectAsync
+        ? await this.controlStore.getProjectAsync(frame.projectId)
+        : this.controlStore.getProject(frame.projectId);
       const project = lookup && "project" in lookup ? lookup.project : lookup;
       if (!project || project.id !== frame.projectId) {
         throw new VellumError("NOT_FOUND", "Project not found");
@@ -280,11 +311,11 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       };
       if (
         storeForApiKey.apiKeysByPrefix.size === 0 &&
-        this.controlStore.getApiKeyByPrefix &&
+        (this.controlStore.findApiKeyByPrefix || this.controlStore.getApiKeyByPrefix) &&
         typeof frame.apiKey === "string"
       ) {
         const prefix = frame.apiKey.slice(0, 16);
-        const rec = this.controlStore.getApiKeyByPrefix(prefix);
+        const rec = await this.lookupKeyByPrefix(prefix);
         if (rec) {
           storeForApiKey.apiKeysByPrefix.set(prefix, rec);
         }
@@ -328,7 +359,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       throw new VellumError("UNAUTHENTICATED", "WebSocket connection must authenticate with an 'auth' frame first");
     }
 
-    const expiryErr = this.checkSessionCredentialExpiry(session);
+    const expiryErr = await this.checkSessionCredentialExpiry(session);
     if (expiryErr) {
       session.sendFrame({
         type: "error",
@@ -379,7 +410,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     const projectId = session.projectId!;
     const apiKeyRecord = session.apiKeyRecord!;
     const authContext = session.authContext;
-    const ruleset = this.controlStore.getActiveRuleset(projectId) ?? null;
+    const ruleset = await this.rulesetFor(projectId);
     const includes = frame.resolveIncludes ? (frame.include ?? frame.query?.include ?? []) : [];
     validateRealtimeIncludes(includes);
 
@@ -445,7 +476,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       const initialDocs: DocumentRecord[] = [];
       if (targetPath) {
         const doc = await tx.getDocument(targetPath, false);
-        authorizeOperation({ apiKeyRecord, rulesetRecord: this.controlStore.getActiveRuleset(projectId) ?? null,
+        authorizeOperation({ apiKeyRecord, rulesetRecord: ruleset,
           operation: "get", path: targetPath, authContext, resourceData: doc?.data ?? null });
         if (doc) {
           subRecord.matchedPaths.add(doc.path);
@@ -457,7 +488,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           .filter((d: DocumentRecord) => {
             if (!documentMatchesQuery(d, normalizedQuery)) return false;
             try {
-              authorizeOperation({ apiKeyRecord, rulesetRecord: this.controlStore.getActiveRuleset(projectId) ?? null,
+              authorizeOperation({ apiKeyRecord, rulesetRecord: ruleset,
                 operation: "get", path: d.path, authContext, resourceData: d.data });
               return true;
             } catch { return false; }
@@ -480,7 +511,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       const references = includes.length ? await fetchRealtimeReferences(projectId, initialDocs, includes, this.dataStore, tx) : new Map<string, DocumentRecord>();
       const payloads = await Promise.all(initialDocs.map(async (doc) => {
         const payload = this.toDocPayload(doc);
-        const enriched = includes.length ? await enrichRealtimeDocument(payload, includes, references, apiKeyRecord, authContext, this.controlStore.getActiveRuleset(projectId) ?? null) : payload;
+        const enriched = includes.length ? await enrichRealtimeDocument(payload, includes, references, apiKeyRecord, authContext, ruleset) : payload;
         return this.projectSubscriptionDocument(enriched, subRecord);
       }));
       if (session.closed || session.subscriptions.get(frame.subId) !== subRecord) return;
@@ -540,7 +571,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
             break;
           }
           const documents = await this.prepareIncludedEvent(projectId, ev, [{ session, subRecord }]);
-          this.deliverEventToSubscription(session, subRecord, ev, { duringReplay: true, ruleset: this.controlStore.getActiveRuleset(projectId) ?? ruleset, document: documents.get(subRecord) });
+          this.deliverEventToSubscription(session, subRecord, ev, { duringReplay: true, ruleset: (await this.rulesetFor(projectId)) ?? ruleset, document: documents.get(subRecord) });
           lastSeq = seq;
           delivered += 1;
         }
@@ -579,7 +610,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     for (const ev of deferred) {
       if (session.closed || session.subscriptions.get(subRecord.subId) !== subRecord) break;
       const documents = await this.prepareIncludedEvent(projectId, ev, [{ session, subRecord }]);
-      this.deliverEventToSubscription(session, subRecord, ev, { ruleset: this.controlStore.getActiveRuleset(projectId) ?? ruleset, document: documents.get(subRecord) });
+      this.deliverEventToSubscription(session, subRecord, ev, { ruleset: (await this.rulesetFor(projectId)) ?? ruleset, document: documents.get(subRecord) });
     }
   }
 
@@ -642,13 +673,14 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     const recipients = [...tenantSessions].flatMap((session) => [...session.subscriptions.values()].map((subRecord) => ({ session, subRecord })));
     const documents = await this.prepareIncludedEvent(projectId, ev, recipients);
     const nowMs = Date.now();
-    const ruleset = this.controlStore.getActiveRuleset(projectId) ?? null;
+    const ruleset = await this.rulesetFor(projectId);
+    const keyMemo = new Map<string, Promise<ApiKeyRecord | null | undefined>>();
 
     for (const session of [...tenantSessions]) {
       if (!session.authenticated || session.closed || session.projectId !== projectId) {
         continue;
       }
-      const expiryErr = this.checkSessionCredentialExpiry(session, nowMs);
+      const expiryErr = await this.checkSessionCredentialExpiry(session, nowMs, keyMemo);
       if (expiryErr) {
         session.sendFrame({
           type: "error",
@@ -679,7 +711,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     const result = new Map<SubscriptionRecord, ReturnType<RealtimeGatewayHub["toDocPayload"]>>();
     const parent = this.eventPayload(ev);
     const pseudo = { ...parent, projectId, pathDepth: ev.path.split("/").length, sizeBytes: 0, deletedAt: null };
-    const interested = recipients.filter(({ session, subRecord }) => !session.closed && !this.checkSessionCredentialExpiry(session)
+    const interested = recipients.filter(({ session, subRecord }) => !session.closed && !this.checkLocalCredentialExpiry(session, Date.now())
       && subRecord.includes?.length && !subRecord.seenSeqIds.has(ev.seqId)
       && (subRecord.path === ev.path || (subRecord.normalizedQuery?.collectionPath === ev.collectionPath
         && documentMatchesQuery(pseudo, subRecord.normalizedQuery))));
@@ -690,7 +722,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       for (const { session, subRecord } of interested) {
         if (session.closed || session.subscriptions.get(subRecord.subId) !== subRecord || !session.apiKeyRecord) continue;
         result.set(subRecord, await enrichRealtimeDocument(parent, subRecord.includes!, references,
-          session.apiKeyRecord, session.authContext, this.controlStore.getActiveRuleset(projectId) ?? null));
+          session.apiKeyRecord, session.authContext, (await this.rulesetFor(projectId))));
       }
     } catch (error) {
       for (const { session, subRecord } of interested) {

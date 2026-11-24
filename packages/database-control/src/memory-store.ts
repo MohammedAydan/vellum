@@ -388,6 +388,14 @@ export class ControlPlaneStore implements ControlPlaneRepository {
     return Array.from(this.controlRefreshSessions.values(), cloneRefreshSession);
   }
 
+  async findUserById(userId: string): Promise<UserRecord | null> {
+    return this.users.get(userId) ?? null;
+  }
+
+  async findProjectById(projectId: string): Promise<ProjectRecord | null> {
+    return this.projects.get(projectId) ?? null;
+  }
+
   isPlatformSuperAdmin(userId: string): boolean {
     return this.users.get(userId)?.isPlatformSuperAdmin === true;
   }

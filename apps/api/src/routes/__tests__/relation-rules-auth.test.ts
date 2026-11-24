@@ -84,46 +84,39 @@ describe("@vellum/api - relation-rules session auth", () => {
   });
 });
 
-describe("@vellum/api - assertProjectAccess cold mirror fallback", () => {
+describe("@vellum/api - assertProjectAccess reads the database", () => {
   const claims = { uid: "user-1", role: "customer" } as unknown as SessionClaims;
   const project = { id: "proj-1", organizationId: "org-1" } as ProjectRecord;
 
-  function stubStore(hydrateOnRefresh: boolean) {
-    let refreshCalls = 0;
+  function stubStore(inDatabase: boolean) {
+    let lookups = 0;
     const store = {
+      // A stale mirror must never answer: it is empty on purpose.
       projects: new Map<string, ProjectRecord>(),
       organizationMembers: new Map([
         ["org-1:user-1", { organizationId: "org-1", userId: "user-1", role: "owner", joinedAt: "" }],
       ]),
-      refresh: async () => {
-        refreshCalls += 1;
-        if (hydrateOnRefresh) store.projects.set(project.id, project);
+      findProjectById: async (id: string) => {
+        lookups += 1;
+        return inDatabase && id === project.id ? project : null;
       },
-      get refreshCalls() {
-        return refreshCalls;
+      get lookups() {
+        return lookups;
       },
     };
-    return store as unknown as ControlPlaneRepository & { refreshCalls: number };
+    return store as unknown as ControlPlaneRepository & { lookups: number };
   }
 
-  it("refreshes the mirror once before declaring a project missing", async () => {
+  it("resolves a project that exists only in the database", async () => {
     const store = stubStore(true);
     const resolved = await assertProjectAccess(store, claims, project.id);
     expect(resolved.id).toBe(project.id);
-    expect(store.refreshCalls).toBe(1);
+    expect(store.lookups).toBe(1);
   });
 
-  it("still throws NOT_FOUND when the project is absent after refresh", async () => {
+  it("throws NOT_FOUND when the database has no such project", async () => {
     const store = stubStore(false);
     await expect(assertProjectAccess(store, claims, "missing")).rejects.toThrowError(/not found/i);
-    expect(store.refreshCalls).toBe(1);
-  });
-
-  it("does not refresh when the project is already mirrored", async () => {
-    const store = stubStore(true);
-    store.projects.set(project.id, project);
-    const resolved = await assertProjectAccess(store, claims, project.id);
-    expect(resolved.id).toBe(project.id);
-    expect(store.refreshCalls).toBe(0);
+    expect(store.lookups).toBe(1);
   });
 });

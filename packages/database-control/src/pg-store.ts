@@ -1099,8 +1099,36 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
 
   // ------------------------------------------ platform super-admin privileges
 
-  public isPlatformSuperAdmin(userId: string): boolean {
-    return this.users.get(userId)?.isPlatformSuperAdmin === true;
+  /** Authoritative: a demotion or suspension applies on the next request on every instance. */
+  public async isPlatformSuperAdmin(userId: string): Promise<boolean> {
+    const user = await this.findUserById(userId);
+    return user !== null && user.isPlatformSuperAdmin === true && !user.isSuspended;
+  }
+
+  public async findUserById(userId: string): Promise<UserRecord | null> {
+    if (!PgControlPlaneStore.UUID_RE.test(userId)) return null;
+    const { rows } = await this.pool.query(
+      `SELECT id, email, email_verified AS "emailVerified", name, avatar_url AS "avatarUrl",
+              platform_role AS "platformRole", is_suspended AS "isSuspended",
+              is_platform_super_admin AS "isPlatformSuperAdmin",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM users WHERE id = $1::uuid`,
+      [userId]
+    );
+    const row = rows[0] as UserRecord | undefined;
+    return row ? { ...row, createdAt: iso(row.createdAt), updatedAt: iso(row.updatedAt) } : null;
+  }
+
+  public async findProjectById(projectId: string): Promise<ProjectRecord | null> {
+    if (!PgControlPlaneStore.UUID_RE.test(projectId)) return null;
+    const { rows } = await this.pool.query(
+      `SELECT id, organization_id AS "organizationId", slug, name, status,
+              cluster_id AS "clusterId", created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM projects WHERE id = $1::uuid`,
+      [projectId]
+    );
+    const row = rows[0] as ProjectRecord | undefined;
+    return row ? { ...row, createdAt: iso(row.createdAt), updatedAt: iso(row.updatedAt) } : null;
   }
 
   public async setPlatformSuperAdmin(userId: string, value: boolean): Promise<void> {

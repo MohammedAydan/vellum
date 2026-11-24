@@ -456,6 +456,10 @@ export interface ControlPlaneRepository {
 
   /** Platform Super Admin privileges are opt-in and never set from signup payloads. */
   isPlatformSuperAdmin(userId: string): MaybePromise<boolean>;
+  /** Authoritative PostgreSQL reads (no mirror). `null` when absent. */
+  findUserById(userId: string): Promise<UserRecord | null>;
+  /** Raw project row regardless of status (callers decide how to treat suspended/deleted). */
+  findProjectById(projectId: string): Promise<ProjectRecord | null>;
   setPlatformSuperAdmin(userId: string, value: boolean): MaybePromise<void>;
 
   createOrganization(input: CreateOrganizationInput): MaybePromise<OrganizationRecord>;

@@ -231,7 +231,7 @@ async function loadRefreshUser(
   userId: string,
   requireSuperAdmin: boolean
 ): Promise<UserRecord> {
-  const user = controlStore.users.get(userId);
+  const user = await controlStore.findUserById(userId);
   if (!user || user.isSuspended) {
     throw new VellumError("UNAUTHENTICATED", "User is disabled or no longer exists");
   }
