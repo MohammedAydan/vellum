@@ -36,6 +36,10 @@ export default function Page() {
       <Section id="changes" title="Changes to this policy">
         <P>We will update the date above when this policy changes. Continued use after a change means you accept the updated policy.</P>
       </Section>
+
+      <Section id="contact" title="Contact">
+        <P>Questions about this page or about your data: email <a href="mailto:mohammedaydan12@gmail.com">mohammedaydan12@gmail.com</a>.</P>
+      </Section>
     </Doc>
   );
 }
