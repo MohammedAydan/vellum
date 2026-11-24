@@ -362,6 +362,10 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     "/v1/projects/:projectId/auth/mfa/verify",
     authRateLimit({ ...MFA_LIMIT, scope: "mfa-verify", keyFrom: mfaKey })
   );
+  app.use(
+    "/v1/projects/:projectId/auth/mfa/disable",
+    authRateLimit({ ...MFA_LIMIT, scope: "mfa-disable", keyFrom: mfaKey })
+  );
 
   // 1.1 TOTP MFA — must be mounted BEFORE the `/v1/auth/**` Better Auth wildcard.
   app.route(

@@ -522,6 +522,12 @@ class VellumAuth implements VellumAuthPort {
         body: <String, Object?>{'code': code});
   }
 
+  @override
+  Future<void> disableMfa({required String code}) async {
+    await client.request('POST', '/auth/mfa/disable',
+        body: <String, Object?>{'code': code});
+  }
+
   /// Sends a password-reset email.
   ///
   /// [email] is positional to keep the public surface identical across SDKs.

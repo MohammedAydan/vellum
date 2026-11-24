@@ -1173,6 +1173,10 @@ export class VellumClient implements VellumClientInterface {
       : this.auth.confirmTotpMfa(codeOrInput);
   }
 
+  public disableMfa(code: string): Promise<void> {
+    return this.auth.disableMfa(code);
+  }
+
   public sendPasswordResetEmail(input: SendPasswordResetEmailInput): Promise<ActionTokenResult>;
   public sendPasswordResetEmail(email: string): Promise<ActionTokenResult>;
   public sendPasswordResetEmail(

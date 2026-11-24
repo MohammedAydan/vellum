@@ -577,6 +577,10 @@ export class VellumAuthClient {
     return parseSuccessResponse(await this.request("POST", "/auth/mfa/verify", input));
   }
 
+  public async disableMfa(code: string): Promise<void> {
+    await this.request("POST", "/auth/mfa/disable", { code });
+  }
+
   /* --------------------------------------------------------------------- */
   /* Profile / password / email                                             */
   /* --------------------------------------------------------------------- */

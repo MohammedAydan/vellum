@@ -119,6 +119,33 @@ describe("browser OAuth helpers", () => {
     expect(calls[0]?.body).toEqual({ idToken: "id.token.value", nonce: "n1" });
   });
 
+  it("oauth with MFA: no session until the second factor (TOTP or recovery code) is verified", async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const customFetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url);
+      calls.push({ url: u, body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown> });
+      if (u.endsWith("/oauth/exchange")) {
+        return new Response(JSON.stringify({ mfaRequired: true, mfaTicket: "t1", factors: ["totp"], expiresAt: "2099-01-01T00:00:00.000Z" }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify(SESSION), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    const client = createClient({
+      endpoint: "https://api.example.com", projectId: "prj_1", apiKey: "pk_test_abc",
+      customFetch, authStorage: new MemoryAuthStorage(), autoRefresh: false,
+    });
+    await client.signInWithRedirect("google");
+    const state = new URL(String(loc.assign.mock.calls[0]?.[0])).searchParams.get("state") ?? "";
+    loc.href = `https://app.example.com/login?vellum_code=abc&state=${state}`;
+    const result = await client.getRedirectResult();
+    expect(result).toMatchObject({ mfaRequired: true, mfaTicket: "t1" });
+    expect(await client.getIdToken()).toBeNull();
+    const user = await client.verifyMfaChallenge("t1", "ABCD-EFGH", "recovery_code");
+    expect(user.id).toBe("usr_1");
+    const challenge = calls.find((c) => c.url.endsWith("/auth/mfa/challenge"));
+    expect(challenge?.body).toEqual({ mfaTicket: "t1", code: "ABCD-EFGH", factorType: "recovery_code" });
+    expect(await client.getIdToken()).toBe(TOKEN);
+  });
+
   it("completeOAuthPopup does nothing on a page without a result", () => {
     expect(completeOAuthPopup("https://app.example.com/login")).toBe(false);
   });
