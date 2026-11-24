@@ -388,6 +388,14 @@ export class ControlPlaneStore implements ControlPlaneRepository {
     return Array.from(this.controlRefreshSessions.values(), cloneRefreshSession);
   }
 
+  async findUserById(userId: string): Promise<UserRecord | null> {
+    return this.users.get(userId) ?? null;
+  }
+
+  async findProjectById(projectId: string): Promise<ProjectRecord | null> {
+    return this.projects.get(projectId) ?? null;
+  }
+
   isPlatformSuperAdmin(userId: string): boolean {
     return this.users.get(userId)?.isPlatformSuperAdmin === true;
   }
@@ -469,6 +477,26 @@ export class ControlPlaneStore implements ControlPlaneRepository {
     });
 
     return { project };
+  }
+
+  async getProjectAsync(projectId: string): Promise<ProjectResult> {
+    return this.getProject(projectId);
+  }
+
+  async getActiveRulesetAsync(projectId: string): Promise<SecurityRulesetRecord | null> {
+    return this.getActiveRuleset(projectId);
+  }
+
+  async getAuthConfigAsync(projectId: string): Promise<ProjectAuthConfig | null> {
+    return this.getAuthConfig(projectId);
+  }
+
+  async getRelationRulesVersionAsync(projectId: string): Promise<number> {
+    return this.getRelationRulesVersion(projectId);
+  }
+
+  async getRelationRulesAsync(projectId: string): Promise<ProjectRelationRuleRecord[]> {
+    return this.getRelationRules(projectId);
   }
 
   getProject(projectId: string): ProjectResult {

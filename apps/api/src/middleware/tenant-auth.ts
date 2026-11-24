@@ -80,7 +80,7 @@ export async function resolveEndUserAuth(
     throw new VellumError("UNAUTHENTICATED", "Cannot resolve end-user token without project context");
   }
 
-  let config = platform.controlStore.getAuthConfig(projectId);
+  let config = await platform.controlStore.getAuthConfigAsync(projectId);
   if (!config) {
     // Local mirror of `ensureAuthConfig` (routes/auth-shared.ts) to avoid a
     // circular import. The private key is encrypted at rest with the master key.

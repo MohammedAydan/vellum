@@ -103,7 +103,7 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
   // ------------------------------------------------------------------ DIRECTORY
 
   routes.get("/users", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await authorize(c, tenant, false);
     const query = parseOrThrow(AdminListUsersQuerySchema, c.req.query());
     const options: ListAuthUsersOptions = {
@@ -119,7 +119,7 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
   });
 
   routes.post("/users", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await authorize(c, tenant, true);
     const body = parseOrThrow(AdminCreateUserRequestSchema, await c.req.json());
     if (body.email) {
@@ -146,7 +146,7 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
   });
 
   routes.get("/users/:uid", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await authorize(c, tenant, false);
     const uid = c.req.param("uid");
     const user = await storage.getAuthUserById(tenant.ctx, uid);
@@ -175,7 +175,7 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
   });
 
   routes.patch("/users/:uid", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await authorize(c, tenant, true);
     const uid = c.req.param("uid");
     const body = parseOrThrow(AdminPatchUserRequestSchema, await c.req.json());
@@ -199,7 +199,7 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
   });
 
   routes.delete("/users/:uid", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await authorize(c, tenant, true);
     const deleted = await storage.deleteAuthUser(tenant.ctx, c.req.param("uid"));
     if (!deleted) throw new VellumError("NOT_FOUND", "End-user not found");
@@ -207,7 +207,7 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
   });
 
   routes.put("/users/:uid/claims", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await authorize(c, tenant, true);
     const body = parseOrThrow(AdminSetClaimsRequestSchema, await c.req.json());
     if (Buffer.byteLength(JSON.stringify(body.claims), "utf8") > 1000) {
@@ -224,7 +224,7 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
   });
 
   routes.post("/users/:uid/revoke", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await authorize(c, tenant, true);
     const body = parseOrThrow(AdminRevokeSessionsRequestSchema, await optionalJsonBody(c));
     const revoked = await storage.revokeAllUserSessions(
@@ -236,7 +236,7 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
   });
 
   routes.post("/users:import", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await authorize(c, tenant, true);
     const body = parseOrThrow(AdminImportUsersRequestSchema, await c.req.json());
     const created = [];
@@ -263,14 +263,14 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
   // --------------------------------------------------------------------- CONFIG
 
   routes.get("/config", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await authorize(c, tenant, false);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     return c.json(publicAuthConfig(config));
   });
 
   routes.patch("/config", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await authorize(c, tenant, true);
     const body = parseOrThrow(AuthConfigPatchSchema, await c.req.json());
     const existing = await ensureAuthConfig(platform, tenant.projectId);

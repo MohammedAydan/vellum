@@ -65,6 +65,11 @@ export type ProjectLookupResult =
 export interface ControlStoreForRealtime {
   getProject(projectId: string): ProjectLookupResult;
   getApiKeyByPrefix?(prefix: string): ApiKeyRecord | null;
+  /** Authoritative PostgreSQL lookups; preferred over the sync mirror methods. */
+  findApiKeyByPrefix?(prefix: string): Promise<ApiKeyRecord | null>;
+  getProjectAsync?(projectId: string): Promise<ProjectLookupResult>;
+  getAuthConfigAsync?(projectId: string): Promise<{ jwtPublicKeyPem: string } | null>;
+  getActiveRulesetAsync?(projectId: string): Promise<SecurityRulesetRecord | null>;
   /** Ed25519 public key for the project's end-user access tokens. */
   getAuthConfig?(projectId: string): { jwtPublicKeyPem: string } | null;
   getActiveRuleset(projectId: string): SecurityRulesetRecord | null;

@@ -25,7 +25,7 @@ import {
 import type { ProjectAuthConfig } from "../config-types.js";
 
 export interface AuthCryptoDeps {
-  getConfig(projectId: string): ProjectAuthConfig | null;
+  getConfig(projectId: string): ProjectAuthConfig | null | Promise<ProjectAuthConfig | null>;
   masterKey?: string | undefined;
   issuer?: string | undefined;
 }
@@ -77,8 +77,8 @@ export function createAuthSessionService(
   /** Bounded cache for decrypted Ed25519 signing keys per encrypted key blob. */
   const privateKeyCache = new Map<string, crypto.KeyObject>();
 
-  function configFor(ctx: TenantContext): ProjectAuthConfig {
-    const config = deps.getConfig(ctx.projectId);
+  async function configFor(ctx: TenantContext): Promise<ProjectAuthConfig> {
+    const config = await deps.getConfig(ctx.projectId);
     if (!config) {
       throw new VellumError("SERVICE_UNAVAILABLE", "End-user auth is not configured for this project");
     }
@@ -127,7 +127,7 @@ export function createAuthSessionService(
   }
 
   async function issue(input: IssueSessionInput): Promise<IssuedSession> {
-    const config = configFor(input.ctx);
+    const config = await configFor(input.ctx);
     const rawRefreshToken = newRefreshToken();
     const refreshHash = sha256(rawRefreshToken);
     const refreshDays =
@@ -220,7 +220,7 @@ export function createAuthSessionService(
     if (!user || user.isDisabled) {
       throw new VellumError("UNAUTHENTICATED", "User is disabled or no longer exists");
     }
-    const config = configFor(ctx);
+    const config = await configFor(ctx);
     const newToken = newRefreshToken();
     const newHash = sha256(newToken);
     const refreshDays =

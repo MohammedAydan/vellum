@@ -12,3 +12,18 @@ import type { ProjectRecord, ProjectResult } from "@vellum/database-control";
 export function unwrapProject(result: ProjectResult | ProjectRecord): ProjectRecord {
   return "project" in result ? result.project : result;
 }
+
+type AsyncCapable = {
+  getProject(id: string): ProjectResult | ProjectRecord;
+  getProjectAsync?: (id: string) => Promise<ProjectResult | ProjectRecord>;
+};
+
+/**
+ * Authoritative project read: PostgreSQL on every call when the store supports
+ * it (production), the in-memory store otherwise (tests, local dev).
+ */
+export async function loadProject(store: AsyncCapable, projectId: string): Promise<ProjectRecord> {
+  return unwrapProject(
+    store.getProjectAsync ? await store.getProjectAsync(projectId) : store.getProject(projectId)
+  );
+}

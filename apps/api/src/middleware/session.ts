@@ -255,14 +255,7 @@ export async function assertProjectAccess(
   projectId: string,
   options: OrgAccessOptions = {}
 ): Promise<ProjectRecord> {
-  let project = controlStore.projects.get(projectId);
-  if (!project && typeof controlStore.refresh === "function") {
-    // The projects map is a process-local mirror; on a cold serverless
-    // instance it may not be hydrated yet. Refresh once before declaring
-    // the project missing.
-    await controlStore.refresh();
-    project = controlStore.projects.get(projectId);
-  }
+  const project = await controlStore.findProjectById(projectId);
   if (!project) {
     throw new VellumError("NOT_FOUND", `Project '${projectId}' not found`);
   }

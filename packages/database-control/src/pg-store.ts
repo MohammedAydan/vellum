@@ -135,6 +135,29 @@ function safeErrorReason(err: unknown): string {
  * Reconciles a `readonly Map` in place without clearing existing entries first,
  * so concurrent synchronous readers never see an empty map mid-refresh.
  */
+const AUTH_CONFIG_COLUMNS = `id, project_id AS "projectId",
+                auth_service_suspended AS "authServiceSuspended",
+                suspension_reason AS "suspensionReason",
+                max_users_quota AS "maxUsersQuota",
+                max_signups_per_hour AS "maxSignupsPerHour",
+                enable_email_password AS "enableEmailPassword",
+                require_email_verification AS "requireEmailVerification",
+                enable_anonymous_auth AS "enableAnonymousAuth",
+                enable_totp_mfa AS "enableTotpMfa",
+                enable_user_projection AS "enableUserProjection",
+                projection_collection_path AS "projectionCollectionPath",
+                password_min_length AS "passwordMinLength",
+                password_require_uppercase AS "passwordRequireUppercase",
+                password_require_number AS "passwordRequireNumber",
+                password_require_symbol AS "passwordRequireSymbol",
+                access_token_ttl_seconds AS "accessTokenTtlSeconds",
+                refresh_token_ttl_days AS "refreshTokenTtlDays",
+                jwt_key_id AS "jwtKeyId", jwt_public_key_pem AS "jwtPublicKeyPem",
+                jwt_private_key_encrypted AS "jwtPrivateKeyEncrypted",
+                oauth_providers AS "oauthProviders",
+                custom_smtp_config_encrypted AS "customSmtpConfigEncrypted",
+                created_at AS "createdAt", updated_at AS "updatedAt"`;
+
 function reconcileMapInPlace<K, V>(target: Map<K, V>, next: Map<K, V>): void {
   for (const [key, value] of next) {
     target.set(key, value);
@@ -338,28 +361,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
            FROM api_keys`
       );
       const authConfigs = await client.query(
-        `SELECT id, project_id AS "projectId",
-                auth_service_suspended AS "authServiceSuspended",
-                suspension_reason AS "suspensionReason",
-                max_users_quota AS "maxUsersQuota",
-                max_signups_per_hour AS "maxSignupsPerHour",
-                enable_email_password AS "enableEmailPassword",
-                require_email_verification AS "requireEmailVerification",
-                enable_anonymous_auth AS "enableAnonymousAuth",
-                enable_totp_mfa AS "enableTotpMfa",
-                enable_user_projection AS "enableUserProjection",
-                projection_collection_path AS "projectionCollectionPath",
-                password_min_length AS "passwordMinLength",
-                password_require_uppercase AS "passwordRequireUppercase",
-                password_require_number AS "passwordRequireNumber",
-                password_require_symbol AS "passwordRequireSymbol",
-                access_token_ttl_seconds AS "accessTokenTtlSeconds",
-                refresh_token_ttl_days AS "refreshTokenTtlDays",
-                jwt_key_id AS "jwtKeyId", jwt_public_key_pem AS "jwtPublicKeyPem",
-                jwt_private_key_encrypted AS "jwtPrivateKeyEncrypted",
-                oauth_providers AS "oauthProviders",
-                custom_smtp_config_encrypted AS "customSmtpConfigEncrypted",
-                created_at AS "createdAt", updated_at AS "updatedAt"
+        `SELECT ${AUTH_CONFIG_COLUMNS}
            FROM project_auth_configs`
       );
       const globalSettings = await client.query(
@@ -633,6 +635,77 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
   }
 
   // ------------------------------------------------------------- sync reads
+
+  private static readonly UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  /** Authoritative project read from PostgreSQL (no mirror, no cache). */
+  public async getProjectAsync(projectId: string): Promise<ProjectResult> {
+    if (!PgControlPlaneStore.UUID_RE.test(projectId)) {
+      throw new VellumError("NOT_FOUND", `Project '${projectId}' not found`);
+    }
+    const { rows } = await this.pool.query(
+      `SELECT id, organization_id AS "organizationId", slug, name, status,
+              cluster_id AS "clusterId", created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM projects WHERE id = $1::uuid`,
+      [projectId]
+    );
+    const row = rows[0] as ProjectRecord | undefined;
+    if (!row || row.status === "deleted") {
+      throw new VellumError("NOT_FOUND", `Project '${projectId}' not found`);
+    }
+    if (row.status === "suspended") {
+      throw new VellumError("PERMISSION_DENIED", `Project '${projectId}' is currently suspended`);
+    }
+    return { project: { ...row, createdAt: iso(row.createdAt), updatedAt: iso(row.updatedAt) } };
+  }
+
+  /** Authoritative active-ruleset read (unique partial index idx_active_ruleset_per_project). */
+  public async getActiveRulesetAsync(projectId: string): Promise<SecurityRulesetRecord | null> {
+    if (!PgControlPlaneStore.UUID_RE.test(projectId)) return null;
+    const { rows } = await this.pool.query(
+      `SELECT id, project_id AS "projectId", version, rules_ast AS "rulesAst",
+              is_active AS "isActive", created_by AS "createdBy", created_at AS "createdAt"
+         FROM security_rulesets WHERE project_id = $1::uuid AND is_active = true LIMIT 1`,
+      [projectId]
+    );
+    const row = rows[0] as SecurityRulesetRecord | undefined;
+    return row ? { ...row, rulesAst: asObject(row.rulesAst), createdAt: iso(row.createdAt) } : null;
+  }
+
+  public async getAuthConfigAsync(projectId: string): Promise<ProjectAuthConfig | null> {
+    if (!PgControlPlaneStore.UUID_RE.test(projectId)) return null;
+    const { rows } = await this.pool.query(
+      `SELECT ${AUTH_CONFIG_COLUMNS} FROM project_auth_configs WHERE project_id = $1::uuid`,
+      [projectId]
+    );
+    return rows[0] ? mapAuthConfigRow(rows[0] as Record<string, unknown>) : null;
+  }
+
+  public async getRelationRulesVersionAsync(projectId: string): Promise<number> {
+    if (!PgControlPlaneStore.UUID_RE.test(projectId)) return 0;
+    const { rows } = await this.pool.query(
+      `SELECT version FROM project_relation_rules_meta WHERE project_id = $1::uuid`,
+      [projectId]
+    );
+    return rows[0] ? Number((rows[0] as { version: number }).version) : 0;
+  }
+
+  public async getRelationRulesAsync(projectId: string): Promise<ProjectRelationRuleRecord[]> {
+    if (!PgControlPlaneStore.UUID_RE.test(projectId)) return [];
+    const { rows } = await this.pool.query(
+      `SELECT id, project_id AS "projectId", collection, field,
+              target_collection AS "targetCollection", on_delete AS "onDelete", version,
+              created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM project_relation_rules WHERE project_id = $1::uuid
+        ORDER BY collection ASC, field ASC`,
+      [projectId]
+    );
+    return (rows as ProjectRelationRuleRecord[]).map((r) => ({
+      ...r,
+      createdAt: iso(r.createdAt),
+      updatedAt: iso(r.updatedAt),
+    }));
+  }
 
   public getProject(projectId: string): ProjectResult {
     const project = this.projects.get(projectId);
@@ -1026,8 +1099,36 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
 
   // ------------------------------------------ platform super-admin privileges
 
-  public isPlatformSuperAdmin(userId: string): boolean {
-    return this.users.get(userId)?.isPlatformSuperAdmin === true;
+  /** Authoritative: a demotion or suspension applies on the next request on every instance. */
+  public async isPlatformSuperAdmin(userId: string): Promise<boolean> {
+    const user = await this.findUserById(userId);
+    return user !== null && user.isPlatformSuperAdmin === true && !user.isSuspended;
+  }
+
+  public async findUserById(userId: string): Promise<UserRecord | null> {
+    if (!PgControlPlaneStore.UUID_RE.test(userId)) return null;
+    const { rows } = await this.pool.query(
+      `SELECT id, email, email_verified AS "emailVerified", name, avatar_url AS "avatarUrl",
+              platform_role AS "platformRole", is_suspended AS "isSuspended",
+              is_platform_super_admin AS "isPlatformSuperAdmin",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM users WHERE id = $1::uuid`,
+      [userId]
+    );
+    const row = rows[0] as UserRecord | undefined;
+    return row ? { ...row, createdAt: iso(row.createdAt), updatedAt: iso(row.updatedAt) } : null;
+  }
+
+  public async findProjectById(projectId: string): Promise<ProjectRecord | null> {
+    if (!PgControlPlaneStore.UUID_RE.test(projectId)) return null;
+    const { rows } = await this.pool.query(
+      `SELECT id, organization_id AS "organizationId", slug, name, status,
+              cluster_id AS "clusterId", created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM projects WHERE id = $1::uuid`,
+      [projectId]
+    );
+    const row = rows[0] as ProjectRecord | undefined;
+    return row ? { ...row, createdAt: iso(row.createdAt), updatedAt: iso(row.updatedAt) } : null;
   }
 
   public async setPlatformSuperAdmin(userId: string, value: boolean): Promise<void> {

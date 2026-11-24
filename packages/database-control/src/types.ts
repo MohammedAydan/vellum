@@ -392,6 +392,8 @@ export interface ControlPlaneRepository {
 
   /** Synchronous project lookup (throws NOT_FOUND / PERMISSION_DENIED). */
   getProject(projectId: string): ProjectResult;
+  /** Authoritative PostgreSQL read (same errors as getProject). */
+  getProjectAsync(projectId: string): Promise<ProjectResult>;
   getApiKey(keyId: string): ApiKeyRecord | undefined;
   getApiKeyByPrefix(prefix: string): ApiKeyRecord | null;
   /**
@@ -410,7 +412,11 @@ export interface ControlPlaneRepository {
   /** Marks a key as used now. Best effort and throttled by the implementation. */
   touchApiKeyLastUsed(keyId: string): Promise<void>;
   getActiveRuleset(projectId: string): SecurityRulesetRecord | null;
+  /** Authoritative PostgreSQL read; no cache. Use on every request path. */
+  getActiveRulesetAsync(projectId: string): Promise<SecurityRulesetRecord | null>;
   getAuthConfig(projectId: string): ProjectAuthConfig | null;
+  /** Authoritative PostgreSQL read; no cache. */
+  getAuthConfigAsync(projectId: string): Promise<ProjectAuthConfig | null>;
   listAuthConfigs(): ProjectAuthConfig[];
   upsertAuthConfig(input: UpsertAuthConfigInput): MaybePromise<ProjectAuthConfig>;
   getPlatformAuthSettings(): PlatformAuthGlobalSettings;
@@ -450,6 +456,10 @@ export interface ControlPlaneRepository {
 
   /** Platform Super Admin privileges are opt-in and never set from signup payloads. */
   isPlatformSuperAdmin(userId: string): MaybePromise<boolean>;
+  /** Authoritative PostgreSQL reads (no mirror). `null` when absent. */
+  findUserById(userId: string): Promise<UserRecord | null>;
+  /** Raw project row regardless of status (callers decide how to treat suspended/deleted). */
+  findProjectById(projectId: string): Promise<ProjectRecord | null>;
   setPlatformSuperAdmin(userId: string, value: boolean): MaybePromise<void>;
 
   createOrganization(input: CreateOrganizationInput): MaybePromise<OrganizationRecord>;
@@ -461,6 +471,8 @@ export interface ControlPlaneRepository {
   getRelationRules(projectId: string): ProjectRelationRuleRecord[];
   /** Current relation-rules version for a project (0 when none was ever written). */
   getRelationRulesVersion(projectId: string): number;
+  getRelationRulesAsync(projectId: string): Promise<ProjectRelationRuleRecord[]>;
+  getRelationRulesVersionAsync(projectId: string): Promise<number>;
   replaceRelationRules(input: ReplaceRelationRulesInput): MaybePromise<RelationRulesSnapshot>;
   listFeatureFlags(): MaybePromise<FeatureFlagRecord[]>;
   setFeatureFlag(input: SetFeatureFlagInput): MaybePromise<FeatureFlagRecord>;

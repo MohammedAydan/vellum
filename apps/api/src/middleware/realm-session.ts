@@ -99,8 +99,8 @@ export function requireSuperAdminSession(
       throw new VellumError("UNAUTHENTICATED", "Invalid session realm");
     }
 
-    const user = platform.controlStore.users.get(claims.uid);
-    if (!user || user.isPlatformSuperAdmin !== true) {
+    const user = await platform.controlStore.findUserById(claims.uid);
+    if (!user || user.isSuspended || user.isPlatformSuperAdmin !== true) {
       throw new VellumError("PERMISSION_DENIED", "Platform Super Admin privileges required");
     }
 

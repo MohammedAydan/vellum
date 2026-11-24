@@ -312,6 +312,21 @@ export class DocumentEngine implements DocumentEnginePort {
     );
   }
 
+  /**
+   * Loads the active ruleset. Stores that can read PostgreSQL directly expose
+   * `getActiveRulesetAsync`; it is preferred so a ruleset change or rollback
+   * takes effect on the very next request on every instance.
+   */
+  private async loadRuleset(projectId: string): Promise<SecurityRulesetRecord | null> {
+    const store = this.controlStore as ControlStoreLike & {
+      getActiveRulesetAsync?: (id: string) => Promise<unknown>;
+    };
+    const record = store.getActiveRulesetAsync
+      ? await store.getActiveRulesetAsync(projectId)
+      : store.getActiveRuleset(projectId);
+    return (record as SecurityRulesetRecord | null) ?? null;
+  }
+
   /** Resolves the owning org id for metering/audit without ever throwing. */
   private resolveOrgId(ctx: EngineContext): string {
     if (typeof ctx.orgId === "string" && ctx.orgId.length > 0) return ctx.orgId;
@@ -545,12 +560,15 @@ export class DocumentEngine implements DocumentEnginePort {
    * rules are read from the control-plane store (`getRelationRules`), which is
    * where the `/v1/projects/:id/relation-rules` management plane persists them.
    */
-  private getProjectRelationRules(ctx: EngineContext): readonly RelationRule[] {
+  private async getProjectRelationRules(ctx: EngineContext): Promise<readonly RelationRule[]> {
     if (ctx.relationRules !== undefined) return ctx.relationRules;
     const store = this.controlStore as ControlStoreLike & {
       getRelationRules?: (projectId: string) => readonly RelationRule[] | null;
+      getRelationRulesAsync?: (projectId: string) => Promise<readonly RelationRule[]>;
     };
-    const rules = store.getRelationRules?.(ctx.projectId);
+    const rules = store.getRelationRulesAsync
+      ? await store.getRelationRulesAsync(ctx.projectId)
+      : store.getRelationRules?.(ctx.projectId);
     if (!Array.isArray(rules)) return [];
     // The control plane persists an omitted targetCollection as SQL NULL. A null
     // must mean "unscoped" (fires for any target collection), exactly like
@@ -711,7 +729,7 @@ export class DocumentEngine implements DocumentEnginePort {
     this.validateEngineContext(ctx);
     await this.enforceRateLimit(ctx);
     const parsed = parseDocumentPath(ctx.path);
-    const ruleset = (this.controlStore.getActiveRuleset(ctx.projectId) as SecurityRulesetRecord | null) ?? null;
+    const ruleset = await this.loadRuleset(ctx.projectId);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
 
@@ -786,7 +804,7 @@ export class DocumentEngine implements DocumentEnginePort {
     if (ctx.transactionToken) throw new VellumError("INVALID_ARGUMENT", "referencedBy does not accept transaction tokens");
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
-    const ruleset = (this.controlStore.getActiveRuleset(ctx.projectId) as SecurityRulesetRecord | null) ?? null;
+    const ruleset = await this.loadRuleset(ctx.projectId);
     const bypassRules = this.resolveBypassRules(ctx);
     const scope = JSON.stringify([ctx.projectId, apiKey.id, authCtx.uid, target, request.collection ?? null, request.field ?? null]);
     return this.dataStore.withTransaction(this.tenantOf(ctx), async (tx) => {
@@ -983,7 +1001,7 @@ export class DocumentEngine implements DocumentEnginePort {
       );
     }
 
-    const ruleset = (this.controlStore.getActiveRuleset(ctx.projectId) as SecurityRulesetRecord | null) ?? null;
+    const ruleset = await this.loadRuleset(ctx.projectId);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
     const txNowMs = Date.now();
@@ -1115,7 +1133,7 @@ export class DocumentEngine implements DocumentEnginePort {
         // evaluator uses index-backed dependent lookups inside THIS tenant
         // transaction. Derived rows are staged in `pendingRows` so they commit
         // atomically with the original mutation. Deterministic: paths ASC.
-        const rulesByCollection = groupRelationRulesByCollection(this.getProjectRelationRules(ctx));
+        const rulesByCollection = groupRelationRulesByCollection(await this.getProjectRelationRules(ctx));
         const cascadeQueue: Array<{ path: string; depth: number }> = [];
         const visitedCascadePaths = new Set<string>();
         let maxCascadeDepth = 0;
@@ -1585,7 +1603,7 @@ export class DocumentEngine implements DocumentEnginePort {
         "startAfter and startAt cannot be used together"
       );
     }
-    const ruleset = (this.controlStore.getActiveRuleset(ctx.projectId) as SecurityRulesetRecord | null) ?? null;
+    const ruleset = await this.loadRuleset(ctx.projectId);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
 
@@ -1784,7 +1802,7 @@ export class DocumentEngine implements DocumentEnginePort {
       throw new VellumError("INVALID_ARGUMENT", "Aggregate request requires at least one metric");
     }
 
-    const ruleset = (this.controlStore.getActiveRuleset(ctx.projectId) as SecurityRulesetRecord | null) ?? null;
+    const ruleset = await this.loadRuleset(ctx.projectId);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
     authorizeOperation({
@@ -1870,7 +1888,7 @@ export class DocumentEngine implements DocumentEnginePort {
     }
     const limit = Math.min(requestedLimit, 5000);
 
-    const ruleset = (this.controlStore.getActiveRuleset(ctx.projectId) as SecurityRulesetRecord | null) ?? null;
+    const ruleset = await this.loadRuleset(ctx.projectId);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
     authorizeOperation({
@@ -1883,7 +1901,7 @@ export class DocumentEngine implements DocumentEnginePort {
     });
 
     // Rule grouping is shared with the cascade evaluator and built ONCE here.
-    const rulesByCollection = groupRelationRulesByCollection(this.getProjectRelationRules(ctx));
+    const rulesByCollection = groupRelationRulesByCollection(await this.getProjectRelationRules(ctx));
     const tenant = { projectId: ctx.projectId };
     const committedOutboxEvents: unknown[] = [];
     let cascadeWrites = 0;
@@ -2122,7 +2140,7 @@ export class DocumentEngine implements DocumentEnginePort {
     }
 
     const parsed = paths.map((path) => parseDocumentPath(path));
-    const ruleset = (this.controlStore.getActiveRuleset(ctx.projectId) as SecurityRulesetRecord | null) ?? null;
+    const ruleset = await this.loadRuleset(ctx.projectId);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
     const bypassRules = this.resolveBypassRules(ctx);
@@ -2283,7 +2301,7 @@ export class DocumentEngine implements DocumentEnginePort {
       );
     }
     const parsed = parseDocumentPath(ctx.path);
-    const ruleset = (this.controlStore.getActiveRuleset(ctx.projectId) as SecurityRulesetRecord | null) ?? null;
+    const ruleset = await this.loadRuleset(ctx.projectId);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
     const nowIso = new Date().toISOString();
@@ -2556,7 +2574,7 @@ export class DocumentEngine implements DocumentEnginePort {
     // Export is a bulk read: it must authenticate AND enforce collection-level
     // `list` rules before any row is materialised (same gate as executeQuery).
     const apiKey = this.resolveApiKey(ctx);
-    const ruleset = (this.controlStore.getActiveRuleset(ctx.projectId) as SecurityRulesetRecord | null) ?? null;
+    const ruleset = await this.loadRuleset(ctx.projectId);
     const authCtx = this.resolveAuthContext(ctx);
     authorizeOperation({
       apiKeyRecord: apiKey,

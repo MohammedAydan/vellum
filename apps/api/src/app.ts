@@ -64,7 +64,7 @@ import type { ThreatDetector } from "@vellum/security";
 import type { UsageMeteringEngine, QuotaGuard } from "@vellum/billing";
 import { listIndexesReconciled, refreshIndexRecord } from "./index-build.js";
 import { createRealtimeSseRoutes } from "./routes/realtime-sse.js";
-import { unwrapProject } from "./project-lookup.js";
+import { loadProject } from "./project-lookup.js";
 import { attachFortressMiddleware } from "./middleware/fortress.js";
 import { createFortressRoutes } from "./routes/fortress.js";
 
@@ -144,9 +144,9 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     corsOrigins: platform.corsOrigins ?? [],
     isProd: process.env["NODE_ENV"] === "production",
     controlStore: platform.controlStore,
-    getOrgIdForProject: (projectId) => {
-      const orgId = platform.controlStore.projects.get(projectId)?.organizationId ?? null;
-      return Promise.resolve(orgId);
+    getOrgIdForProject: async (projectId) => {
+      const project = await platform.controlStore.findProjectById(projectId);
+      return project?.organizationId ?? null;
     },
   });
 
@@ -432,7 +432,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
 
   // 5. Document Plane Helper
   async function authenticateRequest(c: Context, projectId: string) {
-    const project = unwrapProject(platform.controlStore.getProject(projectId));
+    const project = await loadProject(platform.controlStore, projectId);
     if (project.status.toLowerCase() === "suspended") {
       throw new VellumError("PERMISSION_DENIED", `Project '${projectId}' has been suspended by platform administration`);
     }

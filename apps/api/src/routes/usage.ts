@@ -27,7 +27,7 @@ import {
   assertProjectAccess,
   requireSession,
 } from "../middleware/session.js";
-import { unwrapProject } from "../project-lookup.js";
+import { loadProject } from "../project-lookup.js";
 
 // --------------------------------------------------------------------- types
 
@@ -701,7 +701,7 @@ export function createUsageRoutes(
     requireSession(sessionService, READ_ROLES),
     async (c) => {
       const projectId = c.req.param("projectId");
-      const project = unwrapProject(controlStore.getProject(projectId));
+      const project = await loadProject(controlStore, projectId);
       await assertProjectAccess(controlStore, c.get("session"), projectId);
 
       const url = new URL(c.req.url);
