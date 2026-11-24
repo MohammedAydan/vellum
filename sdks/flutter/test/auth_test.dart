@@ -44,6 +44,7 @@ Map<String, dynamic> _session(String token, {String refreshToken = 'refresh_1'})
     };
 
 void main() {
+  defaultStorageHookTests();
   group('VellumAuth state', () {
     test('sign-up emits a user and sets currentUser', () async {
       final client = VellumClient(
@@ -343,6 +344,38 @@ void main() {
         defaultHttpTransport('GET', urlFor('/error'), <String, String>{}, null),
         throwsA(isA<VellumException>().having((error) => error.code, 'code', equals('INVALID_ARGUMENT'))),
       );
+    });
+  });
+}
+
+void defaultStorageHookTests() {
+  group('VellumDefaults.authStorageFactory', () {
+    tearDown(() => VellumDefaults.authStorageFactory = null);
+
+    test('is used when no storage is passed', () {
+      final custom = InMemoryAuthTokenStorage();
+      VellumDefaults.authStorageFactory = () => custom;
+      final client = VellumClient(
+          baseUrl: 'http://localhost:8080/v1/projects/p',
+          projectId: 'p',
+          apiKey: 'k');
+      expect(identical(client.authTokenStorage, custom), isTrue);
+    });
+
+    test('an explicit storage wins and a throwing factory falls back', () {
+      final explicit = InMemoryAuthTokenStorage();
+      VellumDefaults.authStorageFactory = () => throw StateError('boom');
+      final fallback = VellumClient(
+          baseUrl: 'http://localhost:8080/v1/projects/p',
+          projectId: 'p',
+          apiKey: 'k');
+      expect(fallback.authTokenStorage, isA<InMemoryAuthTokenStorage>());
+      final withExplicit = VellumClient(
+          baseUrl: 'http://localhost:8080/v1/projects/p',
+          projectId: 'p',
+          apiKey: 'k',
+          authStorage: explicit);
+      expect(identical(withExplicit.authTokenStorage, explicit), isTrue);
     });
   });
 }

@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_compat_app/main.dart';
 import 'package:vellum_flutter/vellum_flutter.dart';
+import 'package:vellum_flutter_secure_storage/vellum_flutter_secure_storage.dart';
 
 VellumClient _client(Map<String, Map<String, Object?>> store) {
   return VellumClient(
@@ -27,6 +28,16 @@ VellumClient _client(Map<String, Map<String, Object?>> store) {
 }
 
 void main() {
+  test('adding the companion package makes sessions persistent by default', () {
+    VellumSecureStoragePlugin.registerWith();
+    final client = VellumClient(
+        baseUrl: 'http://localhost:8080/v1/projects/p',
+        projectId: 'p',
+        apiKey: 'k');
+    expect(client.authTokenStorage, isA<SecureAuthTokenStorage>());
+    VellumDefaults.authStorageFactory = null;
+  });
+
   testWidgets('writes and reads a document through the SDK', (tester) async {
     final store = <String, Map<String, Object?>>{};
     await tester.pumpWidget(CompatApp(client: _client(store)));

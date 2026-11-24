@@ -447,7 +447,7 @@ class VellumClient implements VellumClientPort {
         documentCache =
             enableCache ? (cacheStore ?? MemoryDocumentCacheStore()) : null,
         authTokenStorage =
-            authStorage ?? authTokenStorage ?? InMemoryAuthTokenStorage(),
+            authStorage ?? authTokenStorage ?? _resolveDefaultAuthStorage(),
         _random = random {
     realtime = VellumRealtimeManager(this);
   }

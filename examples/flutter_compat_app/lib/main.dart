@@ -73,6 +73,7 @@ class _HomeState extends State<_Home> {
 }
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   final client = VellumClient(
     endpoint: const String.fromEnvironment('VELLUM_ENDPOINT',
         defaultValue: 'http://localhost:8080'),

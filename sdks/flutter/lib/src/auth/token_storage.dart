@@ -90,3 +90,25 @@ class InMemoryAuthTokenStorage implements AuthTokenStorage {
   String toString() =>
       'InMemoryAuthTokenStorage(hasSession: ${_accessToken != null || _refreshToken != null})';
 }
+
+/// Process-wide defaults that companion packages can register (for example
+/// `vellum_flutter_secure_storage`, which installs a platform keychain /
+/// keystore backed session store). Nothing is registered by default, so the
+/// package stays pure Dart and `InMemoryAuthTokenStorage` remains the fallback.
+abstract final class VellumDefaults {
+  /// Creates the session storage used when a client is built without
+  /// `authStorage`. Must not throw; a throwing factory is ignored.
+  static TokenStoragePort Function()? authStorageFactory;
+}
+
+TokenStoragePort _resolveDefaultAuthStorage() {
+  final factory = VellumDefaults.authStorageFactory;
+  if (factory != null) {
+    try {
+      return factory();
+    } catch (_) {
+      // Fall through to the in-memory default.
+    }
+  }
+  return InMemoryAuthTokenStorage();
+}
