@@ -235,9 +235,7 @@ export function createControlPlaneRoutes(
       await assertProjectAccess(controlStore, listSession, projectId);
     }
 
-    const keys = Array.from(controlStore.apiKeysById.values()).filter(
-      (k) => k.projectId === projectId
-    );
+    const keys = await controlStore.listProjectApiKeys(projectId);
     return c.json(keys.map(({ secretHash: _secretHash, ...key }) => key));
   });
 
@@ -249,7 +247,7 @@ export function createControlPlaneRoutes(
     // project before revoking it. Previously any key in the store could be
     // revoked by ID, enabling cross-tenant revocation.
     const project = unwrapProject(controlStore.getProject(projectId));
-    const existing = controlStore.apiKeysById.get(keyId);
+    const existing = await controlStore.findApiKeyById(keyId);
     if (!existing) {
       throw new VellumError("NOT_FOUND", `API key '${keyId}' not found`);
     }

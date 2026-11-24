@@ -393,6 +393,21 @@ export interface ControlPlaneRepository {
   getProject(projectId: string): ProjectResult;
   getApiKey(keyId: string): ApiKeyRecord | undefined;
   getApiKeyByPrefix(prefix: string): ApiKeyRecord | null;
+  /**
+   * Source-of-truth API key reads. On PostgreSQL these are indexed queries against `api_keys`
+   * on every call, with no process-local copy, so a revoke or a restriction edit made by any
+   * instance (or by the console deployment) applies to the very next request.
+   */
+  /** Active (not revoked) key by its 16-character prefix, or null. Expiry is checked by the caller. */
+  findApiKeyByPrefix(prefix: string): Promise<ApiKeyRecord | null>;
+  /** Any key (revoked included) by id, or null. */
+  findApiKeyById(keyId: string): Promise<ApiKeyRecord | null>;
+  /** Every key of a project, revoked included, oldest first. */
+  listProjectApiKeys(projectId: string): Promise<ApiKeyRecord[]>;
+  /** Origins listed on the active, unexpired keys of a project (one DB read, no local copy). */
+  listActiveApiKeyOrigins(projectId: string): Promise<string[]>;
+  /** Marks a key as used now. Best effort and throttled by the implementation. */
+  touchApiKeyLastUsed(keyId: string): Promise<void>;
   getActiveRuleset(projectId: string): SecurityRulesetRecord | null;
   getAuthConfig(projectId: string): ProjectAuthConfig | null;
   listAuthConfigs(): ProjectAuthConfig[];

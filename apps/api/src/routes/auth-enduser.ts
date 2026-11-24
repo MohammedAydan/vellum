@@ -40,7 +40,7 @@ import {
   TokenRefreshRequestSchema,
   UpdateProfileRequestSchema,
 } from "@vellum/api-contract";
-import { verifyApiKey } from "@vellum/authorization";
+import { verifyApiKeyAsync } from "@vellum/authorization";
 import type { ProjectAuthConfig } from "@vellum/database-control";
 import type { AuthUserRecord, UpdateAuthUserInput } from "@vellum/storage";
 import {
@@ -497,7 +497,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/sign-up/email", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     await checkRegistrationGuards(tenant, config);
     if (!config.enableEmailPassword) {
@@ -539,7 +539,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/sign-in/email", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
     if (!config.enableEmailPassword) {
@@ -581,7 +581,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/sign-in/anonymous", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     await checkRegistrationGuards(tenant, config);
     if (!config.enableAnonymousAuth) {
@@ -606,7 +606,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     // email and emailVerified are claims made by the caller. Only a trusted
     // backend holding a secret (sk_) key may assert them. A publishable key in
     // a browser or app could otherwise sign in as any user by email.
-    requireProjectApiKey(c, platform, tenant, { serverOnly: true });
+    await requireProjectApiKey(c, platform, tenant, { serverOnly: true });
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
 
@@ -640,7 +640,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const provider = getProvider(providerId);
     // A browser navigation cannot send headers, so the publishable key travels in the query.
     const apiKey = c.req.query("apiKey") ?? "";
-    const keyRecord = apiKey ? verifyApiKey(apiKey, platform.controlStore, platform.apiKeyPepper) : null;
+    const keyRecord = apiKey ? await verifyApiKeyAsync(apiKey, platform.controlStore, platform.apiKeyPepper) : null;
     if (!keyRecord || keyRecord.projectId !== tenant.projectId) {
       throw new VellumError("UNAUTHENTICATED", "A valid project apiKey query parameter is required");
     }
@@ -760,7 +760,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/oauth/exchange", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
     const body = (await c.req.json().catch(() => ({}))) as { code?: unknown; codeVerifier?: unknown };
@@ -788,7 +788,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   /** Native Google (google_sign_in, Google Identity Services): the app sends a Google ID token. */
   routes.post("/oauth/google/id-token", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
     const creds = resolveProviderCredentials(config.oauthProviders, "google", masterKey());
@@ -822,7 +822,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/token/refresh", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(TokenRefreshRequestSchema, await c.req.json());
     const issued = await sessionService.refresh(tenant.ctx, body.refreshToken);
@@ -837,7 +837,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/sign-out", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(SignOutRequestSchema, await optionalJsonBody(c));
     if (body.refreshToken) {
@@ -853,7 +853,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.get("/user", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const user = await requireEndUser(c, platform, tenant);
     return c.json({ user: publicUser(user) });
@@ -861,7 +861,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.patch("/user", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const current = await requireEndUser(c, platform, tenant);
     const body = parseOrThrow(UpdateProfileRequestSchema, await c.req.json());
@@ -891,7 +891,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/password/reset", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(PasswordResetRequestSchema, await c.req.json());
     const user = await storage.getAuthUserByEmail(tenant.ctx, body.email);
@@ -920,7 +920,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/password/confirm", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(PasswordConfirmRequestSchema, await c.req.json());
     assertPasswordPolicy(body.newPassword, config);
@@ -934,7 +934,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/email/verify/request", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(EmailVerifyRequestSchema, await optionalJsonBody(c));
     const user = body.email
@@ -963,7 +963,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/email/verify/confirm", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(EmailVerifyConfirmRequestSchema, await c.req.json());
     const record = await storage.consumeAuthToken(tenant.ctx, sha256(body.token), TOKEN_TYPE_EMAIL_VERIFICATION);
@@ -976,7 +976,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/mfa/enroll", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     if (!config.enableTotpMfa) {
       throw new VellumError("PERMISSION_DENIED", "TOTP MFA is disabled for this project");
@@ -1008,7 +1008,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/mfa/verify", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const user = await requireEndUser(c, platform, tenant);
     const body = parseOrThrow(MfaVerifyRequestSchema, await c.req.json());
@@ -1049,7 +1049,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   routes.post("/mfa/challenge", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(MfaChallengeRequestSchema, await c.req.json());
     const ticketHash = sha256(body.mfaTicket);
@@ -1119,7 +1119,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   /** Turn the second factor off. Needs a signed-in user and a current code, never just a session. */
   routes.post("/mfa/disable", async (c) => {
     const tenant = resolveAuthTenant(c, platform);
-    requireProjectApiKey(c, platform, tenant);
+    await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const user = await requireEndUser(c, platform, tenant);
     const body = parseOrThrow(MfaVerifyRequestSchema, await c.req.json());

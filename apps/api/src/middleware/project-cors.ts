@@ -18,12 +18,12 @@ import { normalizeStrictOrigin } from "./security.js";
  */
 
 export interface ProjectCorsStore {
-  readonly apiKeysById: Map<string, { projectId: string; allowedOrigins?: string[] | undefined; revokedAt: string | null; expiresAt: string | null }>;
+  /** Origins on the project's active keys, read from the database on every call. */
+  listActiveApiKeyOrigins(projectId: string): Promise<string[]>;
 }
 
 const PROJECT_PATH = /^\/v1\/projects\/([^/]+)\/(.*)$/;
 const EXCLUDED = [/^auth\/admin(\/|$)/, /^admin(\/|$)/, /^console(\/|$)/];
-const CACHE_TTL_MS = 5_000;
 const ALLOW_HEADERS = [
   "Content-Type",
   "Authorization",
@@ -40,27 +40,16 @@ const EXPOSE_HEADERS = "X-Request-Id,X-Refreshed-Session-Token,X-Vellum-Index-Su
 
 export function createProjectCors(
   store: ProjectCorsStore,
-  isGloballyAllowed: (origin: string) => boolean,
-  now: () => number = Date.now
+  isGloballyAllowed: (origin: string) => boolean
 ): MiddlewareHandler {
-  const cache = new Map<string, { at: number; origins: Set<string> }>();
-
-  function originsFor(projectId: string): Set<string> {
-    const hit = cache.get(projectId);
-    const t = now();
-    if (hit && t - hit.at < CACHE_TTL_MS) return hit.origins;
-    const origins = new Set<string>();
-    for (const key of store.apiKeysById.values()) {
-      if (key.projectId !== projectId || key.revokedAt) continue;
-      if (key.expiresAt && Date.parse(key.expiresAt) <= t) continue;
-      for (const raw of key.allowedOrigins ?? []) {
-        const normalized = normalizeStrictOrigin(raw);
-        if (normalized) origins.add(normalized);
-      }
+  // No cache. Allowed origins are read from the database for each cross-origin request, so a key
+  // edit or revoke applies to the next request on every instance. The query is indexed by project.
+  async function isAllowed(projectId: string, normalizedOrigin: string): Promise<boolean> {
+    const origins = await store.listActiveApiKeyOrigins(projectId);
+    for (const raw of origins) {
+      if (normalizeStrictOrigin(raw) === normalizedOrigin) return true;
     }
-    if (cache.size > 1000) cache.clear();
-    cache.set(projectId, { at: t, origins });
-    return origins;
+    return false;
   }
 
   return async (c, next) => {
@@ -72,7 +61,7 @@ export function createProjectCors(
     if (EXCLUDED.some((re) => re.test(rest ?? ""))) return next();
     const normalized = normalizeStrictOrigin(origin);
     if (!normalized || isGloballyAllowed(origin)) return next();
-    if (!originsFor(projectId ?? "").has(normalized)) return next();
+    if (!(await isAllowed(projectId ?? "", normalized))) return next();
 
     const headers = {
       "access-control-allow-origin": origin,

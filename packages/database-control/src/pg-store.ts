@@ -675,6 +675,73 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
     return this.apiKeysByPrefix.get(prefix) ?? null;
   }
 
+  private static readonly API_KEY_COLUMNS = `id, project_id AS "projectId", name,
+                key_type AS "keyType", key_prefix AS "keyPrefix", secret_hash AS "secretHash",
+                scopes, allowed_origins AS "allowedOrigins", allowed_ips AS "allowedIps",
+                rate_limit_rps AS "rateLimitRps", last_used_at AS "lastUsedAt",
+                expires_at AS "expiresAt", revoked_at AS "revokedAt", created_by AS "createdBy",
+                created_at AS "createdAt"`;
+
+  private static apiKeyFromRow(row: ApiKeyRecord): ApiKeyRecord {
+    return {
+      ...row,
+      scopes: Array.isArray(row.scopes) ? [...row.scopes] : [],
+      allowedOrigins: Array.isArray(row.allowedOrigins) ? [...row.allowedOrigins] : [],
+      allowedIps: Array.isArray(row.allowedIps) ? [...row.allowedIps] : [],
+      lastUsedAt: isoOrNull(row.lastUsedAt),
+      expiresAt: isoOrNull(row.expiresAt),
+      revokedAt: isoOrNull(row.revokedAt),
+      createdAt: iso(row.createdAt),
+    };
+  }
+
+  public async findApiKeyByPrefix(prefix: string): Promise<ApiKeyRecord | null> {
+    const { rows } = await this.pool.query(
+      `SELECT ${PgControlPlaneStore.API_KEY_COLUMNS} FROM api_keys WHERE key_prefix = $1 AND revoked_at IS NULL LIMIT 1`,
+      [prefix]
+    );
+    return rows[0] ? PgControlPlaneStore.apiKeyFromRow(rows[0] as ApiKeyRecord) : null;
+  }
+
+  public async findApiKeyById(keyId: string): Promise<ApiKeyRecord | null> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(keyId)) return null;
+    const { rows } = await this.pool.query(
+      `SELECT ${PgControlPlaneStore.API_KEY_COLUMNS} FROM api_keys WHERE id = $1::uuid`,
+      [keyId]
+    );
+    return rows[0] ? PgControlPlaneStore.apiKeyFromRow(rows[0] as ApiKeyRecord) : null;
+  }
+
+  public async listProjectApiKeys(projectId: string): Promise<ApiKeyRecord[]> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) return [];
+    const { rows } = await this.pool.query(
+      `SELECT ${PgControlPlaneStore.API_KEY_COLUMNS} FROM api_keys WHERE project_id = $1::uuid ORDER BY created_at ASC`,
+      [projectId]
+    );
+    return (rows as ApiKeyRecord[]).map((row) => PgControlPlaneStore.apiKeyFromRow(row));
+  }
+
+  public async listActiveApiKeyOrigins(projectId: string): Promise<string[]> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) return [];
+    const { rows } = await this.pool.query(
+      `SELECT DISTINCT o.origin
+         FROM api_keys k, jsonb_array_elements_text(k.allowed_origins) AS o(origin)
+        WHERE k.project_id = $1::uuid AND k.revoked_at IS NULL
+          AND (k.expires_at IS NULL OR k.expires_at > now())
+          AND jsonb_typeof(k.allowed_origins) = 'array'`,
+      [projectId]
+    );
+    return rows.map((r: { origin: string }) => r.origin);
+  }
+
+  public async touchApiKeyLastUsed(keyId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE api_keys SET last_used_at = now()
+        WHERE id = $1::uuid AND (last_used_at IS NULL OR last_used_at < now() - interval '60 seconds')`,
+      [keyId]
+    );
+  }
+
   /** Synchronous read-through: cache -> in-process mirror. */
   public getActiveRuleset(projectId: string): SecurityRulesetRecord | null {
     const cached = this.activeRulesetCache.get(projectId);

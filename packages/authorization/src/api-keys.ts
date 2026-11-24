@@ -103,6 +103,51 @@ export interface ApiKeyStore {
   apiKeysByPrefix: Map<string, ApiKeyRecord>;
 }
 
+/** Store that answers key lookups from the source of truth (the database), never from a local copy. */
+export interface AsyncApiKeyStore {
+  findApiKeyByPrefix(prefix: string): Promise<ApiKeyRecord | null>;
+  touchApiKeyLastUsed?(keyId: string): Promise<void>;
+}
+
+/**
+ * Same checks as `verifyApiKey`, but the key record is read from the database on every call.
+ * There is no cache: a revoke, an expiry change or a restriction edit applies to the next request.
+ * The secret hash is always compared in constant time.
+ */
+export async function verifyApiKeyAsync(
+  fullKey: unknown,
+  store: AsyncApiKeyStore,
+  pepper: string = getDefaultPepper()
+): Promise<ApiKeyRecord> {
+  if (typeof fullKey !== "string" || fullKey.length < 20 || fullKey.length > MAX_API_KEY_LENGTH) {
+    throw new VellumError("UNAUTHENTICATED", "Missing or malformed X-Project-Key header");
+  }
+  const keyRecord = await store.findApiKeyByPrefix(fullKey.slice(0, 16));
+  if (!keyRecord || keyRecord.revokedAt) {
+    throw new VellumError("UNAUTHENTICATED", "Invalid or revoked API key");
+  }
+  const computed = crypto.createHash("sha256").update(`${fullKey}:${pepper}`).digest();
+  if (typeof keyRecord.secretHash !== "string" || !SHA256_HEX_REGEX.test(keyRecord.secretHash)) {
+    throw new VellumError("UNAUTHENTICATED", "Invalid API key signature");
+  }
+  const expected = Buffer.from(keyRecord.secretHash, "hex");
+  if (computed.length !== expected.length || !crypto.timingSafeEqual(computed, expected)) {
+    throw new VellumError("UNAUTHENTICATED", "Invalid API key signature");
+  }
+  const now = Date.now();
+  if (keyRecord.expiresAt) {
+    const expiresAtMs = Date.parse(keyRecord.expiresAt);
+    if (!Number.isFinite(expiresAtMs) || expiresAtMs <= now) {
+      throw new VellumError("UNAUTHENTICATED", "API key has expired");
+    }
+  }
+  const lastUsed = keyRecord.lastUsedAt ? Date.parse(keyRecord.lastUsedAt) : 0;
+  if (store.touchApiKeyLastUsed && now - lastUsed > 60_000) {
+    void store.touchApiKeyLastUsed(keyRecord.id).catch(() => undefined);
+  }
+  return keyRecord;
+}
+
 /**
  * Verifies an incoming `X-Project-Key` against Control Plane metadata using constant-time digest comparison.
  * Always verifies the full key's SHA-256 digest in constant time on every request — even on cache hits —

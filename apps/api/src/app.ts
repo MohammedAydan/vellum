@@ -18,7 +18,7 @@ import {
   type CreateCollectionRequest,
   type UpdateCollectionRequest,
 } from "@vellum/api-contract";
-import { verifyApiKey, authorizeOperation } from "@vellum/authorization";
+import { verifyApiKeyAsync, authorizeOperation } from "@vellum/authorization";
 import type { SessionService } from "@vellum/authorization";
 import { requestId } from "./middleware/request-id.js";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -447,7 +447,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     if (!rawApiKey) {
       throw new VellumError("UNAUTHENTICATED", "Missing X-Vellum-Api-Key (or legacy X-Project-Key) header");
     }
-    const apiKeyRecord = verifyApiKey(rawApiKey, platform.controlStore, platform.apiKeyPepper);
+    const apiKeyRecord = await verifyApiKeyAsync(rawApiKey, platform.controlStore, platform.apiKeyPepper);
     if (apiKeyRecord.projectId !== project.id) {
       throw new VellumError(
         "PERMISSION_DENIED",
