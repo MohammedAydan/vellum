@@ -153,6 +153,12 @@ function SignupPage() {
           <Button type="submit" className="auth-submit" disabled={isSubmitting}>
             {isSubmitting ? t("auth.creatingAccount") : t("auth.createAccount")}
           </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            {t("legal.signupConsentPrefix")}{" "}
+            <Link to="/terms" className="text-primary underline underline-offset-2">{t("legal.terms")}</Link>{" "}
+            {t("legal.and")}{" "}
+            <Link to="/privacy" className="text-primary underline underline-offset-2">{t("legal.privacy")}</Link>.
+          </p>
           <div className="text-center text-xs text-muted-foreground">
             {t("auth.alreadyAccount")}{" "}
             <Link to="/login" className="text-primary hover:underline font-medium">

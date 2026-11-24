@@ -78,6 +78,10 @@ export const ar: TranslationDictionary = {
   "auth.creatingAccount": "جارٍ إنشاء الحساب...",
   "auth.alreadyAccount": "لديك حساب بالفعل؟",
   "auth.signInLink": "تسجيل الدخول",
+  "legal.signupConsentPrefix": "بإنشاء حساب فإنك توافق على",
+  "legal.terms": "شروط الاستخدام",
+  "legal.and": "و",
+  "legal.privacy": "سياسة الخصوصية",
   "auth.signupError": "تعذّر إنشاء الحساب",
 
   // ---- MFA challenge ----------------------------------------------------

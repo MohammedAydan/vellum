@@ -244,3 +244,29 @@ export function A({ href, children }: { href: string; children: ReactNode }) {
     </a>
   );
 }
+
+/** Prominent alpha / no-guarantee notice shown on the docs home, Quickstart, Advanced and Terms pages. */
+export function AlphaNotice({ lang = "en" }: { lang?: Lang }) {
+  const ar = lang === "ar";
+  return (
+    <Callout tone="warning" title={ar ? "نسخة ألفا قيد التطوير" : "Alpha: in active development"}>
+      {ar ? (
+        <>
+          VELLUM قيد التطوير المستمر (Alpha/Beta) وليست منتجاً نهائياً مستقراً. لا توجد اتفاقية مستوى خدمة (SLA)،
+          ولا نضمن استمرار الخدمة أو استقرارها أو سلامة البيانات التجريبية، وقد تتغير الواجهات أو تتوقف في أي وقت
+          دون إشعار. تُقدَّم الخدمة «كما هي» (AS IS) و«حسب التوفر» (AS AVAILABLE) دون أي ضمانات، وتتحمل وحدك
+          مسؤولية استخدامها في مشاريعك. راجع <PageLink slug="terms" lang="ar">شروط الاستخدام</PageLink> و
+          <PageLink slug="privacy" lang="ar">سياسة الخصوصية</PageLink>.
+        </>
+      ) : (
+        <>
+          VELLUM is in active development (Alpha/Beta) and is not a final, stable product. There is no SLA.
+          We do not guarantee uptime, stability or the safety of test data, and APIs or services may change or be
+          shut down at any time without notice. The service is provided &quot;AS IS&quot; and &quot;AS AVAILABLE&quot;
+          without warranties, and you alone are responsible for deciding to use it in your projects. See the{" "}
+          <PageLink slug="terms">Terms of Service</PageLink> and the <PageLink slug="privacy">Privacy Policy</PageLink>.
+        </>
+      )}
+    </Callout>
+  );
+}

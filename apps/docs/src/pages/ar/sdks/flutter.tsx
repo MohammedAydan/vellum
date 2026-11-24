@@ -189,6 +189,10 @@ export default function Page() {
     >
 
       <SdkEndpointNote arabic />
+      <Callout tone="info" title="إعدادات اختيارية">
+        المعرفات من <code>doc()</code> ورموز المصادقة وسياسة الكاش والمراجع مع <code>addWithRelated</code> ونقل الوقت الفعلي في <PageLink slug="advanced" lang="ar">الإعدادات المتقدمة</PageLink>.
+      </Callout>
+
       <Section id="beta-install" title="تثبيت النسخة التجريبية">
       <P>الإصدار 0.0.2 متاح على npm وpub.dev. ثبّت الحزم المنشورة أدناه، ولا تحتاج إلى نسخة من المستودع.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />

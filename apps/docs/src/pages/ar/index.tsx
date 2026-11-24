@@ -1,4 +1,4 @@
-import { Callout, Code, Doc, P, PageLink, Section, Steps, Table, UL } from "../../ui";
+import { AlphaNotice, Callout, Code, Doc, P, PageLink, Section, Steps, Table, UL } from "../../ui";
 
 export default function Page() {
   return (
@@ -7,6 +7,7 @@ export default function Page() {
       description="ما هو VELLUM، وكيف تتكامل قاعدتا البيانات في PostgreSQL، والمبادئ المعمارية الصلبة التي يقوم عليها النظام."
       eyebrow="البداية"
     >
+      <AlphaNotice lang="ar" />
       <Section id="what-is-vellum" title="ما هو VELLUM؟">
         <P>
           <strong>VELLUM</strong> هو قاعدة بيانات مستندات سحابية متعددة المستأجرين مبنية بالكامل على{" "}

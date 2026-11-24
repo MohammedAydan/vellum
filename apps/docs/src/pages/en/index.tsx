@@ -1,4 +1,5 @@
 import {
+  AlphaNotice,
   Callout,
   Cards,
   Code,
@@ -17,6 +18,7 @@ export default function Page() {
       title="VELLUM Documentation"
       description="A multi-tenant, real-time document database built exclusively on PostgreSQL—combining Firebase-style ergonomics with strict Row-Level Security, ACID transactions, and zero external cache brokers."
     >
+      <AlphaNotice />
       <P>
         VELLUM gives application teams a schemaless JSONB document model, deterministic security rules,
         cursor-paginated queries, optimistic concurrency transactions, and multiplexed WebSocket
