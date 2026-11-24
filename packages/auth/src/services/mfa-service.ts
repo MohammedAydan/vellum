@@ -106,67 +106,6 @@ export function verifyTotpCode(
   return matched === 1;
 }
 
-/**
- * Stateful TOTP replay guard that rejects reuse of a TOTP code within the same
- * (or earlier) 30-second time step per subject. Bounded in memory.
- */
-export interface TotpReplayGuard {
-  verifyAndConsume(subjectId: string, secret: string, code: string, window?: number, atEpochMs?: number): boolean;
-  clear(): void;
-}
-
-export function createTotpReplayGuard(maxTrackedSubjects = 50_000): TotpReplayGuard {
-  const lastStepBySubject = new Map<string, number>();
-  const cap = Math.max(1, Math.floor(maxTrackedSubjects));
-
-  return {
-    verifyAndConsume(
-      subjectId: string,
-      secret: string,
-      code: string,
-      window = 1,
-      atEpochMs = Date.now()
-    ): boolean {
-      if (typeof subjectId !== "string" || subjectId.length === 0) return false;
-      if (typeof code !== "string" || !SIX_DIGIT_REGEX.test(code)) return false;
-      if (!Number.isFinite(atEpochMs) || atEpochMs < 0) return false;
-      const key = decodeBase32(secret);
-      if (key.length === 0) return false;
-
-      const boundedWindow = Number.isInteger(window) ? Math.max(0, Math.min(MAX_TOTP_WINDOW, window)) : 1;
-      const counter = Math.floor(atEpochMs / 1000 / STEP_SECONDS);
-      const codeBuf = Buffer.from(code, "utf8");
-
-      let matchedStep = -1;
-      for (let delta = -boundedWindow; delta <= boundedWindow; delta += 1) {
-        const step = counter + delta;
-        if (step < 0) continue;
-        const candidateBuf = Buffer.from(totpAtKey(key, step), "utf8");
-        if (candidateBuf.length === codeBuf.length && crypto.timingSafeEqual(candidateBuf, codeBuf)) {
-          if (matchedStep === -1) matchedStep = step;
-        }
-      }
-      if (matchedStep === -1) return false;
-
-      const prevStep = lastStepBySubject.get(subjectId);
-      if (prevStep !== undefined && matchedStep <= prevStep) {
-        return false;
-      }
-      if (lastStepBySubject.has(subjectId)) {
-        lastStepBySubject.delete(subjectId);
-      } else if (lastStepBySubject.size >= cap) {
-        const oldest = lastStepBySubject.keys().next();
-        if (oldest.done !== true) lastStepBySubject.delete(oldest.value);
-      }
-      lastStepBySubject.set(subjectId, matchedStep);
-      return true;
-    },
-    clear(): void {
-      lastStepBySubject.clear();
-    },
-  };
-}
-
 function hashRecoveryCode(code: string): string {
   return crypto.createHash("sha256").update(code.toUpperCase()).digest("hex");
 }

@@ -6,7 +6,7 @@
  */
 
 import type { Context, MiddlewareHandler } from "hono";
-import { VellumError, type BoundedCachePolicy } from "@vellum/core";
+import { VellumError } from "@vellum/core";
 import type { Role, SessionClaims, SessionService } from "@vellum/authorization";
 import type { ControlPlaneRepository, ProjectRecord } from "@vellum/database-control";
 
@@ -18,44 +18,6 @@ declare module "hono" {
 
 const PLATFORM_OPERATOR_ROLES: ReadonlySet<string> = new Set<Role>(["owner", "admin"]);
 
-export const PG_MEMBERSHIP_CACHE_POLICY: BoundedCachePolicy = Object.freeze({
-  name: "api.pg-org-membership",
-  scope: "tenant",
-  maxEntries: 10_000,
-  ttlMs: 15_000,
-});
-
-interface MembershipCacheEntry {
-  memberships: OrgMembership[];
-  expiresAt: number;
-}
-
-const pgMembershipCache = new Map<string, MembershipCacheEntry>();
-
-function evictMembershipCacheIfNeeded(now: number): void {
-  const { maxEntries } = PG_MEMBERSHIP_CACHE_POLICY;
-  if (pgMembershipCache.size < maxEntries) return;
-  for (const [key, entry] of pgMembershipCache) {
-    if (entry.expiresAt <= now) {
-      pgMembershipCache.delete(key);
-    }
-  }
-  while (pgMembershipCache.size >= maxEntries) {
-    const oldestKey = pgMembershipCache.keys().next().value;
-    if (oldestKey === undefined) break;
-    pgMembershipCache.delete(oldestKey);
-  }
-}
-
-/** Invalidate cached PostgreSQL organization memberships for a user (or all users if omitted). */
-export function invalidateUserOrgMembershipsCache(userId?: string): void {
-  if (userId === undefined) {
-    pgMembershipCache.clear();
-  } else {
-    pgMembershipCache.delete(userId);
-  }
-}
-
 /** Extract a Bearer token; returns null when the header is absent. */
 export function extractBearerToken(header: string | undefined): string | null {
   if (!header) return null;
@@ -63,9 +25,9 @@ export function extractBearerToken(header: string | undefined): string | null {
   return raw.length > 0 ? raw : null;
 }
 
-function verifyOrThrow(sessionService: SessionService, token: string): SessionClaims {
+async function verifyOrThrow(sessionService: SessionService, token: string): Promise<SessionClaims> {
   try {
-    return sessionService.verifyAccess(token);
+    return await sessionService.verifyAccessChecked(token);
   } catch {
     throw new VellumError("UNAUTHENTICATED", "Invalid, expired, or revoked session token");
   }
@@ -82,7 +44,7 @@ export function requireSession(
   return async (c, next) => {
     const token = extractBearerToken(c.req.header("authorization"));
     if (!token) throw new VellumError("UNAUTHENTICATED", "Missing session Bearer token");
-    const claims = verifyOrThrow(sessionService, token);
+    const claims = await verifyOrThrow(sessionService, token);
     if (allowedRoles && !allowedRoles.includes(claims.role)) {
       throw new VellumError("PERMISSION_DENIED", "Your session role is not permitted for this operation", {
         role: claims.role,
@@ -102,7 +64,7 @@ export function optionalSession(sessionService: SessionService): MiddlewareHandl
   return async (c, next) => {
     const token = extractBearerToken(c.req.header("authorization"));
     if (token) {
-      const claims = verifyOrThrow(sessionService, token);
+      const claims = await verifyOrThrow(sessionService, token);
       c.set("session", claims);
     }
     await next();
@@ -126,10 +88,10 @@ export function optionalRealmSession(
     if (token) {
       let claims: SessionClaims | undefined;
       try {
-        claims = consoleService.verifyAccess(token);
+        claims = await consoleService.verifyAccessChecked(token);
       } catch {
         try {
-          claims = superAdminService.verifyAccess(token);
+          claims = await superAdminService.verifyAccessChecked(token);
         } catch {
           throw new VellumError("UNAUTHENTICATED", "Invalid, expired, or revoked session token");
         }
@@ -154,13 +116,13 @@ export function requireRealmSession(
     if (!token) throw new VellumError("UNAUTHENTICATED", "Missing session Bearer token");
     let claims: SessionClaims | undefined;
     try {
-      claims = consoleService.verifyAccess(token);
+      claims = await consoleService.verifyAccessChecked(token);
     } catch {
       if (!superAdminService) {
         throw new VellumError("UNAUTHENTICATED", "Invalid, expired, or revoked session token");
       }
       try {
-        claims = superAdminService.verifyAccess(token);
+        claims = await superAdminService.verifyAccessChecked(token);
       } catch {
         throw new VellumError("UNAUTHENTICATED", "Invalid, expired, or revoked session token");
       }
@@ -210,8 +172,8 @@ function hasQueryPool(store: object): store is ControlStoreWithPool {
 
 /**
  * Resolve a user's organization memberships from in-memory or PostgreSQL control store.
- * PostgreSQL lookups are short-TTL cached (15s, bounded) to avoid redundant DB
- * round-trips on hot console/admin paths.
+ * PostgreSQL lookups are never cached in process: one indexed query
+ * (idx_organization_members_user) per call, so membership changes apply at once.
  */
 export async function getUserOrgMemberships(
   controlStore: ControlPlaneRepository,
@@ -224,30 +186,16 @@ export async function getUserOrgMemberships(
   }
 
   if (hasQueryPool(controlStore)) {
-    const now = Date.now();
-    const cached = pgMembershipCache.get(userId);
-    if (cached && cached.expiresAt > now) {
-      return cached.memberships;
-    }
-
     const res = await controlStore.pool.query(
       "SELECT organization_id AS \"organizationId\", role FROM organization_members WHERE user_id = $1",
       [userId]
     );
-    const memberships = res.rows
+    return res.rows
       .filter((row): row is Record<string, unknown> & { organizationId: string; role: string } =>
         typeof row["organizationId"] === "string" && typeof row["role"] === "string"
       )
       .map((row) => ({ organizationId: row["organizationId"], role: row["role"] }));
 
-    if (!pgMembershipCache.has(userId)) {
-      evictMembershipCacheIfNeeded(now);
-    }
-    pgMembershipCache.set(userId, {
-      memberships,
-      expiresAt: now + PG_MEMBERSHIP_CACHE_POLICY.ttlMs,
-    });
-    return memberships;
   }
 
   return [];

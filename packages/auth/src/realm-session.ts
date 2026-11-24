@@ -86,9 +86,12 @@ export interface RealmRevocationStore {
 
 export interface RealmSessionService {
   signAccess(input: SignRealmAccessInput, ttlSeconds?: number): string;
+  /** Signature, expiry, type and realm only. Runtime paths must use `verifyAccessChecked`. */
   verifyAccess(token: string): RealmSessionClaims;
+  verifyAccessChecked(token: string): Promise<RealmSessionClaims>;
   signRefresh(sub: string, ttlSeconds?: number): string;
   verifyRefresh(token: string): RealmRefreshClaims;
+  verifyRefreshChecked(token: string): Promise<RealmRefreshClaims>;
   revoke(jti: string, expiresAtMs: number): Promise<void>;
   isRevoked(jti: string): Promise<boolean>;
 }
@@ -99,7 +102,6 @@ export const REALM_REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 3600; // 7 days
 const MAX_JWT_BYTES = 16_384;
 const CLOCK_SKEW_SECONDS = 60;
 const BASE64URL_REGEX = /^[A-Za-z0-9_-]+$/;
-const MAX_LOCAL_REVOCATIONS = 100_000;
 
 const ROLES: ReadonlySet<string> = new Set<RealmRole>([
   "owner",
@@ -231,30 +233,6 @@ export function createRealmSessionService(opts: {
     throw new Error("createRealmSessionService requires a non-empty secret");
   }
 
-  /** Synchronous mirror of revocations performed through this service instance. */
-  const localRevocations = new Map<string, number>();
-
-  function pruneLocalRevocations(now: number): void {
-    for (const [key, expMs] of localRevocations) {
-      if (expMs <= now) localRevocations.delete(key);
-    }
-    while (localRevocations.size > MAX_LOCAL_REVOCATIONS) {
-      const oldest = localRevocations.keys().next();
-      if (oldest.done === true) break;
-      localRevocations.delete(oldest.value);
-    }
-  }
-
-  function isLocallyRevoked(jti: string): boolean {
-    const expiresAtMs = localRevocations.get(jti);
-    if (expiresAtMs === undefined) return false;
-    if (expiresAtMs <= Date.now()) {
-      localRevocations.delete(jti);
-      return false;
-    }
-    return true;
-  }
-
   function checkTokenType(payload: Record<string, unknown>, expected: "access" | "refresh"): void {
     if (payload["typ"] !== expected) {
       throw unauthenticated(`Invalid session token type (expected '${expected}')`);
@@ -318,7 +296,6 @@ export function createRealmSessionService(opts: {
       if (typeof jti !== "string" || jti.length === 0) {
         throw unauthenticated("Session token is missing a jti claim");
       }
-      if (isLocallyRevoked(jti)) throw unauthenticated("Session token has been revoked");
 
       return {
         typ: "access",
@@ -365,7 +342,6 @@ export function createRealmSessionService(opts: {
       if (typeof sub !== "string" || typeof jti !== "string" || jti.length === 0) {
         throw unauthenticated("Refresh token is missing required claims");
       }
-      if (isLocallyRevoked(jti)) throw unauthenticated("Refresh token has been revoked");
       return {
         typ: "refresh",
         realm: config.realm,
@@ -377,20 +353,28 @@ export function createRealmSessionService(opts: {
       };
     },
 
+    async verifyAccessChecked(token: string): Promise<RealmSessionClaims> {
+      const claims = this.verifyAccess(token);
+      if (await revocationStore.isRevoked(claims.jti)) {
+        throw unauthenticated("Session token has been revoked");
+      }
+      return claims;
+    },
+
+    async verifyRefreshChecked(token: string): Promise<RealmRefreshClaims> {
+      const claims = this.verifyRefresh(token);
+      if (await revocationStore.isRevoked(claims.jti)) {
+        throw unauthenticated("Refresh token has been revoked");
+      }
+      return claims;
+    },
+
     async revoke(jti: string, expiresAtMs: number): Promise<void> {
       if (!jti) return;
-      const now = Date.now();
-      if (expiresAtMs > now) {
-        localRevocations.set(jti, expiresAtMs);
-        if (localRevocations.size > MAX_LOCAL_REVOCATIONS) {
-          pruneLocalRevocations(now);
-        }
-      }
       await revocationStore.revoke(jti, expiresAtMs);
     },
 
     async isRevoked(jti: string): Promise<boolean> {
-      if (isLocallyRevoked(jti)) return true;
       return revocationStore.isRevoked(jti);
     },
   };

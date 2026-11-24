@@ -6,7 +6,6 @@ import type crypto from "node:crypto";
 import type { EndUserJwtPayload, JwtVerificationTarget } from "../crypto/jwt.js";
 import type { Mailer } from "../mailer.js";
 import type { RealmSessionService } from "../realm-session.js";
-import type { TotpReplayGuard } from "../services/mfa-service.js";
 import type { AuthSessionService } from "../services/session-service.js";
 
 /** Outbound port for Ed25519/EdDSA end-user JWT signing, verification, and JWKS export. */
@@ -35,7 +34,6 @@ export interface MfaServicePort {
   generateTotpSecret(byteLength?: number): string;
   generateTotpCode(secret: string, atEpochMs?: number): string;
   verifyTotpCode(secret: string, code: string, window?: number, atEpochMs?: number): boolean;
-  createTotpReplayGuard(maxTrackedSubjects?: number): TotpReplayGuard;
   deriveRecoveryCodes(count?: number): string[];
   hashRecoveryCodes(codes: string[]): string[];
   verifyRecoveryCode(code: string, hashedCodes: string[]): number;

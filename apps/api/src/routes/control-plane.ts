@@ -37,7 +37,6 @@ import {
   assertProjectAccess,
   getSession,
   getUserOrgMemberships,
-  invalidateUserOrgMembershipsCache,
   optionalRealmSession,
   optionalSession,
   requireRealmSession,
@@ -99,7 +98,6 @@ export function createControlPlaneRoutes(
       // filters customer sessions by organization membership.
       ownerUserId: session?.uid ?? null,
     });
-    if (session?.uid) invalidateUserOrgMembershipsCache(session.uid);
 
     const meta = getActorMetadata(c);
     await controlStore.recordAuditLog({

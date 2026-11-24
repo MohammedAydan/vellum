@@ -36,7 +36,6 @@ import {
 } from "../middleware/session.js";
 import { requireCustomerConsoleSession } from "../middleware/realm-session.js";
 import { extractClientIp } from "../middleware/security.js";
-import { invalidateProjectIndexCache } from "./v2.js";
 import {
   CONSOLE_REFRESH_COOKIE,
   readControlRefreshToken,
@@ -705,7 +704,6 @@ function requireDocumentData(body: unknown): Record<string, unknown> {
       body.collectionPath as string,
       (body.fields as Array<Parameters<typeof normalizeIndexFieldSpec>[0]>).map(normalizeIndexFieldSpec)
     );
-    invalidateProjectIndexCache(projectId);
     const built = await refreshIndexRecord(platform, projectId, created);
     // Deep-linked suggestions from `@vellumdb/sdk-js` / `vellum_flutter` carry the
     // advisor fingerprint in the create body. Mark the matching recommendations
@@ -729,7 +727,6 @@ function requireDocumentData(body: unknown): Record<string, unknown> {
     const { project } = await engineContext(c, projectId, true);
     const indexId = c.req.param("indexId");
     await dataStore.deleteCompositeIndex({ projectId }, indexId);
-    invalidateProjectIndexCache(projectId);
     await audit(c, "console.index.deleted", {
       organizationId: project.organizationId,
       projectId,

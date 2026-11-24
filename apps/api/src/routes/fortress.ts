@@ -315,7 +315,7 @@ export function createFortressRoutes(platform: VellumPlatformContext): Hono {
     const token = extractBearerToken(c.req.header("authorization"));
     if (token !== null) {
       try {
-        const claims = platform.consoleSessionService.verifyAccess(token) as {
+        const claims = (await platform.consoleSessionService.verifyAccessChecked(token)) as {
           realm?: string;
         };
         if (claims.realm === "customer_console") {

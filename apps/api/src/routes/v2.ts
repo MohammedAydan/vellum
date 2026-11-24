@@ -21,7 +21,6 @@ import {
   analyzeQueryIndexCoverage,
   buildIndexSuggestionHeaders,
   normalizeIndexFieldSpec,
-  type BoundedCachePolicy,
   type IndexAdvisorIndex,
   type IndexAdvisorQuery,
 } from "@vellum/core";
@@ -199,44 +198,6 @@ export type V2AuthenticateRequest = (
  */
 const MAX_IN_MEMORY_RECOMMENDATIONS = 5_000;
 
-export const PROJECT_INDEX_CACHE_POLICY: BoundedCachePolicy = Object.freeze({
-  name: "api.project-index-advisor",
-  scope: "tenant",
-  maxEntries: 2_000,
-  ttlMs: 10_000,
-});
-
-interface CachedProjectIndexes {
-  indexes: IndexAdvisorIndex[];
-  expiresAt: number;
-}
-
-const projectIndexCache = new Map<string, CachedProjectIndexes>();
-
-function evictProjectIndexCacheIfNeeded(now: number): void {
-  const { maxEntries } = PROJECT_INDEX_CACHE_POLICY;
-  if (projectIndexCache.size < maxEntries) return;
-  for (const [key, entry] of projectIndexCache) {
-    if (entry.expiresAt <= now) {
-      projectIndexCache.delete(key);
-    }
-  }
-  while (projectIndexCache.size >= maxEntries) {
-    const oldestProject = projectIndexCache.keys().next().value;
-    if (oldestProject === undefined) break;
-    projectIndexCache.delete(oldestProject);
-  }
-}
-
-/** Invalidate the hot-path composite-index advisor cache for a project (or all projects). */
-export function invalidateProjectIndexCache(projectId?: string): void {
-  if (projectId === undefined) {
-    projectIndexCache.clear();
-  } else {
-    projectIndexCache.delete(projectId);
-  }
-}
-
 export function createInMemoryIndexRecommendationRecorder(): IndexRecommendationRecorder {
   const rows = new Map<string, IndexRecommendationRecord>();
   const byFingerprint = new Map<string, string>();
@@ -402,28 +363,15 @@ export function createIndexAdvisor(
   const analyze = analyzeQueryIndexCoverage;
   return async (c, query, tenant, options) => {
     try {
-      const now = Date.now();
-      const cached = projectIndexCache.get(tenant.projectId);
-      let existingIndexes: IndexAdvisorIndex[];
-      if (cached && cached.expiresAt > now) {
-        existingIndexes = cached.indexes;
-      } else {
-        const stored = await platform.dataStore.listCompositeIndexes({
-          projectId: tenant.projectId,
-        });
-        existingIndexes = stored.map((index) => ({
-          collectionPath: index.collectionPath,
-          fields: index.fields.map((field) => normalizeIndexFieldSpec(field)),
-          status: index.status,
-        }));
-        if (!projectIndexCache.has(tenant.projectId)) {
-          evictProjectIndexCacheIfNeeded(now);
-        }
-        projectIndexCache.set(tenant.projectId, {
-          indexes: existingIndexes,
-          expiresAt: now + PROJECT_INDEX_CACHE_POLICY.ttlMs,
-        });
-      }
+      // Read from the data DB on every call: no process-local copy of project indexes.
+      const stored = await platform.dataStore.listCompositeIndexes({
+        projectId: tenant.projectId,
+      });
+      const existingIndexes: IndexAdvisorIndex[] = stored.map((index) => ({
+        collectionPath: index.collectionPath,
+        fields: index.fields.map((field) => normalizeIndexFieldSpec(field)),
+        status: index.status,
+      }));
       const coverage = analyze(query, existingIndexes, {
         projectId: tenant.projectId,
         orgId: tenant.orgId,
@@ -492,7 +440,7 @@ export function createV2Routes(platform: VellumPlatformContext, helpers: V2Route
     const token = extractBearerToken(c.req.header("authorization"));
     if (token) {
       try {
-        const claims = platform.consoleSessionService.verifyAccess(token) as SessionClaims & {
+        const claims = (await platform.consoleSessionService.verifyAccessChecked(token)) as SessionClaims & {
           realm?: string;
         };
         if (claims.realm === "customer_console") {
@@ -517,7 +465,7 @@ export function createV2Routes(platform: VellumPlatformContext, helpers: V2Route
     const token = extractBearerToken(c.req.header("authorization"));
     if (token) {
       try {
-        const claims = platform.consoleSessionService.verifyAccess(token) as SessionClaims & {
+        const claims = (await platform.consoleSessionService.verifyAccessChecked(token)) as SessionClaims & {
           realm?: string;
         };
         if (claims.realm === "customer_console") {
@@ -684,7 +632,6 @@ export function createV2Routes(platform: VellumPlatformContext, helpers: V2Route
       recommendation.collectionPath,
       fields
     );
-    invalidateProjectIndexCache(projectId);
     await helpers.recorder.markAppliedByFingerprint(projectId, recommendation.fingerprint);
     await helpers.recorder.setStatus(id, "applied");
     return c.json({ applied: true, id, fingerprint: recommendation.fingerprint });
