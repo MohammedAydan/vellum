@@ -6,10 +6,13 @@
  * `AbortSignal` cancellation, and realtime `onSnapshot()`.
  */
 
+import type { DocStore, StoredDoc } from "../cache/doc-store.js";
+import { parseJwtSubject } from "../auth/jwt-utils.js";
 import type { BoundedReadCache } from "../cache/read-cache.js";
 import { createAbortError } from "../core/backoff.js";
 import { encodePathSegment, encodeResourcePath, sanitizeAndClone } from "../core/safe-json.js";
 import type {
+  CachePolicy,
   CollectionReferenceInterface,
   DocDataConverter,
   DocumentCreateOptions,
@@ -45,6 +48,10 @@ export interface DocumentReferenceContext {
   prepareRead?(): Promise<string | null>;
   readonly readCache: BoundedReadCache<WireDocument> | null;
   readonly dedupeReads: boolean;
+  /** Offline store behind `CachePolicy`; null when disabled. */
+  readonly docStore?: DocStore | null;
+  readonly cachePolicy?: CachePolicy;
+  readonly cacheTtlMs?: number;
   readonly inFlightGets: Map<string, Promise<WireDocument | null>>;
   getPathWriteEpoch(path: string): number;
   getGlobalCacheEpoch(): number;
@@ -56,6 +63,17 @@ export interface DocumentReferenceContext {
     converter: DocDataConverter<T> | null
   ): () => void;
   createCollectionRef<SubT = Record<string, unknown>>(collectionPath: string): CollectionReferenceInterface<SubT>;
+}
+
+/** True for network-level failures and gateway/availability errors, not for 4xx answers from the server. */
+function isConnectivityError(err: unknown): boolean {
+  if (err === null || typeof err !== "object") return false;
+  const e = err as { name?: string; status?: number; code?: unknown };
+  if (e.name === "AbortError") return false;
+  if (typeof e.status === "number") return e.status === 0 || e.status === 502 || e.status === 503 || e.status === 504;
+  if (e.code === "REQUEST_TIMEOUT") return true;
+  // Raw fetch/network failures carry no API code; SDK-raised errors (SESSION_CHANGED, ...) do.
+  return e.code === undefined;
 }
 
 export class DocumentReference<T = Record<string, unknown>> implements DocumentReferenceInterface<T> {
@@ -115,6 +133,58 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
   }
 
   public async get(options: DocumentGetOptions = {}): Promise<DocumentSnapshot<T>> {
+    const store = this.ctx.docStore ?? null;
+    const policy = options.cachePolicy ?? this.ctx.cachePolicy ?? "networkFirst";
+    if (store === null || policy === "networkOnly") return this.fetchSnapshot(options);
+
+    const bearer = await this.ctx.prepareRead?.();
+    const scope = parseJwtSubject(bearer ?? null) ?? "anon";
+    const key = `${scope}\0${this.path}\0${JSON.stringify(options.include?.map(normalizeInclude) ?? null)}\0${JSON.stringify(options.select ?? null)}`;
+    const ttl = this.ctx.cacheTtlMs ?? 300_000;
+    const readStored = async (checkFresh: boolean): Promise<StoredDoc | null> => {
+      try {
+        const entry = await store.get(key);
+        if (!entry) return null;
+        if (checkFresh && Date.now() - entry.storedAt > ttl) return null;
+        return entry;
+      } catch {
+        return null;
+      }
+    };
+    const fromStore = (entry: StoredDoc): DocumentSnapshot<T> => {
+      const base = buildDocumentSnapshot<T>(entry.value as WireDocument, this.converter);
+      return Object.freeze({ ...base, metadata: Object.freeze({ fromCache: true }) });
+    };
+
+    if (policy === "cacheOnly") {
+      const entry = await readStored(false);
+      return entry ? fromStore(entry) : buildMissingDocumentSnapshot<T>(this.path, this.id, true);
+    }
+    if (policy === "cacheFirst") {
+      const entry = await readStored(true);
+      if (entry) return fromStore(entry);
+    }
+
+    const epochBefore = this.ctx.getPathWriteEpoch(this.path);
+    try {
+      const snap = await this.fetchSnapshot(options);
+      // Skip the write when a local write/realtime change invalidated this path mid-flight.
+      if (snap.exists && this.ctx.getPathWriteEpoch(this.path) === epochBefore) {
+        void store
+          .set(key, { path: this.path, value: snap.raw, storedAt: Date.now() })
+          .catch(() => undefined);
+      }
+      return snap;
+    } catch (err) {
+      if (policy === "networkFirst" && isConnectivityError(err)) {
+        const entry = await readStored(false);
+        if (entry) return fromStore(entry);
+      }
+      throw err;
+    }
+  }
+
+  private async fetchSnapshot(options: DocumentGetOptions = {}): Promise<DocumentSnapshot<T>> {
     if (options.signal?.aborted) {
       throw createAbortError(options.signal);
     }

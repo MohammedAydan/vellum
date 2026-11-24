@@ -10,6 +10,7 @@ export * from "./core/field-ops.js";
 export * from "./core/reference.js";
 export * from "./core/http-transport.js";
 export * from "./cache/read-cache.js";
+export * from "./cache/doc-store.js";
 export * from "./auth/jwt-utils.js";
 export * from "./auth/auth-storage.js";
 export * from "./auth/auth-client.js";

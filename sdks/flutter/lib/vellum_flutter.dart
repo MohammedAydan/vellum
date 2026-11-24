@@ -21,6 +21,7 @@ part 'src/core/wire.dart';
 
 // Immutable snapshots, query/collection models, and index advisor
 part 'src/models/snapshots.dart';
+part 'src/cache/document_cache.dart';
 
 // End-user authentication, session models, and token storage
 part 'src/auth/auth_models.dart';

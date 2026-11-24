@@ -127,6 +127,9 @@ class VellumAuth implements VellumAuthPort {
     if (_currentUser?.id != user?.id ||
         _currentUser?.accessToken != user?.accessToken) {
       client.clearCache();
+      // Token rotation keeps the offline store (entries are per user); a
+      // different user or sign-out wipes it.
+      if (_currentUser?.id != user?.id) client.clearDocumentCache();
     }
     final sameUserTokenChanged = user != null &&
         _currentUser?.id == user.id &&
