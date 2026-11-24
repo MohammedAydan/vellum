@@ -25,9 +25,9 @@ Control-plane state moves into the database, social sign-in, serverless realtime
 
 ### SDK (Flutter) - `vellum_flutter`
 
-- **One package.** `vellum_flutter` now includes persistent encrypted session storage (Keychain, Keystore, libsecret, Windows credential store, encrypted web storage, with an in-memory fallback) and Google and GitHub sign-in in the system browser (`createVellumOAuth`). No extra package, code or native setup.
+- **One package.** `vellum_flutter` now includes persistent encrypted session storage (Keychain, Keystore, libsecret, Windows credential store, encrypted web storage, with an in-memory fallback) and Google and GitHub sign-in through the system browser (`createVellumOAuth`: deep link for custom schemes, loopback redirect for desktop; no webview). No extra package.
 - **Breaking:** `vellum_flutter` is now a Flutter package. It requires the Flutter SDK (`>=3.22.0`) and no longer works from plain Dart servers or CLIs. Dart tooling on the plain VM can import `package:vellum_flutter/vellum_flutter_core.dart` after `flutter pub get`.
-- Optional native Google account picker lives in the separate `vellum_flutter_google` package (uses `google_sign_in`).
+- Native Google account picker: install the official `google_sign_in` package yourself and pass its ID token to `signInWithGoogleIdToken` (no dependency on it from `vellum_flutter`).
 - Parity with the JavaScript additions above: ID-token sign-in, reference values and `addWithRelated`, cache policy, optional document ids, SSE fallback for realtime.
 
 ### Console

@@ -68,9 +68,6 @@ jobs:
       - name: Analyze and test the Flutter SDK
         run: cd sdks/flutter && flutter pub get && flutter analyze --fatal-infos && flutter test
 
-      - name: Analyze the optional Google package
-        run: cd sdks/flutter_google && flutter pub get && flutter analyze --fatal-infos
-
       - name: Analyze the testbed and check the shared console runner
         run: cd examples/flutter_testbed_app && flutter pub get && flutter analyze && flutter test test/runner_compatibility_test.dart
 

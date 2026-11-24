@@ -5,14 +5,12 @@ on:
     branches: [main]
     paths:
       - "sdks/flutter/**"
-      - "sdks/flutter_google/**"
       - "examples/flutter_compat_app/**"
       - ".github/workflows/flutter.yml"
   push:
     branches: [main]
     paths:
       - "sdks/flutter/**"
-      - "sdks/flutter_google/**"
       - "examples/flutter_compat_app/**"
       - ".github/workflows/flutter.yml"
   workflow_dispatch:
@@ -57,7 +55,7 @@ jobs:
         working-directory: examples/flutter_compat_app
 
   sdk-package:
-    name: vellum_flutter and vellum_flutter_google (analyze + tests)
+    name: vellum_flutter package (analyze + tests)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -72,10 +70,6 @@ jobs:
         working-directory: sdks/flutter
       - run: flutter test
         working-directory: sdks/flutter
-      - run: flutter pub get
-        working-directory: sdks/flutter_google
-      - run: flutter analyze --fatal-infos
-        working-directory: sdks/flutter_google
 
   build:
     name: Build ${{ matrix.target }}

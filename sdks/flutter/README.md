@@ -2,7 +2,7 @@
 
 Official **Flutter** SDK for **VELLUM** — a PostgreSQL-backed, multi-tenant document database with strong consistency, cursor streaming, real-time WebSocket sync, and reactive EdDSA end-user authentication.
 
-A single package for **Flutter (iOS, Android, Web, macOS, Windows, Linux)**, strictly null-safe (Dart `>=3.4.0 <4.0.0`, Flutter `>=3.22.0`). It includes the data client, auth, realtime, **encrypted persistent sessions**, and **Google and GitHub sign-in** through the system browser (`createVellumOAuth`). Nothing else to install or configure. Native Google account picker is optional and lives in the separate `vellum_flutter_google` package (it uses `google_sign_in`).
+A single package for **Flutter (iOS, Android, Web, macOS, Windows, Linux)**, strictly null-safe (Dart `>=3.4.0 <4.0.0`, Flutter `>=3.22.0`). It includes the data client, auth, realtime (web supported; the built-in browser sign-in launcher covers mobile and desktop), **encrypted persistent sessions**, and **Google and GitHub sign-in** through the system browser (`createVellumOAuth`). Nothing else to install or configure. For the native Google account picker, add the official `google_sign_in` package to your own app and pass its ID token to `signInWithGoogleIdToken`.
 
 It requires the Flutter SDK. It is no longer usable from plain Dart servers or CLIs.
 

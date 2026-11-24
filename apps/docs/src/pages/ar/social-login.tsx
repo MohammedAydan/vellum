@@ -1,5 +1,5 @@
 import {
-  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterNativeDart, flutterPubspec, androidManifest,
+  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
 } from "../../social-login-examples";
 import { AlphaNotice, Callout, Code, CodeTabs, Doc, P, PageLink, Section, UL } from "../../ui";
 
@@ -52,21 +52,23 @@ export default function Page() {
 
       <Section id="flutter" title="Flutter">
         <P>
-          هذا مدمج في vellum_flutter. يفتح جلسة المتصفح الآمنة للنظام على iOS وAndroid وmacOS وWindows وLinux والويب،
-          وتعيد النتيجة إلى Vellum.
+          هذا مدمج في vellum_flutter. يفتح متصفح النظام (بدون webview وبدون إضافة تثبّتها) ويعيد النتيجة إلى Vellum.
         </P>
         <Code lang="bash" title="pubspec.yaml" code={flutterPubspec} />
         <Code lang="dart" title="تسجيل الدخول" code={flutterBrowserDart} />
         <P>
-          يحتاج Android إلى إدخال واحد في ملف manifest لمخطط رابط تطبيقك. لا يحتاج iOS وmacOS إلى إعداد لمخطط مخصص.
-          على الويب يكون عنوان الرجوع صفحة https من تطبيقك تولّدها الإضافة؛ راجع توثيق الإضافة.
+          مع مخطط مخصص مثل <code>myapp://auth-callback</code> (iOS وAndroid وmacOS) سجّل المخطط في تطبيقك كأي رابط عميق.
+          على Windows وLinux استخدم عنوان رجوع loopback بمنفذ ثابت: يلتقط الـSDK الرجوع على هذا المنفذ فلا حاجة لتسجيل شيء.
+          المشغّل المدمج لا يغطي Flutter web؛ مرّر مشغّلك الخاص هناك.
         </P>
-        <Code lang="xml" title="AndroidManifest.xml (داخل application)" code={androidManifest} />
+        <Code lang="xml" title="AndroidManifest.xml (داخل MainActivity)" code={androidManifest} />
+        <Code lang="xml" title="Info.plist (iOS وmacOS)" code={iosPlist} />
+        <Code lang="dart" title="رجوع loopback على سطح المكتب" code={desktopDart} />
         <P>
-          تفضّل منتقي الحسابات الأصلي لـ Google؟ استخدم حزمة <code>google_sign_in</code> الرسمية عبر الحزمة نفسها.
+          تفضّل منتقي الحسابات الأصلي لـ Google؟ أضف حزمة <code>google_sign_in</code> الرسمية إلى تطبيقك ومرّر رمز الهوية إلى <code>signInWithGoogleIdToken</code>.
           أضف معرّفات عملاء Android وiOS إلى إعدادات Google في مشروعك ليُقبل رمزها.
         </P>
-        <Code lang="dart" title="Google الأصلي (اختياري)" code={flutterNativeDart} />
+        <Code lang="dart" title="Google الأصلي مع google_sign_in (اختياري)" code={flutterNativeDart} />
       </Section>
 
       <Section id="security" title="ملاحظات أمنية">

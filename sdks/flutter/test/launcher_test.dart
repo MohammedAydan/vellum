@@ -1,6 +1,9 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:vellum_flutter/vellum_flutter.dart';
+import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter_test/flutter_test.dart';
+import 'package:vellum_flutter/src/oauth_launcher/loopback_io.dart';
+import 'package:vellum_flutter/vellum_flutter.dart';
 
 void main() {
   test('createVellumOAuth rejects a relative redirect URI', () {
@@ -20,5 +23,42 @@ void main() {
     );
     expect(oauth.redirectUri, 'myapp://auth-callback');
     client.auth.dispose();
+  });
+
+  test('loopback launcher returns the redirect URL with its query', () async {
+    final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final port = probe.port;
+    await probe.close();
+    final redirect = Uri.parse('http://127.0.0.1:$port/callback');
+    final result = awaitLoopbackCallback(redirect, () async {
+      final client = HttpClient();
+      final other = await client.getUrl(Uri.parse('http://127.0.0.1:$port/other'));
+      expect((await other.close()).statusCode, 404);
+      final req = await client.getUrl(
+        Uri.parse('http://127.0.0.1:$port/callback?vellum_code=abc&state=xyz'),
+      );
+      final res = await req.close();
+      expect(res.statusCode, 200);
+      await res.drain<void>();
+      client.close();
+    }, const Duration(seconds: 10));
+    final returned = Uri.parse(await result);
+    expect(returned.path, '/callback');
+    expect(returned.queryParameters['vellum_code'], 'abc');
+    expect(returned.queryParameters['state'], 'xyz');
+  });
+
+  test('loopback launcher times out when no redirect arrives', () async {
+    final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final port = probe.port;
+    await probe.close();
+    await expectLater(
+      awaitLoopbackCallback(
+        Uri.parse('http://127.0.0.1:$port/callback'),
+        () async {},
+        const Duration(milliseconds: 200),
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
   });
 }
