@@ -28,7 +28,7 @@ import {
   resolveIsAdminServer,
 } from "../middleware/tenant-auth.js";
 import type { VellumPlatformContext } from "../app.js";
-import { unwrapProject } from "../project-lookup.js";
+import { loadProject, unwrapProject } from "../project-lookup.js";
 import { extractClientIp } from "../middleware/security.js";
 
 export interface AuthTenant {
@@ -38,12 +38,12 @@ export interface AuthTenant {
 }
 
 /** Resolve and validate the projectId path parameter of an auth route. */
-export function resolveAuthTenant(c: Context, platform: VellumPlatformContext): AuthTenant {
+export async function resolveAuthTenant(c: Context, platform: VellumPlatformContext): Promise<AuthTenant> {
   const projectId = c.req.param("projectId");
   if (!projectId) {
     throw new VellumError("INVALID_ARGUMENT", "Missing projectId path parameter");
   }
-  const project = unwrapProject(platform.controlStore.getProject(projectId));
+  const project = await loadProject(platform.controlStore, projectId);
   const status = project.status.toLowerCase();
   if (status === "suspended") {
     throw new VellumError("PERMISSION_DENIED", `Project '${projectId}' has been suspended by platform administration`);
@@ -89,11 +89,11 @@ export function masterKey(): string | undefined {
 }
 
 /** Read the already-initialized auth config, or fail closed. */
-export function getAuthConfigOrThrow(
+export async function getAuthConfigOrThrow(
   platform: VellumPlatformContext,
   projectId: string
-): ProjectAuthConfig {
-  const config = platform.controlStore.getAuthConfig(projectId);
+): Promise<ProjectAuthConfig> {
+  const config = await platform.controlStore.getAuthConfigAsync(projectId);
   if (!config) {
     throw new VellumError("SERVICE_UNAVAILABLE", "End-user auth is not configured for this project");
   }
@@ -108,7 +108,7 @@ export async function ensureAuthConfig(
   platform: VellumPlatformContext,
   projectId: string
 ): Promise<ProjectAuthConfig> {
-  const existing = platform.controlStore.getAuthConfig(projectId);
+  const existing = await platform.controlStore.getAuthConfigAsync(projectId);
   if (existing) return existing;
   const pair = generateEd25519KeyPair(masterKey());
   return platform.controlStore.upsertAuthConfig({

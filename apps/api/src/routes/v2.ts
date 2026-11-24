@@ -49,7 +49,7 @@ import type { ApiKeyRecord, ControlPlaneRepository } from "@vellum/database-cont
 import type { StructuredLogger } from "@vellum/observability";
 import type { VellumPlatformContext } from "../app.js";
 import { assertProjectAccess, extractBearerToken } from "../middleware/session.js";
-import { unwrapProject } from "../project-lookup.js";
+import { loadProject, unwrapProject } from "../project-lookup.js";
 
 /* -------------------------------------------------------------------------- */
 /* Structural types (kept local so parallel agents' types are not required)   */
@@ -445,7 +445,7 @@ export function createV2Routes(platform: VellumPlatformContext, helpers: V2Route
         };
         if (claims.realm === "customer_console") {
           await assertProjectAccess(platform.controlStore, claims, projectId);
-          const project = unwrapProject(platform.controlStore.getProject(projectId));
+          const project = await loadProject(platform.controlStore, projectId);
           return { project, apiKeyRecord: null, authContext: null };
         }
       } catch {
@@ -470,7 +470,7 @@ export function createV2Routes(platform: VellumPlatformContext, helpers: V2Route
         };
         if (claims.realm === "customer_console") {
           await assertProjectAccess(platform.controlStore, claims, projectId);
-          const project = unwrapProject(platform.controlStore.getProject(projectId));
+          const project = await loadProject(platform.controlStore, projectId);
           return { project, apiKeyRecord: null, authContext: null };
         }
       } catch {
@@ -591,7 +591,7 @@ export function createV2Routes(platform: VellumPlatformContext, helpers: V2Route
 
     let ruleset: unknown = parsed.rulesAst;
     if (ruleset === undefined) {
-      const active = platform.controlStore.getActiveRuleset(projectId);
+      const active = await platform.controlStore.getActiveRulesetAsync(projectId);
       if (!active) {
         throw new VellumError("INVALID_ARGUMENT", "No active ruleset is published for this project");
       }

@@ -740,7 +740,7 @@ function requireDocumentData(body: unknown): Record<string, unknown> {
   routes.get("/console/projects/:projectId/rulesets", async (c) => {
     const projectId = c.req.param("projectId");
     await engineContext(c, projectId);
-    const active = controlStore.getActiveRuleset(projectId);
+    const active = await controlStore.getActiveRulesetAsync(projectId);
     return c.json(active ?? { projectId, version: 0, rulesAst: null });
   });
 

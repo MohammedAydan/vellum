@@ -424,7 +424,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   // -------------------------------------------------------------------- SIGN-UP
 
   routes.post("/sign-up/email", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     await checkRegistrationGuards(tenant, config);
@@ -466,7 +466,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   // --------------------------------------------------------------------- SIGN-IN
 
   routes.post("/sign-in/email", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
@@ -508,7 +508,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   });
 
   routes.post("/sign-in/anonymous", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     await checkRegistrationGuards(tenant, config);
@@ -529,7 +529,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   });
 
   routes.post("/sign-in/provider", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     // The server never verifies provider ids or tokens itself: providerUserId,
     // email and emailVerified are claims made by the caller. Only a trusted
     // backend holding a secret (sk_) key may assert them. A publishable key in
@@ -563,7 +563,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   }
 
   routes.get("/oauth/:provider/start", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     const providerId = c.req.param("provider") ?? "";
     const provider = getProvider(providerId);
     // A browser navigation cannot send headers, so the publishable key travels in the query.
@@ -616,7 +616,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   });
 
   routes.get("/oauth/:provider/callback", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     const providerId = c.req.param("provider") ?? "";
     const provider = getProvider(providerId);
     const flow = openState(c.req.query("state") ?? "", masterKey());
@@ -687,7 +687,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   });
 
   routes.post("/oauth/exchange", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
@@ -715,7 +715,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   /** Native Google (google_sign_in, Google Identity Services): the app sends a Google ID token. */
   routes.post("/oauth/google/id-token", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
@@ -749,7 +749,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   // -------------------------------------------------------------------- TOKENS
 
   routes.post("/token/refresh", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(TokenRefreshRequestSchema, await c.req.json());
@@ -764,7 +764,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   });
 
   routes.post("/sign-out", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(SignOutRequestSchema, await optionalJsonBody(c));
@@ -780,7 +780,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   // -------------------------------------------------------------------- PROFILE
 
   routes.get("/user", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const user = await requireEndUser(c, platform, tenant);
@@ -788,7 +788,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   });
 
   routes.patch("/user", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const current = await requireEndUser(c, platform, tenant);
@@ -818,7 +818,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   // ------------------------------------------------------------------ PASSWORD
 
   routes.post("/password/reset", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(PasswordResetRequestSchema, await c.req.json());
@@ -847,7 +847,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   });
 
   routes.post("/password/confirm", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(PasswordConfirmRequestSchema, await c.req.json());
@@ -861,7 +861,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   // ---------------------------------------------------------- EMAIL VERIFICATION
 
   routes.post("/email/verify/request", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(EmailVerifyRequestSchema, await optionalJsonBody(c));
@@ -890,7 +890,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   });
 
   routes.post("/email/verify/confirm", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(EmailVerifyConfirmRequestSchema, await c.req.json());
@@ -903,7 +903,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   // ----------------------------------------------------------------------- MFA
 
   routes.post("/mfa/enroll", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     if (!config.enableTotpMfa) {
@@ -935,7 +935,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   });
 
   routes.post("/mfa/verify", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const user = await requireEndUser(c, platform, tenant);
@@ -973,7 +973,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   });
 
   routes.post("/mfa/challenge", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(MfaChallengeRequestSchema, await c.req.json());
@@ -1038,7 +1038,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   /** Turn the second factor off. Needs a signed-in user and a current code, never just a session. */
   routes.post("/mfa/disable", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const user = await requireEndUser(c, platform, tenant);
@@ -1069,7 +1069,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
   /** Public: clients and gateways fetch this without any API key. */
   routes.get("/.well-known/jwks.json", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     return c.json(exportPublicJwks(config));
   });

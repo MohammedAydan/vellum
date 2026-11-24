@@ -104,6 +104,7 @@ describe("tenant-auth header helpers", () => {
     const platform: VellumPlatformContext = Object.assign({} as VellumPlatformContext, {
       controlStore: Object.assign({} as VellumPlatformContext["controlStore"], {
         getAuthConfig: () => config,
+        getAuthConfigAsync: async () => config,
         upsertAuthConfig: async () => config,
       }),
     });

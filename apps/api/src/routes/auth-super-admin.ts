@@ -152,7 +152,7 @@ export function createAuthSuperAdminRoutes(platform: VellumPlatformContext): Hon
   // ---------------------------------------------------------- PROJECT CONTROL
 
   routes.patch("/projects/:projectId/control", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     // Super admins act by session; a server key is accepted only when it is
     // bound to the exact same project.
     if (getApiKeyHeader(c)) await requireProjectApiKey(c, platform, tenant, { serverOnly: true });
@@ -169,7 +169,7 @@ export function createAuthSuperAdminRoutes(platform: VellumPlatformContext): Hon
   });
 
   routes.post("/projects/:projectId/rotate-signing-key", async (c) => {
-    const tenant = resolveAuthTenant(c, platform);
+    const tenant = await resolveAuthTenant(c, platform);
     if (getApiKeyHeader(c)) await requireProjectApiKey(c, platform, tenant, { serverOnly: true });
     const existing = await ensureAuthConfig(platform, tenant.projectId);
     const pair = generateEd25519KeyPair(masterKey());

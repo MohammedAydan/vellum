@@ -17,7 +17,7 @@ import { generateProjectApiKey } from "@vellum/authorization";
 import { validateSecurityRulesetAst } from "@vellum/authorization";
 import type { SessionService } from "@vellum/authorization";
 import type { ControlPlaneRepository } from "@vellum/database-control";
-import { unwrapProject } from "../project-lookup.js";
+import { loadProject, unwrapProject } from "../project-lookup.js";
 import {
   getCacheInvalidationBus,
   invalidateApiKeyCache,
@@ -244,7 +244,7 @@ export function createControlPlaneRoutes(
     // validate that the key actually belongs to the addressed
     // project before revoking it. Previously any key in the store could be
     // revoked by ID, enabling cross-tenant revocation.
-    const project = unwrapProject(controlStore.getProject(projectId));
+    const project = await loadProject(controlStore, projectId);
     const existing = await controlStore.findApiKeyById(keyId);
     if (!existing) {
       throw new VellumError("NOT_FOUND", `API key '${keyId}' not found`);
@@ -327,7 +327,7 @@ export function createControlPlaneRoutes(
       await assertProjectAccess(controlStore, getRulesSession, projectId);
     }
 
-    const active = controlStore.getActiveRuleset(projectId);
+    const active = await controlStore.getActiveRulesetAsync(projectId);
     if (!active) {
       return c.json({
         id: `default_${projectId}`,
@@ -355,19 +355,19 @@ export function createControlPlaneRoutes(
   const relationRulesGuard = requireRealmSession(sessionService, superAdminSessionService);
   routes.get("/projects/:projectId/relation-rules", relationRulesGuard, async (c) => {
     const projectId = c.req.param("projectId");
-    const project = unwrapProject(controlStore.getProject(projectId));
+    const project = await loadProject(controlStore, projectId);
     const session = getSession(c);
     if (session) {
       await assertOrgAccess(controlStore, session, project.organizationId);
     }
-    const rules = controlStore.getRelationRules(projectId);
-    const version = controlStore.getRelationRulesVersion(projectId);
+    const rules = await controlStore.getRelationRulesAsync(projectId);
+    const version = await controlStore.getRelationRulesVersionAsync(projectId);
     return c.json({ projectId, version, rules });
   });
 
   routes.put("/projects/:projectId/relation-rules", relationRulesGuard, async (c) => {
     const projectId = c.req.param("projectId");
-    const project = unwrapProject(controlStore.getProject(projectId));
+    const project = await loadProject(controlStore, projectId);
 
     const body = await c.req.json();
     const parsed = UpdateRelationRulesRequestSchema.safeParse(body);
