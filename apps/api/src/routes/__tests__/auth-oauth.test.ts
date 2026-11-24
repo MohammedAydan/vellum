@@ -1,0 +1,225 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash, createSign, generateKeyPairSync, randomBytes } from "node:crypto";
+import { generateProjectApiKey } from "@vellum/authorization";
+import { createVellumPlatform } from "../../index.js";
+import { clearAuthRateLimitState } from "../../middleware/auth-rate-limit.js";
+import { clearOAuthKeyCache } from "../../auth/oauth/providers.js";
+
+const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const jwk = { ...(publicKey.export({ format: "jwk" }) as Record<string, unknown>), kid: "k1", alg: "RS256", use: "sig" };
+const REDIRECT = "https://app.example.com/auth/callback";
+
+function b64(obj: unknown): string {
+  return Buffer.from(JSON.stringify(obj)).toString("base64url");
+}
+function signIdToken(claims: Record<string, unknown>, kid = "k1"): string {
+  const head = b64({ alg: "RS256", kid, typ: "JWT" });
+  const body = b64(claims);
+  const sig = createSign("RSA-SHA256").update(`${head}.${body}`).sign(privateKey).toString("base64url");
+  return `${head}.${body}.${sig}`;
+}
+
+type Mock = { googleClaims: (nonce: string) => Record<string, unknown>; githubEmails: unknown[]; githubId: number };
+const mock: Mock = { googleClaims: () => ({}), githubEmails: [], githubId: 7 };
+let lastNonce = "";
+
+function installFetch() {
+  vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
+    if (url.startsWith("https://www.googleapis.com/oauth2/v3/certs")) return json({ keys: [jwk] });
+    if (url === "https://oauth2.googleapis.com/token") {
+      const params = new URLSearchParams(String(init?.body));
+      if (params.get("code") !== "good-code" || !params.get("code_verifier")) return json({ error: "invalid_grant" }, 400);
+      return json({ access_token: "at", id_token: signIdToken(mock.googleClaims(lastNonce)) });
+    }
+    if (url === "https://github.com/login/oauth/access_token") {
+      const params = new URLSearchParams(String(init?.body));
+      if (params.get("code") !== "good-code") return json({ error: "bad_verification_code" });
+      return json({ access_token: "gh-at" });
+    }
+    if (url === "https://api.github.com/user") return json({ id: mock.githubId, login: "octo", name: "Octo", avatar_url: "https://a/x.png", email: "public@spoof.com" });
+    if (url === "https://api.github.com/user/emails") return json(mock.githubEmails);
+    throw new Error(`unexpected fetch ${url}`);
+  });
+}
+
+async function fixture() {
+  const platform = createVellumPlatform();
+  const org = await platform.controlStore.createOrganization({ name: "O", slug: "oauth-org", billingEmail: "o@example.com" });
+  const { project } = await platform.controlStore.createProject({ organizationId: org.id, name: "P", slug: "oauth-app" });
+  const mk = async (keyType: "public" | "server") => {
+    const key = generateProjectApiKey({ keyType });
+    await platform.controlStore.registerApiKey({ projectId: project.id, name: keyType, keyType, keyPrefix: key.keyPrefix, secretHash: key.secretHash });
+    return key.fullKey;
+  };
+  const publicKeyStr = await mk("public");
+  const serverKey = await mk("server");
+  const base = `/v1/projects/${project.id}/auth`;
+  const call = (method: string, url: string, key: string, body?: unknown) =>
+    platform.fetch(new Request(`http://localhost${base}${url}`, {
+      method,
+      headers: { "content-type": "application/json", "x-vellum-api-key": key },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    }));
+  // Configure providers + allowlist through the customer admin config route is auth-gated;
+  // write the config directly to the control store like the admin route does.
+  const { mergeOAuthProviders } = await import("../../auth/oauth/config.js");
+  const existing = await (await import("../auth-shared.js")).ensureAuthConfig(platform as never, project.id);
+  await platform.controlStore.upsertAuthConfig({
+    projectId: project.id,
+    jwtKeyId: existing.jwtKeyId,
+    jwtPublicKeyPem: existing.jwtPublicKeyPem,
+    jwtPrivateKeyEncrypted: existing.jwtPrivateKeyEncrypted,
+    oauthProviders: mergeOAuthProviders({}, {
+      google: { enabled: true, clientId: "google-client", clientSecret: "gsecret" },
+      github: { enabled: true, clientId: "gh-client", clientSecret: "ghsecret" },
+      __settings: { redirectUris: [REDIRECT, "myapp://auth"] },
+    }, process.env["MASTER_ENCRYPTION_KEY"]),
+  });
+  return { platform, project, call, publicKeyStr, serverKey, base };
+}
+
+function pkce() {
+  const verifier = randomBytes(48).toString("base64url");
+  return { verifier, challenge: createHash("sha256").update(verifier).digest("base64url") };
+}
+
+async function start(f: Awaited<ReturnType<typeof fixture>>, provider: string, challenge: string, extra = "") {
+  return f.platform.fetch(new Request(
+    `http://localhost${f.base}/oauth/${provider}/start?apiKey=${f.publicKeyStr}&redirectUri=${encodeURIComponent(REDIRECT)}&codeChallenge=${challenge}&state=cs1${extra}`,
+    { redirect: "manual" }
+  ));
+}
+
+async function runFlow(f: Awaited<ReturnType<typeof fixture>>, provider: string) {
+  const { verifier, challenge } = pkce();
+  const res = await start(f, provider, challenge);
+  expect(res.status).toBe(302);
+  const authorize = new URL(res.headers.get("location") ?? "");
+  lastNonce = authorize.searchParams.get("nonce") ?? "";
+  expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
+  const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+  cb.searchParams.set("code", "good-code");
+  cb.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+  const back = await f.platform.fetch(new Request(`http://localhost${cb.pathname}${cb.search}`, { redirect: "manual" }));
+  return { back, verifier, authorize };
+}
+
+describe("OAuth sign-in (mock Google and GitHub)", () => {
+  beforeEach(() => {
+    clearAuthRateLimitState();
+    clearOAuthKeyCache();
+    installFetch();
+    mock.githubEmails = [{ email: "Dev@Example.com", primary: true, verified: true }];
+    mock.githubId = 7;
+    mock.googleClaims = (nonce) => ({
+      iss: "https://accounts.google.com", aud: "google-client", sub: "g-1", exp: Math.floor(Date.now() / 1000) + 600,
+      email: "alice@example.com", email_verified: true, name: "Alice", nonce,
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("google: start -> callback -> exchange yields a session; code is single use", async () => {
+    const f = await fixture();
+    const { back, verifier } = await runFlow(f, "google");
+    expect(back.status).toBe(302);
+    const target = new URL(back.headers.get("location") ?? "");
+    expect(target.origin + target.pathname).toBe(REDIRECT);
+    expect(target.searchParams.get("state")).toBe("cs1");
+    const code = target.searchParams.get("vellum_code") ?? "";
+    expect(code).not.toBe("");
+    const bad = await f.call("POST", "/oauth/exchange", f.publicKeyStr, { code, codeVerifier: pkce().verifier });
+    expect(bad.status).toBe(401);
+    const ok = await f.call("POST", "/oauth/exchange", f.publicKeyStr, { code, codeVerifier: verifier });
+    expect(ok.status).toBe(200);
+    const session = (await ok.json()) as { accessToken: string; user: { email: string } };
+    expect(session.user.email).toBe("alice@example.com");
+    expect(session.accessToken).toBeTruthy();
+    const again = await f.call("POST", "/oauth/exchange", f.publicKeyStr, { code, codeVerifier: verifier });
+    expect(again.status).toBe(401);
+  });
+
+  it("google: rejects a wrong nonce, wrong audience and unverified email", async () => {
+    for (const patch of [{ nonce: "other" }, { aud: "someone-else" }, { email_verified: false }]) {
+      const f = await fixture();
+      mock.googleClaims = (nonce) => ({
+        iss: "https://accounts.google.com", aud: "google-client", sub: "g-2", exp: Math.floor(Date.now() / 1000) + 600,
+        email: "bob@example.com", email_verified: true, nonce, ...patch,
+      });
+      const { back } = await runFlow(f, "google");
+      const target = new URL(back.headers.get("location") ?? "");
+      expect(target.searchParams.get("vellum_code")).toBeNull();
+      expect(target.searchParams.get("error")).toBeTruthy();
+    }
+  });
+
+  it("github: uses the primary verified email, not the public profile email", async () => {
+    const f = await fixture();
+    const { back, verifier } = await runFlow(f, "github");
+    const code = new URL(back.headers.get("location") ?? "").searchParams.get("vellum_code") ?? "";
+    const ok = await f.call("POST", "/oauth/exchange", f.publicKeyStr, { code, codeVerifier: verifier });
+    expect(((await ok.json()) as { user: { email: string } }).user.email).toBe("dev@example.com");
+  });
+
+  it("github: refuses when no verified primary email exists", async () => {
+    const f = await fixture();
+    mock.githubEmails = [{ email: "x@example.com", primary: true, verified: false }];
+    const { back } = await runFlow(f, "github");
+    const target = new URL(back.headers.get("location") ?? "");
+    expect(target.searchParams.get("error")).toBe("access_denied");
+  });
+
+  it("links to an existing password account only through a verified email", async () => {
+    const f = await fixture();
+    const signup = await f.call("POST", "/sign-up/email", f.publicKeyStr, { email: "alice@example.com", password: "Password123!", displayName: "A" });
+    expect(signup.status).toBe(201);
+    const { back, verifier } = await runFlow(f, "google");
+    const code = new URL(back.headers.get("location") ?? "").searchParams.get("vellum_code") ?? "";
+    const ok = await f.call("POST", "/oauth/exchange", f.publicKeyStr, { code, codeVerifier: verifier });
+    expect(ok.status).toBe(200);
+  });
+
+  it("refuses redirect URIs outside the allowlist and bad PKCE input", async () => {
+    const f = await fixture();
+    const { challenge } = pkce();
+    const evil = await f.platform.fetch(new Request(
+      `http://localhost${f.base}/oauth/google/start?apiKey=${f.publicKeyStr}&redirectUri=${encodeURIComponent("https://evil.example/cb")}&codeChallenge=${challenge}`,
+      { redirect: "manual" }
+    ));
+    expect(evil.status).toBe(400);
+    const noPkce = await start(f, "google", "short");
+    expect(noPkce.status).toBe(400);
+    const noKey = await f.platform.fetch(new Request(
+      `http://localhost${f.base}/oauth/google/start?redirectUri=${encodeURIComponent(REDIRECT)}&codeChallenge=${challenge}`, { redirect: "manual" }));
+    expect(noKey.status).toBe(401);
+  });
+
+  it("rejects a tampered state", async () => {
+    const f = await fixture();
+    const res = await f.platform.fetch(new Request(`http://localhost${f.base}/oauth/google/callback?code=good-code&state=forged`, { redirect: "manual" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("id-token endpoint verifies a native Google ID token", async () => {
+    const f = await fixture();
+    const token = signIdToken({
+      iss: "accounts.google.com", aud: "google-client", sub: "g-9", exp: Math.floor(Date.now() / 1000) + 600,
+      email: "native@example.com", email_verified: true,
+    });
+    const ok = await f.call("POST", "/oauth/google/id-token", f.publicKeyStr, { idToken: token });
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { user: { email: string } }).user.email).toBe("native@example.com");
+    const forged = token.slice(0, -4) + "AAAA";
+    const bad = await f.call("POST", "/oauth/google/id-token", f.publicKeyStr, { idToken: forged });
+    expect(bad.status).toBe(401);
+  });
+
+  it("never exposes the client secret in the config view", async () => {
+    const f = await fixture();
+    const { publicAuthConfig, ensureAuthConfig } = await import("../auth-shared.js");
+    const view = JSON.stringify(publicAuthConfig(await ensureAuthConfig(f.platform as never, f.project.id)));
+    expect(view).not.toContain("gsecret");
+    expect(view).not.toContain("clientSecretEncrypted");
+  });
+});
