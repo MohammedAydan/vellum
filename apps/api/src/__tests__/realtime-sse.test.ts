@@ -80,23 +80,23 @@ describe("realtime over SSE", () => {
     ]);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/event-stream");
-    const reading = readFrames(res, (fr) => fr.filter((x) => x.type === "mutation").length >= 3);
+    const reading = readFrames(res, (fr) => fr.filter((x) => x["type"] === "mutation").length >= 3);
     await new Promise((r) => setTimeout(r, 150));
     await f.write("POST", "/documents/items/a", { data: { n: 1 } });
     await f.write("PUT", "/documents/items/a", { data: { n: 2 } });
     await f.write("DELETE", "/documents/items/a", {});
     const frames = await reading;
     expect(frames[0]).toMatchObject({ type: "auth_ack" });
-    const ops = frames.filter((x) => x.type === "mutation").map((x) => x.operation);
+    const ops = frames.filter((x) => x["type"] === "mutation").map((x) => x["operation"]);
     expect(ops).toEqual(["create", "update", "delete"]);
   });
 
   it("rejects bad credentials with an error frame and closes", async () => {
     const f = await fixture();
     const res = await f.open([{ type: "auth", projectId: f.projectId, apiKey: "sk_bad_key_000000000000000" }]);
-    const frames = await readFrames(res, (fr) => fr.some((x) => x.type === "error"));
-    expect(frames.some((x) => x.type === "error")).toBe(true);
-    expect(frames.some((x) => x.type === "auth_ack")).toBe(false);
+    const frames = await readFrames(res, (fr) => fr.some((x) => x["type"] === "error"));
+    expect(frames.some((x) => x["type"] === "error")).toBe(true);
+    expect(frames.some((x) => x["type"] === "auth_ack")).toBe(false);
   });
 
   it("requires an auth frame first and bounds frame count", async () => {

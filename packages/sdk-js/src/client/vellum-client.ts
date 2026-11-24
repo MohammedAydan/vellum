@@ -20,6 +20,8 @@ import { HttpTransport } from "../core/http-transport.js";
 import { encodePathSegment, encodeResourcePath, sanitizeAndClone } from "../core/safe-json.js";
 import { RealtimeTransport, toRealtimeUrl } from "../realtime/realtime-transport.js";
 import { SseSocket } from "../realtime/sse-socket.js";
+import { createFallbackSocketFactory } from "../realtime/fallback-socket.js";
+import { defaultWebSocketFactory } from "../realtime/realtime-transport.js";
 import type { RealtimeFrame, RealtimeTransportState, WebSocketFactory } from "../realtime/realtime-transport.js";
 import { CollectionReference, type CollectionReferenceContext } from "../references/collection-ref.js";
 import { DocumentReference } from "../references/document-ref.js";
@@ -241,7 +243,7 @@ export class VellumClient implements VellumClientInterface {
   private readonly realtimeUrl: string | null;
   private readonly realtimeHub: unknown;
   private readonly webSocketFactory: WebSocketFactory | null;
-  private readonly realtimeTransportKind: "sse" | "websocket";
+  private readonly realtimeTransportKind: "auto" | "websocket" | "sse";
   private readonly customFetch: typeof globalThis.fetch | null;
   private readonly realtimeTransportOptions: ClientConfig["realtimeTransportOptions"];
   private readonly transport: HttpTransport;
@@ -261,7 +263,7 @@ export class VellumClient implements VellumClientInterface {
     this.realtimeUrl = config.realtimeUrl ?? null;
     this.realtimeHub = config.realtimeHub ?? null;
     this.webSocketFactory = config.webSocketFactory ?? null;
-    this.realtimeTransportKind = config.realtimeTransport ?? "sse";
+    this.realtimeTransportKind = config.realtimeTransport ?? "auto";
     this.customFetch = config.customFetch ?? null;
     this.realtimeTransportOptions = config.realtimeTransportOptions
       ? Object.freeze({ ...config.realtimeTransportOptions })
@@ -538,13 +540,18 @@ export class VellumClient implements VellumClientInterface {
     }
   }
 
-  /** SSE by default (works on serverless hosts); WebSocket when requested or a factory is injected. */
+  /** WebSocket first; SSE fallback when WebSocket cannot be used (auto); or a forced transport. */
   private resolveSocketFactory(): WebSocketFactory | null {
     if (this.webSocketFactory) return this.webSocketFactory;
     if (this.realtimeTransportKind === "websocket") return null;
-    const fetchFn = this.customFetch ?? null;
-    return (url: string) =>
-      new SseSocket(url, fetchFn ? { fetchFn: fetchFn as never } : {});
+    const sseOptions = this.customFetch ? { fetchFn: this.customFetch as never } : {};
+    if (this.realtimeTransportKind === "sse") {
+      return (url: string) => new SseSocket(url, sseOptions);
+    }
+    return createFallbackSocketFactory({
+      webSocketFactory: defaultWebSocketFactory,
+      sse: sseOptions,
+    });
   }
 
   private ensureTransport(): RealtimeTransport {

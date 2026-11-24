@@ -6,9 +6,10 @@ import { describe, expect, it } from "vitest";
 import { createVellumPlatform } from "../../apps/api/src/index.js";
 import { CustomerDashboardService } from "../../apps/dashboard/src/index.js";
 import { createClient } from "../../packages/sdk-js/src/index.js";
+import { resetRealtimeFallbackCache } from "../../packages/sdk-js/src/index.js";
 import type { RealtimeSnapshot } from "../../packages/sdk-js/src/index.js";
 
-function harness() {
+function harness(transport: "auto" | "sse" = "sse") {
   const platform = createVellumPlatform();
   const dashboard = new CustomerDashboardService({ platform });
   const user = platform.controlStore.createUser({ email: "sse@vellum.dev", name: "SSE", platformRole: "customer" });
@@ -35,6 +36,7 @@ function harness() {
     projectId: project.id,
     apiKey,
     endpoint: "http://127.0.0.1:9",
+    realtimeTransport: transport,
     customFetch: (url, init) => platform.fetch(new Request(url, init)),
     realtimeTransportOptions: { heartbeatIntervalMs: 60_000, connectTimeoutMs: 5000 },
   });
@@ -50,6 +52,19 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
 }
 
 describe("sdk-js realtime over SSE", () => {
+  it("auto mode tries WebSocket first and falls back to SSE when the host cannot upgrade", async () => {
+    resetRealtimeFallbackCache();
+    const { platform, client } = harness("auto");
+    const snaps: RealtimeSnapshot<Record<string, unknown>>[] = [];
+    const ref = client.collection("tickets").doc("t9");
+    const off = ref.onSnapshot((s) => snaps.push(s));
+    await waitFor(() => snaps.length > 0, 15_000);
+    await ref.create({ n: 1 });
+    await waitFor(() => snaps.some((s) => s.changes.some((c) => c.doc.path === "tickets/t9" && c.doc.data()["n"] === 1)), 15_000);
+    off();
+    platform.metering.stop();
+  }, 30_000);
+
   it("delivers create, update and delete quickly and survives adding a second subscription", async () => {
     const { platform, client } = harness();
     const snaps: RealtimeSnapshot<Record<string, unknown>>[] = [];

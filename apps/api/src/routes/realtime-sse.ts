@@ -22,7 +22,11 @@ import type { ServerFrame } from "@vellum/api-contract";
 import type { RealtimeGatewayHub } from "@vellum/realtime";
 
 export const SSE_MAX_FRAMES_PER_REQUEST = 64;
-export const SSE_DEFAULT_MAX_LIFETIME_MS = 240_000;
+/**
+ * Streams end after 55 s (override: REALTIME_SSE_MAX_LIFETIME_MS) so they finish before common
+ * serverless function limits; clients renew seamlessly with resume.
+ */
+export const SSE_DEFAULT_MAX_LIFETIME_MS = 55_000;
 export const SSE_DEFAULT_KEEPALIVE_MS = 15_000;
 
 export interface RealtimeSseOptions {
@@ -42,7 +46,10 @@ export function createRealtimeSseRoutes(
   options: RealtimeSseOptions = {}
 ): Hono {
   const routes = new Hono();
-  const maxLifetimeMs = options.maxLifetimeMs ?? SSE_DEFAULT_MAX_LIFETIME_MS;
+  const envLifetime = Number(process.env["REALTIME_SSE_MAX_LIFETIME_MS"]);
+  const maxLifetimeMs =
+    options.maxLifetimeMs ??
+    (Number.isFinite(envLifetime) && envLifetime >= 5_000 ? envLifetime : SSE_DEFAULT_MAX_LIFETIME_MS);
   const keepAliveMs = options.keepAliveMs ?? SSE_DEFAULT_KEEPALIVE_MS;
 
   routes.post("/realtime/stream", async (c) => {

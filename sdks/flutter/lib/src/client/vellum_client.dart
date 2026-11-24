@@ -362,6 +362,11 @@ class VellumClient implements VellumClientPort {
   final TokenStoragePort authTokenStorage;
   final String? realtimeUrlOverride;
   final RealtimeChannelFactory? webSocketChannelFactory;
+
+  /// Realtime transport: WebSocket first with automatic SSE fallback (default),
+  /// WebSocket only, or SSE only. SSE works on hosts without WebSocket, such as
+  /// Vercel.
+  final VellumRealtimeMode realtimeMode;
   final int Function(int attempt)? realtimeBackoff;
   final IndexSuggestionCallback? onIndexSuggestion;
   final bool warnOnMissingIndexes;
@@ -391,6 +396,7 @@ class VellumClient implements VellumClientPort {
     TokenStoragePort? authTokenStorage,
     this.realtimeUrlOverride,
     this.webSocketChannelFactory,
+    this.realtimeMode = VellumRealtimeMode.auto,
     this.realtimeBackoff,
     this.onIndexSuggestion,
     this.warnOnMissingIndexes = true,

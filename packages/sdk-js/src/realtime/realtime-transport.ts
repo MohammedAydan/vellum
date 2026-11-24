@@ -26,7 +26,7 @@ export interface WebSocketLike {
   close(code?: number, reason?: string): void;
 }
 
-export type WebSocketFactory = (url: string) => WebSocketLike;
+export type WebSocketFactory = (url: string) => WebSocketLike | Promise<WebSocketLike>;
 
 export interface RealtimeAuthMaterial {
   projectId: string;
@@ -158,7 +158,7 @@ function isNodeRuntime(): boolean {
   return typeof process !== "undefined" && typeof process.versions?.node === "string";
 }
 
-async function defaultWebSocketFactory(url: string): Promise<WebSocketLike> {
+export async function defaultWebSocketFactory(url: string): Promise<WebSocketLike> {
   if (!isNodeRuntime()) {
     const GlobalWebSocket = (globalThis as { WebSocket?: new (url: string) => WebSocketLike }).WebSocket;
     if (typeof GlobalWebSocket !== "function") {
@@ -361,7 +361,13 @@ export class RealtimeTransport {
 
     let socket: WebSocketLike;
     try {
-      socket = this.factoryOverride ? this.factoryOverride(this.url) : await defaultWebSocketFactory(this.url);
+      if (this.factoryOverride) {
+        // Only yield when the factory is async, so synchronous factories attach handlers in the same tick.
+        const made = this.factoryOverride(this.url);
+        socket = typeof (made as Promise<WebSocketLike>).then === "function" ? await made : (made as WebSocketLike);
+      } else {
+        socket = await defaultWebSocketFactory(this.url);
+      }
     } catch (error: unknown) {
       this.failConnection(error);
       return;

@@ -26,7 +26,7 @@ class VellumRealtimeManager implements VellumRealtimePort {
     _frameHandlers[subId] = onFrame;
 
     final transport = _transport ??= VellumRealtimeTransport(
-      url: Uri.parse(client.realtimeUrlOverride ?? vellumRealtimeUrl(client.realtimeEndpoint)),
+      url: vellumSanitizeRealtimeUri(client.realtimeUrlOverride ?? vellumRealtimeUrl(client.realtimeEndpoint)),
       auth: () async {
         final token = await client.resolveAuthToken();
         return <String, Object?>{
@@ -47,7 +47,12 @@ class VellumRealtimeManager implements VellumRealtimePort {
           handler(error);
         }
       },
-      channelFactory: client.webSocketChannelFactory,
+      channelFactory: client.webSocketChannelFactory ??
+          switch (client.realtimeMode) {
+            VellumRealtimeMode.auto => FallbackWebSocketChannel.connect,
+            VellumRealtimeMode.websocket => null,
+            VellumRealtimeMode.sse => SseWebSocketChannel.connect,
+          },
       backoffMs: client.realtimeBackoff,
     );
     transport.subscribe(subId, target);

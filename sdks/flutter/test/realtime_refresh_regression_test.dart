@@ -45,6 +45,7 @@ void main() {
         endpoint: 'http://127.0.0.1:${server.port}',
         projectId: 'project',
         apiKey: 'pk_test',
+        realtimeMode: VellumRealtimeMode.websocket,
         httpTransport: (method, url, headers, body) async {
           if (url.endsWith('/auth/sign-up/email')) return session(1);
           if (url.endsWith('/auth/token/refresh')) return session(2);

@@ -67,11 +67,12 @@ export class SseSocket implements WebSocketLike {
     this.url = toRealtimeSseUrl(url);
     this.fetchFn = options.fetchFn ?? null;
     this.debounceMs = options.restartDebounceMs ?? 5;
-    queueMicrotask(() => {
+    // A macrotask, so a caller that awaits the factory still attaches handlers before `open`.
+    setTimeout(() => {
       if (this.readyState !== CONNECTING) return;
       this.readyState = OPEN;
       this.onopen?.({});
-    });
+    }, 0);
   }
 
   public send(data: string): void {
