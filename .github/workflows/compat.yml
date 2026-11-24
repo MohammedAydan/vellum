@@ -1,0 +1,56 @@
+name: Compatibility
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  js-sdk-browsers:
+    name: JS SDK in real browsers (Chromium, Firefox, WebKit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: corepack pnpm --filter @vellumdb/sdk-js build
+      - name: WebSocket first, SSE fallback and IndexedDB cache in each browser
+        run: corepack pnpm exec playwright test -c playwright.compat.config.ts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: compat-browser-results
+          path: test-results/
+
+  js-sdk-node:
+    name: JS SDK on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm --filter @vellumdb/sdk-js build
+      - run: corepack pnpm --filter @vellumdb/sdk-js test

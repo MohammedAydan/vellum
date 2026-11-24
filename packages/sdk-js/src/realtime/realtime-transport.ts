@@ -166,11 +166,23 @@ export async function defaultWebSocketFactory(url: string): Promise<WebSocketLik
     }
     return new GlobalWebSocket(url);
   }
-  // Resolved lazily so browser bundles never pull in `node:module`.
-  const { createRequire } = await import("node:module");
-  const nodeRequire = createRequire(import.meta.url);
-  const wsModule = nodeRequire("ws") as { WebSocket: new (url: string) => WebSocketLike };
-  return new wsModule.WebSocket(url);
+  // Resolved lazily, through a non-literal specifier, so bundlers (webpack, Vite,
+  // esbuild, Metro) never try to resolve `node:module` for browser builds.
+  const globalCtor = (globalThis as { WebSocket?: new (url: string) => WebSocketLike }).WebSocket;
+  try {
+    const specifier = ["node", "module"].join(":");
+    const { createRequire } = (await import(/* webpackIgnore: true */ /* @vite-ignore */ specifier)) as {
+      createRequire: (url: string) => (id: string) => unknown;
+    };
+    const nodeRequire = createRequire(import.meta.url);
+    const wsModule = nodeRequire("ws") as { WebSocket: new (url: string) => WebSocketLike };
+    return new wsModule.WebSocket(url);
+  } catch (error: unknown) {
+    // Runtimes that report a Node-like `process` but cannot load `ws` (some edge
+    // and serverless hosts) still ship a global WebSocket.
+    if (typeof globalCtor === "function") return new globalCtor(url);
+    throw error;
+  }
 }
 
 interface TransportInternalState {

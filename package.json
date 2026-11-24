@@ -68,6 +68,7 @@
     "@types/ws": "^8.18.2",
     "@vitest/coverage-v8": "^2.1.8",
     "drizzle-orm": "^0.38.3",
+    "esbuild": "^0.25.12",
     "eslint": "^9.18.0",
     "fast-check": "^4.10.2",
     "mitata": "^1.0.34",
