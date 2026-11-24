@@ -115,7 +115,7 @@ describe("shared SessionService (jose-compatible HS256)", () => {
     const token = service.signAccess(input);
     const claims = service.verifyAccess(token);
     await service.revoke(claims.jti, Date.now() + 60_000);
-    expect(() => service.verifyAccess(token)).toThrow(/revoked/i);
+    await expect(service.verifyAccessChecked(token)).rejects.toThrow(/revoked/i);
     expect(await service.isRevoked(claims.jti)).toBe(true);
   });
 
