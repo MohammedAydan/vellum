@@ -50,7 +50,7 @@ final db = VellumClient(
   projectId: const String.fromEnvironment('VELLUM_PROJECT_ID'),
   apiKey: const String.fromEnvironment('VELLUM_API_KEY'),
   httpClient: httpClient,
-  authStorage: InMemoryAuthTokenStorage(), // default; see Advanced configuration for a secure storage snippet
+  authStorage: InMemoryAuthTokenStorage(), // default; add vellum_flutter_secure_storage for persistent sessions (see Advanced configuration)
   requestTimeout: const Duration(seconds: 30),
   maxRetries: 3,
   retryBaseDelay: const Duration(milliseconds: 250),
