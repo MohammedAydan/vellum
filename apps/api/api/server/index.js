@@ -20,9 +20,20 @@ const ALLOWED_VERCEL_ORIGINS = new Set([
   "https://vellum-console-mag-1.vercel.app",
 ]);
 
+// The rewrite carries the original path in `?path=` and appends the caller's own query
+// parameters next to it. Put those parameters back on the forwarded request URL, otherwise
+// every query string (pagination, OAuth code/state, apiKey) is silently dropped.
+function rebuildTarget(url) {
+  const target = new URL(url.searchParams.get("path") || "/", "http://localhost");
+  for (const [key, value] of url.searchParams) {
+    if (key !== "path") target.searchParams.append(key, value);
+  }
+  return target.pathname + target.search;
+}
+
 async function handler(req, res) {
   const url = new URL(req.url || "/", "http://localhost");
-  const target = url.searchParams.get("path") || "/";
+  const target = rebuildTarget(url);
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers || {})) {
     if (Array.isArray(value)) for (const item of value) headers.append(key, String(item));
