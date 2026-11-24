@@ -8,6 +8,7 @@
  * destination to a single-segment Function.
  */
 import { createVellumPlatformFromEnv } from "../../dist/index.js";
+import { pipeWebResponse } from "../../dist/runtime/node-stream.js";
 
 const platform = await createVellumPlatformFromEnv();
 
@@ -43,15 +44,14 @@ export default async function handler(req, res) {
     );
   }
 
-  res.statusCode = response.status;
-  response.headers.forEach((value, key) => res.setHeader(key, value));
-
+  const extra = {};
   const origin = req.headers && req.headers.origin;
   if (origin && ALLOWED_VERCEL_ORIGINS.has(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Vary", "Origin");
+    extra["Access-Control-Allow-Origin"] = origin;
+    extra["Access-Control-Allow-Credentials"] = "true";
+    extra["Vary"] = "Origin";
   }
 
-  res.end(Buffer.from(await response.arrayBuffer()));
+  // Stream the body (do not buffer it): realtime over SSE depends on it.
+  await pipeWebResponse(response, res, extra);
 }
