@@ -6,6 +6,7 @@
  * operations (`create()`, `info()`, `clear()`, `drop()`/`delete()`, `import()`, `export()`).
  */
 
+import { reference } from "../core/reference.js";
 import { generateAutoDocId } from "../core/auto-id.js";
 import { encodePathSegment } from "../core/safe-json.js";
 import type {
@@ -20,7 +21,7 @@ import type {
   ImportResult,
   RequestOptions,
 } from "../types.js";
-import { DocumentReference, type DocumentReferenceContext } from "./document-ref.js";
+import { DocumentReference, replaceDocumentReferences, type DocumentReferenceContext } from "./document-ref.js";
 import { QueryBuilder, type QueryBuilderContext } from "./query-builder.js";
 
 export interface CollectionReferenceContext extends QueryBuilderContext, DocumentReferenceContext {
@@ -40,6 +41,16 @@ export interface CollectionReferenceContext extends QueryBuilderContext, Documen
     collection: string,
     options?: { limit?: number; cursor?: string | null; signal?: AbortSignal }
   ): Promise<ExportResult>;
+}
+
+/** One group of related documents for `addWithRelated`. */
+export interface RelatedWrite {
+  /** Collection the related documents are created in. */
+  collection: string;
+  /** Documents to create (they may contain DocumentReference values). */
+  docs: Record<string, unknown>[];
+  /** Optional field on each child that references the new parent document. */
+  parentField?: string;
 }
 
 export class CollectionReference<T = Record<string, unknown>>
@@ -74,6 +85,48 @@ export class CollectionReference<T = Record<string, unknown>>
     const ref = this.doc();
     await ref.create(data, options);
     return ref;
+  }
+
+  /**
+   * Create a document and its related documents in ONE atomic request.
+   *
+   * `related` maps a field on the parent to the child collection and docs. The
+   * parent gets `field: [ref, ...]`, and each child gets a `parentField`
+   * reference back to the parent when `parentField` is set. Either everything
+   * is written or nothing is.
+   */
+  public async addWithRelated(
+    data: T,
+    related: Record<string, RelatedWrite>,
+    options: RequestOptions = {}
+  ): Promise<DocumentReferenceInterface<T>> {
+    const parent = this.doc();
+    const parentData: Record<string, unknown> = { ...(replaceDocumentReferences(data) as Record<string, unknown>) };
+    const writes: Array<{ type: "set"; path: string; data: Record<string, unknown> }> = [];
+    for (const [field, spec] of Object.entries(related)) {
+      encodePathSegment(spec.collection, "related collection");
+      const refs: unknown[] = [];
+      for (const childData of spec.docs) {
+        const childPath = `${spec.collection}/${generateAutoDocId()}`;
+        refs.push(reference(childPath));
+        writes.push({
+          type: "set",
+          path: childPath,
+          data: {
+            ...(replaceDocumentReferences(childData) as Record<string, unknown>),
+            ...(spec.parentField ? { [spec.parentField]: reference(parent.path) } : {}),
+          },
+        });
+      }
+      parentData[field] = refs;
+    }
+    writes.unshift({ type: "set", path: parent.path, data: parentData });
+    if (writes.length > 500) {
+      throw new Error("@vellumdb/sdk-js: addWithRelated supports at most 500 documents per call");
+    }
+    await this.colCtx.request("POST", "/batchWrite", { writes }, {}, true, options.signal);
+    for (const w of writes) this.colCtx.invalidateDocCache(w.path);
+    return parent;
   }
 
   public override withConverter<U>(converter: DocDataConverter<U>): CollectionReferenceInterface<U>;
