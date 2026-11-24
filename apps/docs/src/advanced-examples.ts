@@ -44,7 +44,7 @@ final manual = VellumClient(
   autoRefresh: false,
 );`;
 
-export const secureStorageDart = `// Optional. Add flutter_secure_storage to your own app, then paste this class.
+export const secureStorageDart = `// Optional: only if you want your own storage instead of the companion package.
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:vellum_flutter/vellum_flutter.dart';
@@ -147,3 +147,7 @@ createClient({ endpoint, projectId, apiKey, realtimeTransport: "websocket" }); /
 createClient({ endpoint, projectId, apiKey, realtimeTransport: "sse" });
 
 const stop = db.collection("tasks").onSnapshot((snap) => console.log(snap.docs.length));`;
+
+export const secureStoragePubspec = `dependencies:
+  vellum_flutter: ^0.0.2
+  vellum_flutter_secure_storage: ^0.0.2`;

@@ -1,5 +1,5 @@
 import {
-  autoIdTs, autoIdDart, authTs, authDart, secureStorageDart, cacheTs, cacheDart,
+  autoIdTs, autoIdDart, authTs, authDart, secureStorageDart, secureStoragePubspec, cacheTs, cacheDart,
   relationsTs, relationsDart, realtimeTs,
 } from "../../advanced-examples";
 import { AlphaNotice, Callout, Code, CodeTabs, Doc, P, PageLink, Section, Table } from "../../ui";
@@ -41,13 +41,20 @@ export default function Page() {
         ]} />
       </Section>
 
-      <Section id="secure-storage" title="Flutter: تخزين الرموز الآمن (اختياري)">
+      <Section id="secure-storage" title="Flutter: جلسات آمنة ودائمة">
         <P>
-          يحتفظ عميل Flutter بالجلسة في الذاكرة افتراضياً، فلا شيء لتثبيته. إذا أردت بقاء الجلسة بعد إعادة
-          تشغيل التطبيق داخل keychain أو keystore، أضف <code>flutter_secure_storage</code> إلى تطبيقك والصق
-          هذا الصنف. يستخدم الواجهة الحالية <code>AuthTokenStorage</code>.
+          بدون أي حزمة إضافية يحتفظ عميل Flutter بالجلسة في الذاكرة. لإبقاء المستخدم مسجلاً بعد إعادة تشغيل
+          التطبيق أضف الحزمة المرافقة. لا شيء آخر مطلوب: لا كود ولا إعداد native. تُحفظ الجلسة في Keychain
+          (iOS وmacOS) وKeystore (Android) وlibsecret (Linux) ومخزن بيانات الاعتماد في Windows، أو تخزين
+          مشفّر على الويب عبر HTTPS وlocalhost. إذا لم يتوفر المخزن الآمن وقت التشغيل تبقى الجلسة في الذاكرة
+          ويستمر التطبيق في العمل.
         </P>
-        <Code lang="dart" title="SecureAuthTokenStorage" code={secureStorageDart} />
+        <Code lang="bash" title="pubspec.yaml" code={secureStoragePubspec} />
+        <P>
+          يحتاج Android إلى <code>minSdkVersion</code> 23 أو أعلى. وتحتاج بنية Linux إلى حزمة النظام{" "}
+          <code>libsecret-1-dev</code>. لاختيار التخزين بنفسك مرّره صراحة أو طبّق <code>AuthTokenStorage</code>.
+        </P>
+        <Code lang="dart" title="تخزين مخصص (اختياري)" code={secureStorageDart} />
       </Section>
 
       <Section id="cache" title="سياسة الكاش">

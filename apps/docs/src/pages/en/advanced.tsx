@@ -1,5 +1,5 @@
 import {
-  autoIdTs, autoIdDart, authTs, authDart, secureStorageDart, cacheTs, cacheDart,
+  autoIdTs, autoIdDart, authTs, authDart, secureStorageDart, secureStoragePubspec, cacheTs, cacheDart,
   relationsTs, relationsDart, realtimeTs,
 } from "../../advanced-examples";
 import { AlphaNotice, Callout, Code, CodeTabs, Doc, P, PageLink, Section, Table } from "../../ui";
@@ -41,14 +41,21 @@ export default function Page() {
         ]} />
       </Section>
 
-      <Section id="secure-storage" title="Flutter: secure token storage (optional)">
+      <Section id="secure-storage" title="Flutter: persistent secure sessions">
         <P>
-          Out of the box the Flutter client keeps the session in memory, so there is nothing to install. If
-          you want the session to survive app restarts in the keychain or keystore, add{" "}
-          <code>flutter_secure_storage</code> to your own app and paste this class. It uses the existing{" "}
-          <code>AuthTokenStorage</code> interface.
+          Without any extra package the Flutter client keeps the session in memory. To keep users signed in
+          across app restarts, add the companion package. Nothing else is needed: no code and no native setup.
+          It stores the session in the Keychain (iOS, macOS), the Keystore (Android), libsecret (Linux),
+          the Windows credential store, or encrypted web storage on HTTPS and localhost. If the secure store
+          is not available at runtime, the session stays in memory and the app keeps working.
         </P>
-        <Code lang="dart" title="SecureAuthTokenStorage" code={secureStorageDart} />
+        <Code lang="bash" title="pubspec.yaml" code={secureStoragePubspec} />
+        <P>
+          Android needs <code>minSdkVersion</code> 23 or higher. Linux builds need the{" "}
+          <code>libsecret-1-dev</code> system package. To choose the storage yourself, pass it explicitly or
+          implement <code>AuthTokenStorage</code>.
+        </P>
+        <Code lang="dart" title="Custom storage (optional)" code={secureStorageDart} />
       </Section>
 
       <Section id="cache" title="Cache policy">
