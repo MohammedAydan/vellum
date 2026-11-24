@@ -640,7 +640,8 @@ export function createCustomerAuthRoutes(
     // Ensure user has at least one organization
     const orgs = Array.from(controlStore.organizations.values());
     const organizationMembers = getOrganizationMembersMap(controlStore);
-    let userOrg = organizationMembers
+    // PostgreSQL decides when available; the mirror is only the offline/test fallback.
+    let userOrg = !pgPool && organizationMembers
       ? orgs.find((o) => organizationMembers.has(`${o.id}:${user!.id}`))
       : null;
 
