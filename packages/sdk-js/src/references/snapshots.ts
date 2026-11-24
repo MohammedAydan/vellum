@@ -75,6 +75,7 @@ export function applyConverterToSnapshot<T>(
     path: rawSnapshot.path,
     version: rawSnapshot.version,
     exists: rawSnapshot.exists,
+    ...(rawSnapshot.metadata !== undefined ? { metadata: rawSnapshot.metadata } : {}),
     data: () => converter.fromDoc(rawSnapshot),
     raw: rawSnapshot.raw,
     ...(rawSnapshot.included !== undefined ? { included: rawSnapshot.included } : {}),
@@ -99,6 +100,7 @@ export function buildDocumentSnapshot<T = Record<string, unknown>>(
     path: cloned.path,
     version,
     exists: true,
+    metadata: Object.freeze({ fromCache: false }),
     data: () => sanitizeAndClone(cloned.data) as Record<string, unknown>,
     raw: Object.freeze(sanitizeAndClone(cloned)),
     ...(cloned._included !== undefined ? { included: sanitizeAndClone(cloned._included) } : {}),
@@ -115,13 +117,15 @@ export function buildDocumentSnapshot<T = Record<string, unknown>>(
  */
 export function buildMissingDocumentSnapshot<T = Record<string, unknown>>(
   path: string,
-  id: string
+  id: string,
+  fromCache = false
 ): DocumentSnapshot<T> {
   return Object.freeze({
     id,
     path,
     version: 0,
     exists: false,
+    metadata: Object.freeze({ fromCache }),
     data: () => null as unknown as T,
     raw: null,
   });

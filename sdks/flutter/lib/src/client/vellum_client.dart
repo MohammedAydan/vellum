@@ -362,6 +362,22 @@ class VellumClient implements VellumClientPort {
   /// Silent token refresh (60 s before expiry and on 401). Defaults to true;
   /// when false only an explicit `auth.getIdToken(forceRefresh: true)` refreshes.
   final bool autoRefresh;
+
+  /// Default read policy; overridable per call with `get(cachePolicy: ...)`.
+  final CachePolicy cachePolicy;
+
+  /// Freshness window for [CachePolicy.cacheFirst].
+  final Duration cacheTtl;
+
+  /// Offline store. Defaults to a 100 MB in-memory LRU; pass your own
+  /// [DocumentCacheStore] to persist to disk, or set `enableCache: false`.
+  final DocumentCacheStore? documentCache;
+
+  /// Clears stored documents (used on sign-out / user change).
+  void clearDocumentCache() {
+    final store = documentCache;
+    if (store != null) unawaited(store.clear().catchError((Object _) {}));
+  }
   String? _customToken;
 
   /// Injects an externally issued bearer token. It wins over [getAuthToken]
@@ -405,6 +421,10 @@ class VellumClient implements VellumClientPort {
     String? baseUrl,
     this.getAuthToken,
     this.autoRefresh = true,
+    this.cachePolicy = CachePolicy.networkFirst,
+    this.cacheTtl = const Duration(minutes: 5),
+    DocumentCacheStore? cacheStore,
+    bool enableCache = true,
     HttpTransport? httpTransport,
     http.Client? httpClient,
     TokenStoragePort? authStorage,
@@ -424,6 +444,8 @@ class VellumClient implements VellumClientPort {
   })  : endpoint = (endpoint ?? '').trim().replaceFirst(RegExp(r'/+$'), ''),
         baseUrl = _resolveBaseUrl(endpoint, baseUrl, projectId),
         httpTransport = _resolveTransport(httpTransport, httpClient),
+        documentCache =
+            enableCache ? (cacheStore ?? MemoryDocumentCacheStore()) : null,
         authTokenStorage =
             authStorage ?? authTokenStorage ?? InMemoryAuthTokenStorage(),
         _random = random {
@@ -589,6 +611,49 @@ class VellumClient implements VellumClientPort {
   }
 
   Future<JsonMap> request(
+    String method,
+    String relativePath, {
+    JsonMap? body,
+    bool includeAuth = true,
+    String? idempotencyKey,
+    Map<String, String>? extraHeaders,
+  }) async {
+    final result = await _sendRequest(
+      method,
+      relativePath,
+      body: body,
+      includeAuth: includeAuth,
+      idempotencyKey: idempotencyKey,
+      extraHeaders: extraHeaders,
+    );
+    _invalidateAfterWrite(method, relativePath);
+    return result;
+  }
+
+  /// Keeps the offline cache honest: any successful write drops the stored
+  /// copies it could affect (batches and transactions clear the whole store).
+  void _invalidateAfterWrite(String method, String relativePath) {
+    final store = documentCache;
+    if (store == null || method == 'GET' || method == 'HEAD') return;
+    if (relativePath.startsWith('/batchWrite') ||
+        relativePath.startsWith('/transactions:commit')) {
+      unawaited(store.clear().catchError((Object _) {}));
+      return;
+    }
+    const prefix = '/documents/';
+    if (relativePath.startsWith(prefix)) {
+      final raw = relativePath.substring(prefix.length).split('?').first;
+      final path = Uri.decodeFull(raw);
+      unawaited(store.deletePath(path).catchError((Object _) {}));
+      final slash = path.lastIndexOf('/');
+      if (slash > 0) {
+        // Collection queries that included this document are no longer exact.
+        unawaited(store.deletePrefix('${path.substring(0, slash)}/').catchError((Object _) {}));
+      }
+    }
+  }
+
+  Future<JsonMap> _sendRequest(
     String method,
     String relativePath, {
     JsonMap? body,

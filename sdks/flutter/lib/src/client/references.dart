@@ -32,8 +32,86 @@ class DocumentReference<T> {
   /// Reads the document. [include] accepts `'field'` shorthands or [VellumInclude]
   /// specs; [select] accepts dot paths. Both are sent as URL-encoded JSON query
   /// parameters (`?include=[...]&select=[...]`).
-  Future<DocumentSnapshot<T>> get(
-      {List<Object>? include, List<String>? select}) async {
+  Future<DocumentSnapshot<T>> get({
+    List<Object>? include,
+    List<String>? select,
+    CachePolicy? cachePolicy,
+  }) async {
+    final store = client.documentCache;
+    final policy = cachePolicy ?? client.cachePolicy;
+    if (store == null || policy == CachePolicy.networkOnly) {
+      return _fetch(include: include, select: select);
+    }
+    final scope = client.auth.currentUser?.id ?? 'anon';
+    final key =
+        '$scope\u0000$path\u0000${jsonEncode(include == null ? null : serializeIncludeRelations(include))}\u0000${jsonEncode(select)}';
+
+    Future<CachedDocument?> readStored({required bool fresh}) async {
+      try {
+        final entry = await store.get(key);
+        if (entry == null) return null;
+        if (fresh &&
+            DateTime.now().difference(entry.storedAt) > client.cacheTtl) {
+          return null;
+        }
+        return entry;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    DocumentSnapshot<T> fromStore(CachedDocument entry) =>
+        _snapshotFromResponse(entry.value, fromCache: true);
+
+    if (policy == CachePolicy.cacheOnly) {
+      final entry = await readStored(fresh: false);
+      return entry != null
+          ? fromStore(entry)
+          : DocumentSnapshot<T>(
+              id: id, path: path, version: 0, data: null, fromCache: true);
+    }
+    if (policy == CachePolicy.cacheFirst) {
+      final entry = await readStored(fresh: true);
+      if (entry != null) return fromStore(entry);
+    }
+    try {
+      final snap = await _fetch(
+          include: include, select: select, store: store, storeKey: key);
+      return snap;
+    } catch (error) {
+      if (policy == CachePolicy.networkFirst && _isConnectivityFailure(error)) {
+        final entry = await readStored(fresh: false);
+        if (entry != null) return fromStore(entry);
+      }
+      rethrow;
+    }
+  }
+
+  DocumentSnapshot<T> _snapshotFromResponse(
+    Map<String, Object?> res, {
+    bool fromCache = false,
+  }) {
+    final rawData = (res['data'] as Map).cast<String, Object?>();
+    final rawIncluded = res['_included'];
+    final rawRedacted = res['_redactedRefs'];
+    return DocumentSnapshot<T>(
+      id: res['documentId'] as String,
+      path: res['path'] as String,
+      version: (res['version'] as num).toInt(),
+      data: fromJson(rawData, res['documentId'] as String),
+      included: rawIncluded is Map ? rawIncluded.cast<String, Object?>() : null,
+      redactedRefs:
+          rawRedacted is List ? rawRedacted.whereType<String>().toList() : null,
+      fromCache: fromCache,
+    );
+  }
+
+  Future<DocumentSnapshot<T>> _fetch({
+    List<Object>? include,
+    List<String>? select,
+    DocumentCacheStore? store,
+    String? storeKey,
+  }) async {
     final queryParams = <String, String>{};
     if (include != null && include.isNotEmpty) {
       queryParams['include'] = jsonEncode(serializeIncludeRelations(include));
@@ -55,18 +133,17 @@ class DocumentReference<T> {
       }
       rethrow;
     }
-    final rawData = (res['data'] as Map).cast<String, Object?>();
-    final rawIncluded = res['_included'];
-    final rawRedacted = res['_redactedRefs'];
-    final snap = DocumentSnapshot<T>(
-      id: res['documentId'] as String,
-      path: res['path'] as String,
-      version: (res['version'] as num).toInt(),
-      data: fromJson(rawData, res['documentId'] as String),
-      included: rawIncluded is Map ? rawIncluded.cast<String, Object?>() : null,
-      redactedRefs:
-          rawRedacted is List ? rawRedacted.whereType<String>().toList() : null,
-    );
+    final snap = _snapshotFromResponse(res);
+    if (store != null &&
+        storeKey != null &&
+        authEpoch == client.auth.sessionEpoch) {
+      unawaited(store
+          .set(
+            storeKey,
+            CachedDocument(path: path, value: res, storedAt: DateTime.now()),
+          )
+          .catchError((Object _) {}));
+    }
     if (authEpoch == client.auth.sessionEpoch &&
         (include == null || include.isEmpty) &&
         (select == null || select.isEmpty)) {

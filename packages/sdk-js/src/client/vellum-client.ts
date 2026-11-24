@@ -14,6 +14,7 @@ import type { SignInOAuthPayload, SignOutOptions, SignUpEmailOptions } from "../
 import { isRecord, parseJwtSubject } from "../auth/jwt-utils.js";
 import { batchWriteChunked as runBatchWriteChunked } from "../batch/batch-chunked.js";
 import { BoundedReadCache } from "../cache/read-cache.js";
+import { createDefaultDocStore, DEFAULT_MAX_CACHE_SIZE_BYTES, type DocStore } from "../cache/doc-store.js";
 import { computeReconnectBackoffMs, createAbortError, sleepWithSignal } from "../core/backoff.js";
 import { normalizeEndpoint, validateProjectConfig } from "../core/config.js";
 import { HttpTransport } from "../core/http-transport.js";
@@ -69,6 +70,7 @@ import type {
   UpdateCollectionInput,
   UpdateProfileInput,
   VerifyMfaChallengeInput,
+  CachePolicy,
 } from "../types.js";
 
 interface HubConnection {
@@ -86,6 +88,9 @@ interface ActiveSubscription {
 
 interface CacheInternalState {
   readonly readCache: BoundedReadCache<WireDocument> | null;
+  readonly docStore: DocStore | null;
+  readonly cachePolicy: CachePolicy;
+  readonly cacheTtlMs: number;
   readonly dedupeReads: boolean;
   readonly inFlightGets: Map<string, Promise<WireDocument>>;
   readonly pathWriteEpochs: Map<string, number>;
@@ -291,8 +296,20 @@ export class VellumClient implements VellumClientInterface {
           })
         : null;
 
+    const docStore: DocStore | null =
+      config.cache?.store === false
+        ? null
+        : (config.cache?.store ??
+          createDefaultDocStore(
+            `${this.endpoint}|${this.projectId}`,
+            config.cache?.maxCacheSizeBytes ?? DEFAULT_MAX_CACHE_SIZE_BYTES
+          ));
+
     this.cacheState = {
       readCache,
+      docStore,
+      cachePolicy: config.cachePolicy ?? "networkFirst",
+      cacheTtlMs: config.cache?.cacheTtlMs ?? 300_000,
       dedupeReads: config.dedupeReads ?? false,
       inFlightGets: new Map<string, Promise<WireDocument>>(),
       pathWriteEpochs: new Map<string, number>(),
@@ -318,7 +335,7 @@ export class VellumClient implements VellumClientInterface {
         `${DEFAULT_AUTH_STORAGE_KEY}:${encodeURIComponent(this.endpoint)}:${encodeURIComponent(this.projectId)}`
       ) : null),
       onTokenChanged: (previousToken, nextToken) => {
-        this.clearCache();
+        this.resetCaches(false);
         if (nextToken !== null && (nextToken === this.auth.currentUser?.accessToken ||
           (parseJwtSubject(previousToken) !== null && parseJwtSubject(previousToken) === parseJwtSubject(nextToken)))) {
           this.reauthenticateRealtime(nextToken);
@@ -353,6 +370,9 @@ export class VellumClient implements VellumClientInterface {
       prepareRead: () => this.auth.getValidAccessToken(),
       getSessionEpoch: () => this.cacheState.sessionEpoch,
       readCache: this.cacheState.readCache,
+      docStore: this.cacheState.docStore,
+      cachePolicy: this.cacheState.cachePolicy,
+      cacheTtlMs: this.cacheState.cacheTtlMs,
       dedupeReads: this.cacheState.dedupeReads,
       inFlightGets: this.cacheState.inFlightGets,
       getPathWriteEpoch: (path: string) => this.getPathWriteEpoch(path),
@@ -418,6 +438,7 @@ export class VellumClient implements VellumClientInterface {
   private invalidateDocCache(path: string): void {
     this.cacheState.pathWriteEpochs.set(path, (this.cacheState.pathWriteEpochs.get(path) ?? 0) + 1);
     this.cacheState.readCache?.invalidatePath(path);
+    void this.cacheState.docStore?.deletePath(path).catch(() => undefined);
     const keyPrefix = `${path}\0`;
     for (const key of this.cacheState.inFlightGets.keys()) {
       if (key.startsWith(keyPrefix)) {
@@ -430,6 +451,7 @@ export class VellumClient implements VellumClientInterface {
     this.cacheState.globalCacheEpoch += 1;
     this.cacheState.readCache?.invalidateCollection(collectionPath);
     const prefix = collectionPath.endsWith("/") ? collectionPath : `${collectionPath}/`;
+    void this.cacheState.docStore?.deletePrefix(prefix).catch(() => undefined);
     for (const key of this.cacheState.inFlightGets.keys()) {
       if (key.startsWith(prefix)) {
         this.cacheState.inFlightGets.delete(key);
@@ -443,8 +465,14 @@ export class VellumClient implements VellumClientInterface {
   }
 
   public clearCache(): void {
+    this.resetCaches(true);
+  }
+
+  /** Token rotation keeps the offline store (entries are scoped per user); sign-in/out and explicit clears wipe it. */
+  private resetCaches(clearStore: boolean): void {
     this.cacheState.globalCacheEpoch += 1;
     this.cacheState.readCache?.clear();
+    if (clearStore) void this.cacheState.docStore?.clear().catch(() => undefined);
     this.cacheState.inFlightGets.clear();
   }
 

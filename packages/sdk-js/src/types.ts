@@ -1,3 +1,4 @@
+import type { DocStore } from "./cache/doc-store.js";
 /**
  * @vellumdb/sdk-js - Types and Interfaces
  * Specification Section 12.1
@@ -25,7 +26,25 @@ export interface ReadCacheConfig {
   ttlMs?: number;
   /** Maximum number of cached entries before LRU eviction. Defaults to `1_000`. */
   maxEntries?: number;
+  /**
+   * Offline/disk store behind `CachePolicy`. Defaults to IndexedDB in browsers
+   * and an in-memory LRU elsewhere. Pass `false` to disable, or your own `DocStore`.
+   */
+  store?: DocStore | false;
+  /** Size cap for the default store in bytes. Defaults to 100 MB. */
+  maxCacheSizeBytes?: number;
+  /** Freshness window for `cacheFirst` in milliseconds. Defaults to 5 minutes. */
+  cacheTtlMs?: number;
 }
+
+/**
+ * How reads use the offline store.
+ * - `networkFirst` (default): fetch, and on connectivity failure return the stored copy with `metadata.fromCache = true`.
+ * - `cacheFirst`: use a fresh stored copy, otherwise fetch.
+ * - `networkOnly`: never read the store.
+ * - `cacheOnly`: only the store; a miss gives a non-existent snapshot.
+ */
+export type CachePolicy = "networkFirst" | "cacheFirst" | "networkOnly" | "cacheOnly";
 
 /** Public realtime connection lifecycle states observable via `VellumClient`. */
 export type ConnectionState = "disconnected" | "connecting" | "connected" | "reconnecting";
@@ -62,6 +81,8 @@ export interface ClientConfig {
   retryRandomFn?: (() => number) | null;
   /** Optional opt-in bounded LRU/TTL read cache for `doc.get()` reads. */
   cache?: ReadCacheConfig;
+  /** Default read policy for the whole client. Defaults to `networkFirst`; overridable per call. */
+  cachePolicy?: CachePolicy;
   /**
    * Opt-in single-flight in-flight GET coalescing: duplicate concurrent
    * `doc.get()` calls for the exact same path & options share one HTTP request
@@ -237,6 +258,8 @@ export interface DocumentGetOptions extends RequestOptions {
   dedupe?: boolean;
   /** Skip reading from the bounded read cache for this call when `true`. */
   bypassCache?: boolean;
+  /** Per-call override of the client's `cachePolicy`. */
+  cachePolicy?: CachePolicy;
 }
 
 export interface DocumentSetOptions extends RequestOptions {
@@ -297,6 +320,8 @@ export interface DocumentSnapshot<T = Record<string, unknown>> {
   readonly path: string;
   readonly version: number;
   readonly exists: boolean;
+  /** `fromCache` is true when this snapshot was served from the offline store. */
+  readonly metadata?: { readonly fromCache: boolean };
   readonly data: () => T;
   readonly raw: unknown;
   /** Resolved relations returned by the server as `_included`, when requested. */

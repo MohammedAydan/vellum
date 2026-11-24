@@ -62,6 +62,9 @@ class DocumentSnapshot<T> {
   final JsonMap? _included;
   final List<String>? _redactedRefs;
 
+  /// True when this snapshot was served from the offline cache.
+  final bool fromCache;
+
   const DocumentSnapshot({
     required this.id,
     required this.path,
@@ -71,6 +74,7 @@ class DocumentSnapshot<T> {
     required T? data,
     JsonMap? included,
     List<String>? redactedRefs,
+    this.fromCache = false,
   })  : _data = data,
         _included = included,
         _redactedRefs = redactedRefs;
