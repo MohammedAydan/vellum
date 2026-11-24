@@ -2,7 +2,7 @@
 library;
 
 import 'package:flutter_testbed_app/testbed_runner.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('all 20 live scenarios pass against VELLUM_API_BASE_URL', () async {

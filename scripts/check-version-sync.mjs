@@ -47,8 +47,6 @@ function pubspecVersion(file) {
 }
 const pubspecs = [
   "sdks/flutter/pubspec.yaml",
-  "sdks/flutter_secure_storage/pubspec.yaml",
-  "sdks/flutter_oauth/pubspec.yaml",
   "examples/flutter_compat_app/pubspec.yaml",
   "apps/vellum-e2e-app/pubspec.yaml",
   "examples/flutter_testbed_app/pubspec.yaml",

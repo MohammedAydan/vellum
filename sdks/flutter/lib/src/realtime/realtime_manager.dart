@@ -1,5 +1,5 @@
 /// Multiplexed realtime subscription manager with resumeSeqId and leak-free disposal.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// Multiplexes realtime subscriptions over a single [VellumRealtimeTransport].
 class VellumRealtimeManager implements VellumRealtimePort {

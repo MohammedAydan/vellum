@@ -1,5 +1,5 @@
 /// Canonical API exceptions and secret redaction helpers.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// Structured exception thrown on canonical API error responses.
 class VellumException implements Exception {

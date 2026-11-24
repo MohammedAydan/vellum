@@ -1,5 +1,5 @@
 /// Document and collection path validation and URL-safe encoding.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// Validates a single VELLUM path segment against path traversal, URL injection,
 /// and control-character attacks.

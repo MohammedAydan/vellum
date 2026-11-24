@@ -5,7 +5,7 @@ import 'dart:math';
 import 'package:vellum_flutter/vellum_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 String _jwt(Duration ttl, {String sub = 'usr_1'}) {

@@ -2,7 +2,6 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_compat_app/main.dart';
 import 'package:vellum_flutter/vellum_flutter.dart';
-import 'package:vellum_flutter_secure_storage/vellum_flutter_secure_storage.dart';
 
 VellumClient _client(Map<String, Map<String, Object?>> store) {
   return VellumClient(

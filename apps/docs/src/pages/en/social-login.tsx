@@ -1,5 +1,5 @@
 import {
-  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterNativeDart, flutterPubspec, androidManifest,
+  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
 } from "../../social-login-examples";
 import { AlphaNotice, Callout, Code, CodeTabs, Doc, P, PageLink, Section, UL } from "../../ui";
 
@@ -11,9 +11,8 @@ export default function Page() {
       description="Let users sign in with Google or GitHub from the web or from a Flutter app. Vellum runs the OAuth flow on the server, so your app never handles a provider secret."
     >
       <AlphaNotice />
-      <Callout tone="warning" title="Next SDK release">
-        The methods on this page ship after version 0.0.2. They are in the repository and are not on npm or
-        pub.dev yet.
+      <Callout tone="warning" title="Requires 0.0.3 or later">
+        The methods on this page are available from version 0.0.3 of the JavaScript and Flutter SDKs.
       </Callout>
 
       <Section id="how" title="How it works">
@@ -53,21 +52,23 @@ export default function Page() {
 
       <Section id="flutter" title="Flutter">
         <P>
-          Add the companion package. It opens the system browser session on iOS, Android, macOS, Windows, Linux and web,
-          and returns the result to Vellum.
+          This is built into vellum_flutter. It opens the system browser (no webview, no extra plugin to install) and returns the result to Vellum.
         </P>
         <Code lang="bash" title="pubspec.yaml" code={flutterPubspec} />
         <Code lang="dart" title="Sign in" code={flutterBrowserDart} />
         <P>
-          Android needs one manifest entry for your app link scheme. iOS and macOS need no setup for a custom scheme.
-          On web, the redirect URI is an https page of your app that the plugin generates; see the plugin documentation.
+          With a custom scheme such as <code>myapp://auth-callback</code> (iOS, Android, macOS) register the scheme in your app
+          like any deep link. On Windows and Linux use a loopback redirect with a fixed port: the SDK catches the redirect on that
+          port, so nothing needs registering. The built-in launcher does not cover Flutter web; pass your own launcher there.
         </P>
-        <Code lang="xml" title="AndroidManifest.xml (inside application)" code={androidManifest} />
+        <Code lang="xml" title="AndroidManifest.xml (inside MainActivity)" code={androidManifest} />
+        <Code lang="xml" title="Info.plist (iOS and macOS)" code={iosPlist} />
+        <Code lang="dart" title="Desktop loopback redirect" code={desktopDart} />
         <P>
-          Prefer the native account picker for Google? Use the official <code>google_sign_in</code> package through the same
-          package. Add your Android and iOS client IDs to the Google settings of your project so their tokens are accepted.
+          Prefer the native account picker for Google? Add the official <code>google_sign_in</code> package to your own app and pass its
+          ID token to <code>signInWithGoogleIdToken</code>. Add your Android and iOS client IDs to the Google settings of your project so their tokens are accepted.
         </P>
-        <Code lang="dart" title="Native Google (optional)" code={flutterNativeDart} />
+        <Code lang="dart" title="Native Google with google_sign_in (optional)" code={flutterNativeDart} />
       </Section>
 
       <Section id="security" title="Security notes">

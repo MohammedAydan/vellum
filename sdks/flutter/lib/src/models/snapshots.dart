@@ -1,5 +1,5 @@
 /// Immutable document/query snapshots, relation/aggregation specs, index advisor, and collection models.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// A declarative eager-loaded relation (`include`) for documents and queries.
 ///

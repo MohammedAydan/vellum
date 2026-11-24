@@ -43,9 +43,8 @@ export default function Page() {
 
       <Section id="secure-storage" title="Flutter: persistent secure sessions">
         <P>
-          Without any extra package the Flutter client keeps the session in memory. To keep users signed in
-          across app restarts, add the companion package. Nothing else is needed: no code and no native setup.
-          It stores the session in the Keychain (iOS, macOS), the Keystore (Android), libsecret (Linux),
+          The Flutter client keeps users signed in across app restarts out of the box. Nothing else is needed:
+          no extra package, no code and no native setup. It stores the session in the Keychain (iOS, macOS), the Keystore (Android), libsecret (Linux),
           the Windows credential store, or encrypted web storage on HTTPS and localhost. If the secure store
           is not available at runtime, the session stays in memory and the app keeps working.
         </P>

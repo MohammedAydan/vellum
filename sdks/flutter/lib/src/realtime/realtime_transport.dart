@@ -1,5 +1,5 @@
 /// WebSocket realtime transport with decorrelated jitter, heartbeat, and bounded outbound queue.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// Converts an HTTP(S) or WS(S) endpoint into the canonical realtime URL.
 String vellumRealtimeUrl(String endpoint) {

@@ -1,5 +1,5 @@
 // Examples for the Social sign-in page (Google and GitHub).
-// They mirror @vellumdb/sdk-js and vellum_flutter after 0.0.2.
+// They mirror @vellumdb/sdk-js and vellum_flutter after 0.0.3.
 
 export const popupTs = `// Call from a click handler so the browser allows the popup.
 const result = await db.signInWithPopup("google"); // or "github"
@@ -43,24 +43,39 @@ if (result is VellumMfaRequired) {
   // finish with db.auth.verifyMfaChallenge(...)
 }`;
 
-export const flutterNativeDart = `// Optional: the official google_sign_in package (native account picker).
-final result = await signInWithNativeGoogle(
-  db.auth,
+export const flutterNativeDart = `// Optional. Add the official google_sign_in package to your own pubspec;
+// vellum_flutter does not depend on it.
+import 'package:google_sign_in/google_sign_in.dart';
+
+await GoogleSignIn.instance.initialize(
   serverClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
-);`;
+);
+final account = await GoogleSignIn.instance.authenticate();
+final idToken = account.authentication.idToken!;
+final result = await db.auth.signInWithGoogleIdToken(idToken: idToken);`;
 
 export const flutterPubspec = `dependencies:
-  vellum_flutter: ^0.0.2
-  vellum_flutter_oauth: ^0.0.2`;
+  vellum_flutter: ^0.0.3 # browser sign-in is built in`;
 
-export const androidManifest = `<activity
-  android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
-  android:exported="true"
-  android:taskAffinity="">
-  <intent-filter android:label="flutter_web_auth_2">
-    <action android:name="android.intent.action.VIEW" />
-    <category android:name="android.intent.category.DEFAULT" />
-    <category android:name="android.intent.category.BROWSABLE" />
-    <data android:scheme="myapp" />
-  </intent-filter>
-</activity>`;
+export const androidManifest = `<!-- inside the existing <activity> of your MainActivity -->
+<intent-filter>
+  <action android:name="android.intent.action.VIEW" />
+  <category android:name="android.intent.category.DEFAULT" />
+  <category android:name="android.intent.category.BROWSABLE" />
+  <data android:scheme="myapp" />
+</intent-filter>`;
+
+export const iosPlist = `<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array><string>myapp</string></array>
+  </dict>
+</array>`;
+
+export const desktopDart = `// Windows and Linux (and macOS if you prefer): use a loopback redirect with a fixed port.
+// Add exactly this URL to the redirect list in Auth Studio.
+final oauth = createVellumOAuth(
+  auth: db.auth,
+  redirectUri: 'http://127.0.0.1:4455/callback',
+);`;

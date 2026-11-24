@@ -34,6 +34,10 @@ jobs:
       - uses: dart-lang/setup-dart@v1
       - run: corepack enable && corepack pnpm install --frozen-lockfile
       - run: corepack pnpm build
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
       - name: Compile displayed consumer SDK examples
         run: corepack pnpm docs:typecheck-examples
       - name: Create isolated databases and apply unmodified migrations
@@ -41,7 +45,7 @@ jobs:
           psql postgresql://vellum:vellum@127.0.0.1:5432/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE docs_control'
           psql postgresql://vellum:vellum@127.0.0.1:5432/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE docs_data'
           corepack pnpm db:migrate
-      - run: cd examples/flutter && dart pub get && dart analyze --fatal-infos
+      - run: cd examples/flutter && flutter pub get && flutter analyze --fatal-infos
       - run: corepack pnpm exec playwright install --with-deps chromium
       - name: Live Dart examples, displayed requests and bilingual browser regressions
         run: |

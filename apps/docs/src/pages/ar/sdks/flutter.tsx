@@ -194,7 +194,7 @@ export default function Page() {
       </Callout>
 
       <Section id="beta-install" title="تثبيت النسخة التجريبية">
-      <P>الإصدار 0.0.2 متاح على npm وpub.dev. ثبّت الحزم المنشورة أدناه، ولا تحتاج إلى نسخة من المستودع.</P>
+      <P>الإصدار 0.0.3 متاح على npm وpub.dev. ثبّت الحزم المنشورة أدناه، ولا تحتاج إلى نسخة من المستودع.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />
         <Code lang="yaml" title="Flutter / Dart 3.4+" code={betaDartInstall} />
       </Section>
@@ -226,7 +226,7 @@ export default function Page() {
             [<code>maxRetries</code>, <code>3</code>, "إعادة المحاولة التلقائية للطلبات الآمنة مع تراجع أُسّي وتشتيت."],
             [<code>coalesceInFlightGets</code>, <code>true</code>, "دمج طلبات القراءة المتزامنة لنفس المسار في طلب HTTP واحد."],
             [<code>warnOnMissingIndexes / onIndexSuggestion</code>, <code>true / null</code>, "التقاط توصيات مستشار الفهارس عبر VellumIndexSuggestion."],
-            [<code>authStorage</code>, <code>InMemoryAuthTokenStorage()</code>, "طبقة حفظ الجلسة؛ طبّق AuthTokenStorage (مثل flutter_secure_storage) للإنتاج."],
+            [<code>authStorage</code>, <code>SecureAuthTokenStorage()</code>, "طبقة حفظ الجلسة؛ مشفّرة افتراضياً مع رجوع إلى الذاكرة، ويمكنك تمرير AuthTokenStorage خاص بك."],
           ]}
         />
         <Callout tone="info" title="حماية المسارات وإخفاء الأسرار تلقائياً">

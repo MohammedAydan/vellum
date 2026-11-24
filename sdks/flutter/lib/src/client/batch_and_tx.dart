@@ -1,5 +1,5 @@
 /// Atomic and chunked write batch builders and OCC TransactionContext.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// Fluent bulk write builder supporting atomic [commit] and auto-chunked
 /// [commitChunked] execution.

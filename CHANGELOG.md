@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.0.3
+
+Control-plane state moves into the database, social sign-in, serverless realtime, and Relations tooling. Every package and SDK remains on one shared version.
+
+### Platform
+
+- API keys and per-project CORS origins, session revocations, organization memberships, auth throttles, MFA lockouts, sign-up budgets, usage counters, quota and plan checks, rulesets, auth config, projects, users and operator lists are read from PostgreSQL on every request. Nothing that decides access lives only in one instance's memory, so behaviour is identical across serverless instances.
+- Migrations 0014 to 0017 (additive only).
+- Realtime works on serverless: WebSocket first, with an automatic SSE fallback; responses stream on Vercel.
+- TOTP MFA hardening: no enroll downgrade, disable, replay and lockout protections.
+- Google and GitHub sign-in on the server (code + PKCE, verified identities).
+- Per-project CORS derived from API key origins.
+- Composite indexes build in-request and stuck building states reconcile.
+- Privacy Policy and Terms include a contact email.
+
+### SDK (JavaScript) - `@vellumdb/sdk-js`
+
+- `signInWithPopup`, `signInWithRedirect`, `getRedirectResult`, `signInWithGoogleIdToken`.
+- Reference values in writes and atomic `addWithRelated`.
+- `CachePolicy` with an offline document store; 60s refresh window, `setCustomToken`, `autoRefresh` switch.
+- Optional `doc()` id with local auto-ID generation.
+- Edge runtime and React Native bundler safety checks.
+
+### SDK (Flutter) - `vellum_flutter`
+
+- **One package.** `vellum_flutter` now includes persistent encrypted session storage (Keychain, Keystore, libsecret, Windows credential store, encrypted web storage, with an in-memory fallback) and Google and GitHub sign-in through the system browser (`createVellumOAuth`: deep link for custom schemes, loopback redirect for desktop; no webview). No extra package.
+- **Breaking:** `vellum_flutter` is now a Flutter package. It requires the Flutter SDK (`>=3.22.0`) and no longer works from plain Dart servers or CLIs. Dart tooling on the plain VM can import `package:vellum_flutter/vellum_flutter_core.dart` after `flutter pub get`.
+- Native Google account picker: install the official `google_sign_in` package yourself and pass its ID token to `signInWithGoogleIdToken` (no dependency on it from `vellum_flutter`).
+- Parity with the JavaScript additions above: ID-token sign-in, reference values and `addWithRelated`, cache policy, optional document ids, SSE fallback for realtime.
+
+### Console
+
+- Relations page: preview related records and try `include` queries from the UI.
+
 ## 0.0.2
 
 Security and reliability fixes across the platform, plus JS/Flutter SDK parity work. Every package and SDK remains on one shared version.

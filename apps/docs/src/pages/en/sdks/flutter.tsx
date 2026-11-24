@@ -24,7 +24,7 @@ export default function Page() {
       </Callout>
 
       <Section id="beta-install" title="Beta installation">
-        <P>Version 0.0.2 is available on npm and pub.dev. Install the published Beta packages below. Repository access is not required.</P>
+        <P>Version 0.0.3 is available on npm and pub.dev. Install the published Beta packages below. Repository access is not required.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />
         <Code lang="yaml" title="Flutter / Dart 3.4+" code={betaDartInstall} />
       </Section>
@@ -50,7 +50,7 @@ final db = VellumClient(
   projectId: const String.fromEnvironment('VELLUM_PROJECT_ID'),
   apiKey: const String.fromEnvironment('VELLUM_API_KEY'),
   httpClient: httpClient,
-  authStorage: InMemoryAuthTokenStorage(), // default; add vellum_flutter_secure_storage for persistent sessions (see Advanced configuration)
+  authStorage: SecureAuthTokenStorage(), // default: encrypted persistent sessions (see Advanced configuration)
   requestTimeout: const Duration(seconds: 30),
   maxRetries: 3,
   retryBaseDelay: const Duration(milliseconds: 250),

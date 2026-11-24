@@ -11,7 +11,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:vellum_flutter/vellum_flutter.dart';
+import 'package:vellum_flutter/vellum_flutter_core.dart';
 import 'package:http/http.dart' as http;
 
 class Step {

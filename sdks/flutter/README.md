@@ -1,8 +1,10 @@
 # `vellum_flutter`
 
-Official **Flutter & Dart** SDK for **VELLUM** — a PostgreSQL-backed, multi-tenant document database with strong consistency, cursor streaming, real-time WebSocket sync, and reactive EdDSA end-user authentication.
+Official **Flutter** SDK for **VELLUM** — a PostgreSQL-backed, multi-tenant document database with strong consistency, cursor streaming, real-time WebSocket sync, and reactive EdDSA end-user authentication.
 
-Pure Dart (`>=3.4.0 <4.0.0`), strictly null-safe, with zero Flutter engine binding required so it runs seamlessly across **Flutter (iOS, Android, Web, Desktop)**, **Dart CLI**, and **Dart server** workloads.
+A single package for **Flutter (iOS, Android, Web, macOS, Windows, Linux)**, strictly null-safe (Dart `>=3.4.0 <4.0.0`, Flutter `>=3.22.0`). It includes the data client, auth, realtime (web supported; the built-in browser sign-in launcher covers mobile and desktop), **encrypted persistent sessions**, and **Google and GitHub sign-in** through the system browser (`createVellumOAuth`). Nothing else to install or configure. For the native Google account picker, add the official `google_sign_in` package to your own app and pass its ID token to `signInWithGoogleIdToken`.
+
+It requires the Flutter SDK. It is no longer usable from plain Dart servers or CLIs.
 
 ---
 
@@ -25,7 +27,7 @@ Add `vellum_flutter` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  vellum_flutter: ^0.0.2
+  vellum_flutter: ^0.0.3
 ```
 
 ```bash
@@ -94,7 +96,7 @@ Future<void> main() async {
 | `endpoint` | `String?` | `''` | Host origin; derives `<endpoint>/v1/projects/<projectId>`. |
 | `baseUrl` | `String?` | Derived from `endpoint` | Explicit full REST prefix override. |
 | `httpClient` | `http.Client?` | Short-lived `http.Client` | Inject a long-lived `package:http` client for connection pooling or `MockClient`. |
-| `authStorage` | `AuthTokenStorage?` | `InMemoryAuthTokenStorage()` | Pluggable secure session persistence (e.g., `flutter_secure_storage`). |
+| `authStorage` | `AuthTokenStorage?` | `SecureAuthTokenStorage()` | Encrypted persistent session with an in-memory fallback. Pluggable. |
 | `getAuthToken` | `Future<String?> Function()?` | `null` | Custom bearer provider (takes precedence over `client.auth`). |
 | `requestTimeout` | `Duration` | `Duration(seconds: 30)` | Per-request timeout; throws `VellumException(code: 'REQUEST_TIMEOUT', statusCode: 408)`. |
 | `maxRetries` | `int` | `3` | Transient retries (429/408/5xx/network) for idempotent requests or requests with `idempotencyKey`. |

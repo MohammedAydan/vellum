@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.3
+
+Lockstep release with the platform. `vellum_flutter` is now a single Flutter package.
+
+- Persistent encrypted session storage is built in and on by default (with an in-memory fallback). It replaces the unpublished `vellum_flutter_secure_storage` companion.
+- Google and GitHub sign-in through the system browser is built in (`createVellumOAuth`, `VellumOAuth`; deep link for custom schemes, loopback redirect for desktop, no webview). It replaces the unpublished `vellum_flutter_oauth` companion. Not covered: Flutter web (pass your own launcher).
+- Reference values in writes with atomic `addWithRelated`, a cache policy with an offline document store, optional document ids with local auto-ID generation, a 60 second token refresh window with `setCustomToken`, ID-token sign-in, and an SSE fallback for realtime.
+- **Breaking:** requires the Flutter SDK (`>=3.22.0`); it can no longer be used from plain Dart servers or CLIs. Tools on the plain Dart VM can import `package:vellum_flutter/vellum_flutter_core.dart` after `flutter pub get`.
+- Native Google account picker: use the official `google_sign_in` package yourself and pass its ID token to `signInWithGoogleIdToken`.
+
 ## 0.0.2
 
 Reliability and security hardening, in lockstep with the platform release.

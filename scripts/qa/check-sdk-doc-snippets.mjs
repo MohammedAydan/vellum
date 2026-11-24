@@ -45,7 +45,7 @@ try {
         "--ignore-scripts",
         "--no-audit",
         "--no-fund",
-        "@vellumdb/sdk-js@0.0.2",
+        "@vellumdb/sdk-js@0.0.3",
         "@types/node",
       ],
       jsDir,
@@ -83,7 +83,7 @@ try {
   mkdirSync(dartDir);
   writeFileSync(
     join(dartDir, "pubspec.yaml"),
-    `name: vellum_docs_typecheck\nenvironment:\n  sdk: '>=3.4.0 <4.0.0'\ndependencies:\n  vellum_flutter:${published ? " 0.0.2" : `\n    path: ${resolve(root, "sdks/flutter")}`}\n  http: ^1.2.2\n`,
+    `name: vellum_docs_typecheck\nenvironment:\n  sdk: '>=3.4.0 <4.0.0'\n  flutter: '>=3.22.0'\ndependencies:\n  flutter:\n    sdk: flutter\n  vellum_flutter:${published ? " 0.0.3" : `\n    path: ${resolve(root, "sdks/flutter")}`}\n  http: ^1.2.2\n`,
   );
   for (const [i, s] of dart.entries()) {
     const imports = [],
@@ -118,7 +118,7 @@ try {
       `// ${s.file}:${s.line}\n${imports.join("\n")}\n${classes.join("\n")}\n${text}\n`,
     );
   }
-  run("dart", ["pub", "get"], dartDir);
+  run("flutter", ["pub", "get"], dartDir);
   const analysis = spawnSync("dart", ["analyze", "--format", "machine"], {
     cwd: dartDir,
     encoding: "utf8",
@@ -134,7 +134,7 @@ try {
       errors.join("\n") || analysis.stderr || "Dart analyzer did not finish",
     );
   console.log(
-    `Checked ${publicJs.length} consumer JS/TS snippets and ${dart.length} Dart snippets against ${published ? "published 0.0.2" : "local SDK builds"}.`,
+    `Checked ${publicJs.length} consumer JS/TS snippets and ${dart.length} Dart snippets against ${published ? "published 0.0.3" : "local SDK builds"}.`,
   );
   console.log(
     "Rules DSL and backend metering signatures are separate languages, not consumer SDK programs. Runtime fixtures remain a separate gate.",

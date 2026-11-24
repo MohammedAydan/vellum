@@ -7,7 +7,7 @@ description: Practical Dart reference for vellum_flutter — client setup, CRUD,
 
 # Flutter SDK (`vellum_flutter`)
 
-Practical Dart API reference for `vellum_flutter` v0.0.2 derived from `sdks/flutter/lib/vellum_flutter.dart`. Pure Dart (`>=3.4.0 <4.0.0`), strictly null-safe, with zero Flutter engine binding required.
+Practical Dart API reference for `vellum_flutter` v0.0.3 derived from `sdks/flutter/lib/vellum_flutter.dart`. A single Flutter package (Dart `>=3.4.0 <4.0.0`, Flutter `>=3.22.0`), strictly null-safe, with encrypted persistent sessions and Google/GitHub sign-in built in.
 
 ```dart
 import 'package:vellum_flutter/vellum_flutter.dart';
@@ -40,7 +40,7 @@ final client = VellumClient(
 | `projectId` / `apiKey` | Required | Sent via `x-vellum-api-key` & `X-Project-Key`. Redacted in `toString()`. |
 | `endpoint` / `baseUrl` | `''` / derived | Use `endpoint` (origin) or full `baseUrl` prefix. |
 | `httpClient` / `httpTransport` | Short-lived `http.Client` | Pass a shared `http.Client` for connection pooling or `MockClient`. |
-| `authStorage` / `authTokenStorage` | `InMemoryAuthTokenStorage()` | Implement `AuthTokenStorage` with `flutter_secure_storage` in production. |
+| `authStorage` / `authTokenStorage` | `SecureAuthTokenStorage()` | Encrypted persistent session (in-memory fallback). Pass your own `AuthTokenStorage` to change it. |
 | `requestTimeout` | `Duration(seconds: 30)` | Throws `VellumException(code: 'REQUEST_TIMEOUT', statusCode: 408)`. |
 | `maxRetries` | `3` | Retries 429/408/5xx/network on idempotent requests (`Retry-After` + full jitter). |
 | `coalesceInFlightGets` | `true` | Deduplicates concurrent identical `GET` calls (skips transactional reads). |
@@ -133,4 +133,4 @@ await client.runTransaction<void>((tx) async {
 
 ## Modular Architecture & Tamper-Proofing
 
-`vellum_flutter` is split into 13 focused `part` modules under `lib/src/{core,models,auth,realtime,client}/` behind `lib/vellum_flutter.dart` (pure Dart, zero `dart:io`). Public model collections use `Map.unmodifiable`/`List.unmodifiable`, internal state is library-private, and `toString()` redacts secrets.
+`vellum_flutter` is split into 13 focused `part` modules under `lib/src/{core,models,auth,realtime,client}/` behind `lib/vellum_flutter_core.dart`, re-exported by `lib/vellum_flutter.dart` with the Flutter-only features (no `dart:io`). Public model collections use `Map.unmodifiable`/`List.unmodifiable`, internal state is library-private, and `toString()` redacts secrets.

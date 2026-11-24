@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:vellum_flutter/vellum_flutter.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// Fake transport that returns a decoded body *and* a response-header map.
 typedef V2Handler = VellumHttpResponse Function(

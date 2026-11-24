@@ -1,5 +1,5 @@
 import 'package:vellum_flutter/vellum_flutter.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// Fake transport that returns a decoded body *and* response headers, matching
 /// the style used by `v2_test.dart`.

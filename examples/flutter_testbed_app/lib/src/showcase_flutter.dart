@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 // Flutter-only Material 3 widget tree for the live VELLUM showcase.
 //
 // This file is intentionally selected only when `dart.library.flutter` is true

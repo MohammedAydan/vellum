@@ -127,12 +127,16 @@ describe("Architecture & Contract Boundaries (v5)", () => {
   it("enforces zero `dynamic` and zero `dart:io` in sdks/flutter/lib/**", () => {
     const dartFiles = walkFiles(path.join(ROOT, "sdks/flutter/lib"), [".dart"], new Set(["build", ".dart_tool"]));
     const violations: string[] = [];
+    // The only file allowed to use dart:io: the desktop loopback redirect listener. It is reached through a
+    // conditional import (`if (dart.library.io)`), so the web build never sees it.
+    const ioAllowed = path.join(ROOT, "sdks/flutter/lib/src/oauth_launcher/loopback_io.dart");
     for (const file of dartFiles) {
       const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
       lines.forEach((line, idx) => {
         const trimmed = line.trim();
         if (trimmed.startsWith("//")) return;
-        if (/\bdynamic\b/.test(line) || /import\s+['"]dart:io['"]/.test(line)) {
+        const ioImport = /import\s+['"]dart:io['"]/.test(line) && file !== ioAllowed;
+        if (/\bdynamic\b/.test(line) || ioImport) {
           violations.push(`${path.relative(ROOT, file)}:${idx + 1}: ${trimmed}`);
         }
       });

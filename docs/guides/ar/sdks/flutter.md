@@ -7,7 +7,7 @@ description: دليل تقني شامل لحزمة vellum_flutter بلغة Dart 
 
 # مجموعة Flutter البرمجية (`vellum_flutter`)
 
-الدليل التقني الشامل لحزمة `vellum_flutter` الإصدار `0.0.2`، المستند بالكامل إلى التنفيذ الفعلي في `sdks/flutter/lib/vellum_flutter.dart`.
+الدليل التقني الشامل لحزمة `vellum_flutter` الإصدار `0.0.3`، المستند بالكامل إلى التنفيذ الفعلي في `sdks/flutter/lib/vellum_flutter.dart`.
 
 حزمة Dart خالصة (`>=3.4.0 <4.0.0`) آمنة تمامًا ضد القيم الفارغة (null-safe) ولا تعتمد على محرك Flutter، لذا تعمل بسلاسة على iOS وAndroid وWeb وسطح المكتب وخدمات Dart الخلفية.
 
@@ -17,7 +17,7 @@ description: دليل تقني شامل لحزمة vellum_flutter بلغة Dart 
 
 ```yaml
 dependencies:
-  vellum_flutter: ^0.0.2
+  vellum_flutter: ^0.0.3
 ```
 
 ```dart
@@ -183,7 +183,7 @@ await sub.cancel();
 
 ## مصادقة EdDSA التفاعلية والتخلص من الموارد (`dispose()` / `close()`)
 
-- استعد الجلسة عند بدء التطبيق عبر `await client.auth.restore()` بعد حقن `AuthTokenStorage` آمن (مثل `flutter_secure_storage`).
+- استعد الجلسة عند بدء التطبيق عبر `await client.auth.restore()` ؛ تُحفظ الجلسة مشفّرة افتراضياً ويمكنك تمرير `AuthTokenStorage` خاص بك.
 - يحمي العداد الرتيب `sessionEpoch` من سباقات تجديد الرمز بعد `signOut()` أو `dispose()`، بينما تدمج `refreshOnUnauthorized` أخطاء `401` المتزامنة في طلب تجديد واحد (single-flight).
 - تعيد `signInWithEmailAndPassword` نوعًا مغلقًا `VellumAuthResult` (`VellumSession` أو `VellumMfaRequired`) لمطابقة شاملة في Dart 3.
 - استدعِ `client.dispose()` (أو `client.close()`) عند إنهاء العميل لتحرير المؤقتات واتصالات WebSocket والذاكرة المؤقتة.

@@ -1,5 +1,5 @@
 import 'package:flutter_testbed_app/testbed_runner.dart' as standard;
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 // Exercise the old console source entry without requiring the Flutter SDK.
 // ignore: avoid_relative_lib_imports
 import '../../../apps/vellum-e2e-app/lib/testbed_runner.dart' as console;

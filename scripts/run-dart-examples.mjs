@@ -1,6 +1,6 @@
 import { verifyDisplayedRulesRequests } from './qa/verify-docs-requests.mjs';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // All manifest entries run against a real, caller-provided PostgreSQL API.
@@ -22,7 +22,7 @@ const login=await request('POST','/v1/auth/sign-in/email',{email,password});
 const keysPath=`/v1/console/projects/${projectId}/api-keys`;
 const entries=JSON.parse(readFileSync(resolve(root,'examples/ts/manifest.json'),'utf8'));
 if(entries.length!==13||entries.some(e=>!e.dart))throw new Error('Expected all 13 Dart manifest examples');
-const analyze=spawnSync('dart',['analyze','--fatal-infos'],{cwd:resolve(root,'examples/flutter'),stdio:'inherit'});
+const analyze=spawnSync('flutter',['analyze','--fatal-infos'],{cwd:resolve(root,'examples/flutter'),stdio:'inherit'});
 if(analyze.status!==0)throw new Error('Dart analysis failed');
 const docsKey=await request('POST',keysPath,{name:'docs-displayed-requests',keyType:'server'},login.token);
 try{await verifyDisplayedRulesRequests(base,projectId,docsKey.rawKey,process.env.DOCS_BASE_URL||'http://127.0.0.1:5175');}
@@ -32,7 +32,12 @@ for(const entry of entries.filter(e=>!process.env.DOCS_EXAMPLE_FILTER||process.e
  const key=await request('POST',keysPath,{name:`dart-manifest:${entry.id}`,keyType:'server'},login.token);
  try{
   // Examples accept runtime environment values and retain --define compatibility.
-  const run=spawnSync('dart',['run',resolve(root,'examples',entry.dart)],{cwd:resolve(root,'examples/flutter'),env:{...process.env,VELLUM_API_KEY:key.rawKey},encoding:'utf8',timeout:120000});
+  // The examples import the app entry point (package:vellum_flutter/vellum_flutter.dart). On the plain Dart
+  // VM (no dart:ui) they run against the same SDK through its core entry point.
+  const runDir=resolve(root,'examples/flutter/.dart_tool/vm-run');mkdirSync(runDir,{recursive:true});
+  const runFile=resolve(runDir,entry.dart.split('/').pop());
+  writeFileSync(runFile,readFileSync(resolve(root,'examples',entry.dart),'utf8').replaceAll('package:vellum_flutter/vellum_flutter.dart','package:vellum_flutter/vellum_flutter_core.dart'));
+  const run=spawnSync('dart',['--packages='+resolve(root,'examples/flutter/.dart_tool/package_config.json'),runFile],{cwd:resolve(root,'examples/flutter'),env:{...process.env,VELLUM_API_KEY:key.rawKey},encoding:'utf8',timeout:120000});
   const output=`${run.stdout||''}${run.stderr||''}`;
   const safe=output.replaceAll(key.rawKey,'[redacted]').replaceAll(password,'[redacted]').replaceAll(login.token,'[redacted]');
   console.log(`${run.status===0?'PASS':'FAIL'} ${entry.id}\n${safe}`);

@@ -1,5 +1,5 @@
 /// Declarative field operations, tagged wire format helpers, and JSON coercion.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// Declarative Atomic Field Operations (`$op`)
 class FieldOp {
