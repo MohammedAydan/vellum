@@ -45,6 +45,18 @@ import {
   parseTotpEnrollmentResponse,
   requiredString,
 } from "./jwt-utils.js";
+import {
+  cleanUrl,
+  hasPending,
+  parseCallbackParams,
+  prepareFlow,
+  runPopup,
+  savePending,
+  takePending,
+  type OAuthCallbackParams,
+  type OAuthPopupOptions,
+  type OAuthRedirectOptions,
+} from "./oauth-web.js";
 
 /** The narrow HTTP surface the auth state machine needs from `createClient`. */
 export type AuthRequest = <R = unknown>(
@@ -64,6 +76,8 @@ export interface VellumAuthClientOptions {
   request: AuthRequest;
   getAuthToken: (() => Promise<string | null> | string | null) | null;
   authStorage?: AuthStorage | null;
+  /** Project API base (`<endpoint>/v1/projects/<id>`) and publishable key, used to start browser OAuth flows. */
+  oauth?: { baseUrl: string; apiKey: string } | null;
   /** Silent proactive/reactive refresh. Defaults to true; set false to refresh only on explicit `getIdToken(true)`. */
   autoRefresh?: boolean;
   /** Fired synchronously on sign-in, sign-out and disposal. */
@@ -90,6 +104,7 @@ interface AuthClientInternalState {
 
 export class VellumAuthClient {
   private readonly storage: AuthStorage;
+  private readonly oauthConfig: { baseUrl: string; apiKey: string } | null;
   private readonly autoRefresh: boolean;
   private readonly request: AuthRequest;
   private readonly getAuthToken: (() => Promise<string | null> | string | null) | null;
@@ -103,6 +118,7 @@ export class VellumAuthClient {
     this.getAuthToken = options.getAuthToken;
     this.autoRefresh = options.autoRefresh !== false;
     this.storage = resolveAuthStorage(options.authStorage);
+    this.oauthConfig = options.oauth ?? null;
     this.onSessionChanged = options.onSessionChanged ?? null;
     this.onTokenChanged = options.onTokenChanged ?? null;
     let restored: AuthState | null = null;
@@ -423,6 +439,96 @@ export class VellumAuthClient {
       await this.request("POST", "/auth/sign-in/provider", input, {}, false)
     );
     this.assertSession(epoch);
+    this.commitUser(session, true);
+    return sanitizeAndClone(session);
+  }
+
+  /* --------------------------------------------------------------------- */
+  /* Google / GitHub sign-in (server-side OAuth)                            */
+  /* --------------------------------------------------------------------- */
+
+  private requireOAuth(): { baseUrl: string; apiKey: string } {
+    if (!this.oauthConfig) throw new Error("Browser OAuth is not configured on this client");
+    return this.oauthConfig;
+  }
+
+  private async finishOAuth(
+    params: OAuthCallbackParams,
+    expectedState: string,
+    verifier: string
+  ): Promise<AuthState | MfaRequiredResult> {
+    if (params.error) {
+      throw new Error(params.errorDescription ?? `Sign-in failed (${params.error})`);
+    }
+    if (!params.code || params.state !== expectedState) {
+      throw new Error("Sign-in response did not match the request. Please try again.");
+    }
+    const epoch = this.state.sessionEpoch;
+    const payload = await this.request<Record<string, unknown>>(
+      "POST",
+      "/auth/oauth/exchange",
+      { code: params.code, codeVerifier: verifier },
+      {},
+      false
+    );
+    this.assertSession(epoch);
+    if (payload["mfaRequired"] === true) return parseMfaRequiredResponse(payload);
+    const session = parseSessionResponse(payload);
+    this.commitUser(session, true);
+    return sanitizeAndClone(session);
+  }
+
+  /**
+   * Sign in with `"google"` or `"github"` in a popup. Call it from a click
+   * handler. Resolves to `MfaRequiredResult` when a second factor is needed.
+   */
+  public async signInWithPopup(provider: string, options: OAuthPopupOptions = {}): Promise<AuthState | MfaRequiredResult> {
+    const cfg = this.requireOAuth();
+    const flow = await prepareFlow(cfg.baseUrl, cfg.apiKey, provider, options.redirectUri);
+    const params = await runPopup(flow, options);
+    return this.finishOAuth(params, flow.state, flow.verifier);
+  }
+
+  /** Full-page redirect sign-in (best on mobile browsers). Finish with `getRedirectResult()` on return. */
+  public async signInWithRedirect(provider: string, options: OAuthRedirectOptions = {}): Promise<void> {
+    const cfg = this.requireOAuth();
+    const flow = await prepareFlow(cfg.baseUrl, cfg.apiKey, provider, options.redirectUri);
+    savePending({ provider, state: flow.state, verifier: flow.verifier, redirectUri: flow.redirectUri });
+    (globalThis as { location: Location }).location.assign(flow.startUrl);
+  }
+
+  /**
+   * Call once when your app loads. Returns `null` when the page is not the
+   * return from a redirect sign-in, otherwise the session (or MFA challenge).
+   */
+  public async getRedirectResult(): Promise<AuthState | MfaRequiredResult | null> {
+    const href = (globalThis as { location?: Location }).location?.href;
+    if (!href || !hasPending()) return null;
+    const params = parseCallbackParams(href);
+    if (!params) return null;
+    const pending = takePending();
+    cleanUrl();
+    if (!pending) return null;
+    return this.finishOAuth(params, pending.state, pending.verifier);
+  }
+
+  /**
+   * Sign in with a Google ID token you already hold (Google Identity Services
+   * One Tap / button, or the `google_sign_in` Flutter package). The server
+   * verifies the token against Google's keys and your configured client IDs.
+   */
+  public async signInWithGoogleIdToken(idToken: string, options: { nonce?: string } = {}): Promise<AuthState | MfaRequiredResult> {
+    const epoch = this.state.sessionEpoch;
+    const payload = await this.request<Record<string, unknown>>(
+      "POST",
+      "/auth/oauth/google/id-token",
+      { idToken, ...(options.nonce !== undefined ? { nonce: options.nonce } : {}) },
+      {},
+      false
+    );
+    this.assertSession(epoch);
+    if (payload["mfaRequired"] === true) return parseMfaRequiredResponse(payload);
+    const session = parseSessionResponse(payload);
     this.commitUser(session, true);
     return sanitizeAndClone(session);
   }

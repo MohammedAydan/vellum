@@ -1,0 +1,265 @@
+/**
+ * Browser helpers for Google / GitHub sign-in (popup and redirect).
+ *
+ * The Vellum API is the OAuth client. The browser only starts the flow with a
+ * PKCE challenge and later trades a one-time code plus its verifier for a
+ * session, so a stolen code is useless on its own.
+ *
+ * No Node imports: this file must stay safe for edge runtimes and bundlers.
+ */
+
+export interface OAuthPopupOptions {
+  /**
+   * Page the provider flow returns to. Must be listed in the project's allowed
+   * redirect URIs. Defaults to the current page without query or hash.
+   */
+  redirectUri?: string;
+  /** Give up after this many milliseconds. Default 5 minutes. */
+  timeoutMs?: number;
+  /** Popup window features. Defaults to a centered 480x640 window. */
+  popupFeatures?: string;
+}
+
+export interface OAuthRedirectOptions {
+  redirectUri?: string;
+}
+
+export interface OAuthCallbackParams {
+  code: string | null;
+  state: string | null;
+  error: string | null;
+  errorDescription: string | null;
+}
+
+export const OAUTH_CHANNEL = "vellum-oauth";
+export const OAUTH_POPUP_NAME = "vellum-oauth-popup";
+const PENDING_KEY = "vellum:oauth:pending";
+
+interface PendingFlow {
+  provider: string;
+  state: string;
+  verifier: string;
+  redirectUri: string;
+}
+
+function b64url(bytes: Uint8Array): string {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export function randomToken(byteLength = 32): string {
+  const bytes = new Uint8Array(byteLength);
+  globalThis.crypto.getRandomValues(bytes);
+  return b64url(bytes);
+}
+
+export async function pkceChallenge(verifier: string): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  return b64url(new Uint8Array(digest));
+}
+
+export function defaultRedirectUri(): string {
+  const loc = (globalThis as { location?: Location }).location;
+  if (!loc) throw new Error("redirectUri is required outside a browser");
+  return `${loc.origin}${loc.pathname}`;
+}
+
+export function parseCallbackParams(href: string): OAuthCallbackParams | null {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return null;
+  }
+  const code = url.searchParams.get("vellum_code");
+  const error = url.searchParams.get("error");
+  if (!code && !error) return null;
+  return {
+    code,
+    state: url.searchParams.get("state"),
+    error,
+    errorDescription: url.searchParams.get("error_description"),
+  };
+}
+
+export function buildStartUrl(
+  baseUrl: string,
+  provider: string,
+  input: { apiKey: string; redirectUri: string; codeChallenge: string; state: string }
+): string {
+  const url = new URL(`${baseUrl}/auth/oauth/${encodeURIComponent(provider)}/start`);
+  url.searchParams.set("apiKey", input.apiKey);
+  url.searchParams.set("redirectUri", input.redirectUri);
+  url.searchParams.set("codeChallenge", input.codeChallenge);
+  url.searchParams.set("state", input.state);
+  return url.toString();
+}
+
+export interface PreparedFlow {
+  startUrl: string;
+  state: string;
+  verifier: string;
+  redirectUri: string;
+}
+
+export async function prepareFlow(
+  baseUrl: string,
+  apiKey: string,
+  provider: string,
+  redirectUri: string | undefined
+): Promise<PreparedFlow> {
+  const verifier = randomToken(48);
+  const state = randomToken(16);
+  const target = redirectUri ?? defaultRedirectUri();
+  const startUrl = buildStartUrl(baseUrl, provider, {
+    apiKey,
+    redirectUri: target,
+    codeChallenge: await pkceChallenge(verifier),
+    state,
+  });
+  return { startUrl, state, verifier, redirectUri: target };
+}
+
+/**
+ * Call this on your redirect page when you run into a browser that cuts the
+ * popup/opener link (strict COOP). It forwards the result to the opener and
+ * closes the popup. Safe to call on any page: it does nothing unless the URL
+ * carries a Vellum sign-in result.
+ */
+export function completeOAuthPopup(href: string = (globalThis as { location?: Location }).location?.href ?? ""): boolean {
+  const params = parseCallbackParams(href);
+  if (!params) return false;
+  const g = globalThis as {
+    BroadcastChannel?: typeof BroadcastChannel;
+    opener?: { postMessage(message: unknown, target: string): void } | null;
+    location?: Location;
+    close?: () => void;
+  };
+  if (typeof g.BroadcastChannel === "function") {
+    const channel = new g.BroadcastChannel(OAUTH_CHANNEL);
+    channel.postMessage({ type: "vellum-oauth-result", ...params });
+    channel.close();
+  }
+  try {
+    g.opener?.postMessage({ type: "vellum-oauth-result", ...params }, g.location?.origin ?? "*");
+  } catch {
+    // opener may be gone
+  }
+  g.close?.();
+  return true;
+}
+
+/** Open the popup synchronously (inside the click handler) and wait for the result. */
+export function runPopup(flow: PreparedFlow, options: OAuthPopupOptions): Promise<OAuthCallbackParams> {
+  const g = globalThis as {
+    open?: (url: string, name: string, features: string) => Window | null;
+    screenX?: number; screenY?: number; outerWidth?: number; outerHeight?: number;
+    BroadcastChannel?: typeof BroadcastChannel;
+    addEventListener?: (type: string, listener: (event: MessageEvent) => void) => void;
+    removeEventListener?: (type: string, listener: (event: MessageEvent) => void) => void;
+    location?: Location;
+  };
+  if (typeof g.open !== "function") throw new Error("signInWithPopup is only available in a browser");
+  const width = 480;
+  const height = 640;
+  const left = Math.max(0, (g.screenX ?? 0) + ((g.outerWidth ?? width) - width) / 2);
+  const top = Math.max(0, (g.screenY ?? 0) + ((g.outerHeight ?? height) - height) / 2);
+  const features = options.popupFeatures ?? `popup=yes,width=${width},height=${height},left=${left},top=${top}`;
+  const popup = g.open(flow.startUrl, OAUTH_POPUP_NAME, features);
+  if (!popup) {
+    throw new Error("The sign-in popup was blocked. Call signInWithPopup from a click handler, or use signInWithRedirect.");
+  }
+  const timeoutMs = options.timeoutMs ?? 5 * 60 * 1000;
+  return new Promise<OAuthCallbackParams>((resolve, reject) => {
+    let done = false;
+    const handles: { poll?: ReturnType<typeof setInterval>; timer?: ReturnType<typeof setTimeout> } = {};
+    let channel: BroadcastChannel | undefined;
+    const onMessage = (event: MessageEvent): void => {
+      if (g.location && event.origin !== g.location.origin) return;
+      handle(event.data);
+    };
+    const cleanup = (): void => {
+      done = true;
+      if (handles.poll) clearInterval(handles.poll);
+      if (handles.timer) clearTimeout(handles.timer);
+      channel?.close();
+      g.removeEventListener?.("message", onMessage);
+      try { popup.close(); } catch { /* already closed */ }
+    };
+    const handle = (data: unknown): void => {
+      if (done || !data || typeof data !== "object") return;
+      const d = data as Partial<OAuthCallbackParams> & { type?: string };
+      if (d.type !== "vellum-oauth-result") return;
+      if (d.state !== flow.state) return; // someone else's flow
+      cleanup();
+      resolve({ code: d.code ?? null, state: d.state ?? null, error: d.error ?? null, errorDescription: d.errorDescription ?? null });
+    };
+    if (typeof g.BroadcastChannel === "function") {
+      channel = new g.BroadcastChannel(OAUTH_CHANNEL);
+      channel.onmessage = (event) => handle(event.data);
+    }
+    g.addEventListener?.("message", onMessage);
+    // Zero-config path: once the popup is back on our origin its URL is readable.
+    handles.poll = setInterval(() => {
+      if (done) return;
+      let href = "";
+      try {
+        href = popup.location.href;
+      } catch {
+        href = ""; // still on the provider's origin
+      }
+      const params = href ? parseCallbackParams(href) : null;
+      if (params && params.state === flow.state) {
+        cleanup();
+        resolve(params);
+        return;
+      }
+      if (popup.closed) {
+        // Give a BroadcastChannel message one tick to land before declaring cancel.
+        setTimeout(() => {
+          if (!done) {
+            cleanup();
+            reject(new Error("The sign-in popup was closed before sign-in finished"));
+          }
+        }, 400);
+      }
+    }, 250);
+    handles.timer = setTimeout(() => {
+      if (done) return;
+      cleanup();
+      reject(new Error("Sign-in timed out"));
+    }, timeoutMs);
+  });
+}
+
+// ---------------------------------------------------------------- redirect mode
+
+export function savePending(flow: PendingFlow): void {
+  (globalThis as { sessionStorage?: Storage }).sessionStorage?.setItem(PENDING_KEY, JSON.stringify(flow));
+}
+
+export function takePending(): PendingFlow | null {
+  const store = (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  const raw = store?.getItem(PENDING_KEY);
+  if (!raw) return null;
+  store?.removeItem(PENDING_KEY);
+  try {
+    return JSON.parse(raw) as PendingFlow;
+  } catch {
+    return null;
+  }
+}
+
+export function hasPending(): boolean {
+  return (globalThis as { sessionStorage?: Storage }).sessionStorage?.getItem(PENDING_KEY) != null;
+}
+
+/** Remove the sign-in result from the address bar so a refresh does not replay it. */
+export function cleanUrl(): void {
+  const g = globalThis as { location?: Location; history?: History };
+  if (!g.location || !g.history) return;
+  const url = new URL(g.location.href);
+  for (const key of ["vellum_code", "state", "error", "error_description"]) url.searchParams.delete(key);
+  g.history.replaceState(g.history.state, "", url.pathname + url.search + url.hash);
+}
