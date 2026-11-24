@@ -153,6 +153,7 @@ abstract interface class VellumAuthPort {
   });
   Future<TotpEnrollment> enrollTotpMfa({String? issuer});
   Future<void> confirmTotpMfa({required String code});
+  Future<void> disableMfa({required String code});
   Future<AuthActionResult> sendPasswordResetEmail(String email);
   Future<void> confirmPasswordReset({
     required String token,

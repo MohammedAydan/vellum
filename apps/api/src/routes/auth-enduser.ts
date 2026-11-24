@@ -127,6 +127,11 @@ function clearMfaFailures(key: string): void {
   mfaFailureCounts.delete(key);
 }
 
+const MFA_FAILURE_TOKEN_TYPE = "mfa_failure";
+const MFA_TOTP_USED_TOKEN_TYPE = "mfa_totp_used";
+// A TOTP code is valid for up to 90 seconds (30s step, one step of drift each way).
+const MFA_TOTP_REPLAY_TTL_MS = 120_000;
+
 /**
  * Ephemeral per-project signup budget (Zero-Redis doctrine: throttle state, not
  * durable state; per process instance). Enforces `maxSignupsPerHour`, which was
@@ -259,6 +264,54 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       expiresAt,
     });
     return { token, expiresAt };
+  }
+
+  /**
+   * Cross-instance failure counter for second-factor codes. The in-process counter alone resets on every
+   * serverless instance, so each failed attempt also leaves a short-lived token row (slots 0..max-1).
+   * Returns true once the limit is reached.
+   */
+  async function recordMfaFailurePersisted(tenant: AuthTenant, userId: string, scope: string): Promise<boolean> {
+    for (let slot = 0; slot < MFA_MAX_FAILURES; slot += 1) {
+      const tokenHash = sha256(`${scope}:slot:${slot}`);
+      const taken = await storage.peekAuthToken(tenant.ctx, tokenHash, MFA_FAILURE_TOKEN_TYPE).then(() => true, () => false);
+      if (taken) continue;
+      await storage.saveAuthToken(tenant.ctx, {
+        userId,
+        tokenHash,
+        tokenType: MFA_FAILURE_TOKEN_TYPE,
+        expiresAt: new Date(Date.now() + MFA_FAILURE_CACHE_POLICY.ttlMs).toISOString(),
+      });
+      return slot + 1 >= MFA_MAX_FAILURES;
+    }
+    return true;
+  }
+
+  async function mfaLockedOut(tenant: AuthTenant, scope: string): Promise<boolean> {
+    const lastSlot = sha256(`${scope}:slot:${MFA_MAX_FAILURES - 1}`);
+    return storage.peekAuthToken(tenant.ctx, lastSlot, MFA_FAILURE_TOKEN_TYPE).then(() => true, () => false);
+  }
+
+  async function clearMfaFailuresPersisted(tenant: AuthTenant, scope: string): Promise<void> {
+    for (let slot = 0; slot < MFA_MAX_FAILURES; slot += 1) {
+      await storage.consumeAuthToken(tenant.ctx, sha256(`${scope}:slot:${slot}`), MFA_FAILURE_TOKEN_TYPE).catch(() => undefined);
+    }
+  }
+
+  /** A TOTP code must not work twice: remember the codes that were accepted for a short time. */
+  async function totpCodeWasUsed(tenant: AuthTenant, userId: string, code: string): Promise<boolean> {
+    return storage
+      .peekAuthToken(tenant.ctx, sha256(`mfa-totp-used:${userId}:${code}`), MFA_TOTP_USED_TOKEN_TYPE)
+      .then(() => true, () => false);
+  }
+
+  async function markTotpCodeUsed(tenant: AuthTenant, userId: string, code: string): Promise<void> {
+    await storage.saveAuthToken(tenant.ctx, {
+      userId,
+      tokenHash: sha256(`mfa-totp-used:${userId}:${code}`),
+      tokenType: MFA_TOTP_USED_TOKEN_TYPE,
+      expiresAt: new Date(Date.now() + MFA_TOTP_REPLAY_TTL_MS).toISOString(),
+    });
   }
 
   /** Send a token email; in dev mode the token is returned to the caller. */
@@ -930,6 +983,12 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     }
     const user = await requireEndUser(c, platform, tenant);
     const body = parseOrThrow(MfaEnrollRequestSchema, await optionalJsonBody(c));
+    // Enrolling again would replace the secret and switch the second factor off until it is confirmed,
+    // so anyone holding a session could strip MFA. It has to be disabled with a current code first.
+    const existingMfa = await storage.getAuthMfa(tenant.ctx, user.id);
+    if (existingMfa?.verified) {
+      throw new VellumError("FAILED_PRECONDITION", "TOTP MFA is already enabled. Disable it with a current code before enrolling again.");
+    }
     const secret = generateTotpSecret();
     const recoveryCodes = deriveRecoveryCodes();
     await storage.upsertAuthMfa(tenant.ctx, {
@@ -961,8 +1020,13 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       ? verifyRecoveryCode(body.code, mfa.recoveryCodesHashed)
       : -1;
     const failureKey = sha256(`mfa-verify:${user.id}`);
+    if (await mfaLockedOut(tenant, failureKey)) {
+      throw new VellumError("UNAUTHENTICATED", "Too many invalid codes. Try again later.");
+    }
     if (!verifyTotpCode(secret, body.code) && recoveryIndex === -1) {
-      if (recordMfaFailure(failureKey)) {
+      const local = recordMfaFailure(failureKey);
+      const shared = await recordMfaFailurePersisted(tenant, user.id, failureKey);
+      if (local || shared) {
         // Enrollment verify has no action token to consume, so after 5 bad
         // codes revoke the caller's sessions instead. (The challenge route
         // below consumes its MFA ticket on the 5th failure.)
@@ -971,6 +1035,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       throw new VellumError("UNAUTHENTICATED", "Invalid verification code");
     }
     clearMfaFailures(failureKey);
+    await clearMfaFailuresPersisted(tenant, failureKey);
     await storage.upsertAuthMfa(tenant.ctx, {
       userId: user.id,
       factorType: mfa.factorType,
@@ -994,8 +1059,11 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     // consumed (invalidated) and the user must sign in again. On success the
     // ticket is consumed atomically before the session is issued. Keys are
     // hashes, never raw tickets.
+    let ticketUserId = "";
     const badCode = async (message: string): Promise<never> => {
-      if (recordMfaFailure(failureKey)) {
+      const local = recordMfaFailure(failureKey);
+      const shared = ticketUserId ? await recordMfaFailurePersisted(tenant, ticketUserId, failureKey) : false;
+      if (local || shared) {
         try {
           await storage.consumeAuthToken(tenant.ctx, ticketHash, TOKEN_TYPE_MFA_CHALLENGE);
         } catch {
@@ -1009,6 +1077,10 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       ticketHash,
       TOKEN_TYPE_MFA_CHALLENGE
     );
+    ticketUserId = challenge.userId;
+    if (await mfaLockedOut(tenant, failureKey)) {
+      throw new VellumError("UNAUTHENTICATED", "Too many invalid codes. Sign in again.");
+    }
     const mfa = await storage.getAuthMfa(tenant.ctx, challenge.userId);
     if (!mfa?.verified) throw new VellumError("FAILED_PRECONDITION", "TOTP MFA is not enrolled for this user");
     const user = await storage.getAuthUserById(tenant.ctx, challenge.userId);
@@ -1032,12 +1104,47 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       }
     } else if (!verifyTotpCode(decryptSecret(mfa.secretEncrypted, masterKey()), body.code)) {
       await badCode("Invalid TOTP code");
+    } else {
+      if (await totpCodeWasUsed(tenant, mfa.userId, body.code)) await badCode("Invalid TOTP code");
+      await markTotpCodeUsed(tenant, mfa.userId, body.code);
     }
     clearMfaFailures(failureKey);
+    await clearMfaFailuresPersisted(tenant, failureKey);
     // Consume atomically only after the code verified: a concurrent replay with
     // the same ticket fails here instead of issuing a second session.
     await storage.consumeAuthToken(tenant.ctx, ticketHash, TOKEN_TYPE_MFA_CHALLENGE);
     return c.json(await issueSession(tenant, user, c));
+  });
+
+  /** Turn the second factor off. Needs a signed-in user and a current code, never just a session. */
+  routes.post("/mfa/disable", async (c) => {
+    const tenant = resolveAuthTenant(c, platform);
+    requireProjectApiKey(c, platform, tenant);
+    await ensureAuthConfig(platform, tenant.projectId);
+    const user = await requireEndUser(c, platform, tenant);
+    const body = parseOrThrow(MfaVerifyRequestSchema, await c.req.json());
+    const mfa = await storage.getAuthMfa(tenant.ctx, user.id);
+    if (!mfa?.verified) throw new VellumError("FAILED_PRECONDITION", "TOTP MFA is not enabled");
+    const failureKey = sha256(`mfa-disable:${user.id}`);
+    if (await mfaLockedOut(tenant, failureKey)) {
+      throw new VellumError("UNAUTHENTICATED", "Too many invalid codes. Try again later.");
+    }
+    const fail = async (message: string): Promise<never> => {
+      recordMfaFailure(failureKey);
+      await recordMfaFailurePersisted(tenant, user.id, failureKey);
+      throw new VellumError("UNAUTHENTICATED", message);
+    };
+    if (!/^\d{6}$/.test(body.code)) {
+      if (verifyRecoveryCode(body.code, mfa.recoveryCodesHashed) === -1) await fail("Invalid recovery code");
+    } else {
+      if (!verifyTotpCode(decryptSecret(mfa.secretEncrypted, masterKey()), body.code)) await fail("Invalid TOTP code");
+      if (await totpCodeWasUsed(tenant, user.id, body.code)) await fail("Invalid TOTP code");
+      await markTotpCodeUsed(tenant, user.id, body.code);
+    }
+    clearMfaFailures(failureKey);
+    await clearMfaFailuresPersisted(tenant, failureKey);
+    await storage.deleteAuthMfa(tenant.ctx, user.id);
+    return c.json({ disabled: true });
   });
 
   // --------------------------------------------------------------------- JWKS

@@ -423,6 +423,9 @@ export function generateOpenApiSpec(serverUrl = "https://api.vellum.dev") {
       "/v1/projects/{projectId}/auth/mfa/verify": {
         post: { summary: "Confirm TOTP MFA enrollment" },
       },
+      "/v1/projects/{projectId}/auth/mfa/disable": {
+        post: { summary: "Turn MFA off for the signed-in user (needs a current code)" },
+      },
       "/v1/projects/{projectId}/auth/mfa/challenge": {
         post: { summary: "Answer an MFA challenge and receive session tokens" },
       },

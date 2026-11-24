@@ -692,6 +692,8 @@ export interface VellumClientInterface {
   /** Confirm TOTP enrollment with a one-time code. */
   confirmTotpMfa(input: ConfirmTotpMfaInput): Promise<SuccessResult>;
   confirmTotpMfa(code: string): Promise<SuccessResult>;
+  /** Turn MFA off for the signed-in user. Needs a current TOTP or recovery code. */
+  disableMfa(code: string): Promise<void>;
   sendPasswordResetEmail(input: SendPasswordResetEmailInput): Promise<ActionTokenResult>;
   sendPasswordResetEmail(email: string): Promise<ActionTokenResult>;
   confirmPasswordReset(input: ConfirmPasswordResetInput): Promise<SuccessResult>;

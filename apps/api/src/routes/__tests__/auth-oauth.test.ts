@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash, createSign, generateKeyPairSync, randomBytes } from "node:crypto";
 import { generateProjectApiKey } from "@vellum/authorization";
+import { generateTotpCode } from "@vellum/auth";
 import { createVellumPlatform } from "../../index.js";
 import { clearAuthRateLimitState } from "../../middleware/auth-rate-limit.js";
 import { clearOAuthKeyCache } from "../../auth/oauth/providers.js";
@@ -178,6 +179,41 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     const code = new URL(back.headers.get("location") ?? "").searchParams.get("vellum_code") ?? "";
     const ok = await f.call("POST", "/oauth/exchange", f.publicKeyStr, { code, codeVerifier: verifier });
     expect(ok.status).toBe(200);
+  });
+
+  it("oauth sign-in does not bypass TOTP: returns a ticket, the code completes it", async () => {
+    for (const provider of ["google", "github"]) {
+      const f = await fixture();
+      mock.githubEmails = [{ email: "alice@example.com", primary: true, verified: true }];
+      const signup = await f.call("POST", "/sign-up/email", f.publicKeyStr, { email: "alice@example.com", password: "Password123!", displayName: "A" });
+      const { accessToken } = (await signup.json()) as { accessToken: string };
+      const authed = (path: string, body: unknown) => f.platform.fetch(new Request(`http://localhost${f.base}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify(body),
+      }));
+      const enrolled = (await (await authed("/mfa/enroll", {})).json()) as { secret: string };
+      expect((await authed("/mfa/verify", { code: generateTotpCode(enrolled.secret) })).status).toBe(200);
+
+      const { back, verifier } = await runFlow(f, provider);
+      const code = new URL(back.headers.get("location") ?? "").searchParams.get("vellum_code") ?? "";
+      const ex = await f.call("POST", "/oauth/exchange", f.publicKeyStr, { code, codeVerifier: verifier });
+      expect(ex.status).toBe(200);
+      const body = (await ex.json()) as Record<string, unknown>;
+      expect(body["mfaRequired"]).toBe(true);
+      expect(body["accessToken"]).toBeUndefined();
+      expect(body["refreshToken"]).toBeUndefined();
+      const ticket = String(body["mfaTicket"]);
+
+      const wrong = await f.call("POST", "/mfa/challenge", f.publicKeyStr, { mfaTicket: ticket, code: "000000" });
+      expect(wrong.status).toBe(401);
+      const done = await f.call("POST", "/mfa/challenge", f.publicKeyStr, { mfaTicket: ticket, code: generateTotpCode(enrolled.secret) });
+      expect(done.status).toBe(200);
+      expect(((await done.json()) as { accessToken?: string }).accessToken).toBeTruthy();
+      // The one-time exchange code and the ticket are both spent.
+      expect((await f.call("POST", "/oauth/exchange", f.publicKeyStr, { code, codeVerifier: verifier })).status).toBe(401);
+      expect((await f.call("POST", "/mfa/challenge", f.publicKeyStr, { mfaTicket: ticket, code: generateTotpCode(enrolled.secret) })).status).toBe(401);
+    }
   });
 
   it("refuses redirect URIs outside the allowlist and bad PKCE input", async () => {

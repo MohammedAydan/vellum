@@ -139,6 +139,20 @@ void main() {
     );
     expect(await oauth.signIn('google'), isA<VellumMfaRequired>());
     expect(client.auth.currentUser, isNull);
+    final user = await client.auth.verifyMfaChallenge(
+        mfaTicket: 't1', code: 'ABCD-EFGH', factorType: 'recovery_code');
+    expect(user.id, 'usr_1');
+    expect(client.auth.currentUser, isNotNull);
+    final challenge = posts
+        .lastWhere((p) => (p['url'] as String).endsWith('/auth/mfa/challenge'));
+    expect((challenge['body'] as Map)['factorType'], 'recovery_code');
+  });
+
+  test('disableMfa posts the code to the disable endpoint', () async {
+    await client.auth.disableMfa(code: '123456');
+    final call = posts.last;
+    expect((call['url'] as String).endsWith('/auth/mfa/disable'), isTrue);
+    expect((call['body'] as Map)['code'], '123456');
   });
 
   test('signInWithGoogleIdToken posts the token to the verifying endpoint',

@@ -289,6 +289,7 @@ describe("@vellumdb/sdk-js - positional auth API", () => {
     await db.confirmPasswordReset("reset_token", "newPassword1");
     await db.confirmEmailVerification("verify_token");
     await db.confirmTotpMfa("123456");
+    await db.disableMfa("654321");
 
     const signUp = calls.find((call) => call.url.endsWith("/auth/sign-up/email"));
     expect(signUp?.body).toMatchObject({ email: "alice@example.com", displayName: "Alice" });
@@ -296,6 +297,7 @@ describe("@vellumdb/sdk-js - positional auth API", () => {
       provider: "google",
       idToken: "id-token",
     });
+    expect(calls.find((call) => call.url.endsWith("/auth/mfa/disable"))?.body).toEqual({ code: "654321" });
     expect(calls.find((call) => call.url.endsWith("/auth/mfa/challenge"))?.body).toEqual({
       mfaTicket: "mfa_ticket_1",
       code: "123456",

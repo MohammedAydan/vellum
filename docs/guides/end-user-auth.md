@@ -37,7 +37,7 @@ With `enable_user_projection` on (default), auth writes `users/{uid}` via `Docum
 
 ## REST surfaces
 
-- **End-user** (`/v1/projects/:p/auth`): `sign-up/email`, `sign-in/email`, `sign-in/anonymous`, `sign-in/provider` (secret `sk_` key only, 403 with a publishable `pk_` key; for trusted backends that verify provider identity themselves), `token/refresh`, `sign-out`, `GET|PATCH /user`, `password/reset`, `password/confirm`, `email/verify/request`, `email/verify/confirm`, `mfa/enroll`, `mfa/verify`, `mfa/challenge`, `/.well-known/jwks.json`.
+- **End-user** (`/v1/projects/:p/auth`): `sign-up/email`, `sign-in/email`, `sign-in/anonymous`, `sign-in/provider` (secret `sk_` key only, 403 with a publishable `pk_` key; for trusted backends that verify provider identity themselves), `token/refresh`, `sign-out`, `GET|PATCH /user`, `password/reset`, `password/confirm`, `email/verify/request`, `email/verify/confirm`, `mfa/enroll`, `mfa/verify`, `mfa/disable` (needs a signed-in user and a current code), `mfa/challenge`, `/.well-known/jwks.json`.
 
 See the [full REST reference](../../docs/07-end-user-auth.md).
 
@@ -55,7 +55,7 @@ After token rotation the SDK re-sends the `auth` frame on the live connection.
 
 ## Rate limits
 
-In-process sliding windows (no Redis): 10 failed logins / 15 min per `(ip,email)`; 5 reset/verify requests / 15 min (keyed by `(ip,email)` or `ip + SHA-256(signed bearer)` when no email); 5 failed MFA attempts / 5 min. Throttled responses are `429 TOO_MANY_REQUESTS` with `Retry-After`.
+In-process sliding windows (no Redis): 10 failed logins / 15 min per `(ip,email)`; 5 reset/verify requests / 15 min (keyed by `(ip,email)` or `ip + SHA-256(signed bearer)` when no email); 5 failed MFA attempts / 5 min (also counted in the database, so it holds across serverless instances). A TOTP code works once. Enrolling again while MFA is on is refused; turn it off first with a current code. Social sign-in (Google, GitHub) also asks for the second factor when the user has MFA on. Throttled responses are `429 TOO_MANY_REQUESTS` with `Retry-After`.
 
 ## Read next
 
