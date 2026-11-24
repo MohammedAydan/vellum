@@ -5,6 +5,7 @@
 
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
+import { createProjectCors } from "./middleware/project-cors.js";
 import { compress } from "hono/compress";
 import { VellumError, SYSTEM_LIMITS, normalizeIndexFieldSpec, parseCollectionPath } from "@vellum/core";
 import type { IndexRecommendationRecorder } from "@vellum/database-control";
@@ -189,10 +190,16 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     "*",
     compress({ threshold: 1024, contentTypeFilter: /^application\/json/ })
   );
+  const globalCorsValidator = createCorsOriginValidator(parseAllowedOrigins(platform.corsOrigins?.join(",")));
+  // A developer's own site: allowed per project through the origins on its API keys (no cookies).
+  app.use(
+    "*",
+    createProjectCors(platform.controlStore, (origin) => globalCorsValidator(origin) !== undefined)
+  );
   app.use(
     "*",
     cors({
-      origin: createCorsOriginValidator(parseAllowedOrigins(platform.corsOrigins?.join(","))),
+      origin: globalCorsValidator,
       allowHeaders: [
         "Content-Type",
         "Authorization",
