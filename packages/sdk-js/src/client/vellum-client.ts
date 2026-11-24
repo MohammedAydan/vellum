@@ -306,6 +306,7 @@ export class VellumClient implements VellumClientInterface {
       request: (method, relativePath, body, extraHeaders, includeAuth) =>
         this.transport.request(method, relativePath, body, extraHeaders, includeAuth),
       getAuthToken: config.getAuthToken ?? null,
+      autoRefresh: config.autoRefresh !== false,
       authStorage: config.authStorage ?? (resolveBrowserLocalStorage() ? new BrowserLocalStorage(
         `${DEFAULT_AUTH_STORAGE_KEY}:${encodeURIComponent(this.endpoint)}:${encodeURIComponent(this.projectId)}`
       ) : null),
@@ -1148,6 +1149,10 @@ export class VellumClient implements VellumClientInterface {
 
   public updateProfile(patch: UpdateProfileInput): Promise<VellumAuthUser> {
     return this.auth.updateProfile(patch);
+  }
+
+  public setCustomToken(token: string | null): void {
+    this.auth.setCustomToken(token);
   }
 
   public getIdToken(forceRefresh?: boolean): Promise<string | null> {

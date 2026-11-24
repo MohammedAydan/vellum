@@ -358,6 +358,20 @@ class VellumClient implements VellumClientPort {
   @override
   final String baseUrl;
   final Future<String?> Function()? getAuthToken;
+
+  /// Silent token refresh (60 s before expiry and on 401). Defaults to true;
+  /// when false only an explicit `auth.getIdToken(forceRefresh: true)` refreshes.
+  final bool autoRefresh;
+  String? _customToken;
+
+  /// Injects an externally issued bearer token. It wins over [getAuthToken]
+  /// and the SDK session; pass null to remove it.
+  void setCustomToken(String? token) {
+    final next = (token == null || token.isEmpty) ? null : token;
+    if (next == _customToken) return;
+    _customToken = next;
+    realtime.refreshCredentials();
+  }
   final HttpTransport httpTransport;
   final TokenStoragePort authTokenStorage;
   final String? realtimeUrlOverride;
@@ -385,6 +399,7 @@ class VellumClient implements VellumClientPort {
     required this.apiKey,
     String? baseUrl,
     this.getAuthToken,
+    this.autoRefresh = true,
     HttpTransport? httpTransport,
     http.Client? httpClient,
     TokenStoragePort? authStorage,
@@ -434,6 +449,8 @@ class VellumClient implements VellumClientPort {
   /// Bearer token for REST and WS: an explicit provider wins, the SDK auth
   /// state is the default.
   Future<String?> resolveAuthToken() async {
+    final custom = _customToken;
+    if (custom != null) return custom;
     final explicit = getAuthToken;
     if (explicit != null) {
       final token = await explicit();
