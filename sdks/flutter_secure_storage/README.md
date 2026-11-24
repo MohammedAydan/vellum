@@ -4,8 +4,8 @@ Persistent, encrypted session storage for `vellum_flutter`.
 
 ```yaml
 dependencies:
-  vellum_flutter: ^0.0.2
-  vellum_flutter_secure_storage: ^0.0.2
+  vellum_flutter: ^0.0.3
+  vellum_flutter_secure_storage: ^0.0.3
 ```
 
 That is all. Signed-in sessions now survive app restarts on Android, iOS, macOS,

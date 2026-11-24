@@ -7,7 +7,7 @@ packages:
       path: "../../examples/flutter_testbed_app"
       relative: true
     source: path
-    version: "0.0.2"
+    version: "0.0.3"
   async:
     dependency: transitive
     description:
@@ -221,7 +221,7 @@ packages:
       path: "../../sdks/flutter"
       relative: true
     source: path
-    version: "0.0.2"
+    version: "0.0.3"
   vm_service:
     dependency: transitive
     description:

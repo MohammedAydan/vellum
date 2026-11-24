@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.3
+
+Lockstep release with the platform. Adds social sign-in through the `vellum_flutter_oauth` companion, persistent encrypted sessions through `vellum_flutter_secure_storage`, reference values in writes with atomic `addWithRelated`, a cache policy with an offline document store, optional document ids with local auto-ID generation, a 60 second token refresh window with `setCustomToken`, and an SSE fallback for realtime. See the root CHANGELOG for the full notes.
+
 ## 0.0.2
 
 Reliability and security hardening, in lockstep with the platform release.

@@ -11,9 +11,8 @@ export default function Page() {
       description="Let users sign in with Google or GitHub from the web or from a Flutter app. Vellum runs the OAuth flow on the server, so your app never handles a provider secret."
     >
       <AlphaNotice />
-      <Callout tone="warning" title="Next SDK release">
-        The methods on this page ship after version 0.0.2. They are in the repository and are not on npm or
-        pub.dev yet.
+      <Callout tone="warning" title="Requires 0.0.3 or later">
+        The methods on this page are available from version 0.0.3 of the JavaScript and Flutter SDKs.
       </Callout>
 
       <Section id="how" title="How it works">

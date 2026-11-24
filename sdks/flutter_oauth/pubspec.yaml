@@ -1,6 +1,6 @@
 name: vellum_flutter_oauth
 description: Google and GitHub sign-in for vellum_flutter. Secure system-browser flow (code + PKCE) on iOS, Android, macOS, Windows, Linux and web, plus an optional native Google path.
-version: 0.0.2
+version: 0.0.3
 publish_to: none # switch to hosted vellum_flutter before the first publish
 homepage: https://github.com/MohammedAydan/vellum
 repository: https://github.com/MohammedAydan/vellum/tree/main/sdks/flutter_oauth

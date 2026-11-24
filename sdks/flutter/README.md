@@ -25,7 +25,7 @@ Add `vellum_flutter` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  vellum_flutter: ^0.0.2
+  vellum_flutter: ^0.0.3
 ```
 
 ```bash

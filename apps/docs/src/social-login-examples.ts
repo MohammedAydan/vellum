@@ -1,5 +1,5 @@
 // Examples for the Social sign-in page (Google and GitHub).
-// They mirror @vellumdb/sdk-js and vellum_flutter after 0.0.2.
+// They mirror @vellumdb/sdk-js and vellum_flutter after 0.0.3.
 
 export const popupTs = `// Call from a click handler so the browser allows the popup.
 const result = await db.signInWithPopup("google"); // or "github"
@@ -50,8 +50,8 @@ final result = await signInWithNativeGoogle(
 );`;
 
 export const flutterPubspec = `dependencies:
-  vellum_flutter: ^0.0.2
-  vellum_flutter_oauth: ^0.0.2`;
+  vellum_flutter: ^0.0.3
+  vellum_flutter_oauth: ^0.0.3`;
 
 export const androidManifest = `<activity
   android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
