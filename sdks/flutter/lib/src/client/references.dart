@@ -168,7 +168,7 @@ class DocumentReference<T> {
       'PUT',
       '/documents/$encodedPath',
       body: <String, Object?>{
-        'data': toJson(value),
+        'data': replaceVellumDocumentReferences(toJson(value)),
         'merge': merge,
         if (ifVersion != null) 'ifVersion': ifVersion,
         if (ttlSeconds != null) 'ttlSeconds': ttlSeconds,
@@ -191,7 +191,7 @@ class DocumentReference<T> {
       'POST',
       '/documents/$encodedPath',
       body: <String, Object?>{
-        'data': toJson(value),
+        'data': replaceVellumDocumentReferences(toJson(value)),
         if (ttlSeconds != null) 'ttlSeconds': ttlSeconds,
         if (expiresAt != null) 'expiresAt': expiresAt,
       },
@@ -228,7 +228,7 @@ class DocumentReference<T> {
       'PATCH',
       '/documents/$encodedPath',
       body: {
-        'data': data,
+        'data': replaceVellumDocumentReferences(data),
         if (ifVersion != null) 'ifVersion': ifVersion,
       },
       idempotencyKey: idempotencyKey,
@@ -832,4 +832,100 @@ class CollectionReference<T> extends Query<T> {
       toJson: toJson,
     );
   }
+
+  /// Creates a document with an auto-generated ID and returns its reference.
+  Future<DocumentReference<T>> add(T value, {String? idempotencyKey}) async {
+    final ref = doc();
+    await ref.create(value, idempotencyKey: idempotencyKey);
+    return ref;
+  }
+
+  /// Creates a document and its related documents in ONE atomic request.
+  ///
+  /// [related] maps a field on the parent to the child collection and docs.
+  /// The parent gets `field: [ref, ...]`; each child gets a `parentField`
+  /// reference back to the parent when set. Either everything is written or
+  /// nothing is. At most 500 documents per call.
+  Future<DocumentReference<T>> addWithRelated(
+    T value,
+    Map<String, RelatedWrite> related, {
+    String? idempotencyKey,
+  }) async {
+    final parent = doc();
+    final parentData = <String, Object?>{
+      ...(replaceVellumDocumentReferences(toJson(value)) as Map)
+          .cast<String, Object?>(),
+    };
+    final writes = <JsonMap>[];
+    related.forEach((field, spec) {
+      final collection =
+          validateVellumSegment(spec.collection, context: 'related collection');
+      final refs = <Object?>[];
+      for (final child in spec.docs) {
+        final childPath = '$collection/${generateVellumAutoId()}';
+        refs.add(VellumWire.reference(childPath));
+        writes.add(<String, Object?>{
+          'type': 'set',
+          'path': childPath,
+          'data': <String, Object?>{
+            ...(replaceVellumDocumentReferences(child) as Map)
+                .cast<String, Object?>(),
+            if (spec.parentField != null)
+              spec.parentField!: VellumWire.reference(parent.path),
+          },
+        });
+      }
+      parentData[field] = refs;
+    });
+    writes.insert(0, <String, Object?>{
+      'type': 'set',
+      'path': parent.path,
+      'data': parentData,
+    });
+    if (writes.length > 500) {
+      throw ArgumentError(
+          'addWithRelated supports at most 500 documents per call');
+    }
+    await client.batchWrite(writes, idempotencyKey: idempotencyKey);
+    return parent;
+  }
+}
+
+/// One group of related documents for [CollectionReference.addWithRelated].
+class RelatedWrite {
+  /// Collection the related documents are created in.
+  final String collection;
+
+  /// Documents to create (may contain [DocumentReference] values).
+  final List<JsonMap> docs;
+
+  /// Optional field on each child that references the new parent document.
+  final String? parentField;
+
+  const RelatedWrite({
+    required this.collection,
+    required this.docs,
+    this.parentField,
+  });
+}
+
+/// Replaces [DocumentReference] values in write data with the tagged
+/// reference wire value, so `{'customer': client.doc('users/u1')}` works.
+Object? replaceVellumDocumentReferences(Object? value, [int depth = 0]) {
+  if (value is DocumentReference) return VellumWire.reference(value.path);
+  if (depth >= 32) return value;
+  if (value is List) {
+    return <Object?>[
+      for (final item in value)
+        replaceVellumDocumentReferences(item, depth + 1),
+    ];
+  }
+  if (value is Map) {
+    return <String, Object?>{
+      for (final entry in value.entries)
+        entry.key as String:
+            replaceVellumDocumentReferences(entry.value, depth + 1),
+    };
+  }
+  return value;
 }

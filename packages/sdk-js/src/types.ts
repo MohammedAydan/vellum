@@ -816,6 +816,15 @@ export interface CollectionReferenceInterface<T = Record<string, unknown>> exten
   doc(docId?: string): DocumentReferenceInterface<T>;
   /** Create a new document in this collection with an auto-generated ID. */
   add(data: T, options?: DocumentCreateOptions): Promise<DocumentReferenceInterface<T>>;
+  /**
+   * Create a document plus related documents in one atomic request. The parent
+   * receives `field: [refs]`; children get a `parentField` reference back when set.
+   */
+  addWithRelated(
+    data: T,
+    related: Record<string, { collection: string; docs: Record<string, unknown>[]; parentField?: string }>,
+    options?: RequestOptions
+  ): Promise<DocumentReferenceInterface<T>>;
   /** Attach a typed bidirectional data converter, or pass `null` to strip an existing converter. */
   withConverter<U>(converter: DocDataConverter<U>): CollectionReferenceInterface<U>;
   withConverter(converter: null): CollectionReferenceInterface<Record<string, unknown>>;

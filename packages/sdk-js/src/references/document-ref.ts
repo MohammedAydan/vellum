@@ -9,6 +9,7 @@
 import type { DocStore, StoredDoc } from "../cache/doc-store.js";
 import { parseJwtSubject } from "../auth/jwt-utils.js";
 import type { BoundedReadCache } from "../cache/read-cache.js";
+import { reference } from "../core/reference.js";
 import { createAbortError } from "../core/backoff.js";
 import { encodePathSegment, encodeResourcePath, sanitizeAndClone } from "../core/safe-json.js";
 import type {
@@ -31,6 +32,37 @@ import type {
 import { buildDocumentSnapshot, buildMissingDocumentSnapshot, normalizeInclude, type WireDocument } from "./snapshots.js";
 
 /** Maps a write option to the Idempotency-Key header the API dedupes on. */
+const MAX_REFERENCE_WALK_DEPTH = 32;
+
+/**
+ * Replace `DocumentReference` instances found in write data with the tagged
+ * reference wire value, so `{ customer: db.doc("users/u1") }` just works.
+ * Other values pass through untouched; the input is never mutated.
+ */
+export function replaceDocumentReferences(value: unknown, depth = 0): unknown {
+  if (value instanceof DocumentReference) return reference(value.path);
+  if (depth >= MAX_REFERENCE_WALK_DEPTH || value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    let changed = false;
+    const out = value.map((item) => {
+      const next = replaceDocumentReferences(item, depth + 1);
+      if (next !== item) changed = true;
+      return next;
+    });
+    return changed ? out : value;
+  }
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
+  let changed = false;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    const next = replaceDocumentReferences(v, depth + 1);
+    if (next !== v) changed = true;
+    out[k] = next;
+  }
+  return changed ? out : value;
+}
+
 function idempotencyHeaders(options: { idempotencyKey?: string | undefined }): Record<string, string> {
   return options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {};
 }
@@ -110,10 +142,8 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
   }
 
   private serializeData(data: T): Record<string, unknown> {
-    if (this.converter) {
-      return this.converter.toDoc(data);
-    }
-    return data as unknown as Record<string, unknown>;
+    const plain = this.converter ? this.converter.toDoc(data) : (data as unknown as Record<string, unknown>);
+    return replaceDocumentReferences(plain) as Record<string, unknown>;
   }
 
   public collection<SubT = Record<string, unknown>>(subCollectionName: string): CollectionReferenceInterface<SubT> {
@@ -333,7 +363,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
       "PATCH",
       `/documents/${this.encodedPath()}`,
       {
-        data,
+        data: replaceDocumentReferences(data),
         ifVersion: options.ifVersion ?? null,
       },
       idempotencyHeaders(options),
