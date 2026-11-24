@@ -78,6 +78,10 @@ export const en: TranslationDictionary = {
   "auth.creatingAccount": "Creating account...",
   "auth.alreadyAccount": "Already have an account?",
   "auth.signInLink": "Sign In",
+  "legal.signupConsentPrefix": "By creating an account you accept the",
+  "legal.terms": "Terms of Service",
+  "legal.and": "and the",
+  "legal.privacy": "Privacy Policy",
   "auth.signupError": "Failed to create account",
 
   // ---- MFA challenge ----------------------------------------------------

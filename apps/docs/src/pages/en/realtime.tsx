@@ -17,7 +17,7 @@ export default function Page() {
       description="Broker-free PostgreSQL LISTEN/NOTIFY with a dedicated keepAlive listener, monotonic outbox poller, O(tenant) fan-out, continuous auth & ruleset enforcement, and resumeSeqId replay."
     >
       <P>
-        VELLUM delivers sub-50 ms live document and query updates over RFC 6455 WebSockets (
+        VELLUM delivers sub-50 ms live document and query updates over RFC 6455 WebSockets, with an automatic HTTP streaming fallback (
         <code>wss://&lt;host&gt;/v1/realtime</code>) with zero Redis or external message brokers.
         Every committed mutation appends an immutable row to the Data Plane&apos;s{" "}
         <code>realtime_outbox</code> table (indexed on <code>(project_id, seq_id ASC)</code>, 24 h
@@ -159,6 +159,18 @@ await sub.cancel();`,
           <code>ping</code>/<code>pong</code>), see the{" "}
           <PageLink slug="reference/realtime-protocol">Realtime WebSocket Protocol reference</PageLink>.
         </Callout>
+      </Section>
+
+      <Section id="transports" title="Transports: WebSocket first, SSE fallback">
+        <P>
+          The SDKs connect with a WebSocket by default. Some hosts, such as Vercel serverless functions,
+          cannot upgrade connections. In that case the SDKs fall back automatically to HTTP streaming
+          (Server-Sent Events) at <code>POST /v1/realtime/stream</code>, which carries the same frames, the
+          same authentication and the same resume position. Your listeners do not change, and you do not need
+          to configure anything. To force a transport, set <code>realtimeTransport</code> (JavaScript) or{" "}
+          <code>realtimeMode</code> (Flutter). Details are in{" "}
+          <PageLink slug="advanced">Advanced configuration</PageLink>.
+        </P>
       </Section>
 
       <Section id="opt-in-includes" title="Opt-in relation includes">

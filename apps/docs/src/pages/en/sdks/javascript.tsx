@@ -19,6 +19,10 @@ export default function Page() {
     >
 
       <SdkEndpointNote />
+      <Callout tone="info" title="Optional settings">
+        Document ids from <code>doc()</code>, auth tokens, cache policy, references with <code>addWithRelated</code> and realtime transport are covered in <PageLink slug="advanced">Advanced configuration</PageLink>.
+      </Callout>
+
       <Section id="beta-install" title="Beta installation">
         <P>Version 0.0.2 is available on npm and pub.dev. Install the published Beta packages below. Repository access is not required.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />

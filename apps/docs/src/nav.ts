@@ -25,6 +25,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { slug: "index", title: t("Introduction", "مقدمة"), desc: t("What VELLUM is, how its two PostgreSQL data planes fit together, and where to begin.", "ما هو VELLUM، وكيف تتكامل قاعدتا البيانات الخاصتان بـ PostgreSQL، ومن أين تبدأ."), keywords: ["overview", "architecture", "postgres", "jsonb"] },
       { slug: "quickstart", title: t("Quickstart", "البدء السريع"), desc: t("Install the SDK, create a client and perform your first write, read and delete.", "ثبّت الحزمة البرمجية، أنشئ عميلًا، ونفّذ أول كتابة وقراءة وحذف."), keywords: ["install", "setup", "first write"] },
+      { slug: "advanced", title: t("Advanced configuration", "الإعدادات المتقدمة"), desc: t("Optional settings: auto-ids, auth tokens, secure storage, cache policy, references and realtime transport.", "إعدادات اختيارية: المعرفات التلقائية، ورموز المصادقة، والتخزين الآمن، وسياسة الكاش، والمراجع ونقل الوقت الفعلي."), keywords: ["doc", "auto id", "cachePolicy", "setCustomToken", "secure storage", "addWithRelated", "sse"] },
       { slug: "authentication", title: t("Authentication", "المصادقة"), desc: t("API keys, end-user tokens, key rotation and least-privilege access.", "مفاتيح API، ورموز المستخدمين النهائيين، وتدوير المفاتيح، وأقل قدر من الامتيازات."), keywords: ["api key", "token", "session"] },
     ],
   },
@@ -73,6 +74,13 @@ export const NAV_GROUPS: NavGroup[] = [
       { slug: "reference/errors", title: t("Error codes & retry guidance", "رموز الأخطاء وإرشادات إعادة المحاولة"), desc: t("Every canonical code, its HTTP status, when it occurs and whether retry is safe.", "كل رمز معياري، وحالته HTTP، ومتى يحدث، وما إذا كانت إعادة المحاولة آمنة."), keywords: ["errors", "retry", "status"] },
       { slug: "errors-and-limits", title: t("Quotas & limits", "الحصص والحدود"), desc: t("Locked v1 quotas enforced by @vellum/core, with the exact error for each breach.", "الحصص الثابتة للإصدار 1 التي يفرضها @vellum/core، والخطأ المطابق لتجاوز كل منها."), keywords: ["limits", "quota", "1MiB"] },
       { slug: "reference/packages", title: t("Package APIs", "واجهات الحزم البرمجية"), desc: t("Package-by-package API surface for the framework-agnostic @vellum/* libraries.", "الواجهة البرمجية لكل حزمة على حدة لمكتبات @vellum/* المستقلة عن الأطر."), keywords: ["packages", "monorepo"] },
+    ],
+  },
+  {
+    title: t("Legal", "قانوني"),
+    items: [
+      { slug: "privacy", title: t("Privacy Policy", "سياسة الخصوصية"), desc: t("What data VELLUM collects, how it is stored and protected, and that it is never sold or shared.", "ما البيانات التي يجمعها VELLUM، وكيف تُخزَّن وتُحمى، وأنها لا تُباع ولا تُشارك."), keywords: ["privacy", "data", "gdpr"] },
+      { slug: "terms", title: t("Terms of Service", "شروط الاستخدام"), desc: t("Acceptable use, technical limits, intellectual property, and the Alpha notice and disclaimer.", "الاستخدام المقبول، والحدود التقنية، والملكية الفكرية، وإشعار ألفا وإخلاء المسؤولية."), keywords: ["terms", "alpha", "disclaimer", "AS IS"] },
     ],
   },
   {

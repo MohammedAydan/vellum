@@ -4,6 +4,7 @@ import { Route as authRoute } from "./routes/_auth.js";
 import { Route as loginRoute } from "./routes/_auth/login.js";
 import { Route as signupRoute } from "./routes/_auth/signup.js";
 import { Route as mfaRoute } from "./routes/_auth/mfa.js";
+import { PrivacyRoute, TermsRoute } from "./routes/legal.js";
 import { Route as appRoute } from "./routes/_app.js";
 import { Route as appIndexRoute } from "./routes/_app/index.js";
 import { Route as orgProjectsRoute } from "./routes/_app/orgs.$orgId.js";
@@ -48,6 +49,8 @@ const authWithChildren = authRoute.addChildren([
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
+  PrivacyRoute,
+  TermsRoute,
   authWithChildren,
   appWithChildren,
 ]);

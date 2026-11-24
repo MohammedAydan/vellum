@@ -1,9 +1,10 @@
 import { SdkEndpointNote } from "../../sdk-endpoint-note";
 import { betaJavaScriptInstall, betaDartInstall } from "../../beta-install";
 import { quickstartTypeScript, quickstartDart } from "../../quickstart-examples";
-import { Callout, Code, CodeTabs, Doc, P, PageLink, Section, UL } from "../../ui";
+import { AlphaNotice, Callout, Code, CodeTabs, Doc, P, PageLink, Section, UL } from "../../ui";
 export default function Page() {
   return <Doc eyebrow="البداية" title="البدء السريع" description="تحقق من جاهزية API، وثبّت نسخة Beta، ثم اكتب واقرأ واستعلم واحذف مع تنظيف موارد العميل.">
+    <AlphaNotice lang="ar" />
     <SdkEndpointNote arabic />
       <Section id="beta-install" title="تثبيت النسخة التجريبية">
       <P>الإصدار 0.0.2 متاح على npm وpub.dev. ثبّت الحزم المنشورة أدناه، ولا تحتاج إلى نسخة من المستودع.</P>
@@ -37,6 +38,10 @@ curl -fsS http://localhost:8080/v1/health/ready`} />
       <P>راجع <PageLink slug="query" lang="ar">دليل الاستعلام</PageLink> للترشيح والترتيب والإسقاط.</P>
     </Section>
     <Section id="dispose-best-practices" title="5. دورة حياة العميل وتنظيف الموارد">
+      <Callout tone="info" title="تحتاج تحكماً أكثر؟">
+        تستخدم هذه الصفحة الإعدادات الافتراضية فقط. المعرفات والرموز وسياسة الكاش والمراجع ونقل الوقت الفعلي في{" "}
+        <PageLink slug="advanced" lang="ar">الإعدادات المتقدمة</PageLink>. استدعِ <code>collection.doc()</code> دون وسيط للحصول على معرّف تلقائي.
+      </Callout>
       <Callout tone="warning" title="استدعِ dispose() عند إنهاء العميل">استدعِ db.dispose() داخل finally في البرامج والاختبارات. في التطبيق طويل العمر شارك عميلاً واحداً ونظفه عند إنهاء التطبيق أو الواجهة، لإغلاق المؤقتات والذاكرة واتصالات WebSocket.</Callout>
       <P>تابع <PageLink slug="pagination" lang="ar">الترقيم الصفحي</PageLink> و<PageLink slug="realtime" lang="ar">الوقت الفعلي</PageLink> و<PageLink slug="production-checklist" lang="ar">قائمة الإنتاج</PageLink>.</P>
     </Section>

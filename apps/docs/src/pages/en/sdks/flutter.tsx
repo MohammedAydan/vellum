@@ -19,6 +19,10 @@ export default function Page() {
     >
 
       <SdkEndpointNote />
+      <Callout tone="info" title="Optional settings">
+        Document ids from <code>doc()</code>, auth tokens, cache policy, references with <code>addWithRelated</code> and realtime transport are covered in <PageLink slug="advanced">Advanced configuration</PageLink>.
+      </Callout>
+
       <Section id="beta-install" title="Beta installation">
         <P>Version 0.0.2 is available on npm and pub.dev. Install the published Beta packages below. Repository access is not required.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />
@@ -46,7 +50,7 @@ final db = VellumClient(
   projectId: const String.fromEnvironment('VELLUM_PROJECT_ID'),
   apiKey: const String.fromEnvironment('VELLUM_API_KEY'),
   httpClient: httpClient,
-  authStorage: InMemoryAuthTokenStorage(), // Use a secure AuthTokenStorage implementation for persistence
+  authStorage: InMemoryAuthTokenStorage(), // default; see Advanced configuration for a secure storage snippet
   requestTimeout: const Duration(seconds: 30),
   maxRetries: 3,
   retryBaseDelay: const Duration(milliseconds: 250),

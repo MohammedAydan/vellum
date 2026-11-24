@@ -3,6 +3,7 @@ import { Route as rootRoute } from "./__root.js";
 import { getStoredSession } from "../lib/auth.js";
 import { Layers3, ShieldCheck, Radio } from "lucide-react";
 import { AuthShell, useI18n } from "@vellum/ui";
+import { AlphaNotice, LegalLinks } from "../features/legal/legal-page.js";
 
 export const Route = createRoute({
   getParentRoute: () => rootRoute,
@@ -51,6 +52,10 @@ function AuthLayout() {
       footer="PostgreSQL · JSONB · LISTEN/NOTIFY"
     >
       <Outlet />
+      <div className="mt-6 space-y-3">
+        <AlphaNotice />
+        <LegalLinks />
+      </div>
     </AuthShell>
   );
 }

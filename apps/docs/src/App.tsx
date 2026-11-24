@@ -341,7 +341,14 @@ export default function App() {
           </div>
           <footer className="docs-footer">
             <span>VELLUM · {isArabic ? "قاعدة مستندات أصلية على PostgreSQL" : "PostgreSQL-native document database"}</span>
-            <span className="footer-check"><Check size={13} /> {isArabic ? "توثيق النسخة التجريبية" : "Beta developer docs"}</span>
+            <span className="footer-check"><Check size={13} /> {isArabic ? "ألفا: بلا ضمانات، كما هي" : "Alpha: no guarantees, provided as is"}</span>
+            <span className="footer-links">
+              <a href={pageHref("privacy", lang)} onClick={go(pageHref("privacy", lang))}>{isArabic ? "سياسة الخصوصية" : "Privacy Policy"}</a>
+              {" · "}
+              <a href={pageHref("terms", lang)} onClick={go(pageHref("terms", lang))}>{isArabic ? "شروط الاستخدام" : "Terms of Service"}</a>
+              {" · "}
+              <a href={`${pageHref("terms", lang)}#alpha`} onClick={go(`${pageHref("terms", lang)}#alpha`)}>{isArabic ? "إخلاء المسؤولية" : "Disclaimer"}</a>
+            </span>
           </footer>
         </div>
       </DocsShell>

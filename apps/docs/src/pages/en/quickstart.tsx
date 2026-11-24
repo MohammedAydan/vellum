@@ -2,6 +2,7 @@ import { SdkEndpointNote } from "../../sdk-endpoint-note";
 import { quickstartTypeScript, quickstartDart } from "../../quickstart-examples";
 import { betaJavaScriptInstall, betaDartInstall } from "../../beta-install";
 import {
+  AlphaNotice,
   Callout,
   Code,
   CodeTabs,
@@ -22,6 +23,7 @@ export default function Page() {
       description="Verify your API instance, install @vellumdb/sdk-js or vellum_flutter, run your first document writes and queries, and clean up client resources safely."
     >
 
+      <AlphaNotice />
       <SdkEndpointNote />
       <Section id="beta-install" title="Beta installation">
         <P>Version 0.0.2 is available on npm and pub.dev. Install the published Beta packages below. Repository access is not required.</P>
@@ -158,6 +160,12 @@ curl -fsS http://localhost:8080/v1/health/ready`}
       </Section>
 
       <Section id="dispose-best-practices" title="5. Client lifecycle &amp; dispose() best practices">
+        <Callout tone="info" title="Need more control?">
+          This page uses defaults only. IDs, auth tokens, cache policy, references and realtime transport are
+          covered in <PageLink slug="advanced">Advanced configuration</PageLink>. Use <code>collection.doc()</code>{" "}
+          with no argument to get an auto-generated id.
+        </Callout>
+
         <Callout tone="warning" title="Always call dispose() when tearing down a client">
           Both <code>@vellumdb/sdk-js</code> and <code>vellum_flutter</code> manage proactive JWT
           refresh timers, WebSocket realtime transports, and in-memory read caches. In CLI scripts,

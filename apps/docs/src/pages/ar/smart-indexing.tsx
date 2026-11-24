@@ -38,9 +38,7 @@ final client = VellumClient(
 
 const warning = `[VELLUM Index Advisor] Slow/unindexed query detected on "posts".
 Reason: Composite index needed for equality filter on [status] + sort on [priority DESC]
-Create this index in 1 click: http://localhost:3000/app/orgs/.../indexes?suggest=eyJvcm...`;
-
-const deepLink = `\${VELLUM_DASHBOARD_BASE_URL}/app/orgs/\${orgId}/projects/\${projectId}/indexes?suggest=\${base64url}`;
+Suggested index: posts (status ASC, priority DESC)`;
 
 const curl = `# تُعاد ترويسات المستشار الاستباقية على /query وقراءات المجموعات.
 curl -s -D - -o /dev/null -X POST \\
@@ -64,7 +62,7 @@ export default function Page() {
   return (
     <Doc
       title="الفهرسة الذكية والأداء"
-      description="مستشار الفهارس E/S/R، والبصمات والروابط المباشرة، وتحذيرات الحزم البرمجية، والذاكرة المؤقتة المحدودة، ونهج Zero-Redis."
+      description="مستشار الفهارس E/S/R، والبصمات، وتحذيرات الحزم البرمجية، والذاكرة المؤقتة المحدودة، ونهج Zero-Redis."
       eyebrow="المفاهيم الأساسية"
     >
       <Section id="overview" title="نظرة عامة">
@@ -138,17 +136,11 @@ export default function Page() {
         />
       </Section>
 
-      <Section id="deep-links" title="البصمات والروابط المباشرة (Deep Links)">
+      <Section id="deep-links" title="البصمات وترويسات المستشار">
         <P>
           تمنع البصمة <code>fingerprint</code> تكرار نفس التحذير عند تكرار الاستعلام. وتُفحص حمولة{" "}
           <code>suggestPayload</code> بدقة عند فك الترميز (أي حمولة معطوبة أو أكبر من 8 KiB تعود{" "}
-          <code>null</code>). يحمل الترويسة <code>x-vellum-index-url</code> رابط الإنشاء بنقرة واحدة:
-        </P>
-        <Code lang="text" title="بنية الرابط المباشر" code={deepLink} />
-        <P>
-          القيمة الافتراضية لـ <code>VELLUM_DASHBOARD_BASE_URL</code> هي <code>http://localhost:3000</code>،
-          وتُكشف ترويستا المستشار عبر CORS. عند فتح الرابط تُملأ بيانات الفهرس تلقائياً، وعند
-          إنشائه تُحدَّث حالة التوصية المطابقة إلى <code>applied</code>.
+          <code>null</code>). تحمل الترويسة <code>x-vellum-index-url</code> التوصية نفسها بصيغة مشفرة، وتعرضها الحزمتان باسم <code>url</code>.
         </P>
       </Section>
 

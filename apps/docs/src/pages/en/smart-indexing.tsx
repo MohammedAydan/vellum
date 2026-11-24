@@ -14,7 +14,7 @@ export default function Page() {
     <Doc
       eyebrow="Core concepts"
       title="Smart Indexing &amp; Performance"
-      description="The automatic E/S/R (Equality → Sort → Range) index advisor, response headers, advisor deep links, SDK deduplication, and bounded in-process caches."
+      description="The automatic E/S/R (Equality → Sort → Range) index advisor, response headers, SDK deduplication, and bounded in-process caches."
     >
       <P>
         Designing composite indexes by hand is error-prone when queries combine multiple equality
@@ -51,7 +51,7 @@ export default function Page() {
         />
       </Section>
 
-      <Section id="advisor-headers" title="Response headers &amp; one-click deep links">
+      <Section id="advisor-headers" title="Response headers">
         <P>
           When the server detects a missing or suboptimal index, it attaches two non-blocking
           headers to the HTTP response without failing the request:
@@ -64,8 +64,8 @@ export default function Page() {
               <code>fields</code> array, and human-readable <code>reason</code>.
             </>,
             <>
-              <code>x-vellum-index-url</code>: A pre-filled index-creation link carrying the
-              collection and E/S/R fields for one-click creation.
+              <code>x-vellum-index-url</code>: The same suggestion in encoded form. The SDKs expose
+              it as <code>url</code> in the suggestion callback.
             </>,
           ]}
         />
