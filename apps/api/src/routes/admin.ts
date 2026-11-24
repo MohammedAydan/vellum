@@ -184,8 +184,16 @@ export function createAdminRoutes(
     };
   }
 
+  // Operator views list tenants and users. The lists are mirrored per process, so every handler
+  // that reads them re-reads PostgreSQL first. Operator traffic is low, and concurrent calls
+  // share one refresh.
+  const syncFromDb = async (): Promise<void> => {
+    await controlStore.refresh?.();
+  };
+
   // 1. First-Time Setup Status & Master Owner Initialization
-  routes.get("/admin/setup-status", (c) => {
+  routes.get("/admin/setup-status", async (c) => {
+    await syncFromDb();
     const allUsers = Array.from(controlStore.users.values());
     const owners = allUsers.filter((u) => u.platformRole === "owner");
     const requiresSetup = owners.length === 0;
@@ -200,6 +208,7 @@ export function createAdminRoutes(
   });
 
   routes.post("/admin/setup-owner", async (c) => {
+    await syncFromDb();
     const allUsers = Array.from(controlStore.users.values());
     const existingOwners = allUsers.filter((u) => u.platformRole === "owner");
     if (existingOwners.length > 0) {
@@ -283,6 +292,7 @@ export function createAdminRoutes(
 
   // 2. Operator Authentication
   routes.post("/admin/login", async (c) => {
+    await syncFromDb();
     const body = await c.req.json();
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const password = typeof body.password === "string" ? body.password : "";
@@ -338,6 +348,7 @@ export function createAdminRoutes(
 
   // 3. Cluster Telemetry & Overview — all numbers from live PostgreSQL reads
   routes.get("/admin/overview", requireOperator, async (c) => {
+    await syncFromDb();
     const orgs = Array.from(controlStore.organizations.values());
     const projects = Array.from(controlStore.projects.values());
     const keys = Array.from(controlStore.apiKeysById.values());
@@ -363,6 +374,7 @@ export function createAdminRoutes(
 
   // 4. Multi-Tenant Directory — usage from project_usage_daily, never invented
   routes.get("/admin/tenants", requireOperator, async (c) => {
+    await syncFromDb();
     const orgs = Array.from(controlStore.organizations.values());
     const projects = Array.from(controlStore.projects.values());
     const today = new Date().toISOString().slice(0, 10);
@@ -398,6 +410,7 @@ export function createAdminRoutes(
 
   // 5. Tenant Details
   routes.get("/admin/tenants/:orgId", requireOperator, async (c) => {
+    await syncFromDb();
     const orgId = c.req.param("orgId");
     const org = controlStore.organizations.get(orgId);
     if (!org) {
@@ -426,6 +439,7 @@ export function createAdminRoutes(
   });
 
   routes.get("/admin/tenants/:orgId/security-metadata", requireOperator, async (c) => {
+    await syncFromDb();
     const orgId = c.req.param("orgId");
     if (!controlStore.organizations.has(orgId)) throw new VellumError("NOT_FOUND", "Tenant not found");
     const ids = [...controlStore.projects.values()].filter(p => p.organizationId === orgId).map(p => p.id);
@@ -434,6 +448,7 @@ export function createAdminRoutes(
 
   // 6. Tenant Suspend / Reactivate
   routes.post("/admin/tenants/:orgId/suspend", requireOperatorWrite, async (c) => {
+    await syncFromDb();
     const orgId = c.req.param("orgId");
     const org = controlStore.organizations.get(orgId);
     if (!org) {
@@ -458,6 +473,7 @@ export function createAdminRoutes(
   });
 
   routes.post("/admin/tenants/:orgId/reactivate", requireOperatorWrite, async (c) => {
+    await syncFromDb();
     const orgId = c.req.param("orgId");
     const org = controlStore.organizations.get(orgId);
     if (!org) {

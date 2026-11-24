@@ -92,4 +92,24 @@ describe.skipIf(!enabled)("session revocations and memberships are read from Pos
     expect(await a.findUserByEmail(`nobody-${userId}@example.invalid`)).toBeNull();
     await raw.query("UPDATE users SET is_suspended = false WHERE id=$1", [userId]);
   });
+
+  it("operator list views see rows written elsewhere after refresh, and refresh latency is reported", async () => {
+    const id = randomUUID();
+    await raw.query("INSERT INTO organizations(id,slug,name,billing_email) VALUES($1,$2,'Late Org','late@example.invalid')", [id, `late-${id}`]);
+    try {
+      expect(a.organizations.has(id)).toBe(false);
+      await a.refresh();
+      expect(a.organizations.has(id)).toBe(true);
+      const samples: number[] = [];
+      for (let i = 0; i < 30; i++) {
+        const t = performance.now();
+        await a.refresh();
+        samples.push(performance.now() - t);
+      }
+      samples.sort((x, y) => x - y);
+      console.log(`admin refresh ms p50=${percentile(samples, 50).toFixed(1)} p95=${percentile(samples, 95).toFixed(1)} p99=${percentile(samples, 99).toFixed(1)}`);
+    } finally {
+      await raw.query("DELETE FROM organizations WHERE id=$1", [id]);
+    }
+  });
 });

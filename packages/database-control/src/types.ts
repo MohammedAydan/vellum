@@ -373,6 +373,8 @@ import type {
  * `@vellum/admin` service and `verifyApiKey()` read them directly.
  */
 export interface ControlPlaneRepository {
+  /** Re-reads the list mirrors from the database (PostgreSQL store only). Used by operator list views. */
+  refresh?(): Promise<void>;
   readonly users: Map<string, UserRecord>;
   readonly organizations: Map<string, OrganizationRecord>;
   readonly projects: Map<string, ProjectRecord>;
