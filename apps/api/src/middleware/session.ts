@@ -179,12 +179,8 @@ export async function getUserOrgMemberships(
   controlStore: ControlPlaneRepository,
   userId: string
 ): Promise<OrgMembership[]> {
-  if (hasOrganizationMembers(controlStore)) {
-    return Array.from(controlStore.organizationMembers.values())
-      .filter((m) => m.userId === userId)
-      .map((m) => ({ organizationId: m.organizationId, role: m.role }));
-  }
-
+  // PostgreSQL first: the PG store also carries a refreshed in-process mirror of members,
+  // which must never answer an authorization question.
   if (hasQueryPool(controlStore)) {
     const res = await controlStore.pool.query(
       "SELECT organization_id AS \"organizationId\", role FROM organization_members WHERE user_id = $1",
@@ -196,6 +192,12 @@ export async function getUserOrgMemberships(
       )
       .map((row) => ({ organizationId: row["organizationId"], role: row["role"] }));
 
+  }
+
+  if (hasOrganizationMembers(controlStore)) {
+    return Array.from(controlStore.organizationMembers.values())
+      .filter((m) => m.userId === userId)
+      .map((m) => ({ organizationId: m.organizationId, role: m.role }));
   }
 
   return [];
