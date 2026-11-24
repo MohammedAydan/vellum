@@ -263,7 +263,7 @@ await querySub.cancel();`,
 
       <Section id="transports" title="وسائل النقل: WebSocket أولاً ثم SSE">
         <P>
-          تتصل الحزمتان عبر WebSocket افتراضياً. بعض الاستضافات، مثل دوال Vercel، لا تدعم ترقية الاتصال. عندها
+          تتصل الحزمتان عبر WebSocket افتراضياً. بعض الشبكات والوسطاء وبيئات التشغيل لا تدعم ترقية الاتصال. عندها
           تنتقل الحزمتان تلقائياً إلى بث HTTP (Server-Sent Events) على <code>POST /v1/realtime/stream</code>،
           وهو يحمل الإطارات نفسها والمصادقة نفسها وموضع الاستئناف نفسه. لا يتغير شيء في مستمعيك ولا تحتاج إلى
           أي إعداد. لفرض وسيلة محددة استخدم <code>realtimeTransport</code> (JavaScript) أو{" "}

@@ -1,7 +1,7 @@
 /**
  * @vellumdb/sdk-js - Server-Sent Events realtime socket
  *
- * Serverless hosts (Vercel) cannot upgrade to WebSocket. `SseSocket` implements
+ * Some networks, proxies and runtimes cannot use WebSocket. `SseSocket` implements
  * the `WebSocketLike` surface on top of a streaming `fetch` to
  * `POST /v1/realtime/stream`, so `RealtimeTransport` (auth handshake,
  * heartbeat, resume watermarks, backoff with jitter) works unchanged.

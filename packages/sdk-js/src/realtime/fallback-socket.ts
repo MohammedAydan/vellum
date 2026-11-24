@@ -2,7 +2,7 @@
  * @vellumdb/sdk-js - WebSocket-first realtime socket with automatic SSE fallback
  *
  * WebSocket stays the primary transport. When the connection cannot be
- * established (the host refuses the upgrade, e.g. Vercel Functions; the client
+ * established (the host or a proxy refuses the upgrade; the client
  * runtime has no WebSocket; a proxy drops it before the first server frame), the
  * socket switches to `SseSocket` (HTTP streaming) and replays the auth frame and
  * active subscriptions. The decision is remembered per host for a few minutes so

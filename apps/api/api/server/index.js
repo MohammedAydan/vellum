@@ -7,7 +7,10 @@
  * path as a `?path=` query because Vercel cannot route a multi-segment rewrite
  * destination to a single-segment Function.
  */
+import http from "node:http";
 import { createVellumPlatformFromEnv } from "../../dist/index.js";
+import { getConfig } from "../../dist/config.js";
+import { attachRealtimeWebSocketServer, parseAllowedOrigins } from "../../dist/ws-rfc6455.js";
 import { pipeWebResponse } from "../../dist/runtime/node-stream.js";
 
 const platform = await createVellumPlatformFromEnv();
@@ -17,7 +20,7 @@ const ALLOWED_VERCEL_ORIGINS = new Set([
   "https://vellum-console-mag-1.vercel.app",
 ]);
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const url = new URL(req.url || "/", "http://localhost");
   const target = url.searchParams.get("path") || "/";
   const headers = new Headers();
@@ -31,6 +34,11 @@ export default async function handler(req, res) {
     const body = req.body;
     if (body !== undefined && body !== null) {
       init.body = typeof body === "string" ? body : JSON.stringify(body);
+    } else {
+      // Served as an http.Server (needed for WebSocket upgrades): the body is an un-parsed stream.
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      if (chunks.length > 0) init.body = Buffer.concat(chunks);
     }
   }
 
@@ -55,3 +63,28 @@ export default async function handler(req, res) {
   // Stream the body (do not buffer it): realtime over SSE depends on it.
   await pipeWebResponse(response, res, extra);
 }
+
+// Vercel Functions serve WebSockets when the default export is an http.Server
+// (Fluid compute, GA). The same server also handles every REST and SSE request.
+const server = http.createServer((req, res) => {
+  handler(req, res).catch((err) => {
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+    }
+    res.end(JSON.stringify({ error: "INTERNAL_ERROR", reason: err instanceof Error ? err.message : String(err) }));
+  });
+});
+
+// Rewrites hand the function `/api/server?path=/v1/...`; the WebSocket handler needs the real path.
+server.on("upgrade", (req) => {
+  const url = new URL(req.url || "/", "http://localhost");
+  const target = url.searchParams.get("path");
+  if (target) req.url = target;
+});
+
+attachRealtimeWebSocketServer(server, platform.realtimeHub, {
+  allowedOrigins: parseAllowedOrigins(getConfig().CORS_ALLOWED_ORIGINS),
+});
+
+export default server;

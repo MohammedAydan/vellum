@@ -1,8 +1,7 @@
 /**
  * Realtime over Server-Sent Events.
  *
- * Serverless hosts (Vercel) cannot upgrade HTTP connections to WebSocket, so
- * `/v1/realtime` fails there. `POST /v1/realtime/stream` carries the same
+ * Hosts, proxies and runtimes that cannot use WebSocket still need realtime. `POST /v1/realtime/stream` carries the same
  * protocol frames over a single streaming HTTP response:
  *
  *  - The request body is `{ "frames": [auth, subscribe, ...] }` (the same
