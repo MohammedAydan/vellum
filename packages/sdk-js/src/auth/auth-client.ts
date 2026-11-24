@@ -2,7 +2,7 @@
  * @vellumdb/sdk-js - End-user authentication state machine.
  *
  * Owns the signed-in session, silent token refresh (single-flight), reactive
- * 45 s pre-flight expiry, listener notification, and pluggable session
+ * 60 s pre-flight expiry, listener notification, and pluggable session
  * persistence. HTTP concerns stay in the injected `request` function so this
  * class is fully unit-testable without a network.
  *
@@ -64,6 +64,8 @@ export interface VellumAuthClientOptions {
   request: AuthRequest;
   getAuthToken: (() => Promise<string | null> | string | null) | null;
   authStorage?: AuthStorage | null;
+  /** Silent proactive/reactive refresh. Defaults to true; set false to refresh only on explicit `getIdToken(true)`. */
+  autoRefresh?: boolean;
   /** Fired synchronously on sign-in, sign-out and disposal. */
   onSessionChanged?: (() => void) | null;
   /** Fired whenever the effective bearer changes (sign-in or token rotation). */
@@ -73,7 +75,7 @@ export interface VellumAuthClientOptions {
 export type SignUpEmailOptions = Omit<SignUpWithEmailAndPasswordInput, "email" | "password">;
 export type SignInOAuthPayload = Omit<SignInWithOAuthInput, "provider">;
 
-const REFRESH_SKEW_MS = 45_000;
+const REFRESH_SKEW_MS = 60_000;
 
 interface AuthClientInternalState {
   currentUserValue: AuthState | null;
@@ -82,10 +84,13 @@ interface AuthClientInternalState {
   lastNotifiedToken: string | null;
   sessionEpoch: number;
   disposed: boolean;
+  /** Externally injected bearer (setCustomToken); wins over getAuthToken. */
+  customToken: string | null;
 }
 
 export class VellumAuthClient {
   private readonly storage: AuthStorage;
+  private readonly autoRefresh: boolean;
   private readonly request: AuthRequest;
   private readonly getAuthToken: (() => Promise<string | null> | string | null) | null;
   private readonly onTokenChanged: ((previousToken: string | null, nextToken: string | null) => void) | null;
@@ -96,6 +101,7 @@ export class VellumAuthClient {
   public constructor(options: VellumAuthClientOptions) {
     this.request = options.request;
     this.getAuthToken = options.getAuthToken;
+    this.autoRefresh = options.autoRefresh !== false;
     this.storage = resolveAuthStorage(options.authStorage);
     this.onSessionChanged = options.onSessionChanged ?? null;
     this.onTokenChanged = options.onTokenChanged ?? null;
@@ -108,6 +114,7 @@ export class VellumAuthClient {
       lastNotifiedToken: restored?.accessToken ?? null,
       sessionEpoch: 0,
       disposed: false,
+      customToken: null,
     };
     Object.freeze(this);
     // A restored session is hydration, not a sign-in event: no listener emit.
@@ -137,10 +144,10 @@ export class VellumAuthClient {
   /* Token lifecycle                                                        */
   /* --------------------------------------------------------------------- */
 
-  /** Schedule a silent refresh 45 s before the access JWT's `exp`. */
+  /** Schedule a silent refresh 60 s before the access JWT's `exp`. */
   private scheduleRefresh(): void {
     this.clearRefreshTimer();
-    if (this.state.disposed) return;
+    if (this.state.disposed || !this.autoRefresh) return;
     const user = this.state.currentUserValue;
     if (!user) return;
     const exp = parseJwtExp(user.accessToken);
@@ -202,14 +209,14 @@ export class VellumAuthClient {
   }
 
   /**
-   * Resolve a token valid for at least another 45 s for HTTP/realtime use.
+   * Resolve a token valid for at least another 60 s for HTTP/realtime use.
    * `notify = false` is used by the initial realtime handshake: it records the
    * baseline token without emitting a redundant re-auth for the very frame
    * that is being sent.
    */
   public async getValidAccessToken(notify = true): Promise<string | null> {
-    let explicit: string | null = null;
-    if (this.getAuthToken) {
+    let explicit: string | null = this.state.customToken;
+    if (explicit === null && this.getAuthToken) {
       try {
         explicit = await this.getAuthToken();
       } catch {
@@ -281,7 +288,7 @@ export class VellumAuthClient {
    * without triggering a redundant `/auth/token/refresh` request.
    */
   public async refreshIfMatching(staleAccessToken: string | null): Promise<string | null> {
-    if (this.state.disposed) return null;
+    if (this.state.disposed || !this.autoRefresh) return null;
     if (this.state.refreshInFlightPromise) {
       try {
         return (await this.state.refreshInFlightPromise).accessToken;
@@ -301,10 +308,23 @@ export class VellumAuthClient {
     }
   }
 
+  /**
+   * Inject an externally issued bearer (e.g. from your own auth backend). It
+   * takes precedence over `getAuthToken` and the SDK session; pass `null` to
+   * remove it. The realtime connection re-authenticates with the new token.
+   */
+  public setCustomToken(token: string | null): void {
+    const previous = this.state.customToken;
+    this.state.customToken = token === null || token === "" ? null : token;
+    if (previous !== this.state.customToken) {
+      void this.getValidAccessToken(true).catch(() => undefined);
+    }
+  }
+
   public async getIdToken(forceRefresh = false): Promise<string | null> {
     const user = this.state.currentUserValue;
     if (!user) return null;
-    if (!forceRefresh && !isTokenExpiringWithin(user.accessToken, REFRESH_SKEW_MS)) {
+    if (!forceRefresh && (!this.autoRefresh || !isTokenExpiringWithin(user.accessToken, REFRESH_SKEW_MS))) {
       return user.accessToken;
     }
     try {

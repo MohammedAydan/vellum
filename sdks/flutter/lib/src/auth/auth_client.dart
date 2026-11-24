@@ -154,13 +154,13 @@ class VellumAuth implements VellumAuthPort {
   void _scheduleRefresh() {
     _refreshTimer?.cancel();
     _refreshTimer = null;
-    if (_disposed) return;
+    if (_disposed || !client.autoRefresh) return;
     final user = _currentUser;
     if (user == null) return;
     final exp = _jwtExpirySeconds(user.accessToken);
     if (exp == null) return;
     final delayMs =
-        max(0, exp * 1000 - 45000 - DateTime.now().millisecondsSinceEpoch);
+        max(0, exp * 1000 - 60000 - DateTime.now().millisecondsSinceEpoch);
     _refreshTimer = Timer(Duration(milliseconds: delayMs), () {
       _refreshTimer = null;
       if (_disposed) return;
@@ -168,7 +168,7 @@ class VellumAuth implements VellumAuthPort {
     });
   }
 
-  /// Returns a valid access token, refreshing 45 s before expiry. Concurrent
+  /// Returns a valid access token, refreshing 60 s before expiry. Concurrent
   /// forced refreshes share one in-flight request.
   @override
   Future<String?> getIdToken({bool forceRefresh = false}) async {
@@ -176,8 +176,9 @@ class VellumAuth implements VellumAuthPort {
     final user = _currentUser;
     if (user == null) return null;
     if (!forceRefresh &&
-        !_isTokenExpiringWithin(
-            user.accessToken, const Duration(seconds: 45))) {
+        (!client.autoRefresh ||
+            !_isTokenExpiringWithin(
+                user.accessToken, const Duration(seconds: 60)))) {
       return user.accessToken;
     }
 
@@ -210,7 +211,7 @@ class VellumAuth implements VellumAuthPort {
   /// If another request has already rotated [failedToken] to a newer token,
   /// returns that newer token immediately without issuing another refresh call.
   Future<String?> refreshOnUnauthorized(String? failedToken) async {
-    if (_disposed) return null;
+    if (_disposed || !client.autoRefresh) return null;
     final user = _currentUser;
     if (user == null || user.refreshToken.isEmpty) return null;
     if (failedToken != null &&
@@ -218,7 +219,7 @@ class VellumAuth implements VellumAuthPort {
         user.accessToken.isNotEmpty &&
         user.accessToken != failedToken &&
         !_isTokenExpiringWithin(
-            user.accessToken, const Duration(seconds: 45))) {
+            user.accessToken, const Duration(seconds: 60))) {
       return user.accessToken;
     }
     return getIdToken(forceRefresh: true);

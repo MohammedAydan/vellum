@@ -182,7 +182,7 @@ describe("@vellumdb/sdk-js - end-user auth", () => {
     expect(headersOf(documentCall)["authorization"]).toBe(`Bearer ${FUTURE_TOKEN}`);
   });
 
-  it("pre-flight refreshes a token expiring within 45 s before a REST call", async () => {
+  it("pre-flight refreshes a token expiring within 60 s before a REST call", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-11-17T00:00:00.000Z"));
     try {

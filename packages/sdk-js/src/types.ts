@@ -47,6 +47,8 @@ export interface ClientConfig {
    * `window.localStorage` is available, otherwise `MemoryAuthStorage`.
    */
   authStorage?: AuthStorage | null;
+  /** Silent token refresh (60 s before expiry and on 401). Defaults to `true`. */
+  autoRefresh?: boolean;
   customFetch?: typeof globalThis.fetch;
   /** Per-request HTTP timeout in milliseconds via `AbortController`. Defaults to `30_000`. Set `0` to disable. */
   timeoutMs?: number;
@@ -668,6 +670,8 @@ export interface VellumClientInterface {
   getUser(): Promise<VellumAuthUser>;
   /** Patch the signed-in user's profile and refresh the local snapshot. */
   updateProfile(patch: UpdateProfileInput): Promise<VellumAuthUser>;
+  /** Inject an externally issued bearer token; `null` removes it. Wins over `getAuthToken` and the SDK session. */
+  setCustomToken(token: string | null): void;
   /** Valid access token, refreshing it when it is close to expiry. */
   getIdToken(forceRefresh?: boolean): Promise<string | null>;
   /** Revoke the session remotely and clear all local auth state. */

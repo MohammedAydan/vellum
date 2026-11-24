@@ -184,7 +184,7 @@ void main() {
   });
 
   group('Silent session refresh', () {
-    test('pre-flight refreshes a token expiring within 45 s before a REST call', () async {
+    test('pre-flight refreshes a token expiring within 60 s before a REST call', () async {
       final expiring = _jwt(<String, dynamic>{
         'sub': 'usr_1',
         'exp': DateTime.now().add(const Duration(seconds: 20)).millisecondsSinceEpoch ~/ 1000,
