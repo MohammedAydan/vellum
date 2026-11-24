@@ -27,7 +27,11 @@ export function readOAuthDraft(config: AuthConfigView | null | undefined, provid
   return {
     enabled: asBoolean(entry["enabled"]),
     clientId: asString(entry["clientId"]),
-    clientSecret: asString(entry["clientSecret"]),
+    clientSecret: "",
+    hasSecret: entry["hasClientSecret"] === true,
+    additionalClientIds: Array.isArray(entry["additionalClientIds"])
+      ? (entry["additionalClientIds"] as unknown[]).filter((v): v is string => typeof v === "string").join("\n")
+      : "",
   };
 }
 
@@ -35,4 +39,10 @@ export function formatDate(value: string | null): string {
   if (!value) return "-";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
+}
+
+export function readRedirectUris(config: AuthConfigView | null | undefined): string[] {
+  const settings = asRecord(config?.oauthProviders?.["__settings"]);
+  const list = settings["redirectUris"];
+  return Array.isArray(list) ? list.filter((v): v is string => typeof v === "string") : [];
 }

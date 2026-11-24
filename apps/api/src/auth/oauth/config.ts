@@ -43,6 +43,7 @@ export function mergeOAuthProviders(existing: Rec, incoming: Rec, masterKey: str
     const previous = asRec(existing[name]);
     const secret = next["clientSecret"];
     delete next["clientSecret"];
+    delete next["hasClientSecret"]; // read-only flag from the public view
     if (typeof secret === "string" && secret.length > 0) {
       next["clientSecretEncrypted"] = encryptSecret(secret, masterKey);
     } else if (typeof previous["clientSecretEncrypted"] === "string") {

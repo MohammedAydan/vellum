@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "../../lib/api.js";
+import { apiFetch, getApiBaseUrl } from "../../lib/api.js";
 import {
   LoadingState,
   ErrorState,
@@ -25,7 +25,7 @@ import {
 import { ShieldAlert, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import type { UnknownRecord, AuthConfigView, OAuthDraft } from "./types.js";
-import { asRecord, asBoolean, errorMessage, readOAuthDraft } from "./helpers.js";
+import { asRecord, asBoolean, errorMessage, readOAuthDraft, readRedirectUris } from "./helpers.js";
 
 export function ProvidersPanel({ projectId }: { projectId: string }) {
   const { t } = useI18n();
@@ -66,8 +66,6 @@ export function ProvidersPanel({ projectId }: { projectId: string }) {
     }
   };
 
-  const callbackUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/v1/projects/${encodeURIComponent(projectId)}/auth/callback`;
-  const jwksUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/v1/projects/${encodeURIComponent(projectId)}/auth/jwks.json`;
 
   const toggle = (key: keyof AuthConfigView, value: boolean) => {
     if (!draft) return;
@@ -142,7 +140,7 @@ export function ProvidersPanel({ projectId }: { projectId: string }) {
                     enableAnonymousAuth: draft.enableAnonymousAuth,
                     enableTotpMfa: draft.enableTotpMfa,
                     requireEmailVerification: draft.requireEmailVerification,
-                    oauthProviders: draft.oauthProviders,
+                    oauthProviders: { magicLink: asRecord(draft.oauthProviders?.["magicLink"]) },
                   }, t("authStudio.providers.saveToast"))}
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
@@ -160,23 +158,11 @@ export function ProvidersPanel({ projectId }: { projectId: string }) {
           <CardDescription className="text-xs">{t("authStudio.providers.oauthDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
-            <ConsoleCopyableField
-              label={t("authStudio.providers.callbackUrl")}
-              value={callbackUrl}
-            />
-            <p className="text-[11px] text-muted-foreground">{t("authStudio.providers.callbackDescription")}</p>
-            <ConsoleCopyableField
-              label="JWKS URL"
-              value={jwksUrl}
-            />
-            <p className="text-[11px] text-muted-foreground">{t("authStudio.providers.oauthDescription")}</p>
-          </div>
-
+          <p className="text-[11px] text-muted-foreground">{t("authStudio.providers.callbackDescription")}</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {(["google", "github"] as const).map((provider) => {
               const oauth = readOAuthDraft(config, provider);
-              const configured = Boolean(oauth.clientId && oauth.clientSecret);
+              const configured = Boolean(oauth.clientId && oauth.hasSecret);
               return (
                 <div key={provider} className="flex items-center justify-between gap-3 rounded-lg border p-3">
                   <div className="min-w-0">
@@ -197,6 +183,12 @@ export function ProvidersPanel({ projectId }: { projectId: string }) {
           </div>
         </CardContent>
       </Card>
+
+      <RedirectUrisCard
+        projectId={projectId}
+        uris={readRedirectUris(config)}
+        onSaved={async () => { await refetch(); }}
+      />
 
       {oauthTarget ? (
         <OAuthConnectionDialog
@@ -253,22 +245,26 @@ function OAuthConnectionDialog({
   const initial = React.useMemo(() => readOAuthDraft(config, provider), [config, provider]);
   const [draft, setDraft] = React.useState<OAuthDraft>(initial);
   const [saving, setSaving] = React.useState(false);
-  const callbackUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/v1/projects/${encodeURIComponent(projectId)}/auth/callback`;
+  const callbackUrl = `${getApiBaseUrl()}/v1/projects/${encodeURIComponent(projectId)}/auth/oauth/${provider}/callback`;
 
   React.useEffect(() => setDraft(initial), [initial]);
 
   const save = async () => {
-    if (!draft.clientId.trim() || !draft.clientSecret.trim()) {
+    if (!draft.clientId.trim() || (!draft.clientSecret.trim() && !draft.hasSecret)) {
       toast.error(t("authStudio.providers.providerSaveFailed"));
       return;
     }
     setSaving(true);
     try {
-      const oauthProviders = { ...asRecord(config?.oauthProviders) };
-      oauthProviders[provider] = {
-        enabled: draft.enabled,
-        clientId: draft.clientId.trim(),
-        clientSecret: draft.clientSecret.trim(),
+      // Only this provider is sent. A blank secret keeps the stored one (the server merges).
+      const extraIds = draft.additionalClientIds.split(/\s+/).map((v) => v.trim()).filter(Boolean);
+      const oauthProviders: Record<string, unknown> = {
+        [provider]: {
+          enabled: draft.enabled,
+          clientId: draft.clientId.trim(),
+          ...(draft.clientSecret.trim() ? { clientSecret: draft.clientSecret.trim() } : {}),
+          ...(provider === "google" ? { additionalClientIds: extraIds } : {}),
+        },
       };
       await apiFetch(
         `/v1/projects/${encodeURIComponent(projectId)}/auth/admin/config`,
@@ -321,16 +317,87 @@ function OAuthConnectionDialog({
               type="password"
               value={draft.clientSecret}
               onChange={(event) => setDraft({ ...draft, clientSecret: event.target.value })}
-              placeholder={t("authStudio.providers.clientSecretPlaceholder")}
+              placeholder={draft.hasSecret ? t("authStudio.providers.clientSecretKeep") : t("authStudio.providers.clientSecretPlaceholder")}
               className="h-8 font-mono text-xs"
               autoComplete="off"
             />
           </div>
+          {provider === "google" ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="oauth-extra-ids" className="text-xs">{t("authStudio.providers.extraClientIds")}</Label>
+              <textarea
+                id="oauth-extra-ids"
+                value={draft.additionalClientIds}
+                onChange={(event) => setDraft({ ...draft, additionalClientIds: event.target.value })}
+                rows={3}
+                className="w-full rounded-md border bg-background px-2 py-1.5 font-mono text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">{t("authStudio.providers.extraClientIdsHelp")}</p>
+            </div>
+          ) : null}
           <ConsoleCopyableField
             label={t("authStudio.providers.callbackUrl")}
             value={callbackUrl}
           />
+          <p className="text-[11px] text-muted-foreground">{t(`authStudio.providers.${provider}Setup`)}</p>
         </div>
     </ConsoleDetailSheet>
+  );
+}
+
+function RedirectUrisCard({
+  projectId,
+  uris,
+  onSaved,
+}: {
+  projectId: string;
+  uris: string[];
+  onSaved: () => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const joined = uris.join("\n");
+  const [text, setText] = React.useState(joined);
+  const [saving, setSaving] = React.useState(false);
+  React.useEffect(() => setText(joined), [joined]);
+
+  const save = async () => {
+    const redirectUris = text.split(/\s+/).map((v) => v.trim()).filter(Boolean);
+    setSaving(true);
+    try {
+      await apiFetch(
+        `/v1/projects/${encodeURIComponent(projectId)}/auth/admin/config`,
+        { method: "PATCH", body: JSON.stringify({ oauthProviders: { __settings: { redirectUris } } }) }
+      );
+      toast.success(t("authStudio.providers.redirectUrisSaved"));
+      await onSaved();
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, t("authStudio.providers.redirectUrisFailed")));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">{t("authStudio.providers.redirectUrisTitle")}</CardTitle>
+        <CardDescription className="text-xs">{t("authStudio.providers.redirectUrisDescription")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <textarea
+          aria-label={t("authStudio.providers.redirectUrisTitle")}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          rows={4}
+          placeholder={"https://app.example.com/login\nmyapp://auth-callback"}
+          className="w-full rounded-md border bg-background px-2 py-1.5 font-mono text-xs"
+        />
+        <div className="flex justify-end">
+          <Button size="sm" className="h-8 text-xs" disabled={saving} onClick={() => void save()}>
+            {t("authStudio.providers.save")}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
