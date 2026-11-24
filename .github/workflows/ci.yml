@@ -352,6 +352,9 @@ jobs:
 
       - name: Session revocations and memberships read from PostgreSQL (required, no silent skip)
         run: SESSION_STATE_PG_TEST=1 corepack pnpm exec vitest run tests/integration/session-state-pg.test.ts
+
+      - name: Quota, plan and usage enforced from PostgreSQL across two instances (required, no silent skip)
+        run: QUOTA_PG_TEST=1 corepack pnpm exec vitest run tests/integration/quota-pg.test.ts
       - name: Durable throttles and usage counters across two instances (required, no silent skip)
         run: THROTTLE_PG_TEST=1 corepack pnpm exec vitest run tests/integration/throttle-pg.test.ts
 

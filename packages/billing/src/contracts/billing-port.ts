@@ -6,7 +6,6 @@ import type {
   BillingPlanRecord,
   BillingRepository,
   InvoiceRecord,
-  OrgSubscriptionRecord,
 } from "@vellum/database-control";
 import type { BillResult } from "../billing-calculator.js";
 import type { FlushResult, UsageTotals } from "../metering-engine.js";
@@ -27,12 +26,9 @@ export interface MeteringPort {
   stop(): Promise<void>;
 }
 
-/** Outbound port for O(1) synchronous quota and spend-cap enforcement. */
+/** Outbound port for quota and spend-cap enforcement, read from the database on every check. */
 export interface QuotaGuardPort {
-  refreshFromStore(rows: readonly OrgSubscriptionRecord[]): void;
-  refreshPlans(): Promise<void>;
-  invalidate(orgId: string): void;
-  checkQuota(orgId: string, op: QuotaOperation): QuotaDecision;
+  checkQuota(orgId: string, op: QuotaOperation): Promise<QuotaDecision>;
 }
 
 /** Outbound port for integer-cent bill calculation and hash-chained invoice generation. */
