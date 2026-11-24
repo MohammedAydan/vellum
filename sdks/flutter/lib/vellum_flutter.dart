@@ -7,6 +7,7 @@ library vellum_flutter;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:http/http.dart' as http;
 import 'package:stream_channel/stream_channel.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -27,6 +28,7 @@ part 'src/cache/document_cache.dart';
 part 'src/auth/auth_models.dart';
 part 'src/auth/token_storage.dart';
 part 'src/auth/auth_client.dart';
+part 'src/auth/oauth_flow.dart';
 
 // Realtime WebSocket transport and subscription manager
 part 'src/realtime/realtime_transport.dart';
