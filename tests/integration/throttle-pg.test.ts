@@ -131,7 +131,8 @@ describe.skipIf(!enabled)("auth throttles and usage counters are durable in Post
         (i % 2 === 0 ? a : b).incrementUsage(projectId, { documentReads: 1 })
       )
     );
-    const last = concurrent.at(-1)!;
+    // Concurrent calls resolve in any order: the record with the most reads is the final state.
+    const last = concurrent.reduce((m, r) => (r.documentReads > m.documentReads ? r : m));
     expect(last.documentReads).toBe(28);
     expect(last.documentWrites).toBe(2);
     expect(last.realtimeMessagesSent).toBe(4);

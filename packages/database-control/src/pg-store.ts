@@ -778,7 +778,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
          project_id, usage_date, document_reads, document_writes, document_deletes,
          realtime_messages_sent, egress_bytes, storage_bytes, updated_at
        )
-       VALUES ($1::uuid, $2::date, $3, $4, $5, $6, $7, GREATEST(0, $8), now())
+       VALUES ($1::uuid, $2::date, $3, $4, $5, $6, $7, GREATEST(0, $8::bigint), now())
        ON CONFLICT (project_id, usage_date) DO UPDATE SET
          document_reads = project_usage_daily.document_reads + EXCLUDED.document_reads,
          document_writes = project_usage_daily.document_writes + EXCLUDED.document_writes,
@@ -786,7 +786,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
          realtime_messages_sent =
            project_usage_daily.realtime_messages_sent + EXCLUDED.realtime_messages_sent,
          egress_bytes = project_usage_daily.egress_bytes + EXCLUDED.egress_bytes,
-         storage_bytes = GREATEST(0, project_usage_daily.storage_bytes + EXCLUDED.storage_bytes),
+         storage_bytes = GREATEST(0, project_usage_daily.storage_bytes + $8::bigint),
          updated_at = now()
        RETURNING project_id AS "projectId", usage_date::text AS "usageDate",
                  document_reads AS "documentReads", document_writes AS "documentWrites",
