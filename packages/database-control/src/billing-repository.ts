@@ -157,7 +157,44 @@ export interface InvoiceRecord extends InvoiceInput {
   createdAt: string;
 }
 
+/** Unflushed usage from one API process. Applied additively so instances never overwrite each other. */
+export interface UsageDeltaInput {
+  orgId: string;
+  projectId: string;
+  billingMonth: string;
+  usageDate: string;
+  docReads: number;
+  docWrites: number;
+  docDeletes: number;
+  storageBytes: number;
+  egressBytes: number;
+  peakConcurrentWs: number;
+  authUserIds: readonly string[];
+}
+
+export interface UsageDeltaResult {
+  monthly: UsageMonthlyRecord;
+  daily: BillingDailyRecord;
+}
+
+/** Everything the quota guard needs for one org, read in a single round trip. */
+export interface QuotaState {
+  subscription: OrgSubscriptionRecord;
+  plan: BillingPlanRecord | null;
+  usage: {
+    docReads: number;
+    docWrites: number;
+    docDeletes: number;
+    storageBytes: number;
+    egressBytes: number;
+    authMau: number;
+    peakConcurrentWs: number;
+  };
+}
+
 export interface BillingRepository {
+  applyUsageDelta(input: UsageDeltaInput): MaybePromise<UsageDeltaResult>;
+  getQuotaState(orgId: string, billingMonth: string): MaybePromise<QuotaState | null>;
   getPlan(id: string): MaybePromise<BillingPlanRecord | null>;
   listPlans(): MaybePromise<BillingPlanRecord[]>;
   getSubscription(orgId: string): MaybePromise<OrgSubscriptionRecord | null>;
@@ -552,6 +589,7 @@ class InMemoryBillingRepository implements BillingRepository {
   private readonly monthly = new Map<string, UsageMonthlyRecord>();
   private readonly monthlyByOrg = new Map<string, Set<string>>();
   private readonly daily = new Map<string, BillingDailyRecord>();
+  private readonly activeUsers = new Map<string, Set<string>>();
   private readonly dailyByOrg = new Map<string, Set<string>>();
   private readonly ledger: LedgerEntryRecord[] = [];
   private readonly ledgerByOrg = new Map<string, LedgerEntryRecord[]>();
@@ -594,6 +632,59 @@ class InMemoryBillingRepository implements BillingRepository {
     if (!set) return;
     set.delete(memberKey);
     if (set.size === 0) map.delete(groupKey);
+  }
+
+  public applyUsageDelta(input: UsageDeltaInput): UsageDeltaResult {
+    const key = InMemoryBillingRepository.monthlyKey(input.orgId, input.projectId, input.billingMonth);
+    const existing = this.monthly.get(key);
+    const users = this.activeUsers.get(key) ?? new Set<string>();
+    for (const id of input.authUserIds) users.add(id);
+    this.activeUsers.set(key, users);
+    const monthly = this.upsertMonthly({
+      orgId: input.orgId,
+      projectId: input.projectId,
+      billingMonth: input.billingMonth,
+      docReads: (existing?.docReads ?? 0) + input.docReads,
+      docWrites: (existing?.docWrites ?? 0) + input.docWrites,
+      docDeletes: (existing?.docDeletes ?? 0) + input.docDeletes,
+      storageBytes: Math.max(0, (existing?.storageBytes ?? 0) + input.storageBytes),
+      egressBytes: (existing?.egressBytes ?? 0) + input.egressBytes,
+      authMau: users.size,
+      peakConcurrentWs: Math.max(existing?.peakConcurrentWs ?? 0, input.peakConcurrentWs),
+    });
+    const dKey = `${input.orgId}|${input.projectId}|${input.usageDate}`;
+    const prior = this.daily.get(dKey);
+    const daily = this.upsertDaily({
+      orgId: input.orgId,
+      projectId: input.projectId,
+      usageDate: input.usageDate,
+      docReads: (prior?.docReads ?? 0) + input.docReads,
+      docWrites: (prior?.docWrites ?? 0) + input.docWrites,
+      docDeletes: (prior?.docDeletes ?? 0) + input.docDeletes,
+      egressBytes: (prior?.egressBytes ?? 0) + input.egressBytes,
+    });
+    return { monthly, daily };
+  }
+
+  public getQuotaState(orgId: string, billingMonth: string): QuotaState | null {
+    const subscription = this.subscriptions.get(orgId);
+    if (!subscription) return null;
+    const plan = this.plans.get(subscription.planId);
+    const usage = { docReads: 0, docWrites: 0, docDeletes: 0, storageBytes: 0, egressBytes: 0, authMau: 0, peakConcurrentWs: 0 };
+    for (const row of this.listMonthly(orgId, billingMonth)) {
+      usage.docReads += row.docReads;
+      usage.docWrites += row.docWrites;
+      usage.docDeletes += row.docDeletes;
+      usage.storageBytes += row.storageBytes;
+      usage.egressBytes += row.egressBytes;
+      usage.authMau += row.authMau;
+      usage.peakConcurrentWs = Math.max(usage.peakConcurrentWs, row.peakConcurrentWs);
+    }
+    return {
+      subscription: cloneSubscription(subscription),
+      plan: plan ? clonePlan(plan) : null,
+      usage,
+    };
   }
 
   public getPlan(id: string): BillingPlanRecord | null {
@@ -873,6 +964,107 @@ class PgBillingRepository implements BillingRepository {
 
   constructor(pool: pg.Pool) {
     this.pool = pool;
+  }
+
+  public async applyUsageDelta(input: UsageDeltaInput): Promise<UsageDeltaResult> {
+    let authMau: number | null = null;
+    if (input.authUserIds.length > 0) {
+      await this.pool.query(
+        `INSERT INTO usage_active_users (org_id, project_id, billing_month, user_id)
+         SELECT $1::uuid, $2::uuid, $3, u FROM unnest($4::text[]) AS u
+         ON CONFLICT DO NOTHING`,
+        [input.orgId, input.projectId, input.billingMonth, [...input.authUserIds]]
+      );
+      const counted = await this.pool.query(
+        `SELECT count(*)::bigint AS n FROM usage_active_users
+          WHERE org_id = $1::uuid AND project_id = $2::uuid AND billing_month = $3`,
+        [input.orgId, input.projectId, input.billingMonth]
+      );
+      authMau = Number((counted.rows[0] as { n: string | number }).n);
+    }
+    const reads = finiteNumber(input.docReads, "docReads");
+    const writes = finiteNumber(input.docWrites, "docWrites");
+    const deletes = finiteNumber(input.docDeletes, "docDeletes");
+    const storage = finiteNumber(input.storageBytes, "storageBytes");
+    const egress = finiteNumber(input.egressBytes, "egressBytes");
+    const peak = finiteNumber(input.peakConcurrentWs, "peakConcurrentWs");
+    const monthly = await this.pool.query(
+      `INSERT INTO usage_monthly_rollups (
+         id, org_id, project_id, billing_month,
+         doc_reads, doc_writes, doc_deletes, storage_bytes, egress_bytes,
+         auth_mau, peak_concurrent_ws, updated_at
+       ) VALUES (
+         $1::uuid, $2::uuid, $3::uuid, $4,
+         $5, $6, $7, GREATEST(0, $8::bigint), $9, COALESCE($10::bigint, 0), $11, now()
+       )
+       ON CONFLICT (org_id, project_id, billing_month) DO UPDATE SET
+         doc_reads = usage_monthly_rollups.doc_reads + $5,
+         doc_writes = usage_monthly_rollups.doc_writes + $6,
+         doc_deletes = usage_monthly_rollups.doc_deletes + $7,
+         storage_bytes = GREATEST(0, usage_monthly_rollups.storage_bytes + $8::bigint),
+         egress_bytes = usage_monthly_rollups.egress_bytes + $9,
+         auth_mau = COALESCE($10::bigint, usage_monthly_rollups.auth_mau),
+         peak_concurrent_ws = GREATEST(usage_monthly_rollups.peak_concurrent_ws, $11),
+         updated_at = now()
+       RETURNING ${MONTHLY_COLUMNS}`,
+      [crypto.randomUUID(), input.orgId, input.projectId, input.billingMonth, reads, writes, deletes, storage, egress, authMau, peak]
+    );
+    const daily = await this.pool.query(
+      `INSERT INTO usage_daily_rollups (
+         id, org_id, project_id, usage_date,
+         doc_reads, doc_writes, doc_deletes, egress_bytes, updated_at
+       ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, now())
+       ON CONFLICT (org_id, project_id, usage_date) DO UPDATE SET
+         doc_reads = usage_daily_rollups.doc_reads + $5,
+         doc_writes = usage_daily_rollups.doc_writes + $6,
+         doc_deletes = usage_daily_rollups.doc_deletes + $7,
+         egress_bytes = usage_daily_rollups.egress_bytes + $8,
+         updated_at = now()
+       RETURNING ${DAILY_COLUMNS}`,
+      [crypto.randomUUID(), input.orgId, input.projectId, input.usageDate, reads, writes, deletes, egress]
+    );
+    const mRow = monthly.rows[0] as Record<string, unknown> | undefined;
+    const dRow = daily.rows[0] as Record<string, unknown> | undefined;
+    if (!mRow || !dRow) throw new Error("applyUsageDelta returned no row");
+    return { monthly: mapMonthlyRow(mRow), daily: mapDailyRow(dRow) };
+  }
+
+  public async getQuotaState(orgId: string, billingMonth: string): Promise<QuotaState | null> {
+    const sub = await this.pool.query(
+      `SELECT ${SUBSCRIPTION_COLUMNS} FROM org_subscriptions WHERE org_id = $1::uuid LIMIT 1`,
+      [orgId]
+    );
+    const subRow = sub.rows[0] as Record<string, unknown> | undefined;
+    if (!subRow) return null;
+    const subscription = mapSubscriptionRow(subRow);
+    const [plan, usage] = await Promise.all([
+      this.getPlan(subscription.planId),
+      this.pool.query(
+        `SELECT COALESCE(SUM(doc_reads), 0)::float8 AS "docReads",
+                COALESCE(SUM(doc_writes), 0)::float8 AS "docWrites",
+                COALESCE(SUM(doc_deletes), 0)::float8 AS "docDeletes",
+                COALESCE(SUM(storage_bytes), 0)::float8 AS "storageBytes",
+                COALESCE(SUM(egress_bytes), 0)::float8 AS "egressBytes",
+                COALESCE(SUM(auth_mau), 0)::float8 AS "authMau",
+                COALESCE(MAX(peak_concurrent_ws), 0)::float8 AS "peakConcurrentWs"
+           FROM usage_monthly_rollups WHERE org_id = $1::uuid AND billing_month = $2`,
+        [orgId, billingMonth]
+      ),
+    ]);
+    const u = (usage.rows[0] ?? {}) as Record<string, number>;
+    return {
+      subscription,
+      plan,
+      usage: {
+        docReads: u["docReads"] ?? 0,
+        docWrites: u["docWrites"] ?? 0,
+        docDeletes: u["docDeletes"] ?? 0,
+        storageBytes: u["storageBytes"] ?? 0,
+        egressBytes: u["egressBytes"] ?? 0,
+        authMau: u["authMau"] ?? 0,
+        peakConcurrentWs: u["peakConcurrentWs"] ?? 0,
+      },
+    };
   }
 
   public async getPlan(id: string): Promise<BillingPlanRecord | null> {

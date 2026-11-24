@@ -101,19 +101,20 @@ describe("@vellum/billing hardening", () => {
       expect(totals.docReads).toBe(0);
     });
 
-    it("prevents external mutation of cached subscription in QuotaGuard", () => {
-      const sub = {
-        orgId: "org_1",
-        planId: "pro",
-        status: "suspended" as const,
-        monthlySpendCapCents: null,
-      };
+    it("reads the subscription from the database on every check (no cache)", async () => {
+      let status = "active";
       const guard = new QuotaGuard({
-        billing: { getPlan: () => plan } as never,
+        billing: {
+          getQuotaState: async () => ({
+            subscription: { orgId: "org_1", planId: "pro", status, monthlySpendCapCents: null },
+            plan,
+            usage: { docReads: 0, docWrites: 0, docDeletes: 0, storageBytes: 0, egressBytes: 0, authMau: 0, peakConcurrentWs: 0 },
+          }),
+        } as never,
       });
-      guard.refreshFromStore([sub as never]);
-      (sub as { status: string }).status = "active";
-      const decision = guard.checkQuota("org_1", "read");
+      expect((await guard.checkQuota("org_1", "read")).allowed).toBe(true);
+      status = "suspended";
+      const decision = await guard.checkQuota("org_1", "read");
       expect(decision.allowed).toBe(false);
       expect(decision.code).toBe("SUBSCRIPTION_SUSPENDED");
     });

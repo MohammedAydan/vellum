@@ -11,7 +11,6 @@
  */
 
 import type {
-  BillingDailyInput,
   BillingRepository,
   UsageMonthlyInput,
 } from "@vellum/database-control";
@@ -23,7 +22,6 @@ const GENESIS_HASH = "0".repeat(64);
 const DEFAULT_LEDGER_MASTER_KEY = "vellum-billing-ledger-master-key-v1";
 const MAX_AUTH_USERS_PER_PROJECT = 100_000;
 const MAX_GROUP_STATES = 50_000;
-const MAX_DAILY_STATES = 50_000;
 const MAX_ORG_STATES = 20_000;
 const MAX_ID_LENGTH = 256;
 const MIN_FLUSH_INTERVAL_MS = 50;
@@ -76,14 +74,6 @@ export interface UsageMeteringEngineOptions {
 interface GroupState extends UsageTotals {
   currentWs: number;
   authUsers: Set<string>;
-}
-
-/** Cumulative state for a single (org, project, day) group. */
-interface DailyState {
-  docReads: number;
-  docWrites: number;
-  docDeletes: number;
-  egressBytes: number;
 }
 
 interface OrgRealtime extends UsageTotals {
@@ -167,10 +157,6 @@ function newGroupState(): GroupState {
   return { ...zeroTotals(), currentWs: 0, authUsers: new Set<string>() };
 }
 
-function newDailyState(): DailyState {
-  return { docReads: 0, docWrites: 0, docDeletes: 0, egressBytes: 0 };
-}
-
 /**
  * Adds to a bounded insertion-ordered set; evicts the oldest entry at capacity
  * so a single project can never grow the MAU set without limit.
@@ -190,9 +176,6 @@ function groupKey(orgId: string, projectId: string, month: string): string {
   return `${orgId}|${projectId}|${month}`;
 }
 
-function dailyKey(orgId: string, projectId: string, date: string): string {
-  return `${orgId}|${projectId}|${date}`;
-}
 
 function resolveChainKey(options: UsageMeteringEngineOptions): Buffer {
   if (options.chainKey !== undefined) return Buffer.from(options.chainKey);
@@ -215,7 +198,6 @@ export class UsageMeteringEngine implements MeteringPort {
 
   /** Cumulative absolute totals, keyed by the same composite key as pending. */
   private readonly groupStates = new Map<string, GroupState>();
-  private readonly dailyStates = new Map<string, DailyState>();
   private readonly orgTotals = new Map<string, OrgRealtime>();
 
   private cachedMonth = "";
@@ -225,6 +207,7 @@ export class UsageMeteringEngine implements MeteringPort {
   private timer: ReturnType<typeof setInterval> | null = null;
   private inFlight: Promise<FlushResult> | null = null;
   private flushSeq = 0;
+  private lastFlushAt = 0;
   private ledgerSeq: number | null = null;
   private nextLedgerSeq = 1;
   private ledgerSeqSeeded = false;
@@ -341,6 +324,19 @@ export class UsageMeteringEngine implements MeteringPort {
     });
   }
 
+  /**
+   * Request-driven flush for runtimes that suspend idle processes (serverless): when the last
+   * flush is older than `intervalMs`, start one in the background. Never throws, never awaits.
+   */
+  public flushIfDue(intervalMs = 5000): void {
+    const now = this.now();
+    if (this.inFlight !== null || now - this.lastFlushAt < intervalMs) return;
+    this.lastFlushAt = now;
+    void this.flush().catch((error: unknown) => {
+      this.logError("billing metering flush failed", error);
+    });
+  }
+
   public start(intervalMs = 5000): void {
     this.stopTimer();
     const safeInterval = Number.isFinite(intervalMs) && intervalMs >= MIN_FLUSH_INTERVAL_MS
@@ -380,51 +376,36 @@ export class UsageMeteringEngine implements MeteringPort {
     const cycleId = `${++this.flushSeq}:${this.now()}`;
     const { date: usageDate } = this.periodSnapshot();
     const orgAggregates = new Map<string, OrgFlushAggregate>();
+    let flushed = 0;
 
     for (const [key, delta] of pending) {
       const [orgId = "", projectId = "", month = ""] = key.split("|");
       if (orgId === "" || month === "") continue;
-      const group = this.groupStates.get(key);
-      if (!group) continue;
 
-      const monthly: UsageMonthlyInput = {
-        orgId,
-        projectId,
-        billingMonth: month,
-        docReads: group.docReads,
-        docWrites: group.docWrites,
-        docDeletes: group.docDeletes,
-        storageBytes: group.storageBytes,
-        egressBytes: group.egressBytes,
-        authMau: group.authMau,
-        peakConcurrentWs: group.peakConcurrentWs,
-      };
-
-      const dKey = dailyKey(orgId, projectId, usageDate);
-      let dailyState = this.dailyStates.get(dKey);
-      if (!dailyState) {
-        evictOldestIfFull(this.dailyStates, MAX_DAILY_STATES);
-        dailyState = newDailyState();
-        this.dailyStates.set(dKey, dailyState);
+      // Additive, atomic in the database: instances never overwrite each other's usage.
+      let monthly: UsageMonthlyInput;
+      try {
+        const result = await this.billing.applyUsageDelta({
+          orgId,
+          projectId,
+          billingMonth: month,
+          usageDate,
+          docReads: delta.docReads,
+          docWrites: delta.docWrites,
+          docDeletes: delta.docDeletes,
+          storageBytes: delta.storageBytes,
+          egressBytes: delta.egressBytes,
+          peakConcurrentWs: delta.peakWs,
+          authUserIds: [...delta.authUsers],
+        });
+        monthly = result.monthly;
+      } catch (error) {
+        // Nothing was written for this group: put its delta back so the next cycle retries it.
+        this.requeue(key, delta);
+        this.logError("billing metering group flush failed", error);
+        continue;
       }
-      if (delta.docReads > 0 || delta.docWrites > 0 || delta.docDeletes > 0 || delta.egressBytes > 0) {
-        dailyState.docReads = safeAdd(dailyState.docReads, delta.docReads);
-        dailyState.docWrites = safeAdd(dailyState.docWrites, delta.docWrites);
-        dailyState.docDeletes = safeAdd(dailyState.docDeletes, delta.docDeletes);
-        dailyState.egressBytes = safeAdd(dailyState.egressBytes, delta.egressBytes);
-      }
-      const daily: BillingDailyInput = {
-        orgId,
-        projectId,
-        usageDate,
-        docReads: dailyState.docReads,
-        docWrites: dailyState.docWrites,
-        docDeletes: dailyState.docDeletes,
-        egressBytes: dailyState.egressBytes,
-      };
-
-      await this.billing.upsertMonthly(monthly);
-      await this.billing.upsertDaily(daily);
+      flushed += 1;
 
       const aggregateKey = `${orgId}|${month}`;
       let aggregate = orgAggregates.get(aggregateKey);
@@ -446,7 +427,22 @@ export class UsageMeteringEngine implements MeteringPort {
     }
 
     await this.appendFlushLedgerEntries(orgAggregates, cycleId);
-    return { flushedGroups: pending.size, ledgerSeq: this.ledgerSeq };
+    return { flushedGroups: flushed, ledgerSeq: this.ledgerSeq };
+  }
+
+  private requeue(key: string, delta: PendingDelta): void {
+    const current = this.pendingDeltas.get(key);
+    if (!current) {
+      this.pendingDeltas.set(key, delta);
+      return;
+    }
+    current.docReads = safeAdd(current.docReads, delta.docReads);
+    current.docWrites = safeAdd(current.docWrites, delta.docWrites);
+    current.docDeletes = safeAdd(current.docDeletes, delta.docDeletes);
+    current.egressBytes = safeAdd(current.egressBytes, delta.egressBytes);
+    current.storageBytes = safeSignedDelta(current.storageBytes + delta.storageBytes);
+    current.peakWs = Math.max(current.peakWs, delta.peakWs);
+    for (const id of delta.authUsers) current.authUsers.add(id);
   }
 
   private async appendFlushLedgerEntries(

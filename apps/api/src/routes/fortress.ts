@@ -354,7 +354,7 @@ export function createFortressRoutes(platform: VellumPlatformContext): Hono {
 
     const quotaDecisions: Record<string, QuotaDecision> = {};
     for (const operation of QUOTA_OPERATIONS) {
-      quotaDecisions[operation] = quota.checkQuota(orgId, operation);
+      quotaDecisions[operation] = await quota.checkQuota(orgId, operation);
     }
 
     return c.json({
@@ -412,7 +412,6 @@ export function createFortressRoutes(platform: VellumPlatformContext): Hono {
     }
     if (parsed.billingEmail !== undefined) patch.billingEmail = parsed.billingEmail;
     const updated = (await billing.updateSubscription(orgId, patch)) ?? current;
-    quota.invalidate(orgId);
 
     const details: Record<string, unknown> = {
       kind: "admin_adjustment",
@@ -865,7 +864,6 @@ export function createFortressRoutes(platform: VellumPlatformContext): Hono {
     }
     if (parsed.quotaOverride !== undefined) patch.quotaOverride = parsed.quotaOverride;
     const updated = (await billing.updateSubscription(orgId, patch)) ?? current;
-    quota.invalidate(orgId);
 
     let adjustmentAppended = false;
     if (parsed.adjustmentAmountCents !== undefined) {

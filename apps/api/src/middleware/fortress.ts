@@ -11,7 +11,6 @@
 import type { Context, Hono } from "hono";
 import type { ErrorCode } from "@vellum/core";
 import { VellumError, SYSTEM_LIMITS } from "@vellum/core";
-import type { OrgSubscriptionRecord } from "@vellum/database-control";
 import { QuotaGuard, UsageMeteringEngine } from "@vellum/billing";
 import type { MeteringLogger, QuotaDecision, QuotaOperation } from "@vellum/billing";
 import { ThreatDetector } from "@vellum/security";
@@ -94,31 +93,9 @@ export function createFortressServices(options: FortressServiceOptions): Fortres
   const quota = new QuotaGuard({
     billing: options.controlStore.billing,
     chainKey: chainKeys.billing,
-    usageProvider: (orgId: string) => metering.totalsFor(orgId),
   });
 
   void (async () => {
-    try {
-      await quota.refreshPlans();
-    } catch {
-      // Empty or unavailable plan table must not block startup.
-    }
-
-    try {
-      const rows: OrgSubscriptionRecord[] = [];
-      for (const orgId of options.controlStore.organizations.keys()) {
-        try {
-          const row = await options.controlStore.billing.getSubscription(orgId);
-          if (row !== null) rows.push(row);
-        } catch {
-          // One bad row must not discard the rest of the snapshot.
-        }
-      }
-      quota.refreshFromStore(rows);
-    } catch {
-      // Quota checks fail open until a snapshot is available.
-    }
-
     try {
       const entries = await options.controlStore.security.listBlocklist(true);
       threatDetector.refreshFromStore(entries);
@@ -521,7 +498,7 @@ export function attachFortressMiddleware(
         try {
           const orgId = await resolver(projectId);
           if (orgId !== null) {
-            const decision = services.quota.checkQuota(orgId, quotaOperationFor(c.req.method, path));
+            const decision = await services.quota.checkQuota(orgId, quotaOperationFor(c.req.method, path));
             if (!decision.allowed) {
               throw quotaErrorFromDecision(decision);
             }
@@ -567,6 +544,7 @@ export function attachFortressMiddleware(
           services.metering.recordEgress(orgId, projectId, bytes);
         }
       }
+      services.metering.flushIfDue(METERING_INTERVAL_MS);
     } catch {
       // Metering is best-effort: a failure must never alter the response.
     }
