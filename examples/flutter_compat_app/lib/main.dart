@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:vellum_flutter/vellum_flutter.dart';
 
 /// Writes a document and reads it back. Returns a short status line.
@@ -16,9 +16,13 @@ class CompatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return WidgetsApp(
       title: 'Vellum compat',
-      theme: ThemeData(colorSchemeSeed: Colors.blueGrey, useMaterial3: true),
+      color: const Color(0xFF455A64),
+      pageRouteBuilder: <T>(RouteSettings settings, WidgetBuilder builder) =>
+          PageRouteBuilder<T>(
+              settings: settings,
+              pageBuilder: (context, _, __) => builder(context)),
       home: _Home(client: client),
     );
   }
@@ -48,17 +52,17 @@ class _HomeState extends State<_Home> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Vellum compat')),
-      body: Center(
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(_status, key: const Key('status')),
             const SizedBox(height: 16),
-            FilledButton(
+            GestureDetector(
               key: const Key('run'),
-              onPressed: _run,
+              onTap: _run,
               child: const Text('Write and read'),
             ),
           ],
