@@ -34,6 +34,7 @@ import {
   useI18n,
 } from "@vellum/ui";
 import { toast } from "sonner";
+import { RelationMap } from "../../features/relations/relation-map.js";
 import { AlertTriangle, GitBranch, Info, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 export const Route = createRoute({
@@ -197,6 +198,7 @@ function RelationsManagerPage() {
   }, [query.data, drafts]);
 
   const rules = drafts ?? [];
+const knownCollections = [...new Set(rules.flatMap((r) => [r.collection, r.targetCollection]).filter(Boolean))].sort();
   const validationErrors = validateRelationRuleDrafts(rules);
   const selfReferential = findSelfReferentialRules(rules);
   const cascadeCycles = findCascadeCycles(rules);
@@ -330,6 +332,15 @@ function RelationsManagerPage() {
         </Alert>
       )}
 
+      <RelationMap
+        rules={rules}
+        onConnect={(collection, target) => {
+          setForm({ ...form, collection, targetCollection: target });
+          toast.message(t("relations.map.drafted"));
+          document.getElementById("relField")?.focus();
+        }}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -398,6 +409,11 @@ function RelationsManagerPage() {
             </div>
           )}
 
+          <datalist id="rel-known-collections">
+            {knownCollections.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
           <div className="rounded-md border border-dashed p-3">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_1fr_160px_auto]">
               <div className="space-y-1">
@@ -406,6 +422,7 @@ function RelationsManagerPage() {
                 </Label>
                 <Input
                   id="relCollection"
+                  list="rel-known-collections"
                   className="h-8 font-mono text-xs"
                   placeholder={t("relations.placeholders.collection")}
                   value={form.collection}
@@ -430,6 +447,7 @@ function RelationsManagerPage() {
                 </Label>
                 <Input
                   id="relTarget"
+                  list="rel-known-collections"
                   className="h-8 font-mono text-xs"
                   placeholder={t("relations.placeholders.target")}
                   value={form.targetCollection}

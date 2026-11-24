@@ -29,7 +29,7 @@ test.describe("Relations manager", () => {
     await page.locator("#relField").fill("postId");
     await page.locator("#relTarget").fill("posts");
     await page.getByRole("button", { name: /add rule/i }).click();
-    await expect(page.getByText("likes", { exact: true })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "likes", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: /save rules/i }).click();
     await expect(page.getByText(/Relation rules saved/)).toBeVisible();
@@ -71,4 +71,18 @@ test.describe("Relations manager", () => {
     await page.screenshot({ path: testInfo.outputPath("relations-mobile.png"), fullPage: true });
   });
 
+  test("map drafts a rule from two clicks", async ({ page }, testInfo) => {
+    await page.goto(
+      `http://127.0.0.1:3000/app/orgs/${ORG_ID}/projects/${PROJECT_ID}/relations`
+    );
+    const map = page.getByRole("img", { name: "Collection relations map" });
+    await expect(map).toBeVisible();
+    await page.getByRole("button", { name: "comments", exact: true }).click();
+    await page.getByRole("button", { name: "users", exact: true }).click();
+    await expect(page.locator("#relCollection")).toHaveValue("comments");
+    await expect(page.locator("#relTarget")).toHaveValue("users");
+    await page.screenshot({ path: testInfo.outputPath("relations-map-desktop.png"), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: testInfo.outputPath("relations-map-mobile.png"), fullPage: true });
+  });
 });
