@@ -93,7 +93,7 @@ export interface ClientConfig {
   realtimeHub?: unknown;
   /**
    * Realtime transport. `"auto"` (default) uses a WebSocket and falls back to HTTP streaming
-   * (SSE) automatically when WebSocket cannot be used (e.g. Vercel). `"websocket"` never falls
+   * (SSE) automatically when WebSocket cannot be used (a proxy or network that blocks upgrades, a runtime without WebSocket). `"websocket"` never falls
    * back; `"sse"` skips WebSocket. Supplying `webSocketFactory` selects that factory as-is.
    */
   realtimeTransport?: "auto" | "websocket" | "sse";

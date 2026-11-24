@@ -163,7 +163,7 @@ await sub.cancel();`,
 
       <Section id="transports" title="Transports: WebSocket first, SSE fallback">
         <P>
-          The SDKs connect with a WebSocket by default. Some hosts, such as Vercel serverless functions,
+          The SDKs connect with a WebSocket by default. Some networks, proxies and runtimes
           cannot upgrade connections. In that case the SDKs fall back automatically to HTTP streaming
           (Server-Sent Events) at <code>POST /v1/realtime/stream</code>, which carries the same frames, the
           same authentication and the same resume position. Your listeners do not change, and you do not need
