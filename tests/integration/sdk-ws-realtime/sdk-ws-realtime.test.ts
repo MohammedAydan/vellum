@@ -112,6 +112,7 @@ describe("tests/integration/sdk-ws-realtime (native WebSocket transport)", () =>
         apiKey: server.apiKey,
         endpoint: `http://127.0.0.1:${server.port}`,
         customFetch: (url, init) => server.platform.fetch(new Request(url, init)),
+        realtimeTransport: "websocket",
         realtimeTransportOptions: { heartbeatIntervalMs: 60_000, connectTimeoutMs: 5000 },
       });
 
@@ -146,6 +147,7 @@ describe("tests/integration/sdk-ws-realtime (native WebSocket transport)", () =>
         apiKey: server.apiKey,
         endpoint: `http://127.0.0.1:${server.port}`,
         customFetch: (url, init) => server.platform.fetch(new Request(url, init)),
+        realtimeTransport: "websocket",
         realtimeTransportOptions: {
           // Longer reconnect delay so the offline write lands while disconnected.
           randomFn: () => 0.9,

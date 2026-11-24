@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
+import 'package:stream_channel/stream_channel.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 export 'generated/error_codes.g.dart';
@@ -28,6 +29,7 @@ part 'src/auth/auth_client.dart';
 
 // Realtime WebSocket transport and subscription manager
 part 'src/realtime/realtime_transport.dart';
+part 'src/realtime/sse_channel.dart';
 part 'src/realtime/realtime_manager.dart';
 
 // Main client, references/queries, and batch/transaction builders

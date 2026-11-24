@@ -1,8 +1,11 @@
 /**
  * @vellum/api - Vercel Functions runtime adapter.
  *
- * Vercel Functions serve WebSocket connections natively (Fluid Compute, public
- * beta since 2026). Hono apps with a Node `http.Server` are supported without a
+ * Vercel Functions cannot upgrade HTTP connections to WebSocket (the upgrade
+ * is refused), so realtime on Vercel is served over Server-Sent Events by
+ * `POST /v1/realtime/stream` (see routes/realtime-sse.ts), which the SDKs use
+ * by default. The WebSocket handler below stays attached for hosts that do
+ * support upgrades. Hono apps with a Node `http.Server` are supported without a
  * Vercel-specific upgrade API: export the server as the function's default
  * export. This module reuses the exact same core (`createVellumApp` via the
  * platform factory) and the exact same RFC 6455 WebSocket handler used by the

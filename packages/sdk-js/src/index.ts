@@ -14,6 +14,8 @@ export * from "./auth/jwt-utils.js";
 export * from "./auth/auth-storage.js";
 export * from "./auth/auth-client.js";
 export * from "./realtime/realtime-transport.js";
+export * from "./realtime/sse-socket.js";
+export * from "./realtime/fallback-socket.js";
 export * from "./references/snapshots.js";
 export * from "./references/document-ref.js";
 export * from "./references/query-builder.js";

@@ -63,6 +63,7 @@ import type { StructuredLogger, SlidingWindowRateLimiter } from "@vellum/observa
 import type { ThreatDetector } from "@vellum/security";
 import type { UsageMeteringEngine, QuotaGuard } from "@vellum/billing";
 import { listIndexesReconciled, refreshIndexRecord } from "./index-build.js";
+import { createRealtimeSseRoutes } from "./routes/realtime-sse.js";
 import { unwrapProject } from "./project-lookup.js";
 import { attachFortressMiddleware } from "./middleware/fortress.js";
 import { createFortressRoutes } from "./routes/fortress.js";
@@ -407,6 +408,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     "/v1/projects/:projectId/auth/admin",
     createAuthCustomerAdminRoutes(platform)
   );
+  app.route("/v1", createRealtimeSseRoutes(platform));
   app.route("/v1/projects/:projectId/auth", createAuthEndUserRoutes(platform));
   app.route("/v1/admin/auth", createAuthSuperAdminRoutes(platform));
 

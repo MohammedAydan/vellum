@@ -19,6 +19,9 @@ import { normalizeEndpoint, validateProjectConfig } from "../core/config.js";
 import { HttpTransport } from "../core/http-transport.js";
 import { encodePathSegment, encodeResourcePath, sanitizeAndClone } from "../core/safe-json.js";
 import { RealtimeTransport, toRealtimeUrl } from "../realtime/realtime-transport.js";
+import { SseSocket } from "../realtime/sse-socket.js";
+import { createFallbackSocketFactory } from "../realtime/fallback-socket.js";
+import { defaultWebSocketFactory } from "../realtime/realtime-transport.js";
 import type { RealtimeFrame, RealtimeTransportState, WebSocketFactory } from "../realtime/realtime-transport.js";
 import { CollectionReference, type CollectionReferenceContext } from "../references/collection-ref.js";
 import { DocumentReference } from "../references/document-ref.js";
@@ -240,6 +243,8 @@ export class VellumClient implements VellumClientInterface {
   private readonly realtimeUrl: string | null;
   private readonly realtimeHub: unknown;
   private readonly webSocketFactory: WebSocketFactory | null;
+  private readonly realtimeTransportKind: "auto" | "websocket" | "sse";
+  private readonly customFetch: typeof globalThis.fetch | null;
   private readonly realtimeTransportOptions: ClientConfig["realtimeTransportOptions"];
   private readonly transport: HttpTransport;
   private readonly cacheState: CacheInternalState;
@@ -258,6 +263,8 @@ export class VellumClient implements VellumClientInterface {
     this.realtimeUrl = config.realtimeUrl ?? null;
     this.realtimeHub = config.realtimeHub ?? null;
     this.webSocketFactory = config.webSocketFactory ?? null;
+    this.realtimeTransportKind = config.realtimeTransport ?? "auto";
+    this.customFetch = config.customFetch ?? null;
     this.realtimeTransportOptions = config.realtimeTransportOptions
       ? Object.freeze({ ...config.realtimeTransportOptions })
       : null;
@@ -533,6 +540,20 @@ export class VellumClient implements VellumClientInterface {
     }
   }
 
+  /** WebSocket first; SSE fallback when WebSocket cannot be used (auto); or a forced transport. */
+  private resolveSocketFactory(): WebSocketFactory | null {
+    if (this.webSocketFactory) return this.webSocketFactory;
+    if (this.realtimeTransportKind === "websocket") return null;
+    const sseOptions = this.customFetch ? { fetchFn: this.customFetch as never } : {};
+    if (this.realtimeTransportKind === "sse") {
+      return (url: string) => new SseSocket(url, sseOptions);
+    }
+    return createFallbackSocketFactory({
+      webSocketFactory: defaultWebSocketFactory,
+      sse: sseOptions,
+    });
+  }
+
   private ensureTransport(): RealtimeTransport {
     if (this.realtimeState.realtimeTransport) return this.realtimeState.realtimeTransport;
     const opts = this.realtimeTransportOptions;
@@ -555,7 +576,7 @@ export class VellumClient implements VellumClientInterface {
           if (sub.onError) sub.onError(error);
         }
       },
-      ...(this.webSocketFactory ? { webSocketFactory: this.webSocketFactory } : {}),
+      webSocketFactory: this.resolveSocketFactory(),
       ...(opts?.randomFn ? { randomFn: opts.randomFn } : {}),
       ...(opts?.heartbeatIntervalMs !== undefined ? { heartbeatIntervalMs: opts.heartbeatIntervalMs } : {}),
       ...(opts?.pongTimeoutMs !== undefined ? { pongTimeoutMs: opts.pongTimeoutMs } : {}),

@@ -68,6 +68,12 @@ export interface ClientConfig {
   dedupeReads?: boolean;
   /** Test seam only: inject an in-process realtime hub instead of the native WS transport. */
   realtimeHub?: unknown;
+  /**
+   * Realtime transport. `"auto"` (default) uses a WebSocket and falls back to HTTP streaming
+   * (SSE) automatically when WebSocket cannot be used (e.g. Vercel). `"websocket"` never falls
+   * back; `"sse"` skips WebSocket. Supplying `webSocketFactory` selects that factory as-is.
+   */
+  realtimeTransport?: "auto" | "websocket" | "sse";
   /** Test seam: override the WebSocket constructor (defaults to `ws` in Node, global in browsers). */
   webSocketFactory?: WebSocketFactory | null;
   /** Test seam: tune transport timing (heartbeat, reconnect jitter, connect timeout, queue cap). */
