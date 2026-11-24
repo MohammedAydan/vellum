@@ -1,3 +1,4 @@
+import type { OAuthPopupOptions, OAuthRedirectOptions } from "../auth/oauth-web.js";
 /**
  * @vellumdb/sdk-js - VellumClient Composition Root
  * Specification Section 12.1 & 9.3
@@ -330,6 +331,7 @@ export class VellumClient implements VellumClientInterface {
       request: (method, relativePath, body, extraHeaders, includeAuth) =>
         this.transport.request(method, relativePath, body, extraHeaders, includeAuth),
       getAuthToken: config.getAuthToken ?? null,
+      oauth: { baseUrl: `${this.endpoint}/v1/projects/${encodeURIComponent(this.projectId)}`, apiKey: this.apiKey },
       autoRefresh: config.autoRefresh !== false,
       authStorage: config.authStorage ?? (resolveBrowserLocalStorage() ? new BrowserLocalStorage(
         `${DEFAULT_AUTH_STORAGE_KEY}:${encodeURIComponent(this.endpoint)}:${encodeURIComponent(this.projectId)}`
@@ -1125,6 +1127,22 @@ export class VellumClient implements VellumClientInterface {
     return typeof providerOrInput === "string"
       ? this.auth.signInWithOAuth(providerOrInput, payload)
       : this.auth.signInWithOAuth(providerOrInput);
+  }
+
+  public signInWithPopup(provider: string, options?: OAuthPopupOptions): Promise<AuthState | MfaRequiredResult> {
+    return this.auth.signInWithPopup(provider, options);
+  }
+
+  public signInWithRedirect(provider: string, options?: OAuthRedirectOptions): Promise<void> {
+    return this.auth.signInWithRedirect(provider, options);
+  }
+
+  public getRedirectResult(): Promise<AuthState | MfaRequiredResult | null> {
+    return this.auth.getRedirectResult();
+  }
+
+  public signInWithGoogleIdToken(idToken: string, options?: { nonce?: string }): Promise<AuthState | MfaRequiredResult> {
+    return this.auth.signInWithGoogleIdToken(idToken, options);
   }
 
   public verifyMfaChallenge(input: VerifyMfaChallengeInput): Promise<AuthState>;

@@ -1,3 +1,4 @@
+import type { OAuthPopupOptions, OAuthRedirectOptions } from "./auth/oauth-web.js";
 import type { DocStore } from "./cache/doc-store.js";
 /**
  * @vellumdb/sdk-js - Types and Interfaces
@@ -672,6 +673,13 @@ export interface VellumClientInterface {
   signInAnonymously(input?: SignInAnonymouslyInput): Promise<AuthState>;
   signInWithOAuth(input: SignInWithOAuthInput): Promise<AuthState>;
   signInWithOAuth(provider: string, payload?: SignInOAuthPayload): Promise<AuthState>;
+  /** Google / GitHub sign-in in a popup (call from a click). Resolves to `MfaRequiredResult` when a second factor is required. */
+  signInWithPopup(provider: string, options?: OAuthPopupOptions): Promise<AuthState | MfaRequiredResult>;
+  /** Full-page redirect sign-in; finish with `getRedirectResult()` when your app loads again. */
+  signInWithRedirect(provider: string, options?: OAuthRedirectOptions): Promise<void>;
+  getRedirectResult(): Promise<AuthState | MfaRequiredResult | null>;
+  /** Sign in with a Google ID token from Google Identity Services or `google_sign_in`. Verified by the server. */
+  signInWithGoogleIdToken(idToken: string, options?: { nonce?: string }): Promise<AuthState | MfaRequiredResult>;
   /** Complete an MFA challenge with the ticket returned by a sign-in. */
   verifyMfaChallenge(input: VerifyMfaChallengeInput): Promise<AuthState>;
   verifyMfaChallenge(
