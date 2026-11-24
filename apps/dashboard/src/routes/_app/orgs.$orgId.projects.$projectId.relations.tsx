@@ -35,6 +35,7 @@ import {
 } from "@vellum/ui";
 import { toast } from "sonner";
 import { RelationMap } from "../../features/relations/relation-map.js";
+import { RelationExplorer } from "../../features/relations/relation-explorer.js";
 import { AlertTriangle, GitBranch, Info, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 export const Route = createRoute({
@@ -340,6 +341,8 @@ const knownCollections = [...new Set(rules.flatMap((r) => [r.collection, r.targe
           document.getElementById("relField")?.focus();
         }}
       />
+
+      <RelationExplorer projectId={projectId} rules={rules} />
 
       <Card>
         <CardHeader>
