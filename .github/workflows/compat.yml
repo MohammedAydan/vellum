@@ -54,3 +54,20 @@ jobs:
       - run: corepack pnpm install --frozen-lockfile
       - run: corepack pnpm --filter @vellumdb/sdk-js build
       - run: corepack pnpm --filter @vellumdb/sdk-js test
+
+  js-sdk-edge:
+    name: JS SDK in an edge runtime (no Node APIs) and bundler safety for React Native
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm --filter @vellumdb/sdk-js build
+      - name: Run the SDK inside @edge-runtime/vm
+        run: node tests/compat-edge/edge-runtime.mjs
