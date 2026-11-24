@@ -34,6 +34,10 @@ export default function Page() {
       <Section id="changes" title="Changes and termination">
         <P>We may update these terms, and we may suspend or end the service or your access at any time. Continued use after a change means you accept it. See also the <PageLink slug="privacy">Privacy Policy</PageLink>.</P>
       </Section>
+
+      <Section id="contact" title="Contact">
+        <P>Questions about this page or about your data: email <a href="mailto:mohammedaydan12@gmail.com">mohammedaydan12@gmail.com</a>.</P>
+      </Section>
     </Doc>
   );
 }

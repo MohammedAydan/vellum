@@ -36,6 +36,10 @@ export default function Page() {
       <Section id="changes" title="تغييرات السياسة">
         <P>سنحدّث التاريخ أعلاه عند تغيير هذه السياسة. استمرارك في الاستخدام بعد التغيير يعني قبولك للسياسة المحدّثة.</P>
       </Section>
+
+      <Section id="contact" title="التواصل">
+        <P>للأسئلة حول هذه الصفحة أو بياناتك: راسلنا على <a href="mailto:mohammedaydan12@gmail.com">mohammedaydan12@gmail.com</a>.</P>
+      </Section>
     </Doc>
   );
 }

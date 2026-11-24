@@ -34,6 +34,10 @@ export default function Page() {
       <Section id="changes" title="التغييرات والإنهاء">
         <P>قد نحدّث هذه الشروط، وقد نوقف الخدمة أو وصولك إليها في أي وقت. استمرارك في الاستخدام بعد التغيير يعني قبولك. راجع أيضاً <PageLink slug="privacy" lang="ar">سياسة الخصوصية</PageLink>.</P>
       </Section>
+
+      <Section id="contact" title="التواصل">
+        <P>للأسئلة حول هذه الصفحة أو بياناتك: راسلنا على <a href="mailto:mohammedaydan12@gmail.com">mohammedaydan12@gmail.com</a>.</P>
+      </Section>
     </Doc>
   );
 }

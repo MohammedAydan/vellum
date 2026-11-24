@@ -41,6 +41,9 @@ export const LEGAL: Record<"en" | "ar", Record<LegalKind, LegalDoc>> = {
         { heading: "Changes to this policy", items: [
           "We will update the date above when this policy changes. Continued use after a change means you accept the updated policy.",
         ] },
+        { heading: "Contact", items: [
+          "Questions about this policy or about your data: email mohammedaydan12@gmail.com.",
+        ] },
       ],
     },
     terms: {
@@ -66,6 +69,9 @@ export const LEGAL: Record<"en" | "ar", Record<LegalKind, LegalDoc>> = {
         ] },
         { heading: "Changes and termination", items: [
           "We may update these terms, and we may suspend or end the service or your access at any time. Continued use after a change means you accept it.",
+        ] },
+        { heading: "Contact", items: [
+          "Questions about these terms: email mohammedaydan12@gmail.com.",
         ] },
       ],
     },
@@ -97,6 +103,9 @@ export const LEGAL: Record<"en" | "ar", Record<LegalKind, LegalDoc>> = {
         { heading: "تغييرات السياسة", items: [
           "سنحدّث التاريخ أعلاه عند تغيير هذه السياسة. استمرارك في الاستخدام بعد التغيير يعني قبولك للسياسة المحدّثة.",
         ] },
+        { heading: "التواصل", items: [
+          "للأسئلة حول هذه السياسة أو بياناتك: راسلنا على mohammedaydan12@gmail.com.",
+        ] },
       ],
     },
     terms: {
@@ -122,6 +131,9 @@ export const LEGAL: Record<"en" | "ar", Record<LegalKind, LegalDoc>> = {
         ] },
         { heading: "التغييرات والإنهاء", items: [
           "قد نحدّث هذه الشروط، وقد نوقف الخدمة أو وصولك إليها في أي وقت. استمرارك في الاستخدام بعد التغيير يعني قبولك.",
+        ] },
+        { heading: "التواصل", items: [
+          "للأسئلة حول هذه الشروط: راسلنا على mohammedaydan12@gmail.com.",
         ] },
       ],
     },
