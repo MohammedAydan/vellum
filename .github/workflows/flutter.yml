@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - "sdks/flutter/**"
+      - "sdks/flutter_secure_storage/**"
       - "examples/flutter_compat_app/**"
       - ".github/workflows/flutter.yml"
   push:
     branches: [main]
     paths:
       - "sdks/flutter/**"
+      - "sdks/flutter_secure_storage/**"
       - "examples/flutter_compat_app/**"
       - ".github/workflows/flutter.yml"
   workflow_dispatch:
@@ -50,6 +52,23 @@ jobs:
         working-directory: examples/flutter_compat_app
       - run: flutter test
         working-directory: examples/flutter_compat_app
+
+  secure-storage:
+    name: Secure storage package (analyze + tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: sdks/flutter_secure_storage
+      - run: flutter analyze
+        working-directory: sdks/flutter_secure_storage
+      - run: flutter test
+        working-directory: sdks/flutter_secure_storage
 
   build:
     name: Build ${{ matrix.target }}
