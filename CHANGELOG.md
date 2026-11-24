@@ -23,11 +23,12 @@ Control-plane state moves into the database, social sign-in, serverless realtime
 - Optional `doc()` id with local auto-ID generation.
 - Edge runtime and React Native bundler safety checks.
 
-### SDK (Flutter/Dart) - `vellum_flutter`
+### SDK (Flutter) - `vellum_flutter`
 
-- Parity with the JavaScript additions above: `VellumOAuth` flow with ID-token sign-in (companion `vellum_flutter_oauth`), reference values and `addWithRelated`, cache policy, optional document ids.
-- Persistent encrypted session storage through the zero-config companion `vellum_flutter_secure_storage`, with an in-memory fallback.
-- SSE fallback for realtime.
+- **One package.** `vellum_flutter` now includes persistent encrypted session storage (Keychain, Keystore, libsecret, Windows credential store, encrypted web storage, with an in-memory fallback) and Google and GitHub sign-in in the system browser (`createVellumOAuth`). No extra package, code or native setup.
+- **Breaking:** `vellum_flutter` is now a Flutter package. It requires the Flutter SDK (`>=3.22.0`) and no longer works from plain Dart servers or CLIs. Dart tooling on the plain VM can import `package:vellum_flutter/vellum_flutter_core.dart` after `flutter pub get`.
+- Optional native Google account picker lives in the separate `vellum_flutter_google` package (uses `google_sign_in`).
+- Parity with the JavaScript additions above: ID-token sign-in, reference values and `addWithRelated`, cache policy, optional document ids, SSE fallback for realtime.
 
 ### Console
 

@@ -1,5 +1,5 @@
 /// VellumClient, HTTP transport layer, index suggestion header handling, and request orchestration.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 String? _responseHeader(Map<String, String> headers, String name) {
   final String? direct = headers[name];

@@ -1,7 +1,7 @@
 // Verifies the conditional showcase facade under the pure Dart toolchain.
 // Under Flutter the same import resolves to the Material widget implementation.
 import 'package:flutter_testbed_app/flutter_ui_showcase.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('flutter_ui_showcase conditional facade', () {

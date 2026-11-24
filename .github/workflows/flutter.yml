@@ -5,16 +5,14 @@ on:
     branches: [main]
     paths:
       - "sdks/flutter/**"
-      - "sdks/flutter_secure_storage/**"
-      - "sdks/flutter_oauth/**"
+      - "sdks/flutter_google/**"
       - "examples/flutter_compat_app/**"
       - ".github/workflows/flutter.yml"
   push:
     branches: [main]
     paths:
       - "sdks/flutter/**"
-      - "sdks/flutter_secure_storage/**"
-      - "sdks/flutter_oauth/**"
+      - "sdks/flutter_google/**"
       - "examples/flutter_compat_app/**"
       - ".github/workflows/flutter.yml"
   workflow_dispatch:
@@ -30,11 +28,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
-      - run: dart pub get
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
         working-directory: sdks/flutter
       - name: Run all browser-compatible tests in Chrome
-        run: dart test -p chrome test/web
+        run: flutter test --platform chrome test/web
         working-directory: sdks/flutter
 
   app-test:
@@ -55,8 +56,8 @@ jobs:
       - run: flutter test
         working-directory: examples/flutter_compat_app
 
-  secure-storage:
-    name: Secure storage package (analyze + tests)
+  sdk-package:
+    name: vellum_flutter and vellum_flutter_google (analyze + tests)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -66,17 +67,15 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-        working-directory: sdks/flutter_secure_storage
-      - run: flutter analyze
-        working-directory: sdks/flutter_secure_storage
+        working-directory: sdks/flutter
+      - run: flutter analyze --fatal-infos
+        working-directory: sdks/flutter
       - run: flutter test
-        working-directory: sdks/flutter_secure_storage
+        working-directory: sdks/flutter
       - run: flutter pub get
-        working-directory: sdks/flutter_oauth
-      - run: flutter analyze
-        working-directory: sdks/flutter_oauth
-      - run: flutter test
-        working-directory: sdks/flutter_oauth
+        working-directory: sdks/flutter_google
+      - run: flutter analyze --fatal-infos
+        working-directory: sdks/flutter_google
 
   build:
     name: Build ${{ matrix.target }}

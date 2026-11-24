@@ -183,7 +183,7 @@ await sub.cancel();
 
 ## مصادقة EdDSA التفاعلية والتخلص من الموارد (`dispose()` / `close()`)
 
-- استعد الجلسة عند بدء التطبيق عبر `await client.auth.restore()` بعد حقن `AuthTokenStorage` آمن (مثل `flutter_secure_storage`).
+- استعد الجلسة عند بدء التطبيق عبر `await client.auth.restore()` ؛ تُحفظ الجلسة مشفّرة افتراضياً ويمكنك تمرير `AuthTokenStorage` خاص بك.
 - يحمي العداد الرتيب `sessionEpoch` من سباقات تجديد الرمز بعد `signOut()` أو `dispose()`، بينما تدمج `refreshOnUnauthorized` أخطاء `401` المتزامنة في طلب تجديد واحد (single-flight).
 - تعيد `signInWithEmailAndPassword` نوعًا مغلقًا `VellumAuthResult` (`VellumSession` أو `VellumMfaRequired`) لمطابقة شاملة في Dart 3.
 - استدعِ `client.dispose()` (أو `client.close()`) عند إنهاء العميل لتحرير المؤقتات واتصالات WebSocket والذاكرة المؤقتة.

@@ -1,7 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vellum_flutter/vellum_flutter.dart';
-import 'package:vellum_flutter_secure_storage/vellum_flutter_secure_storage.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

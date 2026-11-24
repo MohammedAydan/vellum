@@ -1,5 +1,5 @@
 /// Reconnect/retry backoff strategies and Retry-After header parsing.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// Exponential backoff with full jitter per Specification Section 9.3:
 /// `t_sleep = random(0, min(30000, 500 * 2^attempt))`

@@ -83,7 +83,7 @@ try {
   mkdirSync(dartDir);
   writeFileSync(
     join(dartDir, "pubspec.yaml"),
-    `name: vellum_docs_typecheck\nenvironment:\n  sdk: '>=3.4.0 <4.0.0'\ndependencies:\n  vellum_flutter:${published ? " 0.0.3" : `\n    path: ${resolve(root, "sdks/flutter")}`}\n  http: ^1.2.2\n`,
+    `name: vellum_docs_typecheck\nenvironment:\n  sdk: '>=3.4.0 <4.0.0'\n  flutter: '>=3.22.0'\ndependencies:\n  flutter:\n    sdk: flutter\n  vellum_flutter:${published ? " 0.0.3" : `\n    path: ${resolve(root, "sdks/flutter")}`}\n  http: ^1.2.2\n`,
   );
   for (const [i, s] of dart.entries()) {
     const imports = [],
@@ -118,7 +118,7 @@ try {
       `// ${s.file}:${s.line}\n${imports.join("\n")}\n${classes.join("\n")}\n${text}\n`,
     );
   }
-  run("dart", ["pub", "get"], dartDir);
+  run("flutter", ["pub", "get"], dartDir);
   const analysis = spawnSync("dart", ["analyze", "--format", "machine"], {
     cwd: dartDir,
     encoding: "utf8",

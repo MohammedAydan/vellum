@@ -1,5 +1,5 @@
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
-import 'package:vellum_flutter/vellum_flutter.dart';
+import 'package:vellum_flutter/vellum_flutter_core.dart';
 
 /// Opens the sign-in page in the platform's secure browser session
 /// (ASWebAuthenticationSession, Chrome Custom Tab / Auth Tab, a popup on web)

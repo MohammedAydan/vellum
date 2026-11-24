@@ -4,7 +4,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:vellum_flutter/vellum_flutter.dart';
 
 /// Runs in a real browser (`dart test -p chrome`). A VM-side mock host streams

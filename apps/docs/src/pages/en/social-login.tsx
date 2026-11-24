@@ -52,7 +52,7 @@ export default function Page() {
 
       <Section id="flutter" title="Flutter">
         <P>
-          Add the companion package. It opens the system browser session on iOS, Android, macOS, Windows, Linux and web,
+          This is built into vellum_flutter. It opens the system browser session on iOS, Android, macOS, Windows, Linux and web,
           and returns the result to Vellum.
         </P>
         <Code lang="bash" title="pubspec.yaml" code={flutterPubspec} />

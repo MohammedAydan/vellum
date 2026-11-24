@@ -3,7 +3,7 @@
 /// Pure Dart, so it works on Android, iOS, web and desktop. The default store is
 /// in memory; implement [DocumentCacheStore] to persist to disk (for example
 /// with sqflite, drift or Hive) without any other change.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// How document reads use the offline cache.
 enum CachePolicy {

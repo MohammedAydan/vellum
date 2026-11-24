@@ -1,5 +1,5 @@
 /// Fluent DocumentReference, Query, and CollectionReference builders with converter support.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 class DocumentReference<T> {
   final VellumClient client;

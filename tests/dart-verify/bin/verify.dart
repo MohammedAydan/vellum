@@ -15,7 +15,7 @@ import "dart:async";
 import "dart:convert";
 import "dart:io";
 
-import "package:vellum_flutter/vellum_flutter.dart";
+import "package:vellum_flutter/vellum_flutter_core.dart";
 import "package:http/http.dart" as http;
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:vellum_flutter/vellum_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// Builds a minimal EdDSA-shaped JWT so the SDK's `exp` reader can parse it.
 String _jwt(Duration ttl) {

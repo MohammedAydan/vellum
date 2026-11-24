@@ -52,7 +52,7 @@ export default function Page() {
 
       <Section id="flutter" title="Flutter">
         <P>
-          أضف الحزمة المرافقة. تفتح جلسة المتصفح الآمنة للنظام على iOS وAndroid وmacOS وWindows وLinux والويب،
+          هذا مدمج في vellum_flutter. يفتح جلسة المتصفح الآمنة للنظام على iOS وAndroid وmacOS وWindows وLinux والويب،
           وتعيد النتيجة إلى Vellum.
         </P>
         <Code lang="bash" title="pubspec.yaml" code={flutterPubspec} />

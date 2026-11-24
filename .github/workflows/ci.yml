@@ -59,14 +59,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
 
-      - name: Analyze and test Flutter/Dart SDK
-        run: cd sdks/flutter && dart pub get && dart analyze --fatal-infos && dart test
+      - name: Analyze and test the Flutter SDK
+        run: cd sdks/flutter && flutter pub get && flutter analyze --fatal-infos && flutter test
 
-      - name: Analyze standard Dart testbed and shared console runner
-        run: cd examples/flutter_testbed_app && dart pub get && dart analyze --fatal-infos && dart test test/runner_compatibility_test.dart
+      - name: Analyze the optional Google package
+        run: cd sdks/flutter_google && flutter pub get && flutter analyze --fatal-infos
+
+      - name: Analyze the testbed and check the shared console runner
+        run: cd examples/flutter_testbed_app && flutter pub get && flutter analyze && flutter test test/runner_compatibility_test.dart
 
   # PROOF OF INDEPENDENCE: the backend project builds from apps/api alone, with
   # no frontend assets. Its Vercel function entry point must live under apps/api.

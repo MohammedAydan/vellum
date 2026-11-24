@@ -1,4 +1,4 @@
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// Canonical JSON object map type.
 typedef JsonMap = Map<String, Object?>;

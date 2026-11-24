@@ -1,5 +1,5 @@
 /// Reactive end-user authentication client with single-flight refresh and session epoch tracking.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 String _requireAuthString(Object? value, String field) {
   if (value is! String || value.trim().isEmpty) {

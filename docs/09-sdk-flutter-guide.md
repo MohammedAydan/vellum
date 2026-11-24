@@ -2,7 +2,7 @@
 
 Complete engineering guide for `vellum_flutter` v0.0.3 — grounded directly in `sdks/flutter/lib/vellum_flutter.dart`. The pre-rebrand import `package:vellum_flutter/vellum_flutter.dart` and the `Vellum*` typedefs remain as compatibility aliases; new code should use the `Vellum*` names.
 
-Pure Dart (`>=3.4.0 <4.0.0`), strictly null-safe, with zero Flutter binding required. Works identically in Flutter mobile/web/desktop apps, Dart CLI tools, and Dart backend services.
+A single Flutter package (Dart `>=3.4.0 <4.0.0`, Flutter `>=3.22.0`), strictly null-safe. Works in Flutter mobile, web and desktop apps, with encrypted persistent sessions and Google/GitHub sign-in built in. It requires the Flutter SDK.
 
 > **Security Note**: Embed only publishable `pk_` keys in client apps and enforce access via Security Rules and end-user EdDSA auth. Never ship `sk_` keys inside Flutter binaries.
 
@@ -26,7 +26,7 @@ final client = VellumClient(
   projectId: 'proj_01j9...',
   apiKey: 'pk_live_...',
   httpClient: httpClient,
-  authStorage: SecureAuthTokenStorage(), // Implement AuthTokenStorage with flutter_secure_storage
+  authStorage: SecureAuthTokenStorage(), // the default on Flutter; shown here only to pass it explicitly
   requestTimeout: const Duration(seconds: 15),
   maxRetries: 3,
   retryBaseDelay: const Duration(milliseconds: 250),
@@ -324,7 +324,7 @@ query's own `.include(...)` specs are reused. Wire semantics:
 
 ## 6. Reactive EdDSA Authentication (`client.auth`)
 
-- **Persistent Storage**: Implement `AuthTokenStorage` backed by `flutter_secure_storage`, pass it to `VellumClient(authStorage: ...)`, and call `await client.auth.restore()` on startup.
+- **Persistent Storage**: Sessions are stored encrypted by default (Keychain, Keystore, libsecret, Windows credential store, encrypted web storage) and fall back to memory if the store is unavailable. Pass your own `AuthTokenStorage` to `VellumClient(authStorage: ...)` to change it, and call `await client.auth.restore()` on startup.
 - **Race-Safe `sessionEpoch`**: A monotonic `sessionEpoch` counter increments on sign-in, `restore()`, `signOut()`, and `dispose()`. Any in-flight refresh whose epoch no longer matches is discarded so sign-out can never be resurrected by a slow network response.
 - **Single-Flight Proactive & Reactive 401 Refresh**: Proactive refresh runs 45s before JWT `exp`. Concurrent `401` responses coalesce through `refreshOnUnauthorized(failedToken)` into a single `/auth/token/refresh` call and replay once.
 - **Sealed Sign-In Result**: `signInWithEmailAndPassword` returns `VellumAuthResult` (`VellumSession` or `VellumMfaRequired`) for exhaustive pattern matching in Dart 3.

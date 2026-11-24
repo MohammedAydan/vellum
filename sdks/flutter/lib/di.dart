@@ -7,7 +7,7 @@ library vellum_flutter_di;
 
 import 'dart:math';
 
-import 'package:vellum_flutter/vellum_flutter.dart';
+import 'package:vellum_flutter/vellum_flutter_core.dart';
 import 'package:http/http.dart' as http;
 
 /// Creates a configured [VellumClientPort] backed by [VellumClient].

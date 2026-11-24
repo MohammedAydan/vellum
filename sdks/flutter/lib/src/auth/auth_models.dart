@@ -1,5 +1,5 @@
 /// Immutable end-user authentication models with secret-redacting toString() overrides.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// A signed-in end-user snapshot: public fields plus the SDK-held token material.
 class VellumUser {

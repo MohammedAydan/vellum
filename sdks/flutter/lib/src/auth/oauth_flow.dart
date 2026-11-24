@@ -1,5 +1,5 @@
 /// Browser-based Google / GitHub sign-in (code + PKCE), without any platform code.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// Opens [authorizeUrl] in a secure system browser session and returns the
 /// full URL the browser was redirected to (the one that starts with the

@@ -1,5 +1,5 @@
 /// Server-Sent Events realtime channel for hosts without WebSocket support.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /// Converts a realtime WebSocket or HTTP URL into the SSE stream URL.
 ///

@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
-import 'package:vellum_flutter/vellum_flutter.dart';
+import 'package:vellum_flutter/vellum_flutter_core.dart';
 
 late String origin, projectId, secret, publicKey, consoleToken;
 late VellumClient db;

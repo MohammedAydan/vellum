@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:vellum_flutter/vellum_flutter.dart';
+import 'package:vellum_flutter/vellum_flutter_core.dart';
 
 /// Minimal key/value surface the session store needs (a seam for tests).
 abstract interface class SecureKeyValue {

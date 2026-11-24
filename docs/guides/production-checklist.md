@@ -22,7 +22,7 @@ Verify every item below before shipping a VELLUM-backed application to productio
 
 ## 2. Authentication & Session Persistence
 
-- [ ] **Secure storage on mobile**: In `vellum_flutter`, replace the default `InMemoryAuthTokenStorage` with an `AuthTokenStorage` backed by `flutter_secure_storage`, and call `await client.auth.restore()` during app bootstrap.
+- [ ] **Secure storage on mobile**: `vellum_flutter` stores the session encrypted by default (with an in-memory fallback if the platform store is unavailable). Call `await client.auth.restore()` during app bootstrap.
 - [ ] **Handle MFA explicitly**: Handle `MfaRequiredResult` (`"mfaRequired" in res` in JS) and `VellumMfaRequired` (sealed `switch` in Dart) for accounts with TOTP enrolled.
 - [ ] **Revoke on compromise**: Use `signOut({ allSessions: true })` (JS) or `client.auth.signOut(allSessions: true)` (Dart) when a user changes password or reports a lost device.
 

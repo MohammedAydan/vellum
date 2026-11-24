@@ -43,15 +43,15 @@ if (result is VellumMfaRequired) {
   // finish with db.auth.verifyMfaChallenge(...)
 }`;
 
-export const flutterNativeDart = `// Optional: the official google_sign_in package (native account picker).
+export const flutterNativeDart = `// Optional, from the separate vellum_flutter_google package (uses the official
+// google_sign_in package for the native account picker).
 final result = await signInWithNativeGoogle(
   db.auth,
   serverClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
 );`;
 
 export const flutterPubspec = `dependencies:
-  vellum_flutter: ^0.0.3
-  vellum_flutter_oauth: ^0.0.3`;
+  vellum_flutter: ^0.0.3 # browser sign-in is built in`;
 
 export const androidManifest = `<activity
   android:name="com.linusu.flutter_web_auth_2.CallbackActivity"

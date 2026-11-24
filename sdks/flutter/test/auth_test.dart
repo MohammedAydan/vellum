@@ -1,9 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:vellum_flutter/vellum_flutter.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 String _jwt(Map<String, dynamic> payload) {
   final header = base64Url.encode(utf8.encode(jsonEncode(<String, dynamic>{'alg': 'EdDSA'})));

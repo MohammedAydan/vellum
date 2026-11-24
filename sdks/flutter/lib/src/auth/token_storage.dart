@@ -1,5 +1,5 @@
 /// Pluggable auth token storage interface and in-memory default implementation.
-part of '../../vellum_flutter.dart';
+part of '../../vellum_flutter_core.dart';
 
 /* -------------------------------------------------------------------------- */
 /* End-user auth                                                              */
