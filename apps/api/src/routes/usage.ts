@@ -27,7 +27,7 @@ import {
   assertProjectAccess,
   requireSession,
 } from "../middleware/session.js";
-import { loadProject, unwrapProject } from "../project-lookup.js";
+import { loadProject } from "../project-lookup.js";
 
 // --------------------------------------------------------------------- types
 

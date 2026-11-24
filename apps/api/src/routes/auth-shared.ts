@@ -28,7 +28,7 @@ import {
   resolveIsAdminServer,
 } from "../middleware/tenant-auth.js";
 import type { VellumPlatformContext } from "../app.js";
-import { loadProject, unwrapProject } from "../project-lookup.js";
+import { loadProject } from "../project-lookup.js";
 import { extractClientIp } from "../middleware/security.js";
 
 export interface AuthTenant {

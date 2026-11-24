@@ -49,7 +49,7 @@ import type { ApiKeyRecord, ControlPlaneRepository } from "@vellum/database-cont
 import type { StructuredLogger } from "@vellum/observability";
 import type { VellumPlatformContext } from "../app.js";
 import { assertProjectAccess, extractBearerToken } from "../middleware/session.js";
-import { loadProject, unwrapProject } from "../project-lookup.js";
+import { loadProject } from "../project-lookup.js";
 
 /* -------------------------------------------------------------------------- */
 /* Structural types (kept local so parallel agents' types are not required)   */

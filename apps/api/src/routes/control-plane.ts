@@ -17,7 +17,7 @@ import { generateProjectApiKey } from "@vellum/authorization";
 import { validateSecurityRulesetAst } from "@vellum/authorization";
 import type { SessionService } from "@vellum/authorization";
 import type { ControlPlaneRepository } from "@vellum/database-control";
-import { loadProject, unwrapProject } from "../project-lookup.js";
+import { loadProject } from "../project-lookup.js";
 import {
   getCacheInvalidationBus,
   invalidateApiKeyCache,
