@@ -120,6 +120,31 @@ abstract interface class VellumAuthPort {
     String? photoUrl,
     JsonMap? metadata,
   });
+  /// Browser-based Google / GitHub sign-in is driven by [VellumOAuth] (and the
+  /// `vellum_flutter_oauth` package); these are its building blocks.
+  ///
+  /// URL that starts the server-side OAuth flow for [provider]. The server
+  /// returns to [redirectUri] (it must be in the project's allowed list) with a
+  /// one-time `vellum_code`.
+  Uri oauthStartUri({
+    required String provider,
+    required String redirectUri,
+    required String codeChallenge,
+    String? state,
+  });
+
+  /// Trades the one-time `vellum_code` plus the PKCE [codeVerifier] for a session.
+  Future<VellumAuthResult> exchangeOAuthCode({
+    required String code,
+    required String codeVerifier,
+  });
+
+  /// Signs in with a Google ID token (for example from `google_sign_in`).
+  /// The server verifies it against Google's keys and the project's client IDs.
+  Future<VellumAuthResult> signInWithGoogleIdToken({
+    required String idToken,
+    String? nonce,
+  });
   Future<VellumUser> getUser();
   Future<VellumUser> verifyMfaChallenge({
     required String mfaTicket,

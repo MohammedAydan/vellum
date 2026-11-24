@@ -376,6 +376,78 @@ class VellumAuth implements VellumAuthPort {
     return user;
   }
 
+  @override
+  Uri oauthStartUri({
+    required String provider,
+    required String redirectUri,
+    required String codeChallenge,
+    String? state,
+  }) {
+    return Uri.parse(
+      '${client.baseUrl}/auth/oauth/${Uri.encodeComponent(provider)}/start',
+    ).replace(
+      queryParameters: <String, String>{
+        'apiKey': client.apiKey,
+        'redirectUri': redirectUri,
+        'codeChallenge': codeChallenge,
+        if (state != null) 'state': state,
+      },
+    );
+  }
+
+  @override
+  Future<VellumAuthResult> exchangeOAuthCode({
+    required String code,
+    required String codeVerifier,
+  }) async {
+    final expectedEpoch = _sessionEpoch;
+    final res = await client.request(
+      'POST',
+      '/auth/oauth/exchange',
+      body: <String, Object?>{'code': code, 'codeVerifier': codeVerifier},
+      includeAuth: false,
+    );
+    return _completeSignIn(res, expectedEpoch);
+  }
+
+  @override
+  Future<VellumAuthResult> signInWithGoogleIdToken({
+    required String idToken,
+    String? nonce,
+  }) async {
+    final expectedEpoch = _sessionEpoch;
+    final res = await client.request(
+      'POST',
+      '/auth/oauth/google/id-token',
+      body: <String, Object?>{
+        'idToken': idToken,
+        if (nonce != null) 'nonce': nonce,
+      },
+      includeAuth: false,
+    );
+    return _completeSignIn(res, expectedEpoch);
+  }
+
+  Future<VellumAuthResult> _completeSignIn(
+    JsonMap res,
+    int expectedEpoch,
+  ) async {
+    _requireCurrentEpoch(expectedEpoch);
+    if (res['mfaRequired'] == true) {
+      return VellumMfaRequired(
+        mfaTicket: _requireAuthString(res['mfaTicket'], 'mfaTicket'),
+        factors: (res['factors'] is List)
+            ? (res['factors'] as List).whereType<String>().toList()
+            : const <String>[],
+        expiresAt: res['expiresAt'] is String ? res['expiresAt'] as String : '',
+      );
+    }
+    final user = VellumUser.fromSession(res);
+    _sessionEpoch++;
+    await _setCurrentUser(user);
+    return VellumSession(user);
+  }
+
   /// Fetches the authenticated end-user's public profile from `GET /auth/user`.
   ///
   /// The fresh profile is merged into [currentUser] while preserving the
