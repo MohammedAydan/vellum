@@ -392,6 +392,14 @@ export class ControlPlaneStore implements ControlPlaneRepository {
     return this.users.get(userId) ?? null;
   }
 
+  async findUserByEmail(email: string): Promise<UserRecord | null> {
+    const wanted = email.trim().toLowerCase();
+    for (const user of this.users.values()) {
+      if (user.email.toLowerCase() === wanted) return user;
+    }
+    return null;
+  }
+
   async findProjectById(projectId: string): Promise<ProjectRecord | null> {
     return this.projects.get(projectId) ?? null;
   }
