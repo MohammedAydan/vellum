@@ -462,8 +462,7 @@ export function createCustomerAuthRoutes(
     }
 
     // Check if user already exists
-    const allUsers = Array.from(controlStore.users.values());
-    const existing = allUsers.find((u) => u.email.toLowerCase() === email);
+    const existing = await controlStore.findUserByEmail(email);
     if (existing) {
       throw new VellumError("ALREADY_EXISTS", "An account with this email address already exists");
     }
@@ -595,27 +594,8 @@ export function createCustomerAuthRoutes(
     }
 
     const pgPool = getQueryPool(controlStore);
-    const allUsers = Array.from(controlStore.users.values());
-    let user = allUsers.find((u) => u.email.toLowerCase() === email);
-
-    // If not in cache, check database directly
-    if (!user && pgPool) {
-      const dbRes = await pgPool.query(
-        `SELECT id, email, name, platform_role AS "platformRole", is_suspended AS "isSuspended"
-         FROM users WHERE LOWER(email) = $1`,
-        [email]
-      );
-      const row = dbRes.rows[0];
-      if (row && typeof row["id"] === "string" && typeof row["email"] === "string") {
-        user = {
-          id: row["id"],
-          email: row["email"],
-          name: typeof row["name"] === "string" ? row["name"] : "",
-          platformRole: typeof row["platformRole"] === "string" ? row["platformRole"] : "customer",
-          isSuspended: Boolean(row["isSuspended"]),
-        } as (typeof allUsers)[number];
-      }
-    }
+    // The database decides: a suspension or password change elsewhere applies immediately.
+    const user = await controlStore.findUserByEmail(email);
 
     if (!user) {
       throw new VellumError("UNAUTHENTICATED", "Invalid email or password");

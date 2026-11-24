@@ -81,4 +81,15 @@ describe.skipIf(!enabled)("session revocations and memberships are read from Pos
     console.log(`session_revocations isRevoked ms p50=${percentile(samples, 50).toFixed(2)} p95=${percentile(samples, 95).toFixed(2)} p99=${percentile(samples, 99).toFixed(2)}`);
     expect(percentile(samples, 99)).toBeLessThan(250);
   });
+
+  it("user lookup by email is authoritative: a user created or suspended elsewhere is seen at once", async () => {
+    const email = `${userId}@example.invalid`;
+    const found = await b.findUserByEmail(email.toUpperCase());
+    expect(found?.id).toBe(userId);
+    expect(found?.isSuspended).toBe(false);
+    await raw.query("UPDATE users SET is_suspended = true WHERE id=$1", [userId]);
+    expect((await a.findUserByEmail(email))?.isSuspended).toBe(true);
+    expect(await a.findUserByEmail(`nobody-${userId}@example.invalid`)).toBeNull();
+    await raw.query("UPDATE users SET is_suspended = false WHERE id=$1", [userId]);
+  });
 });

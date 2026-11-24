@@ -1119,6 +1119,19 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
     return row ? { ...row, createdAt: iso(row.createdAt), updatedAt: iso(row.updatedAt) } : null;
   }
 
+  public async findUserByEmail(email: string): Promise<UserRecord | null> {
+    const { rows } = await this.pool.query(
+      `SELECT id, email, email_verified AS "emailVerified", name, avatar_url AS "avatarUrl",
+              platform_role AS "platformRole", is_suspended AS "isSuspended",
+              is_platform_super_admin AS "isPlatformSuperAdmin",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM users WHERE LOWER(email) = $1 LIMIT 1`,
+      [email.trim().toLowerCase()]
+    );
+    const row = rows[0] as UserRecord | undefined;
+    return row ? { ...row, createdAt: iso(row.createdAt), updatedAt: iso(row.updatedAt) } : null;
+  }
+
   public async findProjectById(projectId: string): Promise<ProjectRecord | null> {
     if (!PgControlPlaneStore.UUID_RE.test(projectId)) return null;
     const { rows } = await this.pool.query(

@@ -458,6 +458,8 @@ export interface ControlPlaneRepository {
   isPlatformSuperAdmin(userId: string): MaybePromise<boolean>;
   /** Authoritative PostgreSQL reads (no mirror). `null` when absent. */
   findUserById(userId: string): Promise<UserRecord | null>;
+  /** Authoritative, case-insensitive lookup. Sign-up and sign-in decide on this, never on a cache. */
+  findUserByEmail(email: string): Promise<UserRecord | null>;
   /** Raw project row regardless of status (callers decide how to treat suspended/deleted). */
   findProjectById(projectId: string): Promise<ProjectRecord | null>;
   setPlatformSuperAdmin(userId: string, value: boolean): MaybePromise<void>;
