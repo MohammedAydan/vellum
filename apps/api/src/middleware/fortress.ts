@@ -458,7 +458,7 @@ export function attachFortressMiddleware(
     if (typeof rawKey === "string" && rawKey.length > 0 && c.req.path.startsWith("/v1/projects/")) {
       try {
         // verifyApiKey() uses the first 16 characters as the lookup prefix.
-        const record = options.controlStore.getApiKeyByPrefix(rawKey.slice(0, 16));
+        const record = await options.controlStore.findApiKeyByPrefix(rawKey.slice(0, 16));
         if (record !== null) {
           const ip = requestIp(c);
           const allowedOrigins = record.allowedOrigins ?? [];

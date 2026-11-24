@@ -528,6 +528,35 @@ export class ControlPlaneStore implements ControlPlaneRepository {
     return this.apiKeysByPrefix.get(prefix) ?? null;
   }
 
+  async findApiKeyByPrefix(prefix: string): Promise<ApiKeyRecord | null> {
+    const record = this.apiKeysByPrefix.get(prefix);
+    return record && !record.revokedAt ? record : null;
+  }
+
+  async findApiKeyById(keyId: string): Promise<ApiKeyRecord | null> {
+    return this.apiKeysById.get(keyId) ?? null;
+  }
+
+  async listProjectApiKeys(projectId: string): Promise<ApiKeyRecord[]> {
+    return [...this.apiKeysById.values()].filter((k) => k.projectId === projectId);
+  }
+
+  async listActiveApiKeyOrigins(projectId: string): Promise<string[]> {
+    const now = Date.now();
+    const out = new Set<string>();
+    for (const k of this.apiKeysById.values()) {
+      if (k.projectId !== projectId || k.revokedAt) continue;
+      if (k.expiresAt && Date.parse(k.expiresAt) <= now) continue;
+      for (const o of k.allowedOrigins ?? []) out.add(o);
+    }
+    return [...out];
+  }
+
+  async touchApiKeyLastUsed(keyId: string): Promise<void> {
+    const record = this.apiKeysById.get(keyId);
+    if (record) record.lastUsedAt = new Date().toISOString();
+  }
+
   revokeApiKey(keyId: string, actorUserId: string | null = null): ApiKeyRecord {
     const record = this.apiKeysById.get(keyId);
     if (!record) {

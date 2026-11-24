@@ -115,6 +115,9 @@ export const apiKeys = pgTable(
     lookupIdx: index("idx_api_keys_lookup")
       .on(table.keyPrefix)
       .where(sql`${table.revokedAt} IS NULL`),
+    projectActiveIdx: index("idx_api_keys_project_active")
+      .on(table.projectId)
+      .where(sql`${table.revokedAt} IS NULL`),
   })
 );
 

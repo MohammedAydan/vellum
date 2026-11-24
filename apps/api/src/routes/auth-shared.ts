@@ -11,7 +11,7 @@ import type { Context } from "hono";
 import { VellumError } from "@vellum/core";
 import { generateEd25519KeyPair } from "@vellum/auth";
 import { mergeOAuthProviders } from "../auth/oauth/config.js";
-import { verifyApiKey, type ApiKeyRecord } from "@vellum/authorization";
+import { verifyApiKeyAsync, type ApiKeyRecord } from "@vellum/authorization";
 import type {
   ProjectAuthConfig,
   ProjectRecord,
@@ -59,17 +59,17 @@ export function resolveAuthTenant(c: Context, platform: VellumPlatformContext): 
 }
 
 /** Every non-JWKS auth endpoint requires a project key bound to the tenant. */
-export function requireProjectApiKey(
+export async function requireProjectApiKey(
   c: Context,
   platform: VellumPlatformContext,
   tenant: AuthTenant,
   options: { serverOnly?: boolean } = {}
-): ApiKeyRecord {
+): Promise<ApiKeyRecord> {
   const rawKey = getApiKeyHeader(c);
   if (!rawKey) {
     throw new VellumError("UNAUTHENTICATED", "Missing X-Vellum-Api-Key (or legacy X-Project-Key) header");
   }
-  const record = verifyApiKey(rawKey, platform.controlStore, platform.apiKeyPepper);
+  const record = await verifyApiKeyAsync(rawKey, platform.controlStore, platform.apiKeyPepper);
   if (record.projectId !== tenant.projectId) {
     throw new VellumError(
       "PERMISSION_DENIED",

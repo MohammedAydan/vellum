@@ -344,6 +344,9 @@ jobs:
       - name: Relations PostgreSQL integration (required, no silent skip)
         run: RELATIONS_PG_TEST=1 corepack pnpm exec vitest run tests/integration/relation-rules-pg.test.ts
 
+      - name: API keys read from PostgreSQL across two instances (required, no silent skip)
+        run: API_KEYS_PG_TEST=1 corepack pnpm exec vitest run tests/integration/api-keys-pg.test.ts
+
       - name: Admin PostgreSQL regression (required, no silent skip)
         run: ADMIN_PG_REAL=1 corepack pnpm exec vitest run apps/api/src/routes/__tests__/admin-remediation.test.ts
 

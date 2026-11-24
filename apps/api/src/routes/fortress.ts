@@ -493,7 +493,7 @@ export function createFortressRoutes(platform: VellumPlatformContext): Hono {
       if (!project || project.organizationId !== orgId) {
         throw new VellumError("NOT_FOUND", `Project '${projectId}' not found`);
       }
-      const key = controlStore.apiKeysById.get(keyId);
+      const key = await controlStore.findApiKeyById(keyId);
       if (!key || key.projectId !== projectId) {
         throw new VellumError("NOT_FOUND", "API key not found in this project");
       }
@@ -511,14 +511,8 @@ export function createFortressRoutes(platform: VellumPlatformContext): Hono {
       if (parsed.allowedIps !== undefined) patch.allowedIps = parsed.allowedIps;
       if (parsed.expiresAt !== undefined) patch.expiresAt = parsed.expiresAt;
       await security.updateApiKeyRestrictions(keyId, patch);
-      // The PostgreSQL repository write does not update the synchronous mirror.
-      // Hydrate only after durable success so an immediate list/edit is current.
-      for (const record of [controlStore.apiKeysById.get(keyId), controlStore.apiKeysByPrefix.get(key.keyPrefix)]) {
-        if (!record) continue;
-        if (patch.allowedOrigins !== undefined) record.allowedOrigins = [...patch.allowedOrigins];
-        if (patch.allowedIps !== undefined) record.allowedIps = [...patch.allowedIps];
-        if (patch.expiresAt !== undefined) record.expiresAt = patch.expiresAt;
-      }
+      // Nothing is mirrored locally for keys: every request reads api_keys from the database.
+      // (The in-memory test repository applies the patch itself.)
 
       await appendSecurityAudit(platform, {
         actorRealm: "customer_console",

@@ -4,10 +4,20 @@ import { createProjectCors, type ProjectCorsStore } from "../middleware/project-
 
 type Key = { projectId: string; allowedOrigins?: string[] | undefined; revokedAt: string | null; expiresAt: string | null };
 
-function setup(keys: Key[], now = () => Date.now()) {
-  const store: ProjectCorsStore = { apiKeysById: new Map(keys.map((k, i) => [String(i), k])) };
+let reads = 0;
+function setup(keys: Key[]) {
+  reads = 0;
+  const store: ProjectCorsStore = {
+    async listActiveApiKeyOrigins(projectId) {
+      reads += 1;
+      const now = Date.now();
+      return keys
+        .filter((k) => k.projectId === projectId && !k.revokedAt && !(k.expiresAt && Date.parse(k.expiresAt) <= now))
+        .flatMap((k) => k.allowedOrigins ?? []);
+    },
+  };
   const app = new Hono();
-  app.use("*", createProjectCors(store, (o) => o === "https://console.example", now));
+  app.use("*", createProjectCors(store, (o) => o === "https://console.example"));
   app.all("/v1/projects/:id/*", (c) => c.json({ ok: true }));
   app.all("/v1/health", (c) => c.json({ ok: true }));
   return { app, store };
@@ -69,13 +79,24 @@ describe("per-project CORS", () => {
     const res = await app.fetch(req("/v1/projects/p1/collections/a", "https://console.example"));
     expect(res.headers.get("access-control-allow-origin")).toBeNull();
   });
-  it("picks up a revoked key after the cache window", async () => {
-    let t = 1_000_000;
+  it("sees a revoke or an edit on the very next request (no cache)", async () => {
     const k = key();
-    const { app } = setup([k], () => t);
-    expect((await app.fetch(req("/v1/projects/p1/collections/a", "https://shop.example"))).headers.get("access-control-allow-origin")).toBe("https://shop.example");
+    const { app } = setup([k]);
+    const call = () => app.fetch(req("/v1/projects/p1/collections/a", "https://shop.example"));
+    expect((await call()).headers.get("access-control-allow-origin")).toBe("https://shop.example");
+    k.allowedOrigins = ["https://other.example"];
+    expect((await call()).headers.get("access-control-allow-origin")).toBeNull();
+    k.allowedOrigins = ["https://shop.example"];
+    expect((await call()).headers.get("access-control-allow-origin")).toBe("https://shop.example");
     k.revokedAt = "2026-01-01T00:00:00Z";
-    t += 6_000;
-    expect((await app.fetch(req("/v1/projects/p1/collections/a", "https://shop.example"))).headers.get("access-control-allow-origin")).toBeNull();
+    expect((await call()).headers.get("access-control-allow-origin")).toBeNull();
+  });
+  it("reads the store once per cross-origin request and never for same-origin or global origins", async () => {
+    const { app } = setup([key()]);
+    await app.fetch(new Request("http://x/v1/projects/p1/collections/a"));
+    await app.fetch(req("/v1/projects/p1/collections/a", "https://console.example"));
+    expect(reads).toBe(0);
+    await app.fetch(req("/v1/projects/p1/collections/a", "https://shop.example"));
+    expect(reads).toBe(1);
   });
 });

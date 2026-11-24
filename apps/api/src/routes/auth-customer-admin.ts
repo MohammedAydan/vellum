@@ -19,7 +19,7 @@ import {
   AdminSetClaimsRequestSchema,
   AuthConfigPatchSchema,
 } from "@vellum/api-contract";
-import { verifyApiKey } from "@vellum/authorization";
+import { verifyApiKeyAsync } from "@vellum/authorization";
 import type { ListAuthUsersOptions, UpdateAuthUserInput } from "@vellum/storage";
 import type { Role } from "@vellum/authorization";
 import type { VellumPlatformContext } from "../app.js";
@@ -49,7 +49,7 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
   routes.use("*", async (c, next) => {
     const rawKey = getApiKeyHeader(c);
     if (rawKey) {
-      const record = verifyApiKey(rawKey, platform.controlStore, platform.apiKeyPepper);
+      const record = await verifyApiKeyAsync(rawKey, platform.controlStore, platform.apiKeyPepper);
       if (!resolveIsAdminServer(record)) {
         throw new VellumError("PERMISSION_DENIED", "A secret (sk_) server API key is required for admin access");
       }
@@ -83,7 +83,7 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
   /** Project binding + org membership for session callers. */
   async function authorize(c: Context, tenant: AuthTenant, write: boolean): Promise<void> {
     if (getApiKeyHeader(c)) {
-      requireProjectApiKey(c, platform, tenant, { serverOnly: true });
+      await requireProjectApiKey(c, platform, tenant, { serverOnly: true });
       return;
     }
     const claims = c.get("session");
