@@ -724,6 +724,17 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     }
   }
 
+  /**
+   * Durable metering must never delay or break realtime delivery. Delivery
+   * order is preserved by sendFrame above; a failed increment is dropped
+   * rather than buffered (PostgreSQL is the only state store).
+   */
+  private recordUsage(projectId: string): void {
+    void Promise.resolve(
+      this.controlStore.incrementUsage(projectId, { realtimeMessagesSent: 1 })
+    ).catch(() => undefined);
+  }
+
   private deliverEventToSubscription(
     session: ConnectionSession,
     subRecord: SubscriptionRecord,
@@ -790,9 +801,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
         }, subRecord),
       });
       if (!session.closed) {
-        this.controlStore.incrementUsage(session.projectId!, {
-          realtimeMessagesSent: 1,
-        });
+        this.recordUsage(session.projectId!);
       }
       return;
     }
@@ -833,7 +842,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           document: this.projectSubscriptionDocument(options?.document ?? this.toDocPayload(pseudoAfterDoc!), subRecord),
         });
         if (!session.closed) {
-          this.controlStore.incrementUsage(session.projectId!, { realtimeMessagesSent: 1 });
+          this.recordUsage(session.projectId!);
         }
       } else if (matchesNow && matchedBefore) {
         session.sendFrame({
@@ -844,7 +853,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           document: this.projectSubscriptionDocument(options?.document ?? this.toDocPayload(pseudoAfterDoc!), subRecord),
         });
         if (!session.closed) {
-          this.controlStore.incrementUsage(session.projectId!, { realtimeMessagesSent: 1 });
+          this.recordUsage(session.projectId!);
         }
       } else if (!matchesNow && matchedBefore) {
         subRecord.matchedPaths.delete(ev.path);
@@ -865,7 +874,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           }, subRecord),
         });
         if (!session.closed) {
-          this.controlStore.incrementUsage(session.projectId!, { realtimeMessagesSent: 1 });
+          this.recordUsage(session.projectId!);
         }
       }
     }

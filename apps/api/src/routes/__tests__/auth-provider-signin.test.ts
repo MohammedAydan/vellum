@@ -1,7 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { generateProjectApiKey } from "@vellum/authorization";
 import { createVellumPlatform } from "../../index.js";
-import { clearAuthRateLimitState } from "../../middleware/auth-rate-limit.js";
 
 async function fixture() {
   const platform = createVellumPlatform();
@@ -27,7 +26,6 @@ async function fixture() {
 }
 
 describe("POST /sign-in/provider", () => {
-  beforeEach(() => clearAuthRateLimitState());
 
   it("does not let a publishable key sign in as an existing user by email", async () => {
     const { post, publicKey } = await fixture();

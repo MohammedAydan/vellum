@@ -1,12 +1,13 @@
 /**
  * @vellum/api - Control Plane maintenance worker (`apps/api/src/workers/control-maintenance.ts`)
  *
- * the `PgControlPlaneStore` buffers metering deltas in memory and
- * mirrors control-plane metadata in a read cache. This worker owns the two
- * periodic jobs that make those buffers durable and fresh:
+ * the `PgControlPlaneStore` mirrors control-plane metadata in a read cache.
+ * This worker owns the two periodic jobs that keep that cache fresh and the
+ * write-behind timestamps durable:
  *
- *   - `flush()`  every 5 seconds  → writes buffered `project_usage_daily`
- *     deltas and dirty `api_keys.last_used_at` timestamps to PostgreSQL.
+ *   - `flush()`  every 5 seconds  → writes dirty `api_keys.last_used_at`
+ *     timestamps to PostgreSQL and prunes expired auth-throttle rows. Usage
+ *     metering is written on every call; there is no buffered delta to flush.
  *   - `refresh()` every 30 seconds → re-hydrates the read cache so metadata
  *     written by another API instance becomes visible.
  *

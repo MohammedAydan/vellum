@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 import { generateProjectApiKey } from "@vellum/authorization";
 import { generateTotpCode } from "@vellum/auth";
 import { createVellumPlatform } from "../../index.js";
-import { clearAuthRateLimitState } from "../../middleware/auth-rate-limit.js";
 
 async function fixture() {
-  clearAuthRateLimitState();
   const platform = createVellumPlatform();
   const org = await platform.controlStore.createOrganization({ name: "O", slug: "mfa-org", billingEmail: "o@example.com" });
   const { project } = await platform.controlStore.createProject({ organizationId: org.id, name: "P", slug: "mfa-app" });

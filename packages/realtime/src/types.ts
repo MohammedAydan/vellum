@@ -68,12 +68,13 @@ export interface ControlStoreForRealtime {
   /** Ed25519 public key for the project's end-user access tokens. */
   getAuthConfig?(projectId: string): { jwtPublicKeyPem: string } | null;
   getActiveRuleset(projectId: string): SecurityRulesetRecord | null;
+  /** Durable metering; PostgreSQL-backed stores return a promise. */
   incrementUsage(
     projectId: string,
     usage: {
       realtimeMessagesSent?: number;
     }
-  ): void;
+  ): unknown | Promise<unknown>;
 }
 
 export interface RealtimeHubOptions {

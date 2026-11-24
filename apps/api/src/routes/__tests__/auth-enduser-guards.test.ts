@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { generateProjectApiKey } from "@vellum/authorization";
 import { createVellumPlatform } from "../../index.js";
-import { clearAuthRateLimitState } from "../../middleware/auth-rate-limit.js";
-import { clearSignupBudgetState } from "../auth-enduser.js";
 
 async function fixture() {
   const platform = createVellumPlatform();
@@ -62,8 +60,6 @@ async function errorCode(res: Response): Promise<string | undefined> {
 
 describe("end-user auth guards", () => {
   beforeEach(() => {
-    clearAuthRateLimitState();
-    clearSignupBudgetState();
   });
 
   it("keeps existing users signing in after the user quota is reached, but blocks new sign-ups", async () => {

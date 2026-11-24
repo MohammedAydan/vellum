@@ -8,7 +8,7 @@
  */
 
 import { Hono, type Context } from "hono";
-import { VellumError, type BoundedCachePolicy } from "@vellum/core";
+import { VellumError } from "@vellum/core";
 import {
   createAuthSessionService,
   createMailer,
@@ -41,7 +41,7 @@ import {
   UpdateProfileRequestSchema,
 } from "@vellum/api-contract";
 import { verifyApiKeyAsync } from "@vellum/authorization";
-import type { ProjectAuthConfig } from "@vellum/database-control";
+import { THROTTLE_SCOPES, type ProjectAuthConfig } from "@vellum/database-control";
 import type { AuthUserRecord, UpdateAuthUserInput } from "@vellum/storage";
 import {
   buildAuthorizeUrl,
@@ -85,107 +85,22 @@ const ACTION_TOKEN_TTL_MS = 60 * 60 * 1000;
 const MFA_TICKET_TTL_MS = 5 * 60 * 1000;
 
 /**
- * Ephemeral, in-process counter for repeated bad MFA codes (Zero-Redis doctrine:
- * this is throttle state, not durable state). Keys are SHA-256 hashes of the
+ * Durable, cross-instance counter for repeated bad MFA codes (PostgreSQL via
+ * the control store's throttle repository). Keys are SHA-256 hashes of the
  * MFA ticket (challenge) or end-user id (enroll verify) — never raw tokens.
  * After `MFA_MAX_FAILURES` bad codes the ticket is consumed / sessions revoked
- * so a brute-forced ticket or access token cannot be replayed.
+ * so a brute-forced ticket or access token cannot be replayed, and the
+ * lockout holds on every instance until the counter expires.
  */
-export const MFA_FAILURE_CACHE_POLICY: BoundedCachePolicy = Object.freeze({
-  name: "api.mfa-failure-counts",
-  scope: "process",
-  maxEntries: 50_000,
-  ttlMs: 15 * 60 * 1000,
-});
-
-const mfaFailureCounts = new Map<string, { count: number; expiresAt: number }>();
+const MFA_FAILURE_TTL_MS = 15 * 60 * 1000;
 const MFA_MAX_FAILURES = 5;
 
-function recordMfaFailure(key: string): boolean {
-  const now = Date.now();
-  const existing = mfaFailureCounts.get(key);
-  const count = existing && existing.expiresAt > now ? existing.count + 1 : 1;
-  if (count >= MFA_MAX_FAILURES) {
-    mfaFailureCounts.delete(key);
-    return true;
-  }
-  if (!existing && mfaFailureCounts.size >= MFA_FAILURE_CACHE_POLICY.maxEntries) {
-    for (const [candidate, entry] of mfaFailureCounts) {
-      if (entry.expiresAt <= now) mfaFailureCounts.delete(candidate);
-    }
-    while (mfaFailureCounts.size >= MFA_FAILURE_CACHE_POLICY.maxEntries) {
-      const oldestKey = mfaFailureCounts.keys().next().value;
-      if (oldestKey === undefined) break;
-      mfaFailureCounts.delete(oldestKey);
-    }
-  }
-  mfaFailureCounts.set(key, { count, expiresAt: now + MFA_FAILURE_CACHE_POLICY.ttlMs });
-  return false;
-}
-
-function clearMfaFailures(key: string): void {
-  mfaFailureCounts.delete(key);
-}
-
-const MFA_FAILURE_TOKEN_TYPE = "mfa_failure";
 const MFA_TOTP_USED_TOKEN_TYPE = "mfa_totp_used";
 // A TOTP code is valid for up to 90 seconds (30s step, one step of drift each way).
 const MFA_TOTP_REPLAY_TTL_MS = 120_000;
 
-/**
- * Ephemeral per-project signup budget (Zero-Redis doctrine: throttle state, not
- * durable state; per process instance). Enforces `maxSignupsPerHour`, which was
- * previously stored and returned but never applied.
- */
-export const SIGNUP_BUDGET_CACHE_POLICY: BoundedCachePolicy = Object.freeze({
-  name: "api.signup-budget",
-  scope: "process",
-  maxEntries: 10_000,
-  ttlMs: 60 * 60 * 1000,
-});
+/** Per-project hourly sign-up budget; slots live in PostgreSQL, shared by every instance. */
 const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
-const signupEvents = new Map<string, number[]>();
-
-function liveSignups(projectId: string, now: number): number[] {
-  const events = (signupEvents.get(projectId) ?? []).filter((ts) => ts > now - SIGNUP_WINDOW_MS);
-  if (events.length === 0) signupEvents.delete(projectId);
-  else signupEvents.set(projectId, events);
-  return events;
-}
-
-/**
- * Atomically check the hourly budget and reserve a slot (no await between the
- * check and the push), so parallel sign-ups cannot all pass one free slot. The
- * returned function releases the slot when the sign-up fails.
- */
-function reserveSignupSlot(projectId: string, maxPerHour: number): () => void {
-  const now = Date.now();
-  const events = liveSignups(projectId, now);
-  if (events.length >= maxPerHour) {
-    throw new VellumError("TOO_MANY_REQUESTS", "The hourly sign-up limit for this project has been reached", {
-      retryAfterSeconds: 300,
-    });
-  }
-  events.push(now);
-  if (!signupEvents.has(projectId) && signupEvents.size >= SIGNUP_BUDGET_CACHE_POLICY.maxEntries) {
-    const oldest = signupEvents.keys().next().value;
-    if (oldest !== undefined) signupEvents.delete(oldest);
-  }
-  signupEvents.set(projectId, events);
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    const current = signupEvents.get(projectId);
-    const index = current?.indexOf(now) ?? -1;
-    if (current && index !== -1) current.splice(index, 1);
-  };
-}
-
-/** Test helper: reset in-process signup budgets. */
-export function clearSignupBudgetState(): void {
-  signupEvents.clear();
-}
 
 export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   const routes = new Hono();
@@ -221,15 +136,28 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   }
 
   /**
-   * Reserve an hourly sign-up slot and run the account creation. The slot is
-   * taken synchronously before any await, and returned if creation fails.
+   * Reserve an hourly sign-up slot in PostgreSQL (shared by every API
+   * instance, atomic under concurrency) and run the account creation. The
+   * slot is returned when creation fails.
    */
   async function createWithSignupSlot<T>(config: ProjectAuthConfig, tenant: AuthTenant, create: () => Promise<T>): Promise<T> {
-    const release = reserveSignupSlot(tenant.projectId, config.maxSignupsPerHour);
+    const slot = await platform.controlStore.throttle.acquireThrottleSlot(
+      THROTTLE_SCOPES.signupBudget,
+      tenant.projectId,
+      SIGNUP_WINDOW_MS,
+      config.maxSignupsPerHour
+    );
+    if (!slot.acquired) {
+      throw new VellumError("TOO_MANY_REQUESTS", "The hourly sign-up limit for this project has been reached", {
+        retryAfterSeconds: 300,
+      });
+    }
     try {
       return await create();
     } catch (error) {
-      release();
+      if (slot.eventId !== null) {
+        await platform.controlStore.throttle.releaseThrottleSlot(slot.eventId).catch(() => undefined);
+      }
       throw error;
     }
   }
@@ -267,35 +195,35 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   }
 
   /**
-   * Cross-instance failure counter for second-factor codes. The in-process counter alone resets on every
-   * serverless instance, so each failed attempt also leaves a short-lived token row (slots 0..max-1).
-   * Returns true once the limit is reached.
+   * Durable bad-code lockout for second factors, shared by every API instance
+   * (migration 0015). Subjects are `${projectId}:${sha256(...)}` — never raw
+   * tickets, tokens or user ids. Once the counter reaches MFA_MAX_FAILURES it
+   * stays at the cap until it expires, so the lockout holds everywhere.
    */
-  async function recordMfaFailurePersisted(tenant: AuthTenant, userId: string, scope: string): Promise<boolean> {
-    for (let slot = 0; slot < MFA_MAX_FAILURES; slot += 1) {
-      const tokenHash = sha256(`${scope}:slot:${slot}`);
-      const taken = await storage.peekAuthToken(tenant.ctx, tokenHash, MFA_FAILURE_TOKEN_TYPE).then(() => true, () => false);
-      if (taken) continue;
-      await storage.saveAuthToken(tenant.ctx, {
-        userId,
-        tokenHash,
-        tokenType: MFA_FAILURE_TOKEN_TYPE,
-        expiresAt: new Date(Date.now() + MFA_FAILURE_CACHE_POLICY.ttlMs).toISOString(),
-      });
-      return slot + 1 >= MFA_MAX_FAILURES;
-    }
-    return true;
+  async function mfaLockedOut(tenant: AuthTenant, failureKey: string): Promise<boolean> {
+    const count = await platform.controlStore.throttle.getFailureCounter(
+      THROTTLE_SCOPES.mfaFailures,
+      `${tenant.projectId}:${failureKey}`
+    );
+    return count >= MFA_MAX_FAILURES;
   }
 
-  async function mfaLockedOut(tenant: AuthTenant, scope: string): Promise<boolean> {
-    const lastSlot = sha256(`${scope}:slot:${MFA_MAX_FAILURES - 1}`);
-    return storage.peekAuthToken(tenant.ctx, lastSlot, MFA_FAILURE_TOKEN_TYPE).then(() => true, () => false);
+  /** Returns true once the limit is reached. */
+  async function recordMfaFailure(tenant: AuthTenant, failureKey: string): Promise<boolean> {
+    const count = await platform.controlStore.throttle.incrementFailureCounter(
+      THROTTLE_SCOPES.mfaFailures,
+      `${tenant.projectId}:${failureKey}`,
+      MFA_FAILURE_TTL_MS,
+      MFA_MAX_FAILURES
+    );
+    return count >= MFA_MAX_FAILURES;
   }
 
-  async function clearMfaFailuresPersisted(tenant: AuthTenant, scope: string): Promise<void> {
-    for (let slot = 0; slot < MFA_MAX_FAILURES; slot += 1) {
-      await storage.consumeAuthToken(tenant.ctx, sha256(`${scope}:slot:${slot}`), MFA_FAILURE_TOKEN_TYPE).catch(() => undefined);
-    }
+  async function clearMfaFailures(tenant: AuthTenant, failureKey: string): Promise<void> {
+    await platform.controlStore.throttle.clearFailureCounter(
+      THROTTLE_SCOPES.mfaFailures,
+      `${tenant.projectId}:${failureKey}`
+    );
   }
 
   /** A TOTP code must not work twice: remember the codes that were accepted for a short time. */
@@ -1024,9 +952,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       throw new VellumError("UNAUTHENTICATED", "Too many invalid codes. Try again later.");
     }
     if (!verifyTotpCode(secret, body.code) && recoveryIndex === -1) {
-      const local = recordMfaFailure(failureKey);
-      const shared = await recordMfaFailurePersisted(tenant, user.id, failureKey);
-      if (local || shared) {
+      if (await recordMfaFailure(tenant, failureKey)) {
         // Enrollment verify has no action token to consume, so after 5 bad
         // codes revoke the caller's sessions instead. (The challenge route
         // below consumes its MFA ticket on the 5th failure.)
@@ -1034,8 +960,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       }
       throw new VellumError("UNAUTHENTICATED", "Invalid verification code");
     }
-    clearMfaFailures(failureKey);
-    await clearMfaFailuresPersisted(tenant, failureKey);
+    await clearMfaFailures(tenant, failureKey);
     await storage.upsertAuthMfa(tenant.ctx, {
       userId: user.id,
       factorType: mfa.factorType,
@@ -1059,11 +984,8 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     // consumed (invalidated) and the user must sign in again. On success the
     // ticket is consumed atomically before the session is issued. Keys are
     // hashes, never raw tickets.
-    let ticketUserId = "";
     const badCode = async (message: string): Promise<never> => {
-      const local = recordMfaFailure(failureKey);
-      const shared = ticketUserId ? await recordMfaFailurePersisted(tenant, ticketUserId, failureKey) : false;
-      if (local || shared) {
+      if (await recordMfaFailure(tenant, failureKey)) {
         try {
           await storage.consumeAuthToken(tenant.ctx, ticketHash, TOKEN_TYPE_MFA_CHALLENGE);
         } catch {
@@ -1077,7 +999,6 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       ticketHash,
       TOKEN_TYPE_MFA_CHALLENGE
     );
-    ticketUserId = challenge.userId;
     if (await mfaLockedOut(tenant, failureKey)) {
       throw new VellumError("UNAUTHENTICATED", "Too many invalid codes. Sign in again.");
     }
@@ -1108,8 +1029,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       if (await totpCodeWasUsed(tenant, mfa.userId, body.code)) await badCode("Invalid TOTP code");
       await markTotpCodeUsed(tenant, mfa.userId, body.code);
     }
-    clearMfaFailures(failureKey);
-    await clearMfaFailuresPersisted(tenant, failureKey);
+    await clearMfaFailures(tenant, failureKey);
     // Consume atomically only after the code verified: a concurrent replay with
     // the same ticket fails here instead of issuing a second session.
     await storage.consumeAuthToken(tenant.ctx, ticketHash, TOKEN_TYPE_MFA_CHALLENGE);
@@ -1130,8 +1050,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       throw new VellumError("UNAUTHENTICATED", "Too many invalid codes. Try again later.");
     }
     const fail = async (message: string): Promise<never> => {
-      recordMfaFailure(failureKey);
-      await recordMfaFailurePersisted(tenant, user.id, failureKey);
+      await recordMfaFailure(tenant, failureKey);
       throw new VellumError("UNAUTHENTICATED", message);
     };
     if (!/^\d{6}$/.test(body.code)) {
@@ -1141,8 +1060,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       if (await totpCodeWasUsed(tenant, user.id, body.code)) await fail("Invalid TOTP code");
       await markTotpCodeUsed(tenant, user.id, body.code);
     }
-    clearMfaFailures(failureKey);
-    await clearMfaFailuresPersisted(tenant, failureKey);
+    await clearMfaFailures(tenant, failureKey);
     await storage.deleteAuthMfa(tenant.ctx, user.id);
     return c.json({ disabled: true });
   });

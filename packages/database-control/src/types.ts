@@ -22,6 +22,7 @@ export type MaybePromise<T> = T | Promise<T>;
 // read and append tamper-evident records without touching raw SQL.
 import type { SecurityRepository } from "./security-repository.js";
 import type { BillingRepository } from "./billing-repository.js";
+import type { ThrottleRepository } from "./throttle-repository.js";
 
 export interface UserRecord {
   id: string;
@@ -416,7 +417,12 @@ export interface ControlPlaneRepository {
   updatePlatformAuthSettings(
     input: UpdatePlatformAuthSettingsInput
   ): MaybePromise<PlatformAuthGlobalSettings>;
-  incrementUsage(projectId: string, deltas?: UsageDeltas): UsageDailyRecord;
+  /**
+   * Durable, atomic per-day metering. The PostgreSQL store applies the deltas
+   * with a single INSERT ... ON CONFLICT upsert (race-free across instances);
+   * there is no in-process write buffer, so every caller must `await`.
+   */
+  incrementUsage(projectId: string, deltas?: UsageDeltas): MaybePromise<UsageDailyRecord>;
 
   recordAuditLog(input: RecordAuditLogInput): MaybePromise<AuditLogRecord>;
   createUser(input: CreateUserInput): MaybePromise<UserRecord>;
@@ -472,6 +478,11 @@ export interface ControlPlaneRepository {
   // ----- Security Fortress + Billing (contract §12.4) -----
   /** Append-only audit log, threat feed and circuit-breaker blocklist. */
   readonly security: SecurityRepository;
+  /**
+   * Durable auth throttles: sliding-window rate limits, the hourly signup
+   * budget and MFA bad-code lockouts, shared by every API instance.
+   */
+  readonly throttle: ThrottleRepository;
   /** Locked plans, subscriptions, rollups, immutable ledger and invoices. */
   readonly billing: BillingRepository;
 

@@ -1,9 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createVellumPlatform } from '../index.js';
-import { clearAuthRateLimitState } from '../middleware/auth-rate-limit.js';
 
 describe('per-account sign-in throttle', () => {
-  beforeEach(() => clearAuthRateLimitState());
 
   it('limits failed console sign-ins per account even when the apparent client IP changes', async () => {
     const platform = createVellumPlatform();
@@ -12,7 +10,6 @@ describe('per-account sign-in throttle', () => {
       body: JSON.stringify({ name: 'Victim', email: 'victim-lockout@example.invalid', password: 'FixtureOnly123!' }),
     }));
     expect(signup.status).toBe(201);
-    clearAuthRateLimitState();
     const statuses: number[] = [];
     for (let i = 0; i < 60; i += 1) {
       const res = await platform.fetch(new Request('http://localhost/v1/auth/sign-in/email', {

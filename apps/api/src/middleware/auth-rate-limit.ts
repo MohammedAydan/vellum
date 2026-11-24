@@ -1,10 +1,12 @@
 /**
- * @vellum/api - In-process authentication throttle middleware.
+ * @vellum/api - Authentication throttle middleware.
  *
- * ZERO-REDIS DOCTRINE: this is *ephemeral* throttle state, not durable state.
- * PostgreSQL remains the only stateful runtime dependency; this in-process
- * sliding window intentionally lives only for the lifetime of the process and
- * is never persisted or shared across instances.
+ * All throttle state is durable: every API instance reserves and releases
+ * sliding-window slots in PostgreSQL through the control store's throttle
+ * repository, so limits hold across serverless instances, cold starts and
+ * redeploys. Reservation is atomic (a per-bucket advisory lock serializes
+ * concurrent reservers inside `auth_throttle_acquire`), so parallel attempts
+ * cannot all pass one free slot.
  *
  * Notes on Hono error flow (verified against hono@4.13's `compose`): a thrown
  * error from a downstream handler is caught by Hono at that handler's dispatch
@@ -16,7 +18,8 @@
 
 import { createHash } from "node:crypto";
 import type { Context, MiddlewareHandler } from "hono";
-import { VellumError, type BoundedCachePolicy } from "@vellum/core";
+import { VellumError } from "@vellum/core";
+import type { ThrottleRepository } from "@vellum/database-control";
 import { extractClientIp } from "./security.js";
 
 export interface AuthRateLimitOptions {
@@ -39,53 +42,9 @@ export interface AuthRateLimitOptions {
   countAll?: boolean;
 }
 
-interface RateBucket {
-  /** Epoch-ms timestamps of the events currently inside the sliding window. */
-  events: number[];
-  /** Last timestamp this bucket was touched (for bounded-memory eviction). */
-  lastSeen: number;
-}
-
-export const AUTH_RATE_LIMIT_CACHE_POLICY: BoundedCachePolicy = Object.freeze({
-  name: "api.auth-rate-limit",
-  scope: "process",
-  maxEntries: 50_000,
-  ttlMs: 15 * 60 * 1000,
-});
-
-/**
- * Only ever keyed by opaque identifiers derived from `(ip,email)` or an MFA
- * ticket/user id. Emails and IPs are never logged, serialized or returned.
- */
-const buckets = new Map<string, RateBucket>();
-
-/** Test helper: drop all in-process throttle state between cases. */
-export function clearAuthRateLimitState(): void {
-  buckets.clear();
-}
-
 /** Spoof-resistant client IP. No value is logged anywhere. */
 function requestIp(c: Context): string {
   return extractClientIp(c);
-}
-
-/** Evict expired or oldest buckets to keep memory strictly bounded under DDoS. */
-function pruneBucketsIfNeeded(now: number, maxWindowMs: number): void {
-  const { maxEntries, ttlMs } = AUTH_RATE_LIMIT_CACHE_POLICY;
-  if (buckets.size < maxEntries) return;
-  const effectiveWindowMs = Math.min(maxWindowMs, ttlMs);
-  const cutoff = now - effectiveWindowMs;
-  for (const [key, entry] of buckets) {
-    if (entry.lastSeen <= cutoff || entry.events.length === 0) {
-      buckets.delete(key);
-    }
-  }
-  // If still above cap, evict oldest entries (Map preserves insertion order).
-  while (buckets.size >= maxEntries) {
-    const oldestKey = buckets.keys().next().value;
-    if (oldestKey === undefined) break;
-    buckets.delete(oldestKey);
-  }
 }
 
 /**
@@ -121,11 +80,6 @@ async function defaultKey(c: Context): Promise<string> {
   return `${requestIp(c)}|${email || authenticatedIdentity(c)}`;
 }
 
-function releaseSlot(bucket: RateBucket, ts: number): void {
-  const index = bucket.events.indexOf(ts);
-  if (index !== -1) bucket.events.splice(index, 1);
-}
-
 /**
  * Sliding-window limiter for authentication endpoints.
  *
@@ -133,51 +87,43 @@ function releaseSlot(bucket: RateBucket, ts: number): void {
  * before the handler runs. Each attempt reserves a slot up front; only failed
  * responses keep it — or every request when `countAll` is set. `Retry-After` is written before
  * throwing so it survives Hono's `onError` replacement of `c.res`.
+ *
+ * The throttle fails closed: when the durable store is unreachable the error
+ * propagates instead of silently disabling brute-force protection.
  */
-export function authRateLimit(options: AuthRateLimitOptions): MiddlewareHandler {
+export function authRateLimit(
+  options: AuthRateLimitOptions,
+  throttle: ThrottleRepository
+): MiddlewareHandler {
   const { max, windowMs, scope, countAll = false } = options;
   const retryAfterSeconds = Math.ceil(windowMs / 1000);
 
   return async (c, next) => {
     const identity = options.keyFrom ? await options.keyFrom(c) : await defaultKey(c);
-    // The composed key is an opaque Map key only — never logged or returned.
-    const bucketKey = `${scope}:${identity}`;
-    const now = Date.now();
-    const cutoff = now - windowMs;
-
-    let bucket = buckets.get(bucketKey);
-    if (!bucket) {
-      pruneBucketsIfNeeded(now, windowMs);
-      bucket = { events: [], lastSeen: now };
-      buckets.set(bucketKey, bucket);
-    } else {
-      bucket.lastSeen = now;
-    }
-    // Prune events that have fallen out of the window (true sliding window).
-    bucket.events = bucket.events.filter((ts) => ts > cutoff);
-
-    // Already locked out: refuse BEFORE running the handler. Checking only
-    // after the handler would let a correct guess (200) through once the
-    // bucket is full, defeating the throttle for brute-force attempts.
-    if (bucket.events.length >= max) {
+    // The composed key is an opaque bucket subject only — never logged or returned.
+    const slot = await throttle.acquireThrottleSlot(scope, identity, windowMs, max);
+    if (!slot.acquired) {
       c.header("Retry-After", String(retryAfterSeconds));
       throw new VellumError("TOO_MANY_REQUESTS", "Too many attempts. Please try again later.", {
         retryAfterSeconds,
       });
     }
 
-    // Reserve the slot synchronously (no await between the check above and
-    // this push) so concurrent attempts are counted while in flight and cannot
-    // all pass one remaining slot. Attempts that turn out not to count
-    // (successes in failure-only mode) release their slot afterwards.
-    bucket.events.push(now);
-    bucket.lastSeen = now;
+    // Attempts that turn out not to count (successes in failure-only mode, or
+    // infrastructure-level throws, which Hono never converted into a response)
+    // release their slot afterwards. A failed release simply keeps the slot —
+    // the throttle errs on the strict side, never the permissive one.
+    const release = (): void => {
+      if (slot.eventId !== null) {
+        void throttle.releaseThrottleSlot(slot.eventId).catch(() => undefined);
+      }
+    };
     try {
       await next();
     } catch (error) {
-      if (!countAll) releaseSlot(bucket, now);
+      if (!countAll) release();
       throw error;
     }
-    if (!countAll && c.res.status < 400) releaseSlot(bucket, now);
+    if (!countAll && c.res.status < 400) release();
   };
 }

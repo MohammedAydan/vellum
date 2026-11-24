@@ -45,6 +45,7 @@ import {
   createInMemorySecurityRepository,
   type SecurityRepository,
 } from "./security-repository.js";
+import { MemoryThrottleRepository, type ThrottleRepository } from "./throttle-repository.js";
 import {
   createInMemoryBillingRepository,
   type BillingRepository,
@@ -183,6 +184,9 @@ export class ControlPlaneStore implements ControlPlaneRepository {
   readonly billing: BillingRepository = createInMemoryBillingRepository(
     (orgId) => this.organizations.get(orgId)?.billingEmail ?? null
   );
+
+  /** In-process throttles; the offline/test stand-in for the durable repository. */
+  readonly throttle: ThrottleRepository = new MemoryThrottleRepository();
 
   createUser({
     email,

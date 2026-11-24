@@ -258,9 +258,9 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
   // 10 failures / 15 min per (ip,email). `/v1/console/auth/login` does not
   // exist in this build (console uses the Better Auth wildcard), so it is
   // intentionally skipped.
-  app.use("/v1/auth/sign-in/email", authRateLimit({ ...LOGIN_LIMIT, scope: "sign-in-email" }));
-  app.use("/v1/auth/sign-up/email", authRateLimit({ ...LOGIN_LIMIT, scope: "sign-up-email" }));
-  app.use("/v1/admin/login", authRateLimit({ ...LOGIN_LIMIT, scope: "admin-login" }));
+  app.use("/v1/auth/sign-in/email", authRateLimit({ ...LOGIN_LIMIT, scope: "sign-in-email" }, platform.controlStore.throttle));
+  app.use("/v1/auth/sign-up/email", authRateLimit({ ...LOGIN_LIMIT, scope: "sign-up-email" }, platform.controlStore.throttle));
+  app.use("/v1/admin/login", authRateLimit({ ...LOGIN_LIMIT, scope: "admin-login" }, platform.controlStore.throttle));
   // Per-account failure ceiling that does NOT depend on the client IP. The
   // per-(ip,email) limits above are bypassed by anyone who can vary the apparent
   // source address (rotating proxies, a botnet, or a spoofable forwarding
@@ -277,15 +277,15 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     }
     return sha256Hex(`${prefix}|${email}`);
   };
-  app.use("/v1/auth/sign-in/email", authRateLimit({ ...ACCOUNT_LIMIT, scope: "sign-in-email-account", keyFrom: emailOnlyKey("console") }));
-  app.use("/v1/admin/login", authRateLimit({ ...ACCOUNT_LIMIT, scope: "admin-login-account", keyFrom: emailOnlyKey("admin") }));
+  app.use("/v1/auth/sign-in/email", authRateLimit({ ...ACCOUNT_LIMIT, scope: "sign-in-email-account", keyFrom: emailOnlyKey("console") }, platform.controlStore.throttle));
+  app.use("/v1/admin/login", authRateLimit({ ...ACCOUNT_LIMIT, scope: "admin-login-account", keyFrom: emailOnlyKey("admin") }, platform.controlStore.throttle));
   app.use(
     "/v1/projects/:projectId/auth/sign-in/email",
     authRateLimit({
       ...ACCOUNT_LIMIT,
       scope: "enduser-sign-in-account",
       keyFrom: async (c) => `${c.req.param("projectId") ?? ""}|${await emailOnlyKey("enduser")(c)}`,
-    })
+    }, platform.controlStore.throttle)
   );
 
   // Project END-USER credentials (`/v1/projects/:projectId/auth/*`). These were
@@ -306,34 +306,34 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
   // 10 failures / 15 min per (project, ip, email); lockout is enforced before the handler runs.
   app.use(
     "/v1/projects/:projectId/auth/sign-in/email",
-    authRateLimit({ ...LOGIN_LIMIT, scope: "enduser-sign-in", keyFrom: endUserKey })
+    authRateLimit({ ...LOGIN_LIMIT, scope: "enduser-sign-in", keyFrom: endUserKey }, platform.controlStore.throttle)
   );
   // 30 sign-up attempts / 15 min per (project, ip); every attempt counts.
   app.use(
     "/v1/projects/:projectId/auth/sign-up/email",
-    authRateLimit({ max: 30, windowMs: 15 * 60 * 1000, countAll: true, scope: "enduser-sign-up", keyFrom: endUserIpKey })
+    authRateLimit({ max: 30, windowMs: 15 * 60 * 1000, countAll: true, scope: "enduser-sign-up", keyFrom: endUserIpKey }, platform.controlStore.throttle)
   );
   app.use(
     "/v1/projects/:projectId/auth/sign-in/anonymous",
-    authRateLimit({ max: 30, windowMs: 15 * 60 * 1000, countAll: true, scope: "enduser-anonymous", keyFrom: endUserIpKey })
+    authRateLimit({ max: 30, windowMs: 15 * 60 * 1000, countAll: true, scope: "enduser-anonymous", keyFrom: endUserIpKey }, platform.controlStore.throttle)
   );
 
   // OAuth: start and exchange count every request; 60 / 15 min per (project, ip).
   for (const path of ["oauth/:provider/start", "oauth/exchange", "oauth/google/id-token"]) {
     app.use(
       `/v1/projects/:projectId/auth/${path}`,
-      authRateLimit({ max: 60, windowMs: 15 * 60 * 1000, countAll: true, scope: `enduser-${path}`, keyFrom: endUserIpKey })
+      authRateLimit({ max: 60, windowMs: 15 * 60 * 1000, countAll: true, scope: `enduser-${path}`, keyFrom: endUserIpKey }, platform.controlStore.throttle)
     );
   }
 
   // 5 requests / 15 min — every request counts (no account enumeration).
   app.use(
     "/v1/projects/:projectId/auth/password/reset",
-    authRateLimit({ ...REQUEST_LIMIT, scope: "password-reset" })
+    authRateLimit({ ...REQUEST_LIMIT, scope: "password-reset" }, platform.controlStore.throttle)
   );
   app.use(
     "/v1/projects/:projectId/auth/email/verify/request",
-    authRateLimit({ ...REQUEST_LIMIT, scope: "email-verify-request" })
+    authRateLimit({ ...REQUEST_LIMIT, scope: "email-verify-request" }, platform.controlStore.throttle)
   );
 
   // 5 failures / 5 min keyed by mfaTicket (challenge) or the caller identity.
@@ -355,15 +355,15 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
   };
   app.use(
     "/v1/projects/:projectId/auth/mfa/challenge",
-    authRateLimit({ ...MFA_LIMIT, scope: "mfa-challenge", keyFrom: mfaKey })
+    authRateLimit({ ...MFA_LIMIT, scope: "mfa-challenge", keyFrom: mfaKey }, platform.controlStore.throttle)
   );
   app.use(
     "/v1/projects/:projectId/auth/mfa/verify",
-    authRateLimit({ ...MFA_LIMIT, scope: "mfa-verify", keyFrom: mfaKey })
+    authRateLimit({ ...MFA_LIMIT, scope: "mfa-verify", keyFrom: mfaKey }, platform.controlStore.throttle)
   );
   app.use(
     "/v1/projects/:projectId/auth/mfa/disable",
-    authRateLimit({ ...MFA_LIMIT, scope: "mfa-disable", keyFrom: mfaKey })
+    authRateLimit({ ...MFA_LIMIT, scope: "mfa-disable", keyFrom: mfaKey }, platform.controlStore.throttle)
   );
 
   // 1.1 TOTP MFA — must be mounted BEFORE the `/v1/auth/**` Better Auth wildcard.

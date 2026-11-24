@@ -374,6 +374,27 @@ export class DocumentEngine implements DocumentEnginePort {
     this.meteringBreaker.call(orgId, projectId, count, storageDeltaBytes);
   }
 
+  /**
+   * Durable metering must never break a committed document operation: a failed
+   * increment is counted in telemetry, not thrown back at the caller.
+   */
+  private async recordUsage(
+    projectId: string,
+    usage: {
+      documentReads?: number;
+      documentWrites?: number;
+      documentDeletes?: number;
+      storageBytesDelta?: number;
+      egressBytes?: number;
+    }
+  ): Promise<void> {
+    try {
+      await this.controlStore.incrementUsage(projectId, usage);
+    } catch {
+      this.telemetry.counter("usage.increment_failed", 1);
+    }
+  }
+
   /** Fire-and-forget audit; the breaker swallows sync and async sink failures. */
   private safeAudit(action: string, input: Parameters<AuditLike["log"]>[1]): void {
     this.auditBreaker.call(action, input);
@@ -744,7 +765,7 @@ export class DocumentEngine implements DocumentEnginePort {
         const includedBytes = publicDoc._included
           ? Buffer.byteLength(JSON.stringify(publicDoc._included), "utf8")
           : 0;
-        this.controlStore.incrementUsage(ctx.projectId, {
+        await this.recordUsage(ctx.projectId, {
           documentReads: 1,
           egressBytes: existing.sizeBytes + includedBytes,
         });
@@ -789,7 +810,7 @@ export class DocumentEngine implements DocumentEnginePort {
       if (ctx.include?.length) await this.applyIncludes(result.documents, ctx.include, apiKey, ruleset, authCtx, bypassRules, tx);
       const bytes = Buffer.byteLength(JSON.stringify(result.documents), "utf8");
       if (bytes > SYSTEM_LIMITS.MAX_QUERY_RESPONSE_BYTES) throw new VellumError("RESPONSE_TOO_LARGE", "referencedBy response exceeds 4 MiB");
-      this.controlStore.incrementUsage(ctx.projectId, { documentReads: result.scanned + 1, egressBytes: bytes });
+      await this.recordUsage(ctx.projectId, { documentReads: result.scanned + 1, egressBytes: bytes });
       return { documents: result.documents, nextCursor: result.nextCursor };
     });
   }
@@ -1479,7 +1500,7 @@ export class DocumentEngine implements DocumentEnginePort {
     // Emit usage, metering, telemetry, and realtime ONLY after the DB
     // transaction commits so a rollback never leaks side effects.
     if (!batchWasReplayed) {
-      this.controlStore.incrementUsage(ctx.projectId, {
+      await this.recordUsage(ctx.projectId, {
         documentWrites: finalUserWrites,
         documentDeletes: finalUserDeletes,
         storageBytesDelta: finalStorageBytesDelta,
@@ -1692,7 +1713,7 @@ export class DocumentEngine implements DocumentEnginePort {
           }
         }
 
-        this.controlStore.incrementUsage(ctx.projectId, {
+        await this.recordUsage(ctx.projectId, {
           documentReads: Math.max(1, formattedDocs.length),
           egressBytes: responseBytes,
         });
@@ -1787,7 +1808,7 @@ export class DocumentEngine implements DocumentEnginePort {
     );
     this.telemetry.counter("db.round_trips", 1);
     this.telemetry.histogram("db.round_trips", 1);
-    this.controlStore.incrementUsage(ctx.projectId, {
+    await this.recordUsage(ctx.projectId, {
       documentReads: Math.max(1, rows.length),
     });
     return {
@@ -2037,7 +2058,7 @@ export class DocumentEngine implements DocumentEnginePort {
     );
 
     // Emit usage, metering, telemetry, and realtime ONLY after commit.
-    this.controlStore.incrementUsage(ctx.projectId, {
+    await this.recordUsage(ctx.projectId, {
       documentDeletes: deletedCount,
       storageBytesDelta,
     });
@@ -2169,7 +2190,7 @@ export class DocumentEngine implements DocumentEnginePort {
           0
         );
         const egressBytes = publicDocs.reduce((sum, doc) => sum + doc.sizeBytes, 0) + includedBytes;
-        this.controlStore.incrementUsage(ctx.projectId, {
+        await this.recordUsage(ctx.projectId, {
           documentReads: publicDocs.length,
           egressBytes,
         });
@@ -2325,7 +2346,7 @@ export class DocumentEngine implements DocumentEnginePort {
       }
     );
 
-    this.controlStore.incrementUsage(ctx.projectId, {
+    await this.recordUsage(ctx.projectId, {
       documentWrites: 1,
       storageBytesDelta: restored.sizeBytes,
     });

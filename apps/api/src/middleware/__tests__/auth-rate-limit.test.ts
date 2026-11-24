@@ -1,24 +1,26 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import { generateProjectApiKey } from "@vellum/authorization";
 import { createVellumPlatform } from "../../index.js";
 import { sanitizeAdminPayload } from "../../routes/admin.js";
 import { errorHandler } from "../error-handler.js";
-import { authRateLimit, clearAuthRateLimitState } from "../auth-rate-limit.js";
+import { MemoryThrottleRepository } from "@vellum/database-control";
+import { authRateLimit } from "../auth-rate-limit.js";
 
 /** Documentation-range address only — never a real user IP or email. */
 const TEST_IP_HEADERS = { "x-forwarded-for": "203.0.113.7" };
 
-function loginApp(): Hono {
+function loginApp(): { app: Hono; throttle: MemoryThrottleRepository } {
+  const throttle = new MemoryThrottleRepository();
   const app = new Hono();
   app.onError(errorHandler);
-  app.use("/login", authRateLimit({ max: 10, windowMs: 15 * 60 * 1000, scope: "test-login" }));
+  app.use("/login", authRateLimit({ max: 10, windowMs: 15 * 60 * 1000, scope: "test-login" }, throttle));
   app.post("/login", async (c) => {
     const body = (await c.req.json()) as { password?: string };
     if (body.password === "correct-horse") return c.json({ ok: true });
     return c.json({ ok: false }, 401);
   });
-  return app;
+  return { app, throttle };
 }
 
 function postLogin(app: Hono, email: string, password: string): Promise<Response> {
@@ -34,7 +36,10 @@ function verifyApp(): Hono {
   app.onError(errorHandler);
   app.use(
     "/verify",
-    authRateLimit({ max: 1, windowMs: 15 * 60 * 1000, scope: "test-verify", countAll: true })
+    authRateLimit(
+      { max: 1, windowMs: 15 * 60 * 1000, scope: "test-verify", countAll: true },
+      new MemoryThrottleRepository()
+    )
   );
   app.post("/verify", (c) => c.json({ sent: true }));
   return app;
@@ -95,12 +100,9 @@ function collectKeys(value: unknown, acc: Set<string> = new Set<string>()): Set<
 }
 
 describe("@vellum/api - auth rate limiting & secret serialization", () => {
-  beforeEach(() => {
-    clearAuthRateLimitState();
-  });
 
   it("returns 429 with Retry-After on the 11th failed login inside 15 minutes", async () => {
-    const app = loginApp();
+    const { app } = loginApp();
     for (let i = 0; i < 10; i += 1) {
       expect((await postLogin(app, "BRUTE@Example.COM", "wrong")).status).toBe(401);
     }
@@ -118,7 +120,7 @@ describe("@vellum/api - auth rate limiting & secret serialization", () => {
   it("caps parallel attempts at the window size (counted while in flight)", async () => {
     const app = new Hono();
     app.onError(errorHandler);
-    app.use("/slow", authRateLimit({ max: 3, windowMs: 60_000, scope: "test-parallel", countAll: true }));
+    app.use("/slow", authRateLimit({ max: 3, windowMs: 60_000, scope: "test-parallel", countAll: true }, new MemoryThrottleRepository()));
     app.post("/slow", async (c) => {
       await new Promise((resolve) => setTimeout(resolve, 20));
       return c.json({ ok: true });
@@ -136,7 +138,7 @@ describe("@vellum/api - auth rate limiting & secret serialization", () => {
   it("does not let parallel wrong guesses exceed the failure budget", async () => {
     const app = new Hono();
     app.onError(errorHandler);
-    app.use("/slow-login", authRateLimit({ max: 2, windowMs: 60_000, scope: "test-parallel-fail", keyFrom: () => "k" }));
+    app.use("/slow-login", authRateLimit({ max: 2, windowMs: 60_000, scope: "test-parallel-fail", keyFrom: () => "k" }, new MemoryThrottleRepository()));
     app.post("/slow-login", async (c) => {
       await new Promise((resolve) => setTimeout(resolve, 20));
       return c.json({ ok: false }, 401);
@@ -152,7 +154,7 @@ describe("@vellum/api - auth rate limiting & secret serialization", () => {
   });
 
   it("does not count successful logins toward the failure budget", async () => {
-    const app = loginApp();
+    const { app } = loginApp();
     for (let i = 0; i < 12; i += 1) {
       expect((await postLogin(app, "ok@example.com", "correct-horse")).status).toBe(200);
     }
@@ -189,14 +191,14 @@ describe("@vellum/api - auth rate limiting & secret serialization", () => {
     expect((await post("first@example.com")).status).toBe(429);
   });
 
-  it("resets all windows via clearAuthRateLimitState()", async () => {
-    const app = loginApp();
+  it("resets all windows when the throttle state is cleared", async () => {
+    const { app, throttle } = loginApp();
     for (let i = 0; i < 11; i += 1) {
       await postLogin(app, "reset@example.com", "wrong");
     }
     expect((await postLogin(app, "reset@example.com", "wrong")).status).toBe(429);
 
-    clearAuthRateLimitState();
+    throttle.clearAll();
     expect((await postLogin(app, "reset@example.com", "wrong")).status).toBe(401);
   });
 
