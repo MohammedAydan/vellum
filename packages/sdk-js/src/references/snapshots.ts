@@ -109,6 +109,24 @@ export function buildDocumentSnapshot<T = Record<string, unknown>>(
   return applyConverterToSnapshot(rawSnapshot, converter);
 }
 
+/**
+ * Snapshot for a document that has not been saved yet: `exists` is false and
+ * `data()` returns `null` (never throws), like Firestore.
+ */
+export function buildMissingDocumentSnapshot<T = Record<string, unknown>>(
+  path: string,
+  id: string
+): DocumentSnapshot<T> {
+  return Object.freeze({
+    id,
+    path,
+    version: 0,
+    exists: false,
+    data: () => null as unknown as T,
+    raw: null,
+  });
+}
+
 /** Build an immutable, frozen `QuerySnapshot<T>` from wire query results. */
 export function buildQuerySnapshot<T = Record<string, unknown>>(
   documents: readonly WireDocument[],
