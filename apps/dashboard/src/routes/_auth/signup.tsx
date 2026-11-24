@@ -155,9 +155,9 @@ function SignupPage() {
           </Button>
           <p className="text-center text-xs text-muted-foreground">
             {t("legal.signupConsentPrefix")}{" "}
-            <Link to="/terms" className="text-primary hover:underline">{t("legal.terms")}</Link>{" "}
+            <Link to="/terms" className="text-primary underline underline-offset-2">{t("legal.terms")}</Link>{" "}
             {t("legal.and")}{" "}
-            <Link to="/privacy" className="text-primary hover:underline">{t("legal.privacy")}</Link>.
+            <Link to="/privacy" className="text-primary underline underline-offset-2">{t("legal.privacy")}</Link>.
           </p>
           <div className="text-center text-xs text-muted-foreground">
             {t("auth.alreadyAccount")}{" "}

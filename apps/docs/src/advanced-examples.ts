@@ -32,7 +32,7 @@ await manual.auth.getIdToken(true); // an explicit refresh still works`;
 
 export const authDart = `// Defaults: works out of the box. The session lives in memory and is refreshed
 // about 60 s before expiry and again on a 401.
-final db = VellumClient(endpoint: endpoint, projectId: projectId, apiKey: apiKey);
+final db = VellumClient(endpoint: 'https://api.example.com', projectId: 'PROJECT_ID', apiKey: 'API_KEY');
 
 // Bring your own identity provider token:
 db.setCustomToken(tokenFromYourBackend);
@@ -40,7 +40,7 @@ db.setCustomToken(null); // back to the VELLUM session
 
 // Manage tokens yourself:
 final manual = VellumClient(
-  endpoint: endpoint, projectId: projectId, apiKey: apiKey,
+  endpoint: 'https://api.example.com', projectId: 'PROJECT_ID', apiKey: 'API_KEY',
   autoRefresh: false,
 );`;
 
@@ -78,7 +78,7 @@ class SecureAuthTokenStorage implements AuthTokenStorage {
 }
 
 final db = VellumClient(
-  endpoint: endpoint, projectId: projectId, apiKey: apiKey,
+  endpoint: 'https://api.example.com', projectId: 'PROJECT_ID', apiKey: 'API_KEY',
   authTokenStorage: SecureAuthTokenStorage(),
 );
 await db.auth.restore(); // once at startup`;
@@ -102,7 +102,7 @@ createClient({
 
 export const cacheDart = `// Default is CachePolicy.networkFirst with a bounded in-memory store.
 final db = VellumClient(
-  endpoint: endpoint, projectId: projectId, apiKey: apiKey,
+  endpoint: 'https://api.example.com', projectId: 'PROJECT_ID', apiKey: 'API_KEY',
   cachePolicy: CachePolicy.networkFirst,
   cacheTtl: const Duration(minutes: 5),
 );

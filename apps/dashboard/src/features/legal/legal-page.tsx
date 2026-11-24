@@ -24,11 +24,11 @@ export function LegalLinks() {
   const ar = locale === "ar";
   return (
     <nav aria-label={ar ? "الروابط القانونية" : "Legal"} className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <Link to="/privacy" className="hover:underline">{ar ? "سياسة الخصوصية" : "Privacy Policy"}</Link>
+      <Link to="/privacy" className="underline underline-offset-2">{ar ? "سياسة الخصوصية" : "Privacy Policy"}</Link>
       <span aria-hidden="true">·</span>
-      <Link to="/terms" className="hover:underline">{ar ? "شروط الاستخدام" : "Terms of Service"}</Link>
+      <Link to="/terms" className="underline underline-offset-2">{ar ? "شروط الاستخدام" : "Terms of Service"}</Link>
       <span aria-hidden="true">·</span>
-      <Link to="/terms" hash="alpha" className="hover:underline">{ar ? "إخلاء المسؤولية" : "Disclaimer"}</Link>
+      <Link to="/terms" hash="alpha" className="underline underline-offset-2">{ar ? "إخلاء المسؤولية" : "Disclaimer"}</Link>
     </nav>
   );
 }

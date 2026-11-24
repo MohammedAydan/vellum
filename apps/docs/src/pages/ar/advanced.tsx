@@ -92,7 +92,7 @@ export default function Page() {
         </P>
         <Code lang="ts" title="TypeScript" code={realtimeTs} />
         <Code lang="dart" title="Flutter / Dart" code={`final db = VellumClient(
-  endpoint: endpoint, projectId: projectId, apiKey: apiKey,
+  endpoint: 'https://api.example.com', projectId: 'PROJECT_ID', apiKey: 'API_KEY',
   realtimeMode: VellumRealtimeMode.auto, // or .websocket / .sse
 );`} />
       </Section>
