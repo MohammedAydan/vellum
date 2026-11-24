@@ -25,7 +25,7 @@ import type {
   ReferencedByOptions,
   ReferencedByPage,
 } from "../types.js";
-import { buildDocumentSnapshot, normalizeInclude, type WireDocument } from "./snapshots.js";
+import { buildDocumentSnapshot, buildMissingDocumentSnapshot, normalizeInclude, type WireDocument } from "./snapshots.js";
 
 /** Maps a write option to the Idempotency-Key header the API dedupes on. */
 function idempotencyHeaders(options: { idempotencyKey?: string | undefined }): Record<string, string> {
@@ -45,7 +45,7 @@ export interface DocumentReferenceContext {
   prepareRead?(): Promise<string | null>;
   readonly readCache: BoundedReadCache<WireDocument> | null;
   readonly dedupeReads: boolean;
-  readonly inFlightGets: Map<string, Promise<WireDocument>>;
+  readonly inFlightGets: Map<string, Promise<WireDocument | null>>;
   getPathWriteEpoch(path: string): number;
   getGlobalCacheEpoch(): number;
   invalidateDocCache(path: string): void;
@@ -63,11 +63,14 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
   public readonly id: string;
   private readonly ctx: DocumentReferenceContext;
   private readonly converter: DocDataConverter<T> | null;
+  /** True when the ID was generated locally by `collection.doc()`; reading before the first save yields a non-existent snapshot. */
+  private readonly autoId: boolean;
 
   public constructor(
     ctx: DocumentReferenceContext,
     path: string,
-    converter: DocDataConverter<T> | null = null
+    converter: DocDataConverter<T> | null = null,
+    autoId = false
   ) {
     encodeResourcePath(path, "document path");
     const parts = path.split("/");
@@ -80,6 +83,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
     this.path = path;
     this.id = parts[parts.length - 1] ?? "";
     this.converter = converter;
+    this.autoId = autoId;
     Object.freeze(this);
   }
 
@@ -149,7 +153,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
       if (existing) {
         const sharedDoc = await existing;
         assertCurrent();
-        return buildDocumentSnapshot(sharedDoc, this.converter);
+        return sharedDoc === null ? buildMissingDocumentSnapshot(this.path, this.id) : buildDocumentSnapshot(sharedDoc, this.converter);
       }
     }
 
@@ -159,7 +163,13 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
 
     const fetchPromise = this.ctx
       .request<WireDocument>("GET", relativePath, undefined, {}, true, options.signal)
+      .catch((err: unknown): WireDocument | null => {
+        const status = (err as { status?: number } | null | undefined)?.status;
+        if (this.autoId && status === 404) return null;
+        throw err;
+      })
       .then((doc) => {
+        if (doc === null) return null;
         assertCurrent();
         const sanitized = sanitizeAndClone(doc);
         if (
@@ -177,7 +187,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
       this.ctx.inFlightGets.set(cacheKey, fetchPromise);
       try {
         const doc = await fetchPromise;
-        return buildDocumentSnapshot(doc, this.converter);
+        return doc === null ? buildMissingDocumentSnapshot(this.path, this.id) : buildDocumentSnapshot(doc, this.converter);
       } finally {
         if (this.ctx.inFlightGets.get(cacheKey) === fetchPromise) {
           this.ctx.inFlightGets.delete(cacheKey);
@@ -186,7 +196,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
     }
 
     const doc = await fetchPromise;
-    return buildDocumentSnapshot(doc, this.converter);
+    return doc === null ? buildMissingDocumentSnapshot(this.path, this.id) : buildDocumentSnapshot(doc, this.converter);
   }
 
   public async referencedBy<D = Record<string, unknown>>(options: ReferencedByOptions = {}): Promise<ReferencedByPage<D>> {

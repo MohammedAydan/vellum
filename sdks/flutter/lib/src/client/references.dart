@@ -8,12 +8,17 @@ class DocumentReference<T> {
   final FromVellum<T> fromJson;
   final ToVellum<T> toJson;
 
+  /// True when [id] was generated locally by `collection.doc()`. Reading such
+  /// a reference before its first save yields a snapshot with `exists == false`.
+  final bool autoId;
+
   const DocumentReference({
     required this.client,
     required this.path,
     required this.id,
     required this.fromJson,
     required this.toJson,
+    this.autoId = false,
   });
 
   CollectionReference<JsonMap> collection(String subCollectionName) {
@@ -41,7 +46,15 @@ class DocumentReference<T> {
         : '?${queryParams.entries.map((MapEntry<String, String> entry) => '${entry.key}=${Uri.encodeQueryComponent(entry.value)}').join('&')}';
     final encodedPath = encodeVellumPath(path);
     final authEpoch = client.auth.sessionEpoch;
-    final res = await client.request('GET', '/documents/$encodedPath$suffix');
+    final Map<String, Object?> res;
+    try {
+      res = await client.request('GET', '/documents/$encodedPath$suffix');
+    } on VellumException catch (error) {
+      if (autoId && error.statusCode == 404) {
+        return DocumentSnapshot<T>(id: id, path: path, version: 0, data: null);
+      }
+      rethrow;
+    }
     final rawData = (res['data'] as Map).cast<String, Object?>();
     final rawIncluded = res['_included'];
     final rawRedacted = res['_redactedRefs'];
@@ -725,9 +738,16 @@ class CollectionReference<T> extends Query<T> {
     );
   }
 
-  DocumentReference<T> doc(String documentId) {
-    final safeId = validateVellumSegment(documentId, context: 'document ID');
+  /// Addresses a document. Without [documentId] a unique, time-sortable ID is
+  /// generated locally (no network request); the document is created on `set()`.
+  DocumentReference<T> doc([String? documentId]) {
+    final isAuto = documentId == null;
+    final safeId = validateVellumSegment(
+      documentId ?? generateVellumAutoId(),
+      context: 'document ID',
+    );
     return DocumentReference<T>(
+      autoId: isAuto,
       client: client,
       path: '$collectionPath/$safeId',
       id: safeId,

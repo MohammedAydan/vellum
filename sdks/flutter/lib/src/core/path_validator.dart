@@ -66,7 +66,8 @@ String validateVellumSegment(
       (!allowSlash && lower.contains('%2f'))) {
     throw VellumException(
       code: 'INVALID_DOCUMENT_PATH',
-      message: 'Invalid $context: encoded traversal or control sequence is not allowed',
+      message:
+          'Invalid $context: encoded traversal or control sequence is not allowed',
       statusCode: 400,
     );
   }
@@ -93,7 +94,8 @@ String validateVellumSegment(
             (!allowSlash && unit == 0x2F)) {
           throw VellumException(
             code: 'INVALID_DOCUMENT_PATH',
-            message: 'Invalid $context: encoded forbidden character is not allowed',
+            message:
+                'Invalid $context: encoded forbidden character is not allowed',
             statusCode: 400,
           );
         }
@@ -149,4 +151,28 @@ String validateVellumPath(String path, {bool requireEvenSegments = false}) {
 String encodeVellumPath(String path) {
   final validated = validateVellumPath(path);
   return validated.split('/').map(Uri.encodeComponent).join('/');
+}
+
+const String _autoIdAlphabet =
+    '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+final Random _autoIdRandom = Random.secure();
+
+/// Generates a 20 character document ID without any network request: 8 time
+/// characters (base62, ASCII ordered so IDs sort by creation time) followed by
+/// 12 random characters. Matches the TypeScript SDK.
+String generateVellumAutoId([DateTime? now]) {
+  var time = (now ?? DateTime.now()).millisecondsSinceEpoch;
+  final prefix = List<String>.filled(8, '0');
+  for (var i = 7; i >= 0; i--) {
+    prefix[i] = _autoIdAlphabet[time % 62];
+    time ~/= 62;
+  }
+  final suffix = StringBuffer();
+  while (suffix.length < 12) {
+    final byte = _autoIdRandom.nextInt(256);
+    if (byte < 248) {
+      suffix.write(_autoIdAlphabet[byte % 62]);
+    }
+  }
+  return prefix.join() + suffix.toString();
 }

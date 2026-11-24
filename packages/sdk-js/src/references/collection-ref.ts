@@ -6,6 +6,7 @@
  * operations (`create()`, `info()`, `clear()`, `drop()`/`delete()`, `import()`, `export()`).
  */
 
+import { generateAutoDocId } from "../core/auto-id.js";
 import { encodePathSegment } from "../core/safe-json.js";
 import type {
   CollectionInfo,
@@ -41,14 +42,6 @@ export interface CollectionReferenceContext extends QueryBuilderContext, Documen
   ): Promise<ExportResult>;
 }
 
-function generateAutoDocId(): string {
-  const cryptoObj = globalThis.crypto as { randomUUID?: () => string } | undefined;
-  if (cryptoObj && typeof cryptoObj.randomUUID === "function") {
-    return cryptoObj.randomUUID().replace(/-/g, "");
-  }
-  return `doc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
-}
-
 export class CollectionReference<T = Record<string, unknown>>
   extends QueryBuilder<T>
   implements CollectionReferenceInterface<T>
@@ -65,14 +58,20 @@ export class CollectionReference<T = Record<string, unknown>>
     Object.freeze(this);
   }
 
-  public doc(docId: string): DocumentReferenceInterface<T> {
-    encodePathSegment(docId, "document id");
-    return new DocumentReference<T>(this.colCtx, `${this.collectionPath}/${docId}`, this.converter);
+  /**
+   * Address a document. Without an argument a unique ID is generated locally
+   * (no network request); the document is created on the first `set()`.
+   */
+  public doc(docId?: string): DocumentReferenceInterface<T> {
+    const auto = docId === undefined;
+    const id = auto ? generateAutoDocId() : docId;
+    encodePathSegment(id, "document id");
+    return new DocumentReference<T>(this.colCtx, `${this.collectionPath}/${id}`, this.converter, auto);
   }
 
   /** Create a new document in this collection with an auto-generated ID. */
   public async add(data: T, options: DocumentCreateOptions = {}): Promise<DocumentReferenceInterface<T>> {
-    const ref = this.doc(generateAutoDocId());
+    const ref = this.doc();
     await ref.create(data, options);
     return ref;
   }

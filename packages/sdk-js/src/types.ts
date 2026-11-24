@@ -777,7 +777,8 @@ export interface QueryBuilderInterface<T = Record<string, unknown>> {
 }
 
 export interface CollectionReferenceInterface<T = Record<string, unknown>> extends QueryBuilderInterface<T> {
-  doc(docId: string): DocumentReferenceInterface<T>;
+  /** Address a document. Omit `docId` to generate a unique ID locally (no network request). */
+  doc(docId?: string): DocumentReferenceInterface<T>;
   /** Create a new document in this collection with an auto-generated ID. */
   add(data: T, options?: DocumentCreateOptions): Promise<DocumentReferenceInterface<T>>;
   /** Attach a typed bidirectional data converter, or pass `null` to strip an existing converter. */
