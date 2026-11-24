@@ -47,7 +47,6 @@ import {
   createIndexAdvisor,
   createPlatformIndexRecommendationRecorder,
   createV2Routes,
-  invalidateProjectIndexCache,
 } from "./routes/v2.js";
 import { getApiKeyHeader, resolveEndUserAuth } from "./middleware/tenant-auth.js";
 import { extractBearerToken } from "./middleware/session.js";
@@ -780,7 +779,6 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
       body.collectionPath as string,
       (body.fields as Array<Parameters<typeof normalizeIndexFieldSpec>[0]>).map(normalizeIndexFieldSpec)
     );
-    invalidateProjectIndexCache(projectId);
     const built = await refreshIndexRecord(platform, projectId, created);
     // The dashboard deep-link carries the advisor fingerprint. Mark it applied
     // so the same suggestion is not recorded again after the index is created.
@@ -813,7 +811,6 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
       { projectId },
       indexId
     );
-    invalidateProjectIndexCache(projectId);
     return c.json({ deleted: true, indexId });
   });
 
@@ -1230,7 +1227,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     const token = extractBearerToken(c.req.header("authorization"));
     if (token !== null) {
       try {
-        const claims = platform.consoleSessionService.verifyAccess(token) as {
+        const claims = (await platform.consoleSessionService.verifyAccessChecked(token)) as {
           realm?: string;
         };
         if (claims.realm === "customer_console") {

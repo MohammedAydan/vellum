@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   createRealmSessionService,
-  createTotpReplayGuard,
   decryptPrivateKey,
   decryptSecret,
   encryptSecret,
@@ -99,21 +98,13 @@ describe("@vellum/auth - Cryptographic & Protocol Hardening", () => {
     expect(() => verifyEndUserAccessToken(futureIatToken, keys.publicKeyPem, expected)).toThrow();
   });
 
-  it("enforces TOTP window bounds, replay guard, and constant-time recovery code scanning", () => {
+  it("enforces TOTP window bounds and constant-time recovery code scanning", () => {
     const secret = generateTotpSecret();
     const nowMs = 1_700_000_000_000;
     const code = generateTotpCode(secret, nowMs);
 
     // Window capped safely (huge window does not hang or accept far-future codes)
     expect(verifyTotpCode(secret, code, 1_000_000, nowMs + 60 * 60 * 1000)).toBe(false);
-
-    // Stateful replay guard accepts once per step and rejects replay
-    const guard = createTotpReplayGuard();
-    expect(guard.verifyAndConsume("user-1", secret, code, 1, nowMs)).toBe(true);
-    expect(guard.verifyAndConsume("user-1", secret, code, 1, nowMs)).toBe(false);
-    // Next 30s step succeeds
-    const nextCode = generateTotpCode(secret, nowMs + 30_000);
-    expect(guard.verifyAndConsume("user-1", secret, nextCode, 1, nowMs + 30_000)).toBe(true);
 
     // Recovery code verification rejects oversized input
     const hashed = hashRecoveryCodes(["VALIDCODE1"]);

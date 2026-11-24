@@ -17,6 +17,7 @@ import {
   type SessionService,
 } from "@vellum/authorization";
 import { createRealmSessionService, realmConfig } from "@vellum/auth";
+import { createPgRevocationStore } from "@vellum/database-control/adapters";
 import { createMemoryAdapters } from "./composition/root.js";
 import { createVellumApp, type VellumPlatformContext } from "./app.js";
 import { createPlatformIndexRecommendationRecorder } from "./routes/v2.js";
@@ -96,20 +97,28 @@ export function createVellumPlatform({
 
   // createRealmSessionService applies the locked typ/iss/aud for each realm to
   // every token it signs and verifies (SECURITY-HARDENING-CONTRACT §4).
+  // Revocations live in PostgreSQL whenever the control store has a SQL pool, so a sign-out
+  // is seen by every API instance. The in-memory store is only for offline/test adapters.
+  const revocationPool = (activeControlStore as { pool?: { query: unknown } }).pool;
+  const revocationStoreFor = (realm: string) =>
+    revocationPool && typeof revocationPool.query === "function"
+      ? createPgRevocationStore(revocationPool as Parameters<typeof createPgRevocationStore>[0], realm)
+      : createInMemoryRevocationStore();
+
   const activeConsoleSessionService =
     consoleSessionService ??
     sessionService ??
     createRealmSessionService({
       realm: "customer_console",
       secret: activeConsoleSecret,
-      revocationStore: createInMemoryRevocationStore(),
+      revocationStore: revocationStoreFor("customer_console"),
     });
   const activeSuperAdminSessionService =
     superAdminSessionService ??
     createRealmSessionService({
       realm: "super_admin",
       secret: activeSuperAdminSecret,
-      revocationStore: createInMemoryRevocationStore(),
+      revocationStore: revocationStoreFor("super_admin"),
     });
 
   const realtimeHub = new RealtimeGatewayHub({

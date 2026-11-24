@@ -347,6 +347,9 @@ jobs:
       - name: API keys read from PostgreSQL across two instances (required, no silent skip)
         run: API_KEYS_PG_TEST=1 corepack pnpm exec vitest run tests/integration/api-keys-pg.test.ts
 
+      - name: Session revocations and memberships read from PostgreSQL (required, no silent skip)
+        run: SESSION_STATE_PG_TEST=1 corepack pnpm exec vitest run tests/integration/session-state-pg.test.ts
+
       - name: Admin PostgreSQL regression (required, no silent skip)
         run: ADMIN_PG_REAL=1 corepack pnpm exec vitest run apps/api/src/routes/__tests__/admin-remediation.test.ts
 

@@ -12,6 +12,7 @@ export {
   type PgControlPlaneStoreOptions,
   type PgStoreLogger,
 } from "./pg-store.js";
+export { createPgRevocationStore, type RevocationStorePort } from "./revocation-store.js";
 export {
   createInMemorySecurityRepository,
   createPgSecurityRepository,

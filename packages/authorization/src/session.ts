@@ -16,12 +16,9 @@
  *   resulting tokens are standard HS256 JWTs; `jose` verifies them unchanged.
  * - Explicit `typ` and `realm` isolation: end-user JWTs (`typ === "vellum+enduser+jwt"`)
  *   and cross-realm tokens are unconditionally rejected.
- * - Revocation is in-process only (no Redis, no network). `verifyAccess` checks
- *   a synchronous local mirror so revocation is enforced on the read path.
- *   LIMITATION: single-instance only — a revocation issued in process A is not
- *   visible to process B. A PostgreSQL-backed `RevocationStore` can be supplied
- *   by a multi-instance deployment (see `RevocationStore`), but the synchronous
- *   mirror still only reflects revocations made through this service instance.
+ * - Revocation state lives in the `RevocationStore` (PostgreSQL in production). Runtime paths
+ *   call `verifyAccessChecked` / `verifyRefreshChecked`, which look the `jti` up in the store.
+ *   There is no in-process mirror, so a revocation is visible to every instance at once.
  */
 
 import crypto from "node:crypto";
@@ -47,9 +44,13 @@ export interface RevocationStore {
 
 export interface SessionService {
   signAccess(input: Omit<SessionClaims, "jti" | "exp">, ttlSeconds?: number): string;
+  /** Signature, expiry, type and realm only. Runtime paths must use `verifyAccessChecked`, which also reads the revocation store. */
   verifyAccess(token: string): SessionClaims;
+  /** `verifyAccess` plus a revocation lookup in the (database-backed) store. */
+  verifyAccessChecked(token: string): Promise<SessionClaims>;
   signRefresh(sub: string, ttlSeconds?: number): string;
   verifyRefresh(token: string): { sub: string; jti: string; exp: number };
+  verifyRefreshChecked(token: string): Promise<{ sub: string; jti: string; exp: number }>;
   revoke(jti: string, expiresAtMs: number): Promise<void>;
   isRevoked(jti: string): Promise<boolean>;
 }
@@ -225,19 +226,6 @@ export function createSessionService(opts: SessionServiceOptions): SessionServic
     throw new Error("createSessionService cannot use end-user JWT header type");
   }
 
-  /** Synchronous mirror of revocations performed through this service. */
-  const localRevocations = new Map<string, number>();
-
-  function isLocallyRevoked(jti: string): boolean {
-    const expiresAtMs = localRevocations.get(jti);
-    if (expiresAtMs === undefined) return false;
-    if (expiresAtMs <= Date.now()) {
-      localRevocations.delete(jti);
-      return false;
-    }
-    return true;
-  }
-
   function checkTokenType(payload: Record<string, unknown>, expected: "access" | "refresh"): void {
     const tokenTyp = payload["typ"];
     if (tokenTyp === END_USER_JWT_TYP) {
@@ -313,7 +301,6 @@ export function createSessionService(opts: SessionServiceOptions): SessionServic
       if (typeof jti !== "string" || jti.length === 0) {
         throw unauthenticated("Session token is missing a jti claim");
       }
-      if (isLocallyRevoked(jti)) throw unauthenticated("Session token has been revoked");
 
       return {
         sub,
@@ -355,24 +342,31 @@ export function createSessionService(opts: SessionServiceOptions): SessionServic
       if (typeof sub !== "string" || typeof jti !== "string" || jti.length === 0) {
         throw unauthenticated("Refresh token is missing required claims");
       }
-      if (isLocallyRevoked(jti)) throw unauthenticated("Refresh token has been revoked");
       return { sub, jti, exp };
+    },
+
+    async verifyAccessChecked(token: string): Promise<SessionClaims> {
+      const claims = this.verifyAccess(token);
+      if (await revocationStore.isRevoked(claims.jti)) {
+        throw unauthenticated("Session token has been revoked");
+      }
+      return claims;
+    },
+
+    async verifyRefreshChecked(token: string): Promise<{ sub: string; jti: string; exp: number }> {
+      const claims = this.verifyRefresh(token);
+      if (await revocationStore.isRevoked(claims.jti)) {
+        throw unauthenticated("Refresh token has been revoked");
+      }
+      return claims;
     },
 
     async revoke(jti: string, expiresAtMs: number): Promise<void> {
       if (!jti) return;
-      const now = Date.now();
-      if (expiresAtMs > now) {
-        localRevocations.set(jti, expiresAtMs);
-        if (localRevocations.size > MAX_REVOCATION_ENTRIES) {
-          pruneRevocationMap(localRevocations, now);
-        }
-      }
       await revocationStore.revoke(jti, expiresAtMs);
     },
 
     async isRevoked(jti: string): Promise<boolean> {
-      if (isLocallyRevoked(jti)) return true;
       return revocationStore.isRevoked(jti);
     },
   };

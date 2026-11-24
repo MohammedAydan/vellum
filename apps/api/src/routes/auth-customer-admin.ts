@@ -65,10 +65,10 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
     }
     let claims;
     try {
-      claims = platform.consoleSessionService.verifyAccess(token);
+      claims = await platform.consoleSessionService.verifyAccessChecked(token);
     } catch {
       try {
-        claims = platform.superAdminSessionService.verifyAccess(token);
+        claims = await platform.superAdminSessionService.verifyAccessChecked(token);
       } catch {
         throw new VellumError("UNAUTHENTICATED", "Invalid, expired, or revoked session token");
       }

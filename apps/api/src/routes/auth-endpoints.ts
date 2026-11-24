@@ -14,7 +14,6 @@ import { promisify } from "node:util";
 import { VellumError } from "@vellum/core";
 import { getApiKeyHeader } from "../middleware/tenant-auth.js";
 import { constantTimeEqual, extractClientIp } from "../middleware/security.js";
-import { invalidateUserOrgMembershipsCache } from "../middleware/session.js";
 import { getQueryPool } from "./usage.js";
 
 function getOrganizationMembersMap(store: object): Map<string, unknown> | null {
@@ -501,7 +500,6 @@ export function createCustomerAuthRoutes(
         "INSERT INTO organization_members (organization_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
         [org.id, user.id, "owner"]
       );
-      invalidateUserOrgMembershipsCache(user.id);
     }
     const organizationMembers = getOrganizationMembersMap(controlStore);
     if (organizationMembers) {
@@ -642,7 +640,8 @@ export function createCustomerAuthRoutes(
     // Ensure user has at least one organization
     const orgs = Array.from(controlStore.organizations.values());
     const organizationMembers = getOrganizationMembersMap(controlStore);
-    let userOrg = organizationMembers
+    // PostgreSQL decides when available; the mirror is only the offline/test fallback.
+    let userOrg = !pgPool && organizationMembers
       ? orgs.find((o) => organizationMembers.has(`${o.id}:${user!.id}`))
       : null;
 
@@ -678,7 +677,6 @@ export function createCustomerAuthRoutes(
           "INSERT INTO organization_members (organization_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
           [userOrg.id, user.id, "owner"]
         );
-        invalidateUserOrgMembershipsCache(user.id);
       }
       if (organizationMembers) {
         organizationMembers.set(`${userOrg.id}:${user.id}`, {
@@ -733,7 +731,7 @@ export function createCustomerAuthRoutes(
 
   // 3. Get Session — verify the presented token instead of always
   // reporting `valid: true` for any Bearer string.
-  routes.get("/auth/session", (c) => {
+  routes.get("/auth/session", async (c) => {
     const authHeader = c.req.header("authorization");
     if (!authHeader) {
       return c.json({ session: null });
@@ -744,7 +742,7 @@ export function createCustomerAuthRoutes(
       // Console tokens are realm-bound HS256 JWTs signed by the console
       // session service — never verify them with the legacy end-user secret.
       try {
-        const claims = sessionService.verifyAccess(raw);
+        const claims = await sessionService.verifyAccessChecked(raw);
         verified = {
           uid: claims.uid,
           claims: { ...claims },

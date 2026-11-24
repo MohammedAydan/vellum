@@ -19,12 +19,12 @@ import { assertOrgAccess, assertProjectAccess, extractBearerToken } from "./sess
 
 const SLIDING_RENEWAL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-function verifyOrThrow(service: SessionService, token: string): RealmSessionClaims {
+async function verifyOrThrow(service: SessionService, token: string): Promise<RealmSessionClaims> {
   try {
     // The structural SessionService type has no `realm`, but the realm services
     // wired into the platform always return it; verifyAccess has already
     // enforced the realm bound to the service's secret/key.
-    return service.verifyAccess(token) as RealmSessionClaims;
+    return (await service.verifyAccessChecked(token)) as RealmSessionClaims;
   } catch {
     throw new VellumError("UNAUTHENTICATED", "Invalid, expired, or revoked session token");
   }
@@ -57,7 +57,7 @@ export function requireCustomerConsoleSession(
     const token = extractBearerToken(c.req.header("authorization"));
     if (!token) throw new VellumError("UNAUTHENTICATED", "Missing session Bearer token");
 
-    const claims = verifyOrThrow(platform.consoleSessionService, token);
+    const claims = await verifyOrThrow(platform.consoleSessionService, token);
     if (claims.realm !== "customer_console") {
       throw new VellumError("UNAUTHENTICATED", "Invalid session realm");
     }
@@ -94,7 +94,7 @@ export function requireSuperAdminSession(
     const token = extractBearerToken(c.req.header("authorization"));
     if (!token) throw new VellumError("UNAUTHENTICATED", "Missing session Bearer token");
 
-    const claims = verifyOrThrow(platform.superAdminSessionService, token);
+    const claims = await verifyOrThrow(platform.superAdminSessionService, token);
     if (claims.realm !== "super_admin") {
       throw new VellumError("UNAUTHENTICATED", "Invalid session realm");
     }
