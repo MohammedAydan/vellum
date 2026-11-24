@@ -222,4 +222,29 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     expect(view).not.toContain("gsecret");
     expect(view).not.toContain("clientSecretEncrypted");
   });
+
+  it("keeps the stored secret when a patch omits it, and flags presence per provider", async () => {
+    const { mergeOAuthProviders } = await import("../../auth/oauth/config.js");
+    const { publicAuthConfig } = await import("../auth-shared.js");
+    const key = "test-master-key-for-merge";
+    const first = mergeOAuthProviders({}, { github: { enabled: true, clientId: "id1", clientSecret: "s1" } }, key);
+    const second = mergeOAuthProviders(first, { github: { enabled: false, clientId: "id2", hasClientSecret: true } }, key);
+    const gh = second["github"] as Record<string, unknown>;
+    expect(gh["clientSecretEncrypted"]).toBe((first["github"] as Record<string, unknown>)["clientSecretEncrypted"]);
+    expect(gh["clientId"]).toBe("id2");
+    expect(gh).not.toHaveProperty("hasClientSecret");
+    expect(gh).not.toHaveProperty("clientSecret");
+    const view = publicAuthConfig({ oauthProviders: second } as never) as { oauthProviders: Record<string, Record<string, unknown>> };
+    expect(view.oauthProviders["github"]?.["hasClientSecret"]).toBe(true);
+    expect(JSON.stringify(view)).not.toContain("clientSecretEncrypted");
+    const other = mergeOAuthProviders(second, { google: { enabled: true, clientId: "g" } }, key);
+    expect(other).toHaveProperty("github");
+  });
+
+  it("rejects unsafe redirect URIs in the allowlist", async () => {
+    const { mergeOAuthProviders } = await import("../../auth/oauth/config.js");
+    for (const bad of ["javascript:alert(1)", "http://evil.example/cb", "https://a.example/cb#frag", "not a url"]) {
+      expect(() => mergeOAuthProviders({}, { __settings: { redirectUris: [bad] } }, undefined)).toThrow();
+    }
+  });
 });

@@ -265,13 +265,18 @@ function publicOAuthProviders(providers: Record<string, unknown>): {
       continue;
     }
     const providerConfig: Record<string, unknown> = {};
+    let providerHasSecret = false;
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
       if (OAUTH_SECRET_KEYS.has(key)) {
-        if (child !== null && child !== undefined && child !== "") hasClientSecret = true;
+        if (child !== null && child !== undefined && child !== "") {
+          hasClientSecret = true;
+          providerHasSecret = true;
+        }
         continue;
       }
       providerConfig[key] = child;
     }
+    if (providerHasSecret) providerConfig["hasClientSecret"] = true;
     safe[provider] = providerConfig;
   }
   return { providers: safe, hasClientSecret };

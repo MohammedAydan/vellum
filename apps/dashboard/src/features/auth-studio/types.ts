@@ -77,4 +77,8 @@ export interface OAuthDraft {
   enabled: boolean;
   clientId: string;
   clientSecret: string;
+  /** A secret is already stored server-side (never returned). */
+  hasSecret: boolean;
+  /** Extra Google client IDs accepted for native ID tokens, one per line. */
+  additionalClientIds: string;
 }

@@ -17,8 +17,8 @@ describe("Auth Studio view helpers", () => {
     const record = { enabled: true }; expect(asRecord(record)).toBe(record);
   });
   it("keeps empty OAuth drafts safe when configuration is not loaded", () => {
-    expect(readOAuthDraft(null, "github")).toEqual({ enabled: false, clientId: "", clientSecret: "" });
-    expect(readOAuthDraft(undefined, "google")).toEqual({ enabled: false, clientId: "", clientSecret: "" });
+    expect(readOAuthDraft(null, "github")).toEqual({ enabled: false, clientId: "", clientSecret: "", hasSecret: false, additionalClientIds: "" });
+    expect(readOAuthDraft(undefined, "google")).toEqual({ enabled: false, clientId: "", clientSecret: "", hasSecret: false, additionalClientIds: "" });
   });
   it("formats missing/invalid timestamps and preserves useful error messages", () => {
     expect(formatDate(null)).toBe("-");
