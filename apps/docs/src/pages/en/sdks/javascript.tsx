@@ -24,7 +24,7 @@ export default function Page() {
       </Callout>
 
       <Section id="beta-install" title="Beta installation">
-        <P>Version 0.0.3 is available on npm and pub.dev. Install the published Beta packages below. Repository access is not required.</P>
+        <P>Version 0.0.4 is available on npm and pub.dev. Install the published Beta packages below. Repository access is not required.</P>
         <Code lang="bash" title="TypeScript / Node 22+" code={betaJavaScriptInstall} />
         <Code lang="yaml" title="Flutter / Dart 3.4+" code={betaDartInstall} />
       </Section>
