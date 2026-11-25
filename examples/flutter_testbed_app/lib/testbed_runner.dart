@@ -388,6 +388,8 @@ match /v2metrics/{docId} {
           '19 Collections: clear keeps empty', _scenarioCollectionsClear));
       results.add(await _run(
           '20 Collections: delete removes collection + docs', _scenarioCollectionsDelete));
+      results.add(await _run(
+          '21 Batch ifVersion/exists + transaction failure path', _scenarioBatchGuards));
     } finally {
       _dispose();
     }
@@ -535,7 +537,7 @@ match /v2metrics/{docId} {
     }
     _totpSecret = enrollment.secret;
 
-    await aliceClient.auth.confirmTotpMfa(code: _totpCode(enrollment.secret));
+    await aliceClient.auth.confirmTotpMfa(code: await _freshTotp(enrollment.secret));
     await aliceClient.auth.signOut();
 
     final email = _aliceEmail;
@@ -550,7 +552,7 @@ match /v2metrics/{docId} {
 
     final user = await aliceClient.auth.verifyMfaChallenge(
       mfaTicket: result.mfaTicket,
-      code: _totpCode(_totpSecret!),
+      code: await _freshTotp(_totpSecret!),
     );
     if (user.id.isEmpty || aliceClient.auth.currentUser == null) {
       throw StateError('MFA challenge did not establish a session');
@@ -839,7 +841,7 @@ match /v2metrics/{docId} {
       if (secret == null) throw StateError('MFA required but no secret stored');
       await aliceClient.auth.verifyMfaChallenge(
         mfaTicket: result.mfaTicket,
-        code: _totpCode(secret),
+        code: await _freshTotp(secret),
       );
     }
     final sessionRefreshToken =
@@ -936,7 +938,7 @@ match /v2metrics/{docId} {
     if (result is VellumMfaRequired) {
       await aliceClient.auth.verifyMfaChallenge(
         mfaTicket: result.mfaTicket,
-        code: _totpCode(_totpSecret!),
+        code: await _freshTotp(_totpSecret!),
       );
     }
     if (aliceClient.auth.currentUser == null) {
@@ -1299,6 +1301,54 @@ match /v2metrics/{docId} {
     }
   }
 
+  Future<void> _scenarioBatchGuards() async {
+    final name = _collectionsName('guards');
+    final ref = collectionsClient.collection(name).doc('g1');
+    // exists:false creates once, then fails.
+    await collectionsClient.batch().set(ref, <String, Object?>{'n': 1}, exists: false).commit();
+    var snap = await ref.get();
+    final v = snap.version;
+    await _expectCode(
+      () => collectionsClient.batch().set(ref, <String, Object?>{'n': 9}, exists: false).commit(),
+      'exists:false on an existing doc',
+    );
+    // Right version passes.
+    await collectionsClient.batch().set(ref, <String, Object?>{'n': 2}, ifVersion: v).commit();
+    // Stale version gives 412 and changes nothing.
+    await _expectCode(
+      () => collectionsClient.batch().set(ref, <String, Object?>{'n': 3}, ifVersion: v).commit(),
+      'stale ifVersion',
+      status: 412,
+    );
+    snap = await ref.get();
+    if ((snap.data() as Map)['n'] != 2) throw StateError('stale batch changed data');
+    // A failing transaction callback surfaces the ORIGINAL error.
+    Object? caught;
+    try {
+      await collectionsClient.runTransaction<void>((tx) async {
+        await tx.get(ref);
+        if (name.isNotEmpty) throw StateError('boom');
+      });
+    } catch (e) {
+      caught = e;
+    }
+    if (caught is! StateError || caught.message != 'boom') {
+      throw StateError('transaction error was not the original one: $caught');
+    }
+  }
+
+  Future<void> _expectCode(Future<Object?> Function() action, String what, {int? status}) async {
+    try {
+      await action();
+    } on VellumException catch (e) {
+      if (status != null && e.statusCode != status) {
+        throw StateError('$what: expected HTTP $status, got ${e.statusCode} ${e.code}');
+      }
+      return;
+    }
+    throw StateError('$what: expected a failure');
+  }
+
   Future<void> _scenarioCollectionsDelete() async {
     final name = _collectionsName('delete');
     await collectionsClient.createCollection(name);
@@ -1434,6 +1484,18 @@ match /v2metrics/{docId} {
           1000,
     });
     return '$header.$payload.signature';
+  }
+
+  int _lastTotpStep = -1;
+
+  /// The server accepts each TOTP code once (replay protection), so a second
+  /// use inside the same 30 second step waits for the next step.
+  Future<String> _freshTotp(String secret) async {
+    while (DateTime.now().millisecondsSinceEpoch ~/ 30000 <= _lastTotpStep) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    _lastTotpStep = DateTime.now().millisecondsSinceEpoch ~/ 30000;
+    return _totpCode(secret);
   }
 
   /// RFC 6238 TOTP: HMAC-SHA1, 6 digits, 30-second step.
