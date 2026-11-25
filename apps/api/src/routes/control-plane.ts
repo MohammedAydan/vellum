@@ -66,8 +66,14 @@ export function createControlPlaneRoutes(
     ? optionalRealmSession(sessionService, superAdminSessionService)
     : optionalSession(sessionService);
   const strictGuard = requireRealmSession(sessionService, superAdminSessionService);
-  const sessionGuard: MiddlewareHandler = (c, next) =>
-    (process.env["NODE_ENV"] === "production" ? strictGuard : lenientGuard)(c, next);
+  // Fail closed: anonymous access is allowed only when the process says it is a test or development
+  // one (or the operator opts in). An unset or unexpected NODE_ENV must not open the control plane.
+  const sessionGuard: MiddlewareHandler = (c, next) => {
+    const env = process.env["NODE_ENV"];
+    const anonymousAllowed =
+      env === "test" || env === "development" || process.env["VELLUM_ALLOW_ANONYMOUS_CONTROL_PLANE"] === "1";
+    return (anonymousAllowed ? lenientGuard : strictGuard)(c, next);
+  };
 
   // Helper to extract actor metadata for audit logs
   function getActorMetadata(c: Context) {

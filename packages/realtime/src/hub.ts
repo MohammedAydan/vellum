@@ -218,6 +218,10 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       // Never echo token material or verifier internals to the client.
       throw new VellumError("UNAUTHENTICATED", "Invalid end-user access token");
     }
+    if (typeof payload.sid === "string") {
+      const active = await this.isSessionStillActive(projectId, payload.sid, payload.sub);
+      if (!active) throw new VellumError("UNAUTHENTICATED", "Invalid end-user access token");
+    }
     return {
       uid: payload.sub,
       claims: payload.claims ?? {},
@@ -226,6 +230,27 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       is_anonymous: payload.is_anonymous === true,
       token: { ...payload },
     };
+  }
+
+  /** Last time each socket's auth session was confirmed active (re-checked at most once a minute). */
+  private readonly sessionCheckedAt = new WeakMap<ConnectionSession, number>();
+
+  private async isSessionStillActive(projectId: string, sid: string, uid: string): Promise<boolean> {
+    const store = this.dataStore as { isAuthSessionActive?: (ctx: { projectId: string }, s: string, u: string) => Promise<boolean> };
+    if (typeof store.isAuthSessionActive !== "function") return true;
+    return store.isAuthSessionActive({ projectId }, sid, uid);
+  }
+
+  /** Closes a socket whose end-user session was revoked or whose user was disabled after it connected. */
+  private async checkSessionStillActive(session: ConnectionSession): Promise<VellumError | null> {
+    const sid = session.authContext.token?.["sid"];
+    const uid = session.authContext.uid;
+    if (typeof sid !== "string" || !uid || !session.projectId) return null;
+    const now = Date.now();
+    if (now - (this.sessionCheckedAt.get(session) ?? 0) < 60_000) return null;
+    this.sessionCheckedAt.set(session, now);
+    if (await this.isSessionStillActive(session.projectId, sid, uid)) return null;
+    return new VellumError("UNAUTHENTICATED", "End-user session is no longer active");
   }
 
   public createConnectionSession(
@@ -359,7 +384,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       throw new VellumError("UNAUTHENTICATED", "WebSocket connection must authenticate with an 'auth' frame first");
     }
 
-    const expiryErr = await this.checkSessionCredentialExpiry(session);
+    const expiryErr = (await this.checkSessionCredentialExpiry(session)) ?? (await this.checkSessionStillActive(session));
     if (expiryErr) {
       session.sendFrame({
         type: "error",
