@@ -184,6 +184,8 @@ export interface AuthOperations {
   revokeAuthSession(ctx: TenantContext, sessionId: string, reason: string): Promise<AuthSessionRecord>;
   revokeAllUserSessions(ctx: TenantContext, userId: string, reason: string): Promise<number>;
   listUserSessions(ctx: TenantContext, userId: string): Promise<AuthSessionRecord[]>;
+  /** True when the session exists for this user, is not revoked or expired, and the user is not disabled. */
+  isAuthSessionActive(ctx: TenantContext, sessionId: string, userId: string): Promise<boolean>;
 
   upsertAuthMfa(ctx: TenantContext, input: CreateAuthMfaInput): Promise<AuthMfaRecord>;
   getAuthMfa(ctx: TenantContext, userId: string): Promise<AuthMfaRecord | null>;
@@ -415,6 +417,10 @@ export abstract class AuthMethodDelegates {
 
   revokeAuthSession(...args: Parameters<AuthOperations['revokeAuthSession']>): ReturnType<AuthOperations['revokeAuthSession']> {
     return this.authOps.revokeAuthSession(...args);
+  }
+
+  isAuthSessionActive(...args: Parameters<AuthOperations['isAuthSessionActive']>): ReturnType<AuthOperations['isAuthSessionActive']> {
+    return this.authOps.isAuthSessionActive(...args);
   }
 
   revokeAllUserSessions(...args: Parameters<AuthOperations['revokeAllUserSessions']>): ReturnType<AuthOperations['revokeAllUserSessions']> {
@@ -820,6 +826,21 @@ export function createSqlAuthOperations(runInTx: AuthTxRunner): AuthOperations {
         const row = firstRow(rows);
         if (!row) throw new VellumError("NOT_FOUND", "Session not found");
         return mapSession(row);
+      });
+    },
+
+    async isAuthSessionActive(ctx, sessionId, userId) {
+      if (!/^[0-9a-f-]{36}$/i.test(sessionId) || !/^[0-9a-f-]{36}$/i.test(userId)) return false;
+      return runInTx(ctx, async (tx) => {
+        const { rows } = await tx.query(
+          `SELECT 1 FROM project_auth_sessions s
+             JOIN project_auth_users u ON u.id = s.user_id AND u.project_id = s.project_id
+            WHERE s.project_id=$1 AND s.id=$2::uuid AND s.user_id=$3::uuid
+              AND s.revoked=FALSE AND s.expires_at > now() AND u.is_disabled=FALSE
+            LIMIT 1`,
+          [ctx.projectId, sessionId, userId]
+        );
+        return rows.length > 0;
       });
     },
 
@@ -1282,6 +1303,15 @@ export function createMemoryAuthOperations(state: AuthMemoryState): AuthOperatio
       };
       state.sessions.set(key, revoked);
       return structuredClone(revoked);
+    },
+
+    async isAuthSessionActive(ctx, sessionId, userId) {
+      requireAuthTenant(ctx);
+      const session = state.sessions.get(authKey(ctx, sessionId));
+      if (!session || session.projectId !== ctx.projectId || session.userId !== userId || session.revoked) return false;
+      if (Date.parse(session.expiresAt) <= Date.now()) return false;
+      const user = state.users.get(authKey(ctx, userId));
+      return Boolean(user) && !user!.isDisabled;
     },
 
     async revokeAllUserSessions(ctx, userId, reason) {

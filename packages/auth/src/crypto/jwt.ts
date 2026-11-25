@@ -52,6 +52,8 @@ export interface EndUserJwtPayload {
   iat: number;
   exp: number;
   auth_time: number;
+  /** Id of the auth session this token belongs to; lets the API reject tokens of revoked sessions. */
+  sid?: string | undefined;
   nbf?: number | undefined;
 }
 
