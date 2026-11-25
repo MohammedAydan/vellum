@@ -56,6 +56,7 @@ class PersistentDocumentCacheStore implements DocumentCacheStore {
   Timer? _timer;
   VellumClient? _client;
   String _scope = '';
+  String? _ownerUid; // who the mirror content belongs to
   final Map<String, CachedDocument> _mirror = <String, CachedDocument>{};
 
   String get _blobKey => '$_namespace.$_scope.offline.cache.v1';
@@ -81,6 +82,7 @@ class PersistentDocumentCacheStore implements DocumentCacheStore {
     }
     final uid = _userId;
     if (!_persist || uid == null) return;
+    _ownerUid = uid;
     final sealed = await _blobs.read(_blobKey);
     if (sealed == null) return;
     final clear = await _box.open(sealed, scope: _scope, context: _context(uid));
@@ -149,6 +151,8 @@ class PersistentDocumentCacheStore implements DocumentCacheStore {
     _timer?.cancel();
     final uid = _userId;
     if (!_persist || _client == null || uid == null) return;
+    // Content filled under another user must never be written under this one.
+    if (_ownerUid != null && _ownerUid != uid) return;
     var live = await _live();
     if (live.isEmpty) {
       await _blobs.delete(_blobKey);
@@ -174,6 +178,13 @@ class PersistentDocumentCacheStore implements DocumentCacheStore {
 
   @override
   Future<void> set(String key, CachedDocument entry) async {
+    final uid = _userId;
+    if (_ownerUid != null && uid != _ownerUid) {
+      // The session changed under us: drop what the previous user cached.
+      await _memory.clear();
+      _mirror.clear();
+    }
+    _ownerUid = uid;
     await _memory.set(key, entry);
     _mirror[key] = entry;
     _scheduleSave();
@@ -198,6 +209,7 @@ class PersistentDocumentCacheStore implements DocumentCacheStore {
     _timer?.cancel();
     await _memory.clear();
     _mirror.clear();
+    _ownerUid = null;
     if (_persist && _client != null) await _blobs.delete(_blobKey);
   }
 }

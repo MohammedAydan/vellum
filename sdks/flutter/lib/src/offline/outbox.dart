@@ -76,7 +76,7 @@ enum VellumOutboxDropReason {
 /// Replay outcomes: success removes the entry. 400, 403 PERMISSION_DENIED and
 /// 404 drop it (`rejected`); 409 and 412 drop it as a `conflict`. Anything else
 /// (network error, 401, 403 UNAUTHENTICATED, 408, 429, 5xx) stops the run and
-/// keeps the entry, and after [maxAttempts] such failures the entry is dropped
+/// keeps the entry; only 5xx answers count, and after [maxAttempts] of them the entry is dropped
 /// as `failed`. Queued writes are last-writer-wins unless you pass `ifVersion`
 /// (see [enqueueSet]); a stale `ifVersion` surfaces as a `conflict`.
 ///
@@ -356,6 +356,15 @@ class VellumOutbox {
     return null;
   }
 
+  /// Saving after a replay must not make [flush] throw: the write already
+  /// happened. A stale blob only means a repeat replay, which the idempotency
+  /// key makes harmless.
+  Future<void> _trySave() async {
+    try {
+      await _save();
+    } catch (_) {}
+  }
+
   Future<void> _flush() async {
     await _load();
     final generation = _generation;
@@ -369,13 +378,13 @@ class VellumOutbox {
       if (entry.userId != startUser) {
         _entries.removeAt(0);
         _notify(entry, VellumOutboxDropReason.otherUser, null);
-        await _save();
+        await _trySave();
         continue;
       }
       if (DateTime.now().difference(entry.createdAt) > maxAge) {
         _entries.removeAt(0);
         _notify(entry, VellumOutboxDropReason.expired, null);
-        await _save();
+        await _trySave();
         continue;
       }
       Object? failure;
@@ -392,23 +401,25 @@ class VellumOutbox {
       if (generation != _generation) return;
       if (failure == null) {
         _entries.removeAt(0);
-        await _save();
+        await _trySave();
         continue;
       }
       final reason = failure is VellumException ? _dropReason(failure) : null;
       if (reason != null) {
         _entries.removeAt(0);
         _notify(entry, reason, failure);
-        await _save();
+        await _trySave();
         continue;
       }
-      // Keep it and stop: network error, 401, 403 UNAUTHENTICATED, 408, 429, 5xx.
-      entry.attempts++;
+      // Keep it and stop. Only a server answer of 5xx counts as an attempt:
+      // being offline, a signed-out session (401, 403 UNAUTHENTICATED), 408 and
+      // 429 say nothing about the entry itself and must never make it expire.
+      if (failure is VellumException && failure.statusCode >= 500) entry.attempts++;
       if (entry.attempts >= maxAttempts) {
         _entries.removeAt(0);
         _notify(entry, VellumOutboxDropReason.failed, failure);
       }
-      await _save();
+      await _trySave();
       return;
     }
   }

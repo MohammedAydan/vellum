@@ -234,6 +234,30 @@ void main() {
       expect(await cache.get('k1'), isNotNull); // memory is unaffected
     });
 
+    test('content cached under another user is never written under the next one', () async {
+      final (client, a) = await make();
+      await a.set('k', doc()); // owned by usr_1
+      await a.flush();
+      final blobKey = mem.data.keys.firstWhere((k) => k.endsWith('offline.cache.v1'));
+      final before = mem.data[blobKey];
+      user = 'usr_2';
+      await client.auth.signOut(); // hook clears; simulate a missed hook next
+      await _signIn(client);
+      await a.flush();
+      expect(mem.data[blobKey], isNot(before));
+    });
+
+    test('a session change without sign-out hook wipes the old mirror on the next set', () async {
+      final (client, a) = await make();
+      await a.set('old', doc());
+      user = 'usr_2';
+      // Swap the user in place, as a custom token sign-in would.
+      await _signIn(client);
+      await a.set('new', doc());
+      expect(await a.get('old'), isNull);
+      expect(await a.get('new'), isNotNull);
+    });
+
     test('sign-out deletes the blob and destroys the key', () async {
       final (client, a) = await make();
       await a.set('k', doc());
@@ -443,10 +467,38 @@ void main() {
       expect(dropped.single.$2, VellumOutboxDropReason.failed);
     });
 
+    test('network errors, 401, 403 and 429 never use up attempts', () async {
+      final ob = makeOutbox(maxAttempts: 3);
+      await ob.enqueue('DELETE', '/documents/a/b');
+      failure = const SocketLikeError();
+      for (var i = 0; i < 20; i++) {
+        await ob.flush();
+      }
+      for (final code in <int>[401, 403, 408, 429]) {
+        failure = VellumException(code: 'X', message: 'x', statusCode: code);
+        for (var i = 0; i < 5; i++) {
+          await ob.flush();
+        }
+      }
+      expect(ob.length, 1);
+      expect(ob.pending.single.attempts, 0);
+      expect(dropped, isEmpty);
+    });
+
+    test('a failing save after a good replay does not make flush throw', () async {
+      final disk = _FullDisk();
+      final ob = makeOutbox(blobs: disk);
+      await ob.enqueue('DELETE', '/documents/a/1');
+      disk.full = true;
+      await ob.flush(); // the write was sent; the save fails quietly
+      expect(sent.length, 1);
+      expect(ob.length, 0);
+    });
+
     test('attempts survive a restart', () async {
       final ob = makeOutbox(maxAttempts: 5);
       await ob.enqueue('DELETE', '/documents/a/b');
-      failure = Exception('offline');
+      failure = const VellumException(code: 'INTERNAL', message: 'x', statusCode: 503);
       await ob.flush();
       final again = makeOutbox(maxAttempts: 5);
       await again.load();
@@ -570,6 +622,10 @@ VellumClient _makeClientSlow(
         return <String, dynamic>{'ok': true};
       },
     );
+
+class SocketLikeError implements Exception {
+  const SocketLikeError();
+}
 
 class _Broken implements SecureKeyValue {
   int writeAttempts = 0;
