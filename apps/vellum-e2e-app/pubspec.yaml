@@ -1,7 +1,7 @@
 name: vellum_e2e_app
 description: Real Flutter Material 3 app that runs the full VELLUM live E2E suite and emits a Markdown report.
 publish_to: none
-version: 0.0.3
+version: 0.0.4
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

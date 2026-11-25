@@ -6,6 +6,13 @@
 
 - sdk-js and `vellum_flutter`: `customClaims` is removed from the end-user `signUpWithEmailAndPassword` and `updateProfile` inputs. The API has rejected it for end users since 0.0.4, so passing it only produced an error. Set claims with a server key instead. Reading `user.customClaims` is unchanged.
 
+## 0.0.4
+
+Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK stays on one shared version. **Upgrade the SDKs together with the API:** 0.0.3 SDKs cannot start social sign-in against this API (the start call moved from `GET` with the key in the URL to `POST` with the key in a header). Update `@vellumdb/sdk-js` and `vellum_flutter` to 0.0.4.
+
+**Effect for existing users:** on iOS and macOS the Flutter SDK now stores sessions with a stricter Keychain setting, so people signed in with a 0.0.3 app are signed out once after updating. Redirect-less (mobile/desktop polling) sign-in is now off by default for each project: turn it on in Auth Studio (Providers > Redirect-less sign-in) before using it.
+
+
 ### Security
 
 - Security rules: a query, export or batch read with a public key now also checks each returned row against its own `get` rule when one matches the path. Before, `allow list: if isSignedIn(); allow get: if isParticipant(...)` returned every row to any signed-in user. Hidden rows are skipped and pages are refilled (up to 5 extra batches per request). Aggregates and counts are refused for public keys when the `get` rule depends on the document, since a GROUP BY cannot be filtered per row. Paths with only a `list` rule behave as before. Server keys are unchanged.
