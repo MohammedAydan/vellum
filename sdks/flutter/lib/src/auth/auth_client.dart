@@ -265,7 +265,6 @@ class VellumAuth implements VellumAuthPort {
     String? photoUrl,
     String? phoneNumber,
     JsonMap? metadata,
-    JsonMap? customClaims,
   }) async {
     final expectedEpoch = _sessionEpoch;
     final res = await client.request(
@@ -278,7 +277,6 @@ class VellumAuth implements VellumAuthPort {
         if (photoUrl != null) 'photoUrl': photoUrl,
         if (phoneNumber != null) 'phoneNumber': phoneNumber,
         if (metadata != null) 'metadata': metadata,
-        if (customClaims != null) 'customClaims': customClaims,
       },
       includeAuth: false,
     );
@@ -776,7 +774,6 @@ class VellumAuth implements VellumAuthPort {
     String? phoneNumber,
     bool? phoneVerified,
     JsonMap? metadata,
-    JsonMap? customClaims,
     String? password,
     String? currentPassword,
   }) async {
@@ -798,7 +795,6 @@ class VellumAuth implements VellumAuthPort {
       if (phoneNumber != null) 'phoneNumber': phoneNumber,
       if (phoneVerified != null) 'phoneVerified': phoneVerified,
       if (metadata != null) 'metadata': metadata,
-      if (customClaims != null) 'customClaims': customClaims,
       // Needed when changing the email of an account that has a password.
       if (currentPassword != null) 'currentPassword': currentPassword,
     };

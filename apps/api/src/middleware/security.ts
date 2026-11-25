@@ -253,7 +253,7 @@ export function bodyLimit(maxBytes: number = SYSTEM_LIMITS.MAX_BATCH_PAYLOAD_BYT
             if (done) break;
             totalBytes += value.byteLength;
             if (totalBytes > maxBytes) {
-              await reader.cancel().catch(() => undefined);
+              void reader.cancel().catch(() => undefined);
               throw new VellumError("PAYLOAD_TOO_LARGE", `Request body exceeds ${maxBytes} bytes`, {
                 maxBytes,
                 contentLength: totalBytes,

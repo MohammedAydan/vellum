@@ -17,6 +17,7 @@ VellumClient _client(
     );
 
 void main() {
+  transactionRollback();
   batchPreconditions();
   group('signInWithOAuth', () {
     test('returns VellumMfaRequired and stores no session', () async {
@@ -170,6 +171,59 @@ void main() {
       final oauth = createVellumOAuth(auth: client.auth, redirectUri: 'http://127.0.0.1:0/callback');
       expect(oauth.sessionFactory, isNotNull);
       client.auth.dispose();
+    });
+  });
+}
+
+void transactionRollback() {
+  group('transaction rollback', () {
+    test('rolls back before a conflict retry and when the callback throws, original error kept', () async {
+      final rollbacks = <String>[];
+      var begins = 0;
+      var commits = 0;
+      final client = _client((m, url, body) async {
+        if (url.endsWith('/transactions:begin')) return <String, dynamic>{'transactionToken': 'tok_${begins++}'};
+        if (url.endsWith('/transactions:rollback')) {
+          rollbacks.add(body!['transactionToken'] as String);
+          throw Exception('rollback failed'); // must never replace the original outcome
+        }
+        if (url.endsWith('/transactions:commit')) {
+          if (commits++ == 0) {
+            throw const VellumException(code: 'ABORTED_CONFLICT', message: 'conflict', statusCode: 409);
+          }
+          return <String, dynamic>{'status': 'committed'};
+        }
+        return <String, dynamic>{};
+      });
+      final ok = await client.runTransaction((tx) async => 'done');
+      expect(ok, 'done');
+      expect(rollbacks, <String>['tok_0']);
+
+      await expectLater(
+        client.runTransaction<void>((tx) async => throw StateError('boom')),
+        throwsA(isA<StateError>()),
+      );
+      expect(rollbacks, <String>['tok_0', 'tok_2']);
+    });
+
+    test('no rollback after a successful commit or on SESSION_CHANGED', () async {
+      var rollbacks = 0;
+      final client = _client((m, url, body) async {
+        if (url.endsWith('/transactions:begin')) return <String, dynamic>{'transactionToken': 't'};
+        if (url.endsWith('/transactions:rollback')) {
+          rollbacks++;
+          return <String, dynamic>{};
+        }
+        return <String, dynamic>{'status': 'committed'};
+      });
+      await client.runTransaction((tx) async => 1);
+      expect(rollbacks, 0);
+      await expectLater(
+        client.runTransaction<void>((tx) async =>
+            throw const VellumException(code: 'SESSION_CHANGED', message: 'x', statusCode: 401)),
+        throwsA(isA<VellumException>().having((e) => e.code, 'code', 'SESSION_CHANGED')),
+      );
+      expect(rollbacks, 0);
     });
   });
 }

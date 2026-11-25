@@ -8,17 +8,24 @@
 
 - `vellum_flutter`: write batches take `exists` next to `ifVersion` on `set`, `update` and `delete`, and have `create`. The wire format is flat (`type`, `path`, `data`, `ifVersion`, `exists`); a stale version fails the batch with 412.
 
+### Breaking
+
+- sdk-js and `vellum_flutter`: `customClaims` is removed from the end-user `signUpWithEmailAndPassword` and `updateProfile` inputs. The API has rejected it for end users since 0.0.4, so passing it only produced an error. Set claims with a server key instead. Reading `user.customClaims` is unchanged.
+
 ## 0.0.4
 
 Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK stays on one shared version. **Upgrade the SDKs together with the API:** 0.0.3 SDKs cannot start social sign-in against this API (the start call moved from `GET` with the key in the URL to `POST` with the key in a header). Update `@vellumdb/sdk-js` and `vellum_flutter` to 0.0.4.
 
 **Effect for existing users:** on iOS and macOS the Flutter SDK now stores sessions with a stricter Keychain setting, so people signed in with a 0.0.3 app are signed out once after updating. Redirect-less (mobile/desktop polling) sign-in is now off by default for each project: turn it on in Auth Studio (Providers > Redirect-less sign-in) before using it.
 
+
 ### Security
 
 - drizzle-orm upgraded from 0.38 to 0.45.4. Versions before 0.45.2 do not escape SQL identifiers safely (GHSA-gpj5-g38j-94v9). Vellum builds identifiers from fixed schema names only, so no exploitable path was found, but the fix is taken anyway.
 
 - The console, admin and public site now send an enforced `Content-Security-Policy` with `script-src 'self'` (no inline scripts, no `unsafe-eval`), plus `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` and `frame-ancestors 'none'`. The inline bootstrap and site scripts moved to files (`vellum-bootstrap.js`, `site-early.js`, `site.js`). `style-src` still allows inline styles because the UI uses style attributes. A stale prototype `apps/dashboard/public/index.html` that loaded Tailwind and fonts from third-party hosts was removed. Check a Vercel preview for CSP errors in the browser console before the production deploy.
+
+- A request body over the size limit and sent without a `Content-Length` header (chunked uploads) hung until the platform timeout instead of failing with 413, because the body cap awaited `cancel()` on a cloned stream. Any client could hold connections open this way. It now answers 413 at once.
 
 - Security rules: a query, export or batch read with a public key now also checks each returned row against its own `get` rule when one matches the path. Before, `allow list: if isSignedIn(); allow get: if isParticipant(...)` returned every row to any signed-in user. Hidden rows are skipped and pages are refilled (up to 5 extra batches per request). Aggregates and counts are refused for public keys when the `get` rule depends on the document, since a GROUP BY cannot be filtered per row. Paths with only a `list` rule behave as before. Server keys are unchanged.
 - `GET /collections/:name/export` now needs a server key, like import and clear.
@@ -36,6 +43,8 @@ Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK 
 ### Features
 
 - sdk-js `addWithRelated` matches Flutter: it takes `idempotencyKey` (sent as `Idempotency-Key`) and runs the collection converter's `toDoc` on the parent document.
+
+- `vellum_flutter`: `runTransaction` calls `POST /transactions:rollback` (best effort, never replacing the original error) when the callback or the commit fails, before a conflict retry. It skips the call after `SESSION_CHANGED` and after a successful commit.
 
 - `POST /transactions:rollback` ends a transaction right away instead of leaving it to expire. sdk-js `runTransaction` calls it (best effort) when the callback throws, the call is aborted, or a commit conflict is about to be retried, so abandoned attempts no longer hold their read set until the 15 s window ends.
 
