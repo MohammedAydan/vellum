@@ -479,7 +479,7 @@ function isNonMonotoneOnResource(node: unknown, depth = 0): boolean {
 export type { ApiKeyRecord, SecurityRulesetRecord } from "@vellum/database-control";
 
 export interface AuthorizeOperationParams {
-  apiKeyRecord: ApiKeyRecord;
+  apiKeyRecord: ApiKeyRecord | null;
   rulesetRecord: SecurityRulesetRecord | null;
   operation: "get" | "list" | "create" | "update" | "delete" | "indexes:manage";
   path: string;
