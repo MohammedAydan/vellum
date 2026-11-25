@@ -6,6 +6,15 @@ A single package for **Flutter (iOS, Android, Web, macOS, Windows, Linux)**, str
 
 It requires the Flutter SDK. It is no longer usable from plain Dart servers or CLIs.
 
+### Sign in with Google or GitHub on Android and iOS
+
+```dart
+final oauth = createVellumOAuth(auth: client.auth); // no redirect URI
+final result = await oauth.signIn('google'); // or 'github'
+```
+
+Without a `redirectUri` the SDK opens the system browser (Custom Tabs on Android, Safari on iOS) and collects the result by polling the API with a PKCE verifier that never leaves the app. You register nothing in `AndroidManifest.xml` or `Info.plist`, add nothing to Auth Studio, and it keeps working if the OS recreates your app while the browser is open. The user returns to the app after the "you are signed in" page. Pass `redirectUri: 'myapp://auth-callback'` if you prefer a deep link (then register the scheme and add the URI in Auth Studio). Both Google and GitHub need to be enabled and configured in Auth Studio > Providers. For Google's native account picker use `google_sign_in` and `signInWithGoogleIdToken`; add your Android and iOS client IDs as extra allowed audiences.
+
 ---
 
 ## Highlights

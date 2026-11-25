@@ -406,6 +406,44 @@ class VellumAuth implements VellumAuthPort {
   }
 
   @override
+  Future<Uri> oauthStartPoll({
+    required String provider,
+    required String codeChallenge,
+  }) async {
+    final res = await client.request(
+      'POST',
+      '/auth/oauth/${Uri.encodeComponent(provider)}/start',
+      body: <String, Object?>{
+        'delivery': 'poll',
+        'codeChallenge': codeChallenge,
+      },
+      includeAuth: false,
+    );
+    final url = res['authorizeUrl'];
+    if (url is! String || url.isEmpty) {
+      throw const VellumException(
+        code: 'INTERNAL',
+        message: 'The server did not return a sign-in URL',
+        statusCode: 0,
+      );
+    }
+    return Uri.parse(url);
+  }
+
+  @override
+  Future<VellumAuthResult?> pollOAuth({required String codeVerifier}) async {
+    final expectedEpoch = _sessionEpoch;
+    final res = await client.request(
+      'POST',
+      '/auth/oauth/poll',
+      body: <String, Object?>{'codeVerifier': codeVerifier},
+      includeAuth: false,
+    );
+    if (res['status'] == 'pending') return null;
+    return _completeSignIn(res, expectedEpoch);
+  }
+
+  @override
   Future<VellumAuthResult> exchangeOAuthCode({
     required String code,
     required String codeVerifier,

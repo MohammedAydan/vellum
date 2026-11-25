@@ -326,6 +326,12 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     );
   }
 
+  // Redirect-less sign-in polls every ~2 s for up to 5 min, so it gets its own, larger budget.
+  app.use(
+    "/v1/projects/:projectId/auth/oauth/poll",
+    authRateLimit({ max: 600, windowMs: 15 * 60 * 1000, countAll: true, scope: "enduser-oauth-poll", keyFrom: endUserIpKey }, platform.controlStore.throttle)
+  );
+
   // 5 requests / 15 min — every request counts (no account enumeration).
   app.use(
     "/v1/projects/:projectId/auth/password/reset",

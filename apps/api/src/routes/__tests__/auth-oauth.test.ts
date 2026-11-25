@@ -283,4 +283,36 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
       expect(() => mergeOAuthProviders({}, { __settings: { redirectUris: [bad] } }, undefined)).toThrow();
     }
   });
+
+  it("poll delivery: no redirect URI, no deep link; the verifier holder collects the session once", async () => {
+    const f = await fixture();
+    const { verifier, challenge } = pkce();
+    const res = await f.call("POST", "/oauth/google/start", f.publicKeyStr, { delivery: "poll", codeChallenge: challenge });
+    expect(res.status).toBe(200);
+    const authorize = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
+    lastNonce = authorize.searchParams.get("nonce") ?? "";
+    mock.googleClaims = (nonce) => ({ iss: "https://accounts.google.com", aud: "google-client", sub: "g-poll", email: "poll@example.com", email_verified: true, name: "P", exp: Math.floor(Date.now() / 1000) + 600, nonce });
+    const pending = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: verifier });
+    expect(pending.status).toBe(202);
+    expect(((await pending.json()) as { status: string }).status).toBe("pending");
+    const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+    cb.searchParams.set("code", "good-code");
+    cb.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+    const back = await f.platform.fetch(new Request(`http://localhost${cb.pathname}${cb.search}`, { redirect: "manual" }));
+    expect(back.status).toBe(200);
+    expect(back.headers.get("content-type")).toContain("text/html");
+    const html = await back.text();
+    expect(html).not.toContain("vellum_code");
+    const wrong = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: pkce().verifier });
+    expect(wrong.status).toBe(202);
+    const ok = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: verifier });
+    expect(ok.status).toBe(200);
+    const session = (await ok.json()) as { accessToken?: string; user?: { email?: string } };
+    expect(session.accessToken).toBeTruthy();
+    expect(session.user?.email).toBe("poll@example.com");
+    const again = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: verifier });
+    expect(again.status).toBe(202);
+    const short = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: "short" });
+    expect(short.status).toBe(400);
+  });
 });
