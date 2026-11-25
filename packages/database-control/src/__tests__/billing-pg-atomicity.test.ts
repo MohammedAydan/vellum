@@ -47,7 +47,7 @@ describe("PG billing repository", () => {
   it("applies one usage delta inside a single transaction on one connection", async () => {
     const { pool, calls, openClients } = fakePool();
     const repo = createPgBillingRepository(pool);
-    await repo.applyUsageDelta(delta).catch(() => undefined); // row mapping of the fake rows may throw
+    await Promise.resolve(repo.applyUsageDelta(delta)).catch(() => undefined); // row mapping of the fake rows may throw
     expect(calls[0]?.sql).toBe("BEGIN");
     expect(new Set(calls.map((c) => c.client)).size).toBe(1);
     expect(calls.some((c) => /usage_monthly_rollups/.test(c.sql))).toBe(true);
