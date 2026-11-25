@@ -32,6 +32,8 @@ export function readOAuthDraft(config: AuthConfigView | null | undefined, provid
     additionalClientIds: Array.isArray(entry["additionalClientIds"])
       ? (entry["additionalClientIds"] as unknown[]).filter((v): v is string => typeof v === "string").join("\n")
       : "",
+    teamId: asString(entry["teamId"]),
+    keyId: asString(entry["keyId"]),
   };
 }
 

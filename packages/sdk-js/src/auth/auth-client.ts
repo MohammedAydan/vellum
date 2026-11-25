@@ -492,7 +492,7 @@ export class VellumAuthClient {
   }
 
   /**
-   * Sign in with `"google"` or `"github"` in a popup. Call it from a click
+   * Sign in with `"google"`, `"github"` or `"apple"` in a popup. Call it from a click
    * handler. Resolves to `MfaRequiredResult` when a second factor is needed.
    */
   public signInWithPopup(provider: string, options: OAuthPopupOptions = {}): Promise<AuthState | MfaRequiredResult> {
@@ -568,6 +568,31 @@ export class VellumAuthClient {
       "POST",
       "/auth/oauth/google/id-token",
       { idToken, ...(options.nonce !== undefined ? { nonce: options.nonce } : {}) },
+      {},
+      false
+    );
+    this.assertSession(epoch);
+    if (payload["mfaRequired"] === true) return parseMfaRequiredResponse(payload);
+    const session = parseSessionResponse(payload);
+    this.commitUser(session, true);
+    return sanitizeAndClone(session);
+  }
+
+  public async signInWithAppleIdToken(
+    idToken: string,
+    options: { nonce?: string; authorizationCode?: string; givenName?: string; familyName?: string } = {}
+  ): Promise<AuthState | MfaRequiredResult> {
+    const epoch = this.state.sessionEpoch;
+    const payload = await this.request<Record<string, unknown>>(
+      "POST",
+      "/auth/oauth/apple/id-token",
+      {
+        idToken,
+        ...(options.nonce !== undefined ? { nonce: options.nonce } : {}),
+        ...(options.authorizationCode !== undefined ? { authorizationCode: options.authorizationCode } : {}),
+        ...(options.givenName !== undefined ? { givenName: options.givenName } : {}),
+        ...(options.familyName !== undefined ? { familyName: options.familyName } : {}),
+      },
       {},
       false
     );

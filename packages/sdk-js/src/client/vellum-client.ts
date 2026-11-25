@@ -1151,6 +1151,13 @@ export class VellumClient implements VellumClientInterface {
     return this.auth.signInWithGoogleIdToken(idToken, options);
   }
 
+  public signInWithAppleIdToken(
+    idToken: string,
+    options?: { nonce?: string; authorizationCode?: string; givenName?: string; familyName?: string }
+  ): Promise<AuthState | MfaRequiredResult> {
+    return this.auth.signInWithAppleIdToken(idToken, options);
+  }
+
   public verifyMfaChallenge(input: VerifyMfaChallengeInput): Promise<AuthState>;
   public verifyMfaChallenge(
     mfaTicket: string,

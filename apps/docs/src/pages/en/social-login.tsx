@@ -1,14 +1,13 @@
 import {
-  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterDeepLinkDart, androidBackupXml, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
-} from "../../social-login-examples";
+  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterDeepLinkDart, androidBackupXml, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart, flutterAppleDart, appleJsTs } from "../../social-login-examples";
 import { AlphaNotice, Callout, Code, CodeTabs, Doc, P, PageLink, Section, UL } from "../../ui";
 
 export default function Page() {
   return (
     <Doc
       eyebrow="Core concepts"
-      title="Social sign-in (Google and GitHub)"
-      description="Let users sign in with Google or GitHub from the web or from a Flutter app. Vellum runs the OAuth flow on the server, so your app never handles a provider secret."
+      title="Social sign-in (Google, GitHub and Apple)"
+      description="Let users sign in with Google, GitHub or Apple from the web or from a Flutter app. Vellum runs the OAuth flow on the server, so your app never handles a provider secret."
     >
       <AlphaNotice />
       <Callout tone="warning" title="Requires 0.0.3 or later">
@@ -17,7 +16,7 @@ export default function Page() {
 
       <Section id="how" title="How it works">
         <UL items={[
-          <>Your app starts the flow. Vellum sends the user to Google or GitHub and receives the result on the server.</>,
+          <>Your app starts the flow. Vellum sends the user to Google, GitHub or Apple and receives the result on the server.</>,
           <>Vellum checks the identity with the provider. Only a verified email address is accepted, and an existing
           account is linked only when that email is verified.</>,
           <>The user returns to your app with a one-time code. Your app trades it for a session. The code works once,
@@ -27,10 +26,10 @@ export default function Page() {
 
       <Section id="setup" title="Set up the provider">
         <UL items={[
-          <>Create an OAuth client with Google (type Web application) or an OAuth App with GitHub.</>,
+          <>Create an OAuth client with Google (type Web application) an OAuth App with GitHub, or a Services ID with Apple (see below).</>,
           <>Register this callback URL with the provider:
           <code> /v1/projects/&lt;projectId&gt;/auth/oauth/google/callback</code> or
-          <code> /auth/oauth/github/callback</code> on your API host.</>,
+          <code> /auth/oauth/github/callback</code> or <code> /auth/oauth/apple/callback</code> on your API host.</>,
           <>Save the client ID and client secret in your project's auth settings. The secret is encrypted at rest and is never returned.</>,
           <>Add every page or app link users may return to (for example <code>https://app.example.com/login</code> or <code>myapp://auth-callback</code>)
           to the allowed redirect URIs. Anything not on the list is refused.</>,
@@ -98,8 +97,32 @@ export default function Page() {
         <Code lang="dart" title="Native Google with google_sign_in (optional)" code={flutterNativeDart} />
       </Section>
 
+      <Section id="apple" title="Sign in with Apple">
+        <P>
+          If your iOS app offers Google or GitHub sign-in, App Store guideline 4.8 requires an equivalent privacy-preserving option, which in practice means Sign in with Apple.
+          In the Apple Developer portal create a Services ID (the web client ID), enable Sign in with Apple for it and register the callback URL above as a return URL.
+          Create a Sign in with Apple key and download the <code>.p8</code> file once. In Auth Studio &gt; Providers &gt; Apple enter the Services ID, your Team ID, the Key ID and paste the <code>.p8</code> contents.
+          The key is encrypted at rest and never returned. Vellum signs a short-lived client secret from it for each exchange.
+        </P>
+        <P>
+          Apple only accepts an HTTPS return URL on a real domain: no <code>localhost</code>, no IP address and no fragment. To test the web flow locally, use a tunnel or a staging domain.
+          Apple does not document PKCE for its token endpoint, so Vellum does not send a code challenge to Apple. The state and the confirmation code still protect the flow on Vellum's side.
+        </P>
+        <P>
+          For native iOS and Android flows list your app bundle IDs under additional client IDs. The ID token is accepted only if its audience is the Services ID or one of those bundle IDs.
+          Pass a random nonce: give Apple its SHA-256 hash and give Vellum the raw value. A token that carries a nonce is refused when none is supplied.
+          Apple returns the user's name only on the first sign-in, so pass <code>givenName</code> and <code>familyName</code> then. Apple may also hide the real email behind a relay address, which Vellum accepts only when Apple marks it verified.
+        </P>
+        <P>
+          When a user deletes their account or unlinks Apple, Vellum revokes the Apple grant, as Apple requires. This needs the <code>authorizationCode</code> from the sign-in, so pass it.
+        </P>
+        <Code lang="dart" title="Native Apple with sign_in_with_apple (optional)" code={flutterAppleDart} />
+        <Code lang="ts" title="JavaScript" code={appleJsTs} />
+      </Section>
+
       <Section id="security" title="Security notes">
         <UL items={[
+          <>Apple ID tokens are verified against Apple's published keys, issuer, audience, expiry and nonce.</>,
           <>Provider tokens never reach your app. Google ID tokens are verified against Google's published keys, issuer, audience and expiry.</>,
           <>GitHub users need a verified primary email. The public profile email is never trusted.</>,
           <>If the account has a second factor enabled, sign-in returns a challenge that you finish with <code>verifyMfaChallenge</code>.</>,

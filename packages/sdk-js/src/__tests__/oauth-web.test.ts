@@ -124,6 +124,15 @@ describe("browser OAuth helpers", () => {
     expect(calls[0]?.body).toEqual({ idToken: "id.token.value", nonce: "n1" });
   });
 
+  it("signInWithAppleIdToken posts the token, nonce, code and first-time name", async () => {
+    const { client, calls } = mkClient();
+    await client.signInWithAppleIdToken("apple.id.token", { nonce: "raw", authorizationCode: "c1", givenName: "Tim", familyName: "Cook" });
+    expect(calls[0]?.url).toContain("/auth/oauth/apple/id-token");
+    expect(calls[0]?.body).toEqual({ idToken: "apple.id.token", nonce: "raw", authorizationCode: "c1", givenName: "Tim", familyName: "Cook" });
+    await client.signInWithAppleIdToken("a.b.c");
+    expect(calls[1]?.body).toEqual({ idToken: "a.b.c" });
+  });
+
   it("oauth with MFA: no session until the second factor (TOTP or recovery code) is verified", async () => {
     const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
     const customFetch = (async (url: string | URL | Request, init?: RequestInit) => {

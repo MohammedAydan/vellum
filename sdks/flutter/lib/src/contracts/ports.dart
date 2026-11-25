@@ -163,6 +163,19 @@ abstract interface class VellumAuthPort {
     required String idToken,
     String? nonce,
   });
+
+  /// Signs in with the `identityToken` from Sign in with Apple
+  /// (`sign_in_with_apple`). Pass the raw nonce you used (or its SHA-256, which
+  /// is what Apple's native sheet embeds), the `authorizationCode` so the grant
+  /// can be revoked when the account is deleted, and the name from the first
+  /// authorization (Apple only sends it once).
+  Future<VellumAuthResult> signInWithAppleIdToken({
+    required String idToken,
+    String? nonce,
+    String? authorizationCode,
+    String? givenName,
+    String? familyName,
+  });
   Future<VellumUser> getUser();
   Future<VellumUser> verifyMfaChallenge({
     required String mfaTicket,
@@ -200,7 +213,7 @@ abstract interface class VellumAuthPort {
   });
 
   /// Permanently deletes the signed-in account and signs out locally.
-  /// Password accounts must pass [password]; Google/GitHub accounts need nothing.
+  /// Password accounts must pass [password]; Google/GitHub/Apple accounts need nothing.
   Future<void> deleteAccount({String? password});
   Future<AuthActionResult> sendEmailVerification({String? email});
   Future<void> confirmEmailVerification(String token);

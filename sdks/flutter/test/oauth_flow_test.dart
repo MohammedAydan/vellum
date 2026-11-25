@@ -178,6 +178,30 @@ void main() {
         <String, Object?>{'idToken': 'id.tok.en', 'nonce': 'n'});
   });
 
+  test('signInWithAppleIdToken posts the token, nonce, code and first-time name', () async {
+    final result = await client.auth.signInWithAppleIdToken(
+      idToken: 'apple.id.token',
+      nonce: 'raw-nonce',
+      authorizationCode: 'c1',
+      givenName: 'Tim',
+      familyName: 'Cook',
+    );
+    expect(result, isA<VellumSession>());
+    expect(posts.single['url'], endsWith('/auth/oauth/apple/id-token'));
+    expect(posts.single['body'], <String, Object?>{
+      'idToken': 'apple.id.token',
+      'nonce': 'raw-nonce',
+      'authorizationCode': 'c1',
+      'givenName': 'Tim',
+      'familyName': 'Cook',
+    });
+  });
+
+  test('signInWithAppleIdToken sends only what it was given', () async {
+    await client.auth.signInWithAppleIdToken(idToken: 'a.b.c');
+    expect(posts.single['body'], <String, Object?>{'idToken': 'a.b.c'});
+  });
+
   test('redirectUri must be absolute', () {
     expect(
       () => VellumOAuth(

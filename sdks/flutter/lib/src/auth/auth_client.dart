@@ -485,6 +485,30 @@ class VellumAuth implements VellumAuthPort {
     return _completeSignIn(res, expectedEpoch);
   }
 
+  @override
+  Future<VellumAuthResult> signInWithAppleIdToken({
+    required String idToken,
+    String? nonce,
+    String? authorizationCode,
+    String? givenName,
+    String? familyName,
+  }) async {
+    final expectedEpoch = _sessionEpoch;
+    final res = await client.request(
+      'POST',
+      '/auth/oauth/apple/id-token',
+      body: <String, Object?>{
+        'idToken': idToken,
+        if (nonce != null) 'nonce': nonce,
+        if (authorizationCode != null) 'authorizationCode': authorizationCode,
+        if (givenName != null) 'givenName': givenName,
+        if (familyName != null) 'familyName': familyName,
+      },
+      includeAuth: false,
+    );
+    return _completeSignIn(res, expectedEpoch);
+  }
+
   Future<VellumAuthResult> _completeSignIn(
     JsonMap res,
     int expectedEpoch,

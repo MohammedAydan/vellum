@@ -1,8 +1,8 @@
-// Examples for the Social sign-in page (Google and GitHub).
+// Examples for the Social sign-in page (Google, GitHub and Apple).
 // They mirror @vellumdb/sdk-js and vellum_flutter after 0.0.3.
 
 export const popupTs = `// Call from a click handler so the browser allows the popup.
-const result = await db.signInWithPopup("google"); // or "github"
+const result = await db.signInWithPopup("google"); // or "github" or "apple"
 
 if ("mfaTicket" in result) {
   // A second factor is required: finish with db.verifyMfaChallenge(...)
@@ -40,7 +40,7 @@ final oauth = createVellumOAuth(
   onConfirmationCode: (c) => setState(() => code = c), // e.g. "K7M2QP"
 );
 
-final result = await oauth.signIn('github'); // or 'google'
+final result = await oauth.signIn('github'); // or 'google' or 'apple'
 setState(() => code = null);
 if (result is VellumMfaRequired) {
   // finish with db.auth.verifyMfaChallenge(...)
@@ -77,6 +77,35 @@ await GoogleSignIn.instance.initialize(
 final account = await GoogleSignIn.instance.authenticate();
 final idToken = account.authentication.idToken!;
 final result = await db.auth.signInWithGoogleIdToken(idToken: idToken);`;
+
+export const flutterAppleDart = `// Optional. Add the official sign_in_with_apple package (and crypto) to your own pubspec.
+// vellum_flutter does not depend on them.
+import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+
+final rawNonce = base64UrlEncode(List<int>.generate(32, (_) => Random.secure().nextInt(256)));
+final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+final credential = await SignInWithApple.getAppleIDCredential(
+  scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
+  nonce: hashedNonce, // Apple puts this in the token
+);
+// Apple sends the name only on the very first sign-in, so pass it now.
+final result = await db.auth.signInWithAppleIdToken(
+  idToken: credential.identityToken!,
+  nonce: rawNonce, // the raw value; Vellum hashes and compares it
+  authorizationCode: credential.authorizationCode, // lets Vellum revoke the grant on account deletion
+  givenName: credential.givenName,
+  familyName: credential.familyName,
+);`;
+
+export const appleJsTs = `// Web: the same popup or redirect as the other providers.
+await db.signInWithPopup("apple");
+
+// Native wrapper (Capacitor, React Native): pass the ID token you got from Apple.
+await db.signInWithAppleIdToken(identityToken, { nonce: rawNonce, authorizationCode });`;
 
 export const flutterPubspec = `dependencies:
   vellum_flutter: ^0.0.3 # browser sign-in is built in`;
