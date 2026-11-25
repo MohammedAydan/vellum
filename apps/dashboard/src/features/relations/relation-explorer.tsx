@@ -53,7 +53,7 @@ export function buildIncludeQuery(rule: ExplorerRule, limit: number) {
   return {
     collection: rule.collection,
     limit: Math.min(Math.max(Math.trunc(limit) || 1, 1), 25),
-    include: [rule.field],
+    include: [{ field: rule.field }],
   };
 }
 

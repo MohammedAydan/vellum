@@ -4,7 +4,7 @@ import { buildIncludeQuery, referenceValue, relationState } from "../features/re
 describe("relation explorer", () => {
   it("builds a real include query bounded to 25 documents", () => {
     const rule = { collection: "orders", field: "customer", targetCollection: "users" };
-    expect(buildIncludeQuery(rule, 5)).toEqual({ collection: "orders", limit: 5, include: ["customer"] });
+    expect(buildIncludeQuery(rule, 5)).toEqual({ collection: "orders", limit: 5, include: [{ field: "customer" }] });
     expect(buildIncludeQuery(rule, 500).limit).toBe(25);
     expect(buildIncludeQuery(rule, 0).limit).toBe(1);
     expect(buildIncludeQuery(rule, Number.NaN).limit).toBe(1);
