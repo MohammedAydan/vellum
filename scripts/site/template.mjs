@@ -1,46 +1,16 @@
 import { T, FAQ } from "./content.mjs";
+import { C, SNIP } from "./copy.mjs";
+import { CSS } from "./css.mjs";
+import { highlight } from "./highlight.mjs";
 
+export { CSS };
 export const escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const esc = escapeHtml;
 const json = (o) => JSON.stringify(o).replace(/</g, "\\u003c");
 
-export const CSS = `
-:root{color-scheme:dark light;--bg:#0b1120;--fg:#e5e9f0;--mut:#9aa4b5;--line:#1e2738;--card:#101828;--acc:#10b981;--accfg:#04130d;--code:#0a0f1c}
-@media(prefers-color-scheme:light){:root{--bg:#fafbfc;--fg:#111827;--mut:#5b6575;--line:#e3e7ee;--card:#fff;--acc:#059669;--accfg:#fff;--code:#f1f4f8}}
-*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic","Noto Sans",sans-serif}
-a{color:inherit}a:focus-visible,button:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:4px}
-.skip{position:absolute;inset-inline-start:.5rem;top:-3rem;background:var(--acc);color:var(--accfg);padding:.5rem .75rem;border-radius:6px;z-index:10}.skip:focus{top:.5rem}
-.wrap{max-width:68rem;margin:0 auto;padding:0 1.25rem}
-header.top{border-bottom:1px solid var(--line);position:sticky;top:0;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);z-index:5}
-.bar{display:flex;align-items:center;gap:1rem;min-height:3.5rem;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:.5rem;font-weight:650;text-decoration:none;letter-spacing:.01em}.brand img{width:26px;height:26px}
-nav.main{display:flex;gap:1.1rem;margin-inline-start:auto;align-items:center;flex-wrap:wrap;font-size:.92rem}
-nav.main a{color:var(--mut);text-decoration:none}nav.main a:hover{color:var(--fg)}
-.btn{display:inline-block;padding:.55rem .95rem;border-radius:8px;border:1px solid var(--line);text-decoration:none;font-weight:550;font-size:.92rem;color:var(--fg)}
-.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--accfg)}.btn:hover{filter:brightness(1.08)}
-nav.main a.btn{color:var(--fg)}nav.main a.btn.pri{color:var(--accfg)}
-.hero{padding:4.5rem 0 2.5rem}
-.badge{display:inline-block;border:1px solid var(--line);color:var(--mut);padding:.15rem .6rem;border-radius:999px;font-size:.78rem;margin-bottom:1rem}
-h1{font-size:clamp(1.9rem,4.6vw,3rem);line-height:1.15;margin:0 0 1rem;letter-spacing:-.02em;max-width:22ch}
-[dir=rtl] h1{letter-spacing:0;line-height:1.35;max-width:26ch}
-.lead{font-size:1.12rem;color:var(--mut);max-width:42rem;margin:0 0 1.5rem}
-.cta{display:flex;gap:.7rem;flex-wrap:wrap;margin-bottom:1.5rem}
-.install{display:grid;gap:.6rem;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));margin:1.5rem 0}
-.install div{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:.7rem .9rem}
-.install small{display:block;color:var(--mut);font-size:.78rem;margin-bottom:.15rem}
-code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88rem;direction:ltr;unicode-bidi:isolate}
-section.blk{padding:1.4rem 0;border-top:1px solid var(--line)}section.blk h2{font-size:1.2rem;margin:0 0 .4rem}section.blk p{margin:0;color:var(--mut);max-width:46rem}
-.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));margin:1rem 0 2rem}
-.card{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1.1rem;text-decoration:none}.card:hover{border-color:var(--acc)}
-.card h3{margin:0 0 .3rem;font-size:1.02rem}.card p{margin:0;color:var(--mut);font-size:.93rem}
-details{border-top:1px solid var(--line);padding:.9rem 0}details:last-of-type{border-bottom:1px solid var(--line)}summary{cursor:pointer;font-weight:600}details p{color:var(--mut);margin:.5rem 0 0;max-width:46rem}
-h2.t{font-size:1.4rem;margin:2rem 0 .5rem}
-footer{border-top:1px solid var(--line);margin-top:3rem;padding:2rem 0;color:var(--mut);font-size:.9rem}
-.fcols{display:grid;gap:1.5rem;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));margin-bottom:1.5rem}.fcols h4{margin:0 0 .5rem;color:var(--fg);font-size:.85rem}.fcols a{display:block;color:var(--mut);text-decoration:none;padding:.15rem 0}.fcols a:hover{color:var(--fg)}
-.nf{padding:6rem 0;text-align:center}.nf h1{margin-inline:auto}
-@media(max-width:640px){.hero{padding:3rem 0 1.5rem}nav.main{margin-inline-start:0;width:100%}}
-@media(prefers-reduced-motion:no-preference){.card{transition:border-color .15s}}
-`;
+const JS = `(function(){var d=document,r=d.documentElement;try{var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target)}})},{rootMargin:"0px 0px -8% 0px",threshold:.08});d.querySelectorAll(".rv").forEach(function(n){io.observe(n)})}catch(_){d.querySelectorAll(".rv").forEach(function(n){n.classList.add("in")})}
+d.querySelectorAll("[data-copy]").forEach(function(b){b.addEventListener("click",function(){var t=b.getAttribute("data-copy");(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){var o=b.textContent;b.textContent=b.getAttribute("data-done");setTimeout(function(){b.textContent=o},1400)}).catch(function(){})})});
+d.querySelectorAll(".cell").forEach(function(c){c.addEventListener("pointermove",function(e){var b=c.getBoundingClientRect();c.style.setProperty("--mx",(e.clientX-b.left)+"px")})})})();`;
 
 function head({ lang, title, desc, canonical, alts, origin, ld, noindex }) {
   return `<head>
@@ -66,23 +36,29 @@ ${canonical ? `<meta property="og:url" content="${canonical}">` : ""}
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:description" content="${escapeHtml(desc)}">
 <meta name="twitter:image" content="${origin}/og-image.png">
+<script>document.documentElement.classList.add("js")</script>
 <link rel="stylesheet" href="/site.css">
 ${(ld || []).map((o) => `<script type="application/ld+json">${json(o)}</script>`).join("\n")}
 </head>`;
 }
 
-function chrome({ lang, otherHref, body, origin }) {
-  const t = T[lang];
-  const p = lang === "ar" ? "/ar" : "";
-  const docs = lang === "ar" ? "/docs/ar" : "/docs";
+
+const navLinks = (lang) => {
+  const t = T[lang]; const p = lang === "ar" ? "/ar" : ""; const docs = lang === "ar" ? "/docs/ar" : "/docs";
+  return [[`${p}/features`, t.nav.features], [`${p}/sdks`, t.nav.sdks], [`${p}/security`, t.nav.security], [docs, t.nav.docs]];
+};
+
+function chrome({ lang, otherHref, body }) {
+  const t = T[lang]; const c = C[lang];
+  const p = lang === "ar" ? "/ar" : ""; const docs = lang === "ar" ? "/docs/ar" : "/docs";
+  const links = navLinks(lang);
+  const other = `<a href="${otherHref}" hreflang="${lang === "ar" ? "en" : "ar"}" lang="${lang === "ar" ? "en" : "ar"}">${t.footer.lang}</a>`;
   return `<a class="skip" href="#main">${t.skip}</a>
 <header class="top"><div class="wrap bar">
 <a class="brand" href="${p || "/"}"><img src="/mark.png" alt="" width="26" height="26"><span>Vellum</span></a>
-<nav class="main" aria-label="Main">
-<a href="${p}/features">${t.nav.features}</a><a href="${p}/sdks">${t.nav.sdks}</a><a href="${p}/security">${t.nav.security}</a><a href="${docs}">${t.nav.docs}</a>
-<a href="${otherHref}" hreflang="${lang === "ar" ? "en" : "ar"}" lang="${lang === "ar" ? "en" : "ar"}">${t.footer.lang}</a>
-<a class="btn" href="/login">${t.nav.signin}</a><a class="btn pri" href="/signup">${t.nav.start}</a>
-</nav></div></header>
+<nav class="main" aria-label="Main">${links.map(([h, l]) => `<a href="${h}">${l}</a>`).join("")}${other}<a class="btn" href="/login">${t.nav.signin}</a><a class="btn pri" href="/signup">${t.nav.start}</a></nav>
+<details class="menu"><summary>${c.menu}</summary><div class="sheet">${links.map(([h, l]) => `<a href="${h}">${l}</a>`).join("")}${other}<a href="/login">${t.nav.signin}</a><a href="/signup">${t.nav.start}</a></div></details>
+</div></header>
 <main id="main">${body}</main>
 <footer><div class="wrap">
 <div class="fcols">
@@ -92,24 +68,119 @@ function chrome({ lang, otherHref, body, origin }) {
 </div>
 <p>${t.footer.beta}</p>
 <p>&copy; ${new Date().getFullYear()} Vellum</p>
-</div></footer>`;
+</div></footer>
+<script>${JS}</script>`;
 }
 
+/* ---------- components ---------- */
+const win = (name, code, lang, extra = "") => `<div class="win${extra}"><div class="win-h"><i></i><i></i><i></i><span>${esc(name)}</span></div><pre><code>${highlight(code, lang)}</code></pre></div>`;
+const rv = (n = 0) => `rv${n ? " d" + n : ""}`;
+const installBox = (cmd, c) => `<div class="install"><code><span class="pr">$</span>${esc(cmd)}</code><button class="copy" type="button" data-copy="${esc(cmd)}" data-done="${c.copied}">${c.copy}</button></div>`;
+
+const feedHtml = (c) => `<div class="feed-h"><span class="dot"></span>${c.hero.feedTitle}</div><ul class="feed">${c.hero.feed.map(([a, p, v]) => `<li><b>${a}</b><em>${p}</em><s>${v}</s></li>`).join("")}</ul>`;
+
+const graph = (lang) => `<svg class="graph" viewBox="0 0 260 230" role="img" aria-label="${lang === "ar" ? "مستند منشور يشير إلى مستخدمين" : "A post document referencing two user documents"}">
+<path class="ed fl" d="M130 66 C 130 92 62 86 62 128"/><path class="ed fl" d="M130 66 C 130 92 198 86 198 128"/>
+<rect class="nd hi" x="70" y="14" width="120" height="52" rx="12"/><text x="86" y="38">posts/p1</text><text class="sm" x="86" y="54">authorRef, editorRef</text>
+<rect class="nd" x="6" y="128" width="112" height="52" rx="12"/><text x="20" y="152">users/u1</text><text class="sm" x="20" y="168">author</text>
+<rect class="nd" x="142" y="128" width="112" height="52" rx="12"/><text x="156" y="152">users/u2</text><text class="sm" x="156" y="168">editor</text>
+<text class="sm" x="132" y="206" text-anchor="middle" style="fill:var(--acc)">.include(["author"])</text>
+</svg>`;
+
+const arch = (c) => {
+  const n = c.how.nodes;
+  return `<div class="arch ${rv()}">
+<div class="node"><h4>${n[0]}</h4><p>${n[1]}</p></div><div class="link"></div>
+<div class="node"><h4>${n[2]}</h4><p>${n[3]}</p></div><div class="link"></div>
+<div class="node pgbox"><span class="tag">${c.how.pg}</span><div class="pair"><div><h4>${n[4]}</h4><p>${n[5]}</p></div><div><h4>${n[6]}</h4><p>${n[7]}</p></div></div></div>
+</div>`;
+};
+
+const lockIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
+
+const faqHtml = (lang) => FAQ[lang].map(([q, a]) => `<details class="q"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("");
+
+const ctaBand = (c, lang) => `<div class="ctaband ${rv()}"><h2>${c.cta.h2}</h2><p>${c.cta.p}</p><div class="cta"><a class="btn pri lg" href="${lang === "ar" ? "/docs/ar/quickstart" : "/docs/quickstart"}">${c.cta.a}</a><a class="btn lg" href="/signup">${c.cta.b}</a></div></div>`;
+
+/* ---------- pages ---------- */
+function homeBody(lang) {
+  const c = C[lang]; const h = c.hero; const b = c.bento; const p = lang === "ar" ? "/ar" : "";
+  const docs = lang === "ar" ? "/docs/ar" : "/docs";
+  return `<section class="hero"><div class="hero-bg" aria-hidden="true"><i></i><i></i></div><div class="wrap hero-grid">
+<div class="${rv()}"><span class="badge"><span class="dot"></span>${h.badge}</span>
+<h1>${h.h1a}<br><span class="g">${h.h1b}</span></h1>
+<p class="lead">${h.lead}</p>
+<div class="cta"><a class="btn pri lg" href="${docs}/quickstart">${h.cta1}</a><a class="btn lg" href="${docs}">${h.cta2}</a></div>
+<div class="sub">${h.note}</div>
+${installBox("npm install @vellumdb/sdk-js", c)}</div>
+<div class="hero-visual ${rv(2)}">${win("tasks.ts", SNIP.hero, "ts")}<div class="float">${feedHtml(c)}</div></div>
+</div></section>
+<div class="wrap"><div class="stats ${rv()}">${c.stats.map(([n, l, s]) => `<div class="stat"><strong>${n}</strong><span>${l}</span><small>${s}</small></div>`).join("")}</div></div>
+
+<section class="s"><div class="wrap"><p class="eyebrow ${rv()}">${c.how.eyebrow}</p><h2 class="${rv()}">${c.how.h2}</h2><p class="sec-p ${rv()}">${c.how.p}</p>${arch(c)}</div></section>
+
+<section class="s"><div class="wrap"><p class="eyebrow ${rv()}">${b.eyebrow}</p><h2 class="${rv()}">${b.h2}</h2>
+<div class="bento">
+<div class="cell c-q ${rv()}"><h3>${b.q[0]}</h3><p>${b.q[1]}</p>${win("query.ts", `const page = await db
+  .collection("tasks")
+  .where("status", "==", "open")
+  .where("tags", "array-contains", "launch")
+  .where("title", "contains_ci", "docs")
+  .orderBy("priority", "desc")
+  .limit(20)
+  .get();`, "ts")}</div>
+<div class="cell c-r ${rv(1)}"><h3>${b.r[0]}</h3><p>${b.r[1]}</p>${graph(lang)}</div>
+<div class="cell c-s ${rv()}"><h3>${b.s[0]}</h3><p>${b.s[1]}</p>${win("rules", SNIP.rulesShort, "rules")}</div>
+<div class="cell c-rt ${rv(1)}"><h3>${b.rt[0]}</h3><p>${b.rt[1]}</p><div class="win" style="padding:.9rem 1rem">${feedHtml(c)}</div></div>
+<div class="cell c-a ${rv()}"><h3>${b.a[0]}</h3><p>${b.a[1]}</p><div class="prov">${b.providers.map((x, i) => `<span class="chip${i < 4 ? " on" : ""}">${x}</span>`).join("")}</div></div>
+<div class="cell c-i ${rv(1)}"><h3>${b.i[0]}</h3><p>${b.i[1]}</p><div class="chips">${c.feat.chips.map((x, i) => `<span class="chip${i % 3 === 0 ? " on" : ""}">${x}</span>`).join("")}</div></div>
+</div></div></section>
+
+<section class="s"><div class="wrap"><div class="sdk-grid"><div><p class="eyebrow ${rv()}">${c.sdk.eyebrow}</p><h2 class="${rv()}">${c.sdk.h2}</h2><p class="sec-p ${rv()}">${c.sdk.p}</p>
+${installBox(c.sdk.install[0], c)}${installBox(c.sdk.install[1], c)}<p style="margin-top:1.2rem"><a class="btn" href="${p}/sdks">${c.sdk.more}</a></p></div>
+<div class="tabs ${rv(1)}"><input type="radio" name="t" id="tab1" checked><input type="radio" name="t" id="tab2"><div class="tabbar"><label for="tab1">${c.sdk.tabs[0]}</label><label for="tab2">${c.sdk.tabs[1]}</label></div>
+<div class="panes"><div class="pane p1">${win("app.ts", SNIP.ts, "ts")}</div><div class="pane p2">${win("main.dart", SNIP.dart, "dart")}</div></div></div></div></div></section>
+
+<section class="s"><div class="wrap split"><div><p class="eyebrow ${rv()}">${c.ai.eyebrow}</p><h2 class="${rv()}">${c.ai.h2}</h2><p class="sec-p ${rv()}">${c.ai.p}</p><a class="btn" href="${docs}/ai-agents">${c.ai.cta}</a></div>
+<div class="${rv(1)} term">${win("terminal", SNIP.term, "bash")}</div></div></section>
+
+<section class="s"><div class="wrap"><h2 class="${rv()}">${c.faqTitle}</h2><div class="${rv()}">${faqHtml(lang)}</div>${ctaBand(c, lang)}</div></section>`;
+}
+
+function featuresBody(lang) {
+  const c = C[lang]; const f = c.feat;
+  const visual = (v) => v.startsWith("code:") ? win("query.ts", SNIP.ts.split("// Live")[0].split("// Query across any of 13 operators\n")[1].trim(), "ts") + `<div style="height:1rem"></div>` + win("include.ts", SNIP.include, "ts")
+    : v === "graph" ? `<div class="cell">${graph(lang)}</div>`
+    : v === "feed" ? `<div class="win" style="padding:1rem 1.1rem">${feedHtml(c)}</div><div style="height:1rem"></div>${win("realtime.ts", SNIP.realtime, "ts")}`
+    : `<div class="chips">${f.chips.map((x, i) => `<span class="chip${i % 3 === 0 ? " on" : ""}">${x}</span>`).join("")}</div>`;
+  const rows = f.rows.map(([h, p, v], i) => `<div class="feat"><div class="${rv()}"><h2>${h}</h2><p>${p}</p></div><div class="${rv(1)}">${i === 1 ? "" : ""}${visual(v)}</div></div>`).join("");
+  return `<section class="phero"><div class="hero-bg" aria-hidden="true"><i></i><i></i></div><div class="wrap"><h1 style="max-width:18ch">${f.h1}</h1><p class="lead">${f.lead}</p></div></section><div class="wrap">${rows}${ctaBand(c, lang)}</div>`;
+}
+
+function sdksBody(lang) {
+  const c = C[lang]; const s = c.sdks; const docs = lang === "ar" ? "/docs/ar" : "/docs";
+  const rows = s.rows.map(([h, p, cmd, l]) => `<div class="feat"><div class="${rv()}"><h2>${h}</h2><p>${p}</p>${installBox(cmd, c)}</div><div class="${rv(1)}">${win(l === "ts" ? "app.ts" : "main.dart", SNIP[l], l)}</div></div>`).join("");
+  return `<section class="phero"><div class="hero-bg" aria-hidden="true"><i></i><i></i></div><div class="wrap"><h1 style="max-width:20ch">${s.h1}</h1><p class="lead">${s.lead}</p><div class="cta"><a class="btn pri lg" href="${docs}/quickstart">${s.cta}</a></div></div></section>
+<div class="wrap">${rows}<div class="steps ${rv()}">${s.steps.map(([h, p]) => `<div class="step"><h3>${h}</h3><p>${p}</p></div>`).join("")}</div>${ctaBand(c, lang)}</div>`;
+}
+
+function securityBody(lang) {
+  const c = C[lang]; const s = c.sec; const pl = s.planes;
+  return `<section class="phero"><div class="hero-bg" aria-hidden="true"><i></i><i></i></div><div class="wrap"><h1 style="max-width:20ch">${s.h1}</h1><p class="lead">${s.lead}</p>
+<div class="planes ${rv()}"><div class="node"><h4>${pl[0]}</h4><p>${pl[1]}</p></div><div class="lock" title="${pl[4]}">${lockIcon}</div><div class="node pgbox"><span class="tag">${pl[4]}</span><h4>${pl[2]}</h4><p>${pl[3]}</p><p style="color:var(--acc)">${pl[5]}</p></div></div></div></section>
+<div class="wrap" style="padding-top:2rem"><div class="cards">${s.cards.map(([h, p], i) => `<div class="cell ${rv(i % 3)}"><h3>${h}</h3><p>${p}</p></div>`).join("")}</div>
+<div class="feat"><div class="${rv()}"><h2>${s.rulesTitle}</h2><p>${s.rulesP}</p></div><div class="${rv(1)}">${win("rules", SNIP.rules, "rules")}</div></div>
+<div class="cell ${rv()}" style="margin-top:1rem"><h3>${s.report[0]}</h3><p>${s.report[1]}</p><a class="btn" href="mailto:mohammedaydan12@gmail.com">${s.report[2]}</a></div>
+${ctaBand(c, lang)}</div>`;
+}
 
 export function renderPage({ page, lang, origin, routeOf }) {
-  const t = T[lang];
-  const b = page.body[lang];
   const here = (l) => origin + (routeOf(page.slug, l) === "/" ? "/" : routeOf(page.slug, l));
   const canonical = here(lang);
   const alts = [["en", here("en")], ["ar", here("ar")], ["x-default", here("en")]];
   const otherHref = here(lang === "ar" ? "en" : "ar");
   const isHome = page.slug === "home";
-  const ctas = (b.cta || []).map(([label, href], i) => `<a class="btn${i === 0 ? " pri" : ""}" href="${href}">${escapeHtml(label)}</a>`).join("");
-  const install = b.install ? `<div class="install">${b.install.map(([k, v]) => `<div><small>${escapeHtml(k)}</small><code>${escapeHtml(v)}</code></div>`).join("")}</div>` : "";
-  const sections = (b.sections || []).map(([h, p]) => `<section class="blk"><h2>${escapeHtml(h)}</h2><p>${escapeHtml(p)}</p></section>`).join("");
-  const cards = b.cards ? `<div class="grid">${b.cards.map(([h, p, href]) => `<a class="card" href="${href}"><h3>${escapeHtml(h)}</h3><p>${escapeHtml(p)}</p></a>`).join("")}</div>` : "";
-  const faq = isHome ? `<h2 class="t">${escapeHtml(b.faqTitle)}</h2>${FAQ[lang].map(([q, a]) => `<details><summary>${escapeHtml(q)}</summary><p>${escapeHtml(a)}</p></details>`).join("")}` : "";
-  const body = `<div class="wrap"><div class="hero">${isHome ? `<span class="badge">${lang === "ar" ? "نسخة تجريبية عامة 0.0.3" : "Public beta 0.0.3"}</span>` : ""}<h1>${escapeHtml(b.h1)}</h1><p class="lead">${escapeHtml(b.lead)}</p>${ctas ? `<div class="cta">${ctas}</div>` : ""}${install}</div>${isHome ? cards : ""}${sections}${faq}</div>`;
+  const body = { home: homeBody, features: featuresBody, sdks: sdksBody, security: securityBody }[page.slug](lang);
 
   const org = { "@type": "Organization", "@id": `${origin}/#org`, name: "Vellum", url: origin, logo: `${origin}/mark.png`, email: "mohammedaydan12@gmail.com", sameAs: ["https://github.com/MohammedAydan/vellum", "https://www.npmjs.com/package/@vellumdb/sdk-js", "https://pub.dev/packages/vellum_flutter"] };
   const ld = [];
@@ -121,9 +192,10 @@ export function renderPage({ page, lang, origin, routeOf }) {
     ] });
     ld.push({ "@context": "https://schema.org", "@type": "FAQPage", inLanguage: lang, mainEntity: FAQ[lang].map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) });
   } else {
+    const homeUrl = lang === "ar" ? `${origin}/ar` : `${origin}/`;
     ld.push({ "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Vellum", item: here(lang).replace(/\/(ar\/)?[^/]*$/, lang === "ar" ? "/ar" : "/") || origin },
-      { "@type": "ListItem", position: 2, name: b.h1, item: canonical },
+      { "@type": "ListItem", position: 1, name: "Vellum", item: homeUrl },
+      { "@type": "ListItem", position: 2, name: page.title[lang].split("|")[0].trim(), item: canonical },
     ] });
     ld.push({ "@context": "https://schema.org", "@type": "WebPage", name: page.title[lang], description: page.desc[lang], url: canonical, inLanguage: lang, isPartOf: { "@id": `${origin}/#site` } });
   }
@@ -131,19 +203,19 @@ export function renderPage({ page, lang, origin, routeOf }) {
 <html lang="${lang}" dir="${lang === "ar" ? "rtl" : "ltr"}">
 ${head({ lang, title: page.title[lang], desc: page.desc[lang], canonical, alts, origin, ld })}
 <body>
-${chrome({ lang, otherHref, body, origin })}
+${chrome({ lang, otherHref, body })}
 </body>
 </html>
 `;
 }
 
 export function renderNotFound({ origin }) {
-  const body = `<div class="wrap nf"><h1>404</h1><p class="lead" style="margin-inline:auto">${T.en.notFound.body}</p><div class="cta" style="justify-content:center"><a class="btn pri" href="/">${T.en.notFound.home}</a><a class="btn" href="/docs">${T.en.notFound.docs}</a></div></div>`;
+  const body = `<div class="wrap nf"><h1><span class="g">404</span></h1><p class="lead" style="margin-inline:auto">${T.en.notFound.body}</p><div class="cta" style="justify-content:center"><a class="btn pri lg" href="/">${T.en.notFound.home}</a><a class="btn lg" href="/docs">${T.en.notFound.docs}</a></div></div>`;
   return `<!doctype html>
 <html lang="en" dir="ltr">
 ${head({ lang: "en", title: "Page not found | Vellum", desc: T.en.notFound.body, origin, noindex: true })}
 <body>
-${chrome({ lang: "en", otherHref: "/ar", body, origin })}
+${chrome({ lang: "en", otherHref: "/ar", body })}
 </body>
 </html>
 `;
