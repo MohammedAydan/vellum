@@ -619,10 +619,27 @@ export interface ListCollectionsOptions extends RequestOptions {
 /* Public client & reference interfaces                                       */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * One write inside `batchWrite`. `ifVersion` and `exists` make the batch conditional: the server
+ * checks every precondition before it writes anything, so if one document is stale none are
+ * changed (HTTP 412, `FAILED_PRECONDITION`). All operations commit in one round trip.
+ */
+export interface BatchWriteOperation {
+  type: "create" | "set" | "update" | "delete";
+  path: string;
+  data?: Record<string, unknown>;
+  /** `set` only: merge into the existing document instead of replacing it. */
+  merge?: boolean;
+  /** Require the document to be at exactly this version (`0` means it must not exist). */
+  ifVersion?: number | null;
+  /** Require the document to exist (`true`) or not exist (`false`). */
+  exists?: boolean;
+}
+
 export interface VellumClientInterface {
   collection<T = Record<string, unknown>>(collectionPath: string): CollectionReferenceInterface<T>;
   doc<T = Record<string, unknown>>(documentPath: string): DocumentReferenceInterface<T>;
-  batchWrite(writes: unknown[], options?: RequestOptions): Promise<unknown>;
+  batchWrite(writes: Array<BatchWriteOperation | Record<string, unknown>>, options?: RequestOptions): Promise<unknown>;
   /**
    * Automatically chunk large write arrays into server-safe `batchWrite` calls
    * (default 500 ops/batch) with bounded concurrency (default 4) and AbortSignal support.
@@ -876,7 +893,7 @@ export interface CollectionReferenceInterface<T = Record<string, unknown>> exten
   addWithRelated(
     data: T,
     related: Record<string, { collection: string; docs: Record<string, unknown>[]; parentField?: string }>,
-    options?: RequestOptions
+    options?: RequestOptions & { idempotencyKey?: string }
   ): Promise<DocumentReferenceInterface<T>>;
   /** Attach a typed bidirectional data converter, or pass `null` to strip an existing converter. */
   withConverter<U>(converter: DocDataConverter<U>): CollectionReferenceInterface<U>;
