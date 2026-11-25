@@ -42,7 +42,9 @@ function DirectionFromLocale({ children }: { children: React.ReactNode }): React
 }
 
 const rootElement = document.getElementById("root");
-if (rootElement && !rootElement.innerHTML) {
+if (rootElement && (!rootElement.innerHTML || rootElement.hasAttribute("data-splash"))) {
+  rootElement.removeAttribute("data-splash");
+  rootElement.innerHTML = "";
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <React.StrictMode>

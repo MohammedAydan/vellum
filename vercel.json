@@ -90,6 +90,60 @@
           "value": "public, max-age=300, s-maxage=300"
         }
       ]
+    },
+    {
+      "source": "/(login|signup|mfa|app|console-shell)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/app/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/admin/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/admin",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/(sitemap\\.xml|robots\\.txt)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, s-maxage=3600"
+        }
+      ]
+    },
+    {
+      "source": "/(site\\.css|og-image\\.png|mark\\.png)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, s-maxage=86400"
+        }
+      ]
     }
   ],
   "rewrites": [
@@ -102,8 +156,32 @@
       "destination": "/docs"
     },
     {
-      "source": "/:path((?!admin/|docs/|assets/|v1/|favicon\\.).*)",
-      "destination": "/"
+      "source": "/login",
+      "destination": "/console-shell"
+    },
+    {
+      "source": "/signup",
+      "destination": "/console-shell"
+    },
+    {
+      "source": "/mfa",
+      "destination": "/console-shell"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/console-shell"
+    },
+    {
+      "source": "/terms",
+      "destination": "/console-shell"
+    },
+    {
+      "source": "/app",
+      "destination": "/console-shell"
+    },
+    {
+      "source": "/app/:path*",
+      "destination": "/console-shell"
     }
   ]
 }

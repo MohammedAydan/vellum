@@ -19,11 +19,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { buildSite } from "./site/build-site.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const OUT_DIR = path.join(ROOT, "dist-frontend");
 
+// Public site pages are real files. Console routes fall back to the dashboard
+// shell (console-shell.html); anything else is a real 404.
 const REDIRECTS = `/docs            /docs/                301
 /admin           /admin/               301
 /admin/assets/*  /admin/assets/:splat  200
@@ -31,7 +34,14 @@ const REDIRECTS = `/docs            /docs/                301
 /docs/assets/*   /docs/assets/:splat   200
 /docs/*          /docs/index.html      200
 /assets/*        /assets/:splat        200
-/*               /index.html           200
+/login           /console-shell.html   200
+/signup          /console-shell.html   200
+/mfa             /console-shell.html   200
+/privacy         /console-shell.html   200
+/terms           /console-shell.html   200
+/app             /console-shell.html   200
+/app/*           /console-shell.html   200
+/*               /404.html             404
 `;
 
 const HEADERS = `/*
@@ -131,6 +141,9 @@ function main() {
   // Root-level llms.txt so agents that probe /llms.txt find the docs index.
   const llms = path.join(OUT_DIR, "docs", "llms.txt");
   if (fs.existsSync(llms)) fs.copyFileSync(llms, path.join(OUT_DIR, "llms.txt"));
+
+  // Public marketing pages, sitemap, robots.txt, 404 and per-page docs shells.
+  buildSite();
 
   fs.writeFileSync(path.join(OUT_DIR, "_redirects"), REDIRECTS);
   fs.writeFileSync(path.join(OUT_DIR, "_headers"), HEADERS);

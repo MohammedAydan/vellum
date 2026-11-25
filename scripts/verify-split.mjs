@@ -200,7 +200,7 @@ check("root vercel.json provides SPA deep-link fallbacks for dashboard, admin an
   // cleanUrls strips .html from the served filesystem, so a rewrite whose
   // destination ends in .html fails Vercel's `check: true` filesystem probe
   // and the route 404s. Fallbacks must target the extensionless shell URL.
-  const missing = ["/", "/admin", "/docs"]
+  const missing = ["/console-shell", "/admin", "/docs"]
     .filter((dest) => !hasFallback(dest))
     .map((dest) => dest);
   const htmlDestinations = rewrites
