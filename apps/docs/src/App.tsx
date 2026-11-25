@@ -226,7 +226,7 @@ export default function App() {
         <VellumLogo size={28} />
         <span className="brand-name">VELLUM <span className="brand-sub">{isArabic ? "/ التوثيق" : "/ Docs"}</span></span>
       </a>
-      <span className="version-pill">v0.0.3</span>
+      <span className="version-pill">v{__VELLUM_VERSION__}</span>
       <span
         className="beta-pill"
         title={isArabic ? "VELLUM في مرحلة تجريبية عامة. قد تتغير الواجهات والميزات قبل الإصدار 1.0." : "VELLUM is in public beta. APIs and features may change before 1.0."}
