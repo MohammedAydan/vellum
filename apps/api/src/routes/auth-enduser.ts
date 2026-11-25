@@ -40,7 +40,6 @@ import {
   TokenRefreshRequestSchema,
   UpdateProfileRequestSchema,
 } from "@vellum/api-contract";
-import { verifyApiKeyAsync } from "@vellum/authorization";
 import { THROTTLE_SCOPES, type ProjectAuthConfig } from "@vellum/database-control";
 import type { AuthUserRecord, UpdateAuthUserInput } from "@vellum/storage";
 import {
