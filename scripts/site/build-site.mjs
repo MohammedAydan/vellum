@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PAGES, DOCS_JSONLD_TYPE } from "./content.mjs";
-import { CSS, renderPage, renderNotFound, escapeHtml } from "./template.mjs";
+import { CSS, JS, EARLY_JS, renderPage, renderNotFound, escapeHtml } from "./template.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const OUT = path.join(ROOT, "dist-frontend");
@@ -28,6 +28,9 @@ export function buildSite() {
   fs.renameSync(path.join(OUT, "index.html"), path.join(OUT, "console-shell.html"));
 
   write("site.css", CSS);
+  // Scripts are files, not inline, so the page CSP can be `script-src 'self'`.
+  write("site-early.js", EARLY_JS);
+  write("site.js", JS);
   fs.copyFileSync(path.join(ROOT, "assets/site/og-image.png"), path.join(OUT, "og-image.png"));
   fs.copyFileSync(path.join(ROOT, "assets/site/mark.png"), path.join(OUT, "mark.png"));
 
