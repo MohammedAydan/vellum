@@ -1612,6 +1612,7 @@ export class DocumentEngine implements DocumentEnginePort {
       rulesetRecord: ruleset,
       operation: "list",
       path: `${normalizedQuery.collectionPath}/__collection_check__`,
+      collectionLevel: true,
       authContext: authCtx,
       bypassRules: this.resolveBypassRules(ctx),
     });
@@ -1810,6 +1811,7 @@ export class DocumentEngine implements DocumentEnginePort {
       rulesetRecord: ruleset,
       operation: "list",
       path: `${collectionPath}/__collection_check__`,
+      collectionLevel: true,
       authContext: authCtx,
       bypassRules: this.resolveBypassRules(ctx),
     });
@@ -1896,6 +1898,7 @@ export class DocumentEngine implements DocumentEnginePort {
       rulesetRecord: ruleset,
       operation: "list",
       path: `${collectionPath}/__collection_check__`,
+      collectionLevel: true,
       authContext: authCtx,
       bypassRules: this.resolveBypassRules(ctx),
     });
@@ -2153,6 +2156,7 @@ export class DocumentEngine implements DocumentEnginePort {
         rulesetRecord: ruleset,
         operation: "list",
         path: `${collectionPath}/__collection_check__`,
+        collectionLevel: true,
         authContext: authCtx,
         bypassRules,
       });
@@ -2581,6 +2585,7 @@ export class DocumentEngine implements DocumentEnginePort {
       rulesetRecord: ruleset,
       operation: "list",
       path: `${collectionName}/__collection_check__`,
+      collectionLevel: true,
       authContext: authCtx,
       bypassRules: this.resolveBypassRules(ctx),
     });
