@@ -895,7 +895,7 @@ export interface CollectionReferenceInterface<T = Record<string, unknown>> exten
   addWithRelated(
     data: T,
     related: Record<string, { collection: string; docs: Record<string, unknown>[]; parentField?: string }>,
-    options?: RequestOptions
+    options?: RequestOptions & { idempotencyKey?: string }
   ): Promise<DocumentReferenceInterface<T>>;
   /** Attach a typed bidirectional data converter, or pass `null` to strip an existing converter. */
   withConverter<U>(converter: DocDataConverter<U>): CollectionReferenceInterface<U>;
