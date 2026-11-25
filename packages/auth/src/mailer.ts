@@ -108,7 +108,13 @@ export function createMailer(): Mailer {
       }
       const smtp = parseProjectSmtp(input.config) ?? parsePlatformSmtp(input.settings);
       if (!smtp) {
-        if (process.env["NODE_ENV"] === "production") {
+        // Fail closed: a reset or verification token is only ever returned to the caller
+        // when the process is explicitly a test/development one. An unset or unexpected
+        // NODE_ENV must never turn "no SMTP" into "anyone can read any reset token".
+        const env = process.env["NODE_ENV"];
+        const devTokensAllowed =
+          env === "test" || env === "development" || process.env["VELLUM_ALLOW_DEV_TOKENS"] === "1";
+        if (!devTokensAllowed) {
           throw new VellumError(
             "SERVICE_UNAVAILABLE",
             "Email delivery is not configured for this project or platform"
