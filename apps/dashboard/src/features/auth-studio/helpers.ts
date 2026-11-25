@@ -41,6 +41,10 @@ export function formatDate(value: string | null): string {
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
 }
 
+export function readAllowPollSignIn(config: AuthConfigView | null | undefined): boolean {
+  return asRecord(config?.oauthProviders?.["__settings"])["allowPollSignIn"] === true;
+}
+
 export function readRedirectUris(config: AuthConfigView | null | undefined): string[] {
   const settings = asRecord(config?.oauthProviders?.["__settings"]);
   const list = settings["redirectUris"];

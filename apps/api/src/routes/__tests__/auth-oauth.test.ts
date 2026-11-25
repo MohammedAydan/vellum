@@ -44,7 +44,7 @@ function installFetch() {
   });
 }
 
-async function fixture() {
+async function fixture(opts: { poll?: boolean } = {}) {
   const platform = createVellumPlatform();
   const org = await platform.controlStore.createOrganization({ name: "O", slug: "oauth-org", billingEmail: "o@example.com" });
   const { project } = await platform.controlStore.createProject({ organizationId: org.id, name: "P", slug: "oauth-app" });
@@ -74,7 +74,7 @@ async function fixture() {
     oauthProviders: mergeOAuthProviders({}, {
       google: { enabled: true, clientId: "google-client", clientSecret: "gsecret" },
       github: { enabled: true, clientId: "gh-client", clientSecret: "ghsecret" },
-      __settings: { redirectUris: [REDIRECT, "myapp://auth"] },
+      __settings: { redirectUris: [REDIRECT, "myapp://auth"], ...(opts.poll === false ? {} : { allowPollSignIn: true }) },
     }, process.env["MASTER_ENCRYPTION_KEY"]),
   });
   return { platform, project, call, publicKeyStr, serverKey, base };
@@ -495,5 +495,49 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     const f = await fixture();
     const bad = await f.platform.fetch(new Request(`http://localhost${f.base}/oauth/confirm`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ ticket: "AAAA", code }) }));
     expect(await bad.text()).toContain("expired");
+  });
+
+  it("redirect-less sign-in is off by default: start, poll and a pending callback all refuse with a clear message", async () => {
+    const f = await fixture({ poll: false });
+    const { challenge, verifier } = pkce();
+    const res = await f.call("POST", "/oauth/google/start", f.publicKeyStr, { delivery: "poll", codeChallenge: challenge });
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(await res.json())).toContain("Enable it in Auth Studio");
+    const poll = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: verifier });
+    expect(poll.status).toBe(403);
+    // Redirect delivery is unaffected.
+    expect((await start(f, "google", challenge)).status).toBe(200);
+  });
+
+  it("turning the toggle off while a flow is in flight stops it; saving the redirect list or the toggle never wipes the other", async () => {
+    const { mergeOAuthProviders, pollSignInAllowed, redirectAllowlist } = await import("../../auth/oauth/config.js");
+    const key = process.env["MASTER_ENCRYPTION_KEY"];
+    const base = mergeOAuthProviders({}, { __settings: { redirectUris: [REDIRECT] } }, key);
+    expect(pollSignInAllowed(base)).toBe(false);
+    const on = mergeOAuthProviders(base, { __settings: { allowPollSignIn: true } }, key);
+    expect(pollSignInAllowed(on)).toBe(true);
+    expect(redirectAllowlist(on)).toEqual([REDIRECT]);
+    const urisOnly = mergeOAuthProviders(on, { __settings: { redirectUris: ["myapp://auth"] } }, key);
+    expect(pollSignInAllowed(urisOnly)).toBe(true);
+    expect(redirectAllowlist(urisOnly)).toEqual(["myapp://auth"]);
+    expect(() => mergeOAuthProviders(on, { __settings: { allowPollSignIn: "yes" } }, key)).toThrow(/true or false/);
+
+    const f = await fixture();
+    const { challenge } = pkce();
+    const res = await f.call("POST", "/oauth/google/start", f.publicKeyStr, { delivery: "poll", codeChallenge: challenge });
+    const authorize = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
+    lastNonce = authorize.searchParams.get("nonce") ?? "";
+    const existing = await (await import("../auth-shared.js")).ensureAuthConfig(f.platform as never, f.project.id);
+    await f.platform.controlStore.upsertAuthConfig({
+      projectId: f.project.id,
+      jwtKeyId: existing.jwtKeyId,
+      jwtPublicKeyPem: existing.jwtPublicKeyPem,
+      jwtPrivateKeyEncrypted: existing.jwtPrivateKeyEncrypted,
+      oauthProviders: mergeOAuthProviders(existing.oauthProviders, { __settings: { allowPollSignIn: false } }, key),
+    });
+    const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+    const html = await (await f.platform.fetch(new Request(`http://localhost${cb.pathname}?code=good-code&state=${authorize.searchParams.get("state")}`))).text();
+    expect(html).toContain("turned off for this project");
+    expect(html).not.toContain("confirmation code");
   });
 });

@@ -66,7 +66,10 @@ export default function Page() {
           Without a redirect URI the SDK opens the system browser and collects the result by polling the API with a PKCE verifier that
           never leaves the app. There is nothing to add to AndroidManifest.xml or Info.plist and nothing to add in Auth Studio, and it keeps
           working if the OS recreates your app while the browser is open. After signing in, the user returns to your app and the sign-in completes.
-          This is the recommended way on Android and iOS.
+          It is off by default: turn it on in Auth Studio (Providers, "Redirect-less sign-in"), otherwise the SDK reports "Redirect-less sign-in is turned off for this project". Know the tradeoff before you do:
+          the person confirms the sign-in by typing the code your app shows, but a fake app run by an attacker can show that code as well, so a determined phisher can still
+          trick a user into approving a sign-in for the attacker's app. A deep link, and best of all an App Link or Universal Link, only ever reaches your own app, so it does not have this weakness.
+          Use redirect-less sign-in when you cannot register a link, and prefer links for apps that hold sensitive data.
         </P>
         <P>
           Prefer a deep link? Pass a custom scheme such as <code>myapp://auth-callback</code>, add it to the allowed redirect list, and register the scheme in

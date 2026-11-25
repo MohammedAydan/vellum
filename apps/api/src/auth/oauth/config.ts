@@ -22,6 +22,17 @@ export function redirectAllowlist(oauthProviders: Rec): string[] {
 }
 
 /**
+ * Redirect-less (poll) sign-in is off unless the project turns it on in Auth Studio. It trades a little phishing
+ * resistance for needing no deep link, so it is an explicit choice (see the social sign-in docs).
+ */
+export function pollSignInAllowed(oauthProviders: Rec): boolean {
+  return asRec(oauthProviders[SETTINGS_KEY])["allowPollSignIn"] === true;
+}
+
+export const POLL_DISABLED_MESSAGE =
+  "Redirect-less sign-in is turned off for this project. Enable it in Auth Studio (Providers > Redirect-less sign-in) or pass a redirectUri.";
+
+/**
  * Merge an incoming oauthProviders patch into the stored record.
  * - clientSecret (plaintext from the dashboard) is encrypted and stored as
  *   clientSecretEncrypted; an empty or missing secret keeps the stored one.
@@ -31,9 +42,15 @@ export function mergeOAuthProviders(existing: Rec, incoming: Rec, masterKey: str
   const out: Rec = { ...existing };
   for (const [name, raw] of Object.entries(incoming)) {
     if (name === SETTINGS_KEY) {
-      const uris = redirectAllowlist({ [SETTINGS_KEY]: raw });
+      // Settings merge key by key: saving the redirect list must not switch redirect-less sign-in off, and vice versa.
+      const incomingSettings = asRec(raw);
+      const uris = "redirectUris" in incomingSettings ? redirectAllowlist({ [SETTINGS_KEY]: raw }) : redirectAllowlist(existing);
       for (const uri of uris) assertValidRedirectUri(uri);
-      out[name] = { ...asRec(raw), redirectUris: [...new Set(uris)] };
+      const next: Rec = { ...asRec(existing[SETTINGS_KEY]), ...incomingSettings, redirectUris: [...new Set(uris)] };
+      if ("allowPollSignIn" in incomingSettings && typeof incomingSettings["allowPollSignIn"] !== "boolean") {
+        throw new VellumError("INVALID_ARGUMENT", "allowPollSignIn must be true or false");
+      }
+      out[name] = next;
       continue;
     }
     if (raw === null) {

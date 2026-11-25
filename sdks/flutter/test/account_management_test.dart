@@ -108,9 +108,10 @@ void main() {
     final linked = await client.auth.listLinkedProviders();
     expect(linked.providers.single.provider, 'google');
     expect(linked.hasPassword, isFalse);
-    await client.auth.unlinkProvider('google');
+    await client.auth.unlinkProvider('google', currentPassword: 'old-password-1');
     expect(calls.any((c) => c['method'] == 'DELETE' && c['url'].toString().endsWith('/auth/sessions/s1')), isTrue);
-    expect(calls.any((c) => c['method'] == 'DELETE' && c['url'].toString().endsWith('/auth/identities/google')), isTrue);
+    final unlink = calls.lastWhere((c) => c['method'] == 'DELETE' && c['url'].toString().endsWith('/auth/identities/google'));
+    expect(unlink['body'], <String, Object?>{'currentPassword': 'old-password-1'});
   });
 
   test('updateProfile forwards currentPassword when changing the email', () async {

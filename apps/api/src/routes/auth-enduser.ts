@@ -58,6 +58,8 @@ import {
   confirmationCode,
   openJson,
   openState,
+  POLL_DISABLED_MESSAGE,
+  pollSignInAllowed,
   redirectAllowlist,
   resolveProviderCredentials,
   sealJson,
@@ -666,6 +668,9 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     // delivery "poll": no redirect URI and no deep link. The provider returns to this server, which shows a
     // "return to the app" page, and the app collects the result by polling with its PKCE verifier.
     const pollDelivery = body.delivery === "poll";
+    if (pollDelivery && !pollSignInAllowed(config.oauthProviders)) {
+      throw new VellumError("PERMISSION_DENIED", POLL_DISABLED_MESSAGE);
+    }
     const redirectUri = pollDelivery ? "" : typeof body.redirectUri === "string" ? body.redirectUri : "";
     if (!pollDelivery && !isRedirectAllowed(redirectAllowlist(config.oauthProviders), redirectUri)) {
       throw new VellumError("INVALID_ARGUMENT", "redirectUri is not in this project's allowed redirect list");
@@ -724,6 +729,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const config = await ensureAuthConfig(platform, tenant.projectId);
     // The allowlist is re-checked: it may have changed since the flow began.
     const pollFlow = flow.redirectUri === "";
+    if (pollFlow && !pollSignInAllowed(config.oauthProviders)) return returnToAppPage(false, POLL_DISABLED_MESSAGE);
     if (!pollFlow && !isRedirectAllowed(redirectAllowlist(config.oauthProviders), flow.redirectUri)) {
       throw new VellumError("INVALID_ARGUMENT", "redirectUri is no longer allowed for this project");
     }
@@ -894,7 +900,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
         "referrer-policy": "no-referrer",
-        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
+        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
         "x-content-type-options": "nosniff",
       },
     });
@@ -926,6 +932,9 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     try {
       const config = await ensureAuthConfig(platform, tenant.projectId);
       checkAccessGuards(config);
+      if (ticket.redirectUri === "" && !pollSignInAllowed(config.oauthProviders)) {
+        throw new VellumError("PERMISSION_DENIED", POLL_DISABLED_MESSAGE);
+      }
       if (ticket.redirectUri !== "" && !isRedirectAllowed(redirectAllowlist(config.oauthProviders), ticket.redirectUri)) {
         throw new VellumError("INVALID_ARGUMENT", "redirectUri is no longer allowed for this project");
       }
@@ -976,6 +985,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
+    if (!pollSignInAllowed(config.oauthProviders)) throw new VellumError("PERMISSION_DENIED", POLL_DISABLED_MESSAGE);
     const body = (await c.req.json().catch(() => ({}))) as { codeVerifier?: unknown };
     if (typeof body.codeVerifier !== "string" || body.codeVerifier.length < 43 || body.codeVerifier.length > 128) {
       throw new VellumError("INVALID_ARGUMENT", "codeVerifier is required");

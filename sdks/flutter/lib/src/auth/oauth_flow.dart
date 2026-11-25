@@ -103,7 +103,7 @@ class VellumOAuth {
 
   /// Adds `google` or `github` to the signed-in user's account (the provider's
   /// email may differ). Fails when that provider account belongs to another user.
-  Future<VellumAuthResult> link(String provider) {
+  Future<VellumAuthResult> link(String provider, {String? currentPassword}) {
     if (auth.currentUser == null) {
       throw const VellumException(
         code: 'UNAUTHENTICATED',
@@ -117,17 +117,17 @@ class VellumOAuth {
         'in the app into the browser page to approve the link.',
       );
     }
-    return _run(provider, true);
+    return _run(provider, true, currentPassword);
   }
 
-  Future<VellumAuthResult> _run(String provider, bool link) async {
+  Future<VellumAuthResult> _run(String provider, bool link, [String? currentPassword]) async {
     final verifier = _token(48);
     final state = _token(16);
     final challenge = base64Url
         .encode(crypto.sha256.convert(utf8.encode(verifier)).bytes)
         .replaceAll('=', '');
     if (_openUrl != null) {
-      return _signInPolling(provider, verifier, challenge, link);
+      return _signInPolling(provider, verifier, challenge, link, currentPassword);
     }
     final start = await auth.oauthStart(
       provider: provider,
@@ -135,6 +135,7 @@ class VellumOAuth {
       codeChallenge: challenge,
       state: state,
       link: link,
+      currentPassword: currentPassword,
     );
     if (link) onConfirmationCode!(vellumConfirmationCode(challenge));
     final String returned;
@@ -176,11 +177,13 @@ class VellumOAuth {
     String verifier,
     String challenge,
     bool link,
+    String? currentPassword,
   ) async {
     final start = await auth.oauthStartPoll(
       provider: provider,
       codeChallenge: challenge,
       link: link,
+      currentPassword: currentPassword,
     );
     onConfirmationCode!(vellumConfirmationCode(challenge));
     try {
