@@ -13,6 +13,8 @@ import { sanitizeAndClone } from "../core/safe-json.js";
 import type {
   ActionTokenResult,
   AuthState,
+  VellumLinkedProvider,
+  VellumSessionInfo,
   AuthStateListener,
   ConfirmEmailVerificationInput,
   ConfirmPasswordResetInput,
@@ -663,6 +665,26 @@ export class VellumAuthClient {
     return parseSuccessResponse(
       await this.request("POST", "/auth/password/confirm", input, {}, false)
     );
+  }
+
+  public async listSessions(): Promise<VellumSessionInfo[]> {
+    const payload = await this.request<Record<string, unknown>>("GET", "/auth/sessions");
+    const list = Array.isArray(payload["sessions"]) ? (payload["sessions"] as VellumSessionInfo[]) : [];
+    return sanitizeAndClone(list);
+  }
+
+  public async revokeSession(sessionId: string): Promise<void> {
+    await this.request("DELETE", `/auth/sessions/${encodeURIComponent(sessionId)}`);
+  }
+
+  public async listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }> {
+    const payload = await this.request<Record<string, unknown>>("GET", "/auth/identities");
+    const providers = Array.isArray(payload["identities"]) ? (payload["identities"] as VellumLinkedProvider[]) : [];
+    return sanitizeAndClone({ providers, hasPassword: payload["hasPassword"] === true });
+  }
+
+  public async unlinkProvider(provider: string): Promise<void> {
+    await this.request("DELETE", `/auth/identities/${encodeURIComponent(provider)}`);
   }
 
   /**

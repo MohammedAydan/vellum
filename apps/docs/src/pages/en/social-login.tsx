@@ -1,5 +1,5 @@
 import {
-  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
+  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterDeepLinkDart, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
 } from "../../social-login-examples";
 import { AlphaNotice, Callout, Code, CodeTabs, Doc, P, PageLink, Section, UL } from "../../ui";
 
@@ -57,10 +57,16 @@ export default function Page() {
         <Code lang="bash" title="pubspec.yaml" code={flutterPubspec} />
         <Code lang="dart" title="Sign in" code={flutterBrowserDart} />
         <P>
-          With a custom scheme such as <code>myapp://auth-callback</code> (iOS, Android, macOS) register the scheme in your app
-          like any deep link. On Windows and Linux use a loopback redirect with a fixed port: the SDK catches the redirect on that
-          port, so nothing needs registering. The built-in launcher does not cover Flutter web; pass your own launcher there.
+          Without a redirect URI the SDK opens the system browser and collects the result by polling the API with a PKCE verifier that
+          never leaves the app. There is nothing to add to AndroidManifest.xml or Info.plist and nothing to add in Auth Studio, and it keeps
+          working if the OS recreates your app while the browser is open. After signing in, the user returns to your app and the sign-in completes.
+          This is the recommended way on Android and iOS.
         </P>
+        <P>
+          Prefer a deep link? Pass a custom scheme such as <code>myapp://auth-callback</code>, add it to the allowed redirect list, and register the scheme in
+          your app like any deep link. On Windows and Linux you can also use a loopback redirect with a fixed port. The built-in launcher does not cover Flutter web; use the web SDK flow there.
+        </P>
+        <Code lang="dart" title="Deep link (optional)" code={flutterDeepLinkDart} />
         <Code lang="xml" title="AndroidManifest.xml (inside MainActivity)" code={androidManifest} />
         <Code lang="xml" title="Info.plist (iOS and macOS)" code={iosPlist} />
         <Code lang="dart" title="Desktop loopback redirect" code={desktopDart} />

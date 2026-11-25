@@ -653,6 +653,45 @@ class VellumAuth implements VellumAuthPort {
   /// Supplying it alone has no effect (the server rejects an empty patch); use
   /// [sendPasswordResetEmail] followed by [confirmPasswordReset] instead.
   @override
+  Future<List<VellumSessionInfo>> listSessions() async {
+    final res = await client.request('GET', '/auth/sessions');
+    final list = res['sessions'];
+    if (list is! List) return const <VellumSessionInfo>[];
+    return list
+        .whereType<Map>()
+        .map((m) => VellumSessionInfo.fromJson(Map<String, Object?>.from(m)))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> revokeSession(String sessionId) async {
+    await client.request(
+        'DELETE', '/auth/sessions/${Uri.encodeComponent(sessionId)}');
+  }
+
+  @override
+  Future<VellumLinkedProviders> listLinkedProviders() async {
+    final res = await client.request('GET', '/auth/identities');
+    final list = res['identities'];
+    return VellumLinkedProviders(
+      providers: list is List
+          ? list
+              .whereType<Map>()
+              .map((m) =>
+                  VellumLinkedProvider.fromJson(Map<String, Object?>.from(m)))
+              .toList(growable: false)
+          : const <VellumLinkedProvider>[],
+      hasPassword: res['hasPassword'] == true,
+    );
+  }
+
+  @override
+  Future<void> unlinkProvider(String provider) async {
+    await client.request(
+        'DELETE', '/auth/identities/${Uri.encodeComponent(provider)}');
+  }
+
+  @override
   Future<VellumUser> changePassword({
     required String currentPassword,
     required String newPassword,

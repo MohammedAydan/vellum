@@ -1,5 +1,5 @@
 import {
-  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
+  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterDeepLinkDart, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
 } from "../../social-login-examples";
 import { AlphaNotice, Callout, Code, CodeTabs, Doc, P, PageLink, Section, UL } from "../../ui";
 
@@ -57,10 +57,15 @@ export default function Page() {
         <Code lang="bash" title="pubspec.yaml" code={flutterPubspec} />
         <Code lang="dart" title="تسجيل الدخول" code={flutterBrowserDart} />
         <P>
-          مع مخطط مخصص مثل <code>myapp://auth-callback</code> (iOS وAndroid وmacOS) سجّل المخطط في تطبيقك كأي رابط عميق.
-          على Windows وLinux استخدم عنوان رجوع loopback بمنفذ ثابت: يلتقط الـSDK الرجوع على هذا المنفذ فلا حاجة لتسجيل شيء.
-          المشغّل المدمج لا يغطي Flutter web؛ مرّر مشغّلك الخاص هناك.
+          بدون عنوان رجوع (redirect URI) يفتح الـSDK متصفح النظام ويجلب النتيجة بالاستعلام الدوري من الـAPI باستخدام PKCE verifier لا يغادر تطبيقك.
+          لا تضيف شيئا إلى AndroidManifest.xml أو Info.plist ولا إلى Auth Studio، ويستمر العمل حتى لو أعاد النظام إنشاء تطبيقك أثناء فتح المتصفح.
+          بعد تسجيل الدخول يعود المستخدم إلى تطبيقك فيكتمل الدخول. هذه هي الطريقة الموصى بها على Android وiOS.
         </P>
+        <P>
+          تفضّل الرابط العميق؟ مرّر مخططا مخصصا مثل <code>myapp://auth-callback</code> وأضفه إلى قائمة عناوين الرجوع المسموحة وسجّله في تطبيقك كأي رابط عميق.
+          على Windows وLinux يمكنك أيضا استخدام loopback بمنفذ ثابت. المشغّل المدمج لا يغطي Flutter web؛ استخدم مسار الويب هناك.
+        </P>
+        <Code lang="dart" title="رابط عميق (اختياري)" code={flutterDeepLinkDart} />
         <Code lang="xml" title="AndroidManifest.xml (داخل MainActivity)" code={androidManifest} />
         <Code lang="xml" title="Info.plist (iOS وmacOS)" code={iosPlist} />
         <Code lang="dart" title="رجوع loopback على سطح المكتب" code={desktopDart} />

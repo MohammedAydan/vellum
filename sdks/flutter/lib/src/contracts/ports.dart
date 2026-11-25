@@ -173,6 +173,18 @@ abstract interface class VellumAuthPort {
     required String token,
     required String newPassword,
   });
+  /// Active sessions (devices) of the signed-in user.
+  Future<List<VellumSessionInfo>> listSessions();
+
+  /// Signs one of the user's sessions out.
+  Future<void> revokeSession(String sessionId);
+
+  /// Sign-in methods linked to the account.
+  Future<VellumLinkedProviders> listLinkedProviders();
+
+  /// Removes a linked sign-in method. Refused when it is the last one.
+  Future<void> unlinkProvider(String provider);
+
   /// Changes the password of the signed-in user. Needs the current password;
   /// every other session ends and this one continues on a fresh session.
   Future<VellumUser> changePassword({

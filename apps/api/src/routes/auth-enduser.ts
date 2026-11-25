@@ -894,6 +894,75 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     return c.json({ user: publicUser(updated) });
   });
 
+  // ------------------------------------------------------------ SESSIONS AND LINKED SIGN-IN METHODS
+
+  routes.get("/sessions", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    const now = Date.now();
+    const sessions = (await storage.listUserSessions(tenant.ctx, current.id))
+      .filter((s) => !s.revoked && Date.parse(s.expiresAt) > now)
+      .map((s) => ({
+        id: s.id,
+        userAgent: s.userAgent,
+        ipAddress: s.ipAddress,
+        createdAt: s.createdAt,
+        lastRefreshedAt: s.rotatedAt,
+        expiresAt: s.expiresAt,
+      }));
+    c.header("cache-control", "no-store");
+    return c.json({ sessions });
+  });
+
+  routes.delete("/sessions/:sessionId", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    const id = c.req.param("sessionId");
+    const owned = (await storage.listUserSessions(tenant.ctx, current.id)).find((s) => s.id === id);
+    if (!owned) throw new VellumError("NOT_FOUND", "Session not found");
+    await storage.revokeAuthSession(tenant.ctx, owned.id, "revoked_by_user");
+    return c.json({ success: true });
+  });
+
+  routes.get("/identities", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    const identities = (await storage.listUserIdentities(tenant.ctx, current.id)).map((i) => ({
+      provider: i.provider,
+      email: typeof i.identityData["email"] === "string" ? i.identityData["email"] : null,
+      lastSignInAt: i.lastSignInAt,
+      createdAt: i.createdAt,
+    }));
+    return c.json({ identities, hasPassword: current.passwordHash !== null });
+  });
+
+  // Unlinking is refused when it would leave the account with no way to sign in.
+  routes.delete("/identities/:provider", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    const provider = c.req.param("provider") ?? "";
+    const identities = await storage.listUserIdentities(tenant.ctx, current.id);
+    const target = identities.find((i) => i.provider === provider);
+    if (!target) throw new VellumError("NOT_FOUND", "That sign-in method is not linked to this account");
+    const remaining = identities.filter((i) => i.provider !== provider && i.provider !== "password").length;
+    if (provider === "password") {
+      if (remaining === 0) throw new VellumError("FAILED_PRECONDITION", "Link another sign-in method before removing the password");
+      await storage.updateAuthUser(tenant.ctx, current.id, { passwordHash: null });
+    } else if (remaining === 0 && current.passwordHash === null) {
+      throw new VellumError("FAILED_PRECONDITION", "This is the only way to sign in to the account; add a password or another provider first");
+    }
+    await storage.deleteAuthIdentity(tenant.ctx, current.id, provider);
+    return c.json({ success: true });
+  });
+
   // ------------------------------------------------------------------ PASSWORD
 
   // Signed-in password change: needs the current password, ends every other session and returns a fresh one.

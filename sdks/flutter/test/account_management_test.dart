@@ -54,6 +54,22 @@ void main() {
         if (url.endsWith('/auth/user') && method == 'DELETE') {
           return <String, dynamic>{'deleted': true};
         }
+        if (url.endsWith('/auth/sessions') && method == 'GET') {
+          return <String, dynamic>{
+            'sessions': <Map<String, dynamic>>[
+              <String, dynamic>{'id': 's1', 'userAgent': 'ua', 'ipAddress': null, 'createdAt': 'x', 'lastRefreshedAt': null, 'expiresAt': 'y'},
+            ],
+          };
+        }
+        if (url.endsWith('/auth/identities') && method == 'GET') {
+          return <String, dynamic>{
+            'identities': <Map<String, dynamic>>[
+              <String, dynamic>{'provider': 'google', 'email': 'a@b.c', 'lastSignInAt': 'x', 'createdAt': 'y'},
+            ],
+            'hasPassword': false,
+          };
+        }
+        if (method == 'DELETE') return <String, dynamic>{'success': true};
         return _session();
       },
     );
@@ -83,5 +99,18 @@ void main() {
     expect(del['url'], endsWith('/auth/user'));
     expect(del['body'], <String, Object?>{'password': 'old-password-1'});
     expect(client.auth.currentUser, isNull);
+  });
+
+  test('sessions and linked providers', () async {
+    await client.auth.signInWithEmailAndPassword(email: 'a@example.com', password: 'old-password-1');
+    final sessions = await client.auth.listSessions();
+    expect(sessions.single.id, 's1');
+    await client.auth.revokeSession('s1');
+    final linked = await client.auth.listLinkedProviders();
+    expect(linked.providers.single.provider, 'google');
+    expect(linked.hasPassword, isFalse);
+    await client.auth.unlinkProvider('google');
+    expect(calls.any((c) => c['method'] == 'DELETE' && c['url'].toString().endsWith('/auth/sessions/s1')), isTrue);
+    expect(calls.any((c) => c['method'] == 'DELETE' && c['url'].toString().endsWith('/auth/identities/google')), isTrue);
   });
 }
