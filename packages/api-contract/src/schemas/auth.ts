@@ -106,6 +106,8 @@ export type ControlSessionRefreshRequest = z.infer<typeof ControlSessionRefreshR
 export const UpdateProfileRequestSchema = z
   .object({
     email: EmailSchema.optional(),
+    /** Required to change the email of an account that has a password. */
+    currentPassword: z.string().min(1).max(1024).optional(),
     displayName: z.string().trim().min(1).max(200).nullable().optional(),
     photoUrl: SafePhotoUrlSchema.nullable().optional(),
     phoneNumber: z.string().max(32).nullable().optional(),

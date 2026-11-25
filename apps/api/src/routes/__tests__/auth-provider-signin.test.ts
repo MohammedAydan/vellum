@@ -26,7 +26,13 @@ async function fixture() {
     platform.fetch(new Request(`http://localhost${base}${url}`, {
       headers: { "x-vellum-api-key": key, authorization: `Bearer ${token}` },
     }));
-  return { platform, post, get, publicKey, serverKey };
+  const patch = (url: string, body: unknown, key: string, token: string) =>
+    platform.fetch(new Request(`http://localhost${base}${url}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", "x-vellum-api-key": key, authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    }));
+  return { platform, post, get, patch, publicKey, serverKey };
 }
 
 describe("POST /sign-in/provider", () => {
@@ -86,5 +92,18 @@ describe("access token session binding", () => {
     expect((await get("/user", publicKey, accessToken)).status).toBe(200);
     expect((await post("/sign-out", { refreshToken }, publicKey)).status).toBe(200);
     expect((await get("/user", publicKey, accessToken)).status).toBe(401);
+  });
+});
+
+describe("PATCH /user email change", () => {
+  it("needs the current password, so a stolen access token cannot move the account", async () => {
+    const { patch, post, publicKey } = await fixture();
+    const signup = await post("/sign-up/email", { email: "mv@example.com", password: "Password123!", displayName: "M" }, publicKey);
+    const { accessToken } = (await signup.json()) as { accessToken: string };
+    expect((await patch("/user", { email: "evil@example.com" }, publicKey, accessToken)).status).toBe(401);
+    expect((await patch("/user", { email: "evil@example.com", currentPassword: "wrong" }, publicKey, accessToken)).status).toBe(401);
+    const ok = await patch("/user", { email: "new@example.com", currentPassword: "Password123!" }, publicKey, accessToken);
+    expect(ok.status).toBe(200);
+    expect((await patch("/user", { displayName: "Still fine" }, publicKey, accessToken)).status).toBe(200);
   });
 });

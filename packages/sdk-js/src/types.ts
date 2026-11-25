@@ -520,6 +520,8 @@ export type UpdateProfileInput = {
   phoneVerified?: boolean;
   metadata?: Record<string, unknown>;
   customClaims?: Record<string, unknown>;
+  /** Required when changing `email` on an account that has a password. */
+  currentPassword?: string;
   /**
    * Required when changing `email` on an account that has a password: the
    * account's current password. Not needed for Google/GitHub-only accounts.
