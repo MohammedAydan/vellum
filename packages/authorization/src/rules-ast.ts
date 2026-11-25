@@ -459,6 +459,23 @@ export function evaluateAstNode(expr: AstExpression, context: RuleEvaluationCont
   return evaluateAstNodeInternal(expr, context, 1, { steps: 0 });
 }
 
+function mentionsResource(node: unknown, depth = 0): boolean {
+  if (depth > 64 || node === null || typeof node !== "object") return false;
+  if (Array.isArray(node)) return node.some((n) => mentionsResource(n, depth + 1));
+  const rec = node as Record<string, unknown>;
+  if (typeof rec["var"] === "string" && (rec["var"].startsWith("resource") || rec["var"].startsWith("request.resource"))) return true;
+  return Object.values(rec).some((v) => mentionsResource(v, depth + 1));
+}
+
+/** True when the expression can become true only because `resource` is empty (negation or type test on it). */
+function isNonMonotoneOnResource(node: unknown, depth = 0): boolean {
+  if (depth > 64 || node === null || typeof node !== "object") return false;
+  if (Array.isArray(node)) return node.some((n) => isNonMonotoneOnResource(n, depth + 1));
+  const rec = node as Record<string, unknown>;
+  if ((rec["op"] === "not" || rec["op"] === "isType") && mentionsResource(rec)) return true;
+  return Object.values(rec).some((v) => isNonMonotoneOnResource(v, depth + 1));
+}
+
 export type { ApiKeyRecord, SecurityRulesetRecord } from "@vellum/database-control";
 
 export interface AuthorizeOperationParams {
@@ -475,6 +492,14 @@ export interface AuthorizeOperationParams {
    * the auth DocumentProjector); it is never derived from request headers.
    */
   bypassRules?: boolean | undefined;
+  /**
+   * The check happens before any document is read (collection list, query, aggregate,
+   * export), so there is no `resource` yet and it is evaluated as empty. A rule that
+   * negates or type-tests `resource` would then pass for an empty resource and expose
+   * every row (for example `!(resource.data.private == true)`). With this flag such
+   * rules do not count as a collection-level allow.
+   */
+  collectionLevel?: boolean | undefined;
 }
 
 export interface AuthorizationResult {
@@ -498,6 +523,7 @@ export function authorizeOperation({
   requestData = null,
   requestTimeMs = Date.now(),
   bypassRules = false,
+  collectionLevel = false,
 }: AuthorizeOperationParams): AuthorizationResult {
   // Explicit, auditable system bypass. Must be strictly boolean `true`.
   if (bypassRules === true) {
@@ -575,6 +601,9 @@ export function authorizeOperation({
         ? allowObj.write
         : undefined);
 
+    if (expr !== undefined && collectionLevel && typeof expr !== "boolean" && isNonMonotoneOnResource(expr)) {
+      continue;
+    }
     if (expr !== undefined) {
       const allowed =
         typeof expr === "boolean"

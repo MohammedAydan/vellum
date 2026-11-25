@@ -289,3 +289,59 @@ describe("@vellum/document-engine - Upsert & TTL", () => {
     expect((await dataStore.getDocument(TENANT, "sessions/s3"))?.expiresAt).toBe(expiresAt);
   });
 });
+
+describe("@vellum/document-engine - collection-level rule checks", () => {
+  it("does not let a negated resource rule expose every row through query or aggregate", async () => {
+    const dataStore = new DataPlaneStore();
+    const control = new MockControlStore();
+    const engine = new DocumentEngine({ controlStore: control, dataStore });
+    await engine.createDocument({ ...TENANT, path: "notes/a", data: { private: true, body: "secret" } });
+    await engine.createDocument({ ...TENANT, path: "notes/b", data: { private: false, body: "hello" } });
+    control.ruleset = {
+      rulesAst: {
+        version: 1,
+        rules: [
+          {
+            match: "notes/{id}",
+            allow: {
+              list: {
+                op: "not",
+                condition: { op: "==", left: { var: "resource.data.private" }, right: { val: true } },
+              },
+            },
+          },
+        ],
+      },
+    };
+    await expect(
+      engine.executeQuery({ ...TENANT, apiKeyRecord: PUBLIC_KEY, querySpec: { collection: "notes" } })
+    ).rejects.toThrow(VellumError);
+    await expect(
+      engine.aggregateDocuments({
+        ...TENANT,
+        apiKeyRecord: PUBLIC_KEY,
+        request: { collectionPath: "notes", metrics: { count: { op: "count" } } },
+      })
+    ).rejects.toThrow(VellumError);
+  });
+
+  it("still allows a collection-level rule that does not depend on the resource", async () => {
+    const dataStore = new DataPlaneStore();
+    const control = new MockControlStore();
+    const engine = new DocumentEngine({ controlStore: control, dataStore });
+    await engine.createDocument({ ...TENANT, path: "notes/a", data: { body: "x" } });
+    control.ruleset = {
+      rulesAst: {
+        version: 1,
+        rules: [{ match: "notes/{id}", allow: { list: { op: "!=", left: { var: "auth.uid" }, right: { val: null } } } }],
+      },
+    };
+    const res = await engine.executeQuery({
+      ...TENANT,
+      apiKeyRecord: PUBLIC_KEY,
+      authContext: { uid: "u1", claims: {} },
+      querySpec: { collection: "notes" },
+    });
+    expect(res.documents).toHaveLength(1);
+  });
+});
