@@ -111,6 +111,7 @@ export default function Page() {
         <P>
           For native iOS and Android flows list your app bundle IDs under additional client IDs. The ID token is accepted only if its audience is the Services ID or one of those bundle IDs.
           Pass a random nonce: give Apple its SHA-256 hash and give Vellum the raw value. A token that carries a nonce is refused when none is supplied.
+          Sign-in fails if Apple leaves out the email claim, which can happen for a user who later hides their email. In Flutter always pass the nonce as shown: hash it for Apple and give Vellum the raw value.
           Apple returns the user's name only on the first sign-in, so pass <code>givenName</code> and <code>familyName</code> then. Apple may also hide the real email behind a relay address, which Vellum accepts only when Apple marks it verified.
         </P>
         <P>

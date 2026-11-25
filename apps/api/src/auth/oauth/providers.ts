@@ -447,7 +447,7 @@ export async function completeAuthorization(
  */
 export async function exchangeAppleNativeCode(
   creds: ProviderCredentials,
-  input: { authorizationCode: string; clientId: string }
+  input: { authorizationCode: string; clientId: string; expectedSub: string }
 ): Promise<string | null> {
   try {
     const tokens = await exchangeCode(PROVIDERS["apple"] as ProviderDefinition, creds, {
@@ -456,6 +456,12 @@ export async function exchangeAppleNativeCode(
       codeVerifier: "",
       clientId: input.clientId,
     });
+    // The code must belong to the same Apple user as the verified identity token: otherwise a caller holding user A's
+    // token and user B's code would store B's refresh token on A's identity. The token came from Apple over TLS.
+    const payload = tokens.idToken?.split(".")[1];
+    if (!payload) return null;
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: unknown };
+    if (typeof claims.sub !== "string" || claims.sub !== input.expectedSub) return null;
     return tokens.refreshToken;
   } catch {
     return null;

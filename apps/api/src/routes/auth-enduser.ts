@@ -1175,7 +1175,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     if (typeof body.authorizationCode === "string" && body.authorizationCode.length > 0 && hasWebCredentials("apple", creds)) {
       const token = await exchangeAppleNativeCode(
         { clientId: creds.clientId, clientSecret: creds.clientSecret, teamId: creds.teamId, keyId: creds.keyId },
-        { authorizationCode: body.authorizationCode, clientId: profile.audience ?? creds.clientId }
+        { authorizationCode: body.authorizationCode, clientId: profile.audience ?? creds.clientId, expectedSub: profile.providerUserId }
       );
       if (token) appleRefreshToken = token;
     }

@@ -94,9 +94,9 @@ function normalizeAppleEntry(entry: Rec, secret: string): void {
   if (secret.length > 0) {
     try {
       const key = createPrivateKey(secret);
-      if (key.asymmetricKeyType !== "ec") throw new Error("not ec");
+      if (key.asymmetricKeyType !== "ec" || key.asymmetricKeyDetails?.namedCurve !== "prime256v1") throw new Error("not P-256");
     } catch {
-      throw new VellumError("INVALID_ARGUMENT", "The Apple private key must be the contents of the .p8 file (an EC private key)");
+      throw new VellumError("INVALID_ARGUMENT", "The Apple private key must be the contents of the .p8 file (an EC P-256 private key)");
     }
   }
 }

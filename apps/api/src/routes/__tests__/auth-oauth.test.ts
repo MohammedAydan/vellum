@@ -670,13 +670,31 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
       expect(apple.revokeCalls[0]?.get("client_id")).toBe("com.example.app");
     });
 
+    it("a code that belongs to another Apple user is not stored on this identity", async () => {
+      const f = await fixture();
+      const raw = "n2";
+      // Apple's token response carries user B's id_token while the caller's verified token is user A's.
+      apple.claims = appleClaims("com.example.app", { sub: "apple-B" });
+      const res = await f.call("POST", "/oauth/apple/id-token", f.publicKeyStr, {
+        idToken: signIdToken(appleClaims("com.example.app", { sub: "apple-A" })(raw)), nonce: raw, authorizationCode: "good-code",
+      });
+      expect(res.status).toBe(200);
+      const session = (await res.json()) as { accessToken: string };
+      expect(apple.tokenCalls).toHaveLength(1);
+      const del = await f.platform.fetch(new Request(`http://localhost${f.base}/user`, { method: "DELETE", headers: { "content-type": "application/json", "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${session.accessToken}` } }));
+      expect(del.status).toBe(200);
+      expect(apple.revokeCalls).toHaveLength(0);
+    });
+
     it("saving the config validates Team ID, Key ID and the .p8, and never returns the key", async () => {
       const { mergeOAuthProviders } = await import("../../auth/oauth/config.js");
       const key = process.env["MASTER_ENCRYPTION_KEY"];
       expect(() => mergeOAuthProviders({}, { apple: { enabled: true, clientId: "x", teamId: "short", keyId: "KEY1234567", clientSecret: APPLE_P8 } }, key)).toThrow(/Team ID/);
       expect(() => mergeOAuthProviders({}, { apple: { enabled: true, clientId: "x", teamId: "TEAM123456", keyId: "KEY1234567", clientSecret: "not a key" } }, key)).toThrow(/\.p8/);
       const rsa = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ type: "pkcs8", format: "pem" }).toString();
-      expect(() => mergeOAuthProviders({}, { apple: { enabled: true, clientId: "x", teamId: "TEAM123456", keyId: "KEY1234567", clientSecret: rsa } }, key)).toThrow(/EC/);
+      expect(() => mergeOAuthProviders({}, { apple: { enabled: true, clientId: "x", teamId: "TEAM123456", keyId: "KEY1234567", clientSecret: rsa } }, key)).toThrow(/EC P-256/);
+      const k1 = generateKeyPairSync("ec", { namedCurve: "secp256k1" }).privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+      expect(() => mergeOAuthProviders({}, { apple: { enabled: true, clientId: "x", teamId: "TEAM123456", keyId: "KEY1234567", clientSecret: k1 } }, key)).toThrow(/P-256/);
       const merged = mergeOAuthProviders({}, { apple: { enabled: true, clientId: "x", teamId: "team123456", keyId: "key1234567", clientSecret: APPLE_P8 } }, key) as Record<string, Record<string, unknown>>;
       expect(merged["apple"]?.["teamId"]).toBe("TEAM123456");
       expect(JSON.stringify(merged)).not.toContain("BEGIN PRIVATE KEY");
