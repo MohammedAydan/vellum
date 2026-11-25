@@ -493,12 +493,25 @@ export class VellumAuthClient {
    * Sign in with `"google"` or `"github"` in a popup. Call it from a click
    * handler. Resolves to `MfaRequiredResult` when a second factor is needed.
    */
-  public async signInWithPopup(provider: string, options: OAuthPopupOptions = {}): Promise<AuthState | MfaRequiredResult> {
+  public signInWithPopup(provider: string, options: OAuthPopupOptions = {}): Promise<AuthState | MfaRequiredResult> {
+    return this.popupFlow(provider, options, false);
+  }
+
+  /**
+   * Add a Google or GitHub sign-in to the signed-in user's account (any email). Call it from a
+   * click handler. Fails if that provider account already belongs to another user.
+   */
+  public async linkWithPopup(provider: string, options: OAuthPopupOptions = {}): Promise<AuthState | MfaRequiredResult> {
+    if (!this.state.currentUserValue) throw new Error("Sign in before linking a provider");
+    return this.popupFlow(provider, options, true);
+  }
+
+  private async popupFlow(provider: string, options: OAuthPopupOptions, link: boolean): Promise<AuthState | MfaRequiredResult> {
     this.requireOAuth();
     const popup = openPopup(options);
     let flow: PreparedFlow;
     try {
-      flow = await prepareFlow(this.request, provider, options.redirectUri);
+      flow = await prepareFlow(this.request, provider, options.redirectUri, link);
       popup.location.href = flow.startUrl;
     } catch (error) {
       try { popup.close(); } catch { /* already closed */ }

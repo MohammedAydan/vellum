@@ -133,6 +133,7 @@ abstract interface class VellumAuthPort {
     required String redirectUri,
     required String codeChallenge,
     String? state,
+    bool link = false,
   });
 
   /// Starts a redirect-less sign-in: no redirect URI, no deep link, no app
@@ -141,6 +142,7 @@ abstract interface class VellumAuthPort {
   Future<Uri> oauthStartPoll({
     required String provider,
     required String codeChallenge,
+    bool link = false,
   });
 
   /// Collects the result of [oauthStartPoll]. Resolves to `null` while the

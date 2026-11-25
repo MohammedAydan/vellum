@@ -158,3 +158,11 @@ describe("browser OAuth helpers", () => {
     expect(completeOAuthPopup("https://app.example.com/login")).toBe(false);
   });
 });
+
+describe("linkWithPopup", () => {
+  it("refuses to run when nobody is signed in and never calls the API", async () => {
+    const { client, calls } = mkClient();
+    await expect(client.linkWithPopup("google")).rejects.toThrow(/Sign in before linking/);
+    expect(calls).toHaveLength(0);
+  });
+});

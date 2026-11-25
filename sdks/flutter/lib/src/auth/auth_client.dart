@@ -382,6 +382,7 @@ class VellumAuth implements VellumAuthPort {
     required String redirectUri,
     required String codeChallenge,
     String? state,
+    bool link = false,
   }) async {
     // The API key goes in a header of this POST, never in a URL the browser could expose.
     final res = await client.request(
@@ -391,8 +392,10 @@ class VellumAuth implements VellumAuthPort {
         'redirectUri': redirectUri,
         'codeChallenge': codeChallenge,
         if (state != null) 'state': state,
+        if (link) 'link': true,
       },
-      includeAuth: false,
+      // Linking is done by a signed-in user: the server needs their token.
+      includeAuth: link,
     );
     final url = res['authorizeUrl'];
     if (url is! String || url.isEmpty) {
@@ -409,6 +412,7 @@ class VellumAuth implements VellumAuthPort {
   Future<Uri> oauthStartPoll({
     required String provider,
     required String codeChallenge,
+    bool link = false,
   }) async {
     final res = await client.request(
       'POST',
@@ -416,8 +420,9 @@ class VellumAuth implements VellumAuthPort {
       body: <String, Object?>{
         'delivery': 'poll',
         'codeChallenge': codeChallenge,
+        if (link) 'link': true,
       },
-      includeAuth: false,
+      includeAuth: link,
     );
     final url = res['authorizeUrl'];
     if (url is! String || url.isEmpty) {

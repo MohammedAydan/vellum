@@ -106,7 +106,8 @@ export type StartRequest = <R = unknown>(
 export async function prepareFlow(
   request: StartRequest,
   provider: string,
-  redirectUri: string | undefined
+  redirectUri: string | undefined,
+  link = false
 ): Promise<PreparedFlow> {
   const verifier = randomToken(48);
   const state = randomToken(16);
@@ -114,9 +115,9 @@ export async function prepareFlow(
   const res = await request<{ authorizeUrl?: unknown }>(
     "POST",
     `/auth/oauth/${encodeURIComponent(provider)}/start`,
-    { redirectUri: target, codeChallenge: await pkceChallenge(verifier), state },
+    { redirectUri: target, codeChallenge: await pkceChallenge(verifier), state, ...(link ? { link: true } : {}) },
     {},
-    false
+    link // linking needs the signed-in user's token; a plain sign-in sends none
   );
   if (typeof res?.authorizeUrl !== "string" || !res.authorizeUrl) {
     throw new Error("The server did not return a sign-in URL");

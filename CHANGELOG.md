@@ -15,6 +15,8 @@
 - End-user `GET /auth/sessions`, `DELETE /auth/sessions/:id`, `GET /auth/identities` and `DELETE /auth/identities/:provider` (refused when it would remove the last way to sign in). sdk-js `listSessions` / `revokeSession` / `listLinkedProviders` / `unlinkProvider`; `vellum_flutter` same names.
 - Docs: Flutter social sign-in now leads with the redirect-less flow (EN + AR); the deep link is optional.
 
+- Link a provider to the signed-in account: `POST /auth/oauth/:provider/start` with `"link": true` and the user's bearer token adds Google or GitHub (any email) to that user; a provider account that belongs to another user is refused. sdk-js `linkWithPopup`, `vellum_flutter` `VellumOAuth.link`.
+
 ### Fixes
 
 - Desktop and native sign-in: a loopback redirect (`http://127.0.0.1:<port>/...` or `[::1]`) is always accepted, as RFC 8252 describes, so it no longer needs an entry in the allowed redirect list.

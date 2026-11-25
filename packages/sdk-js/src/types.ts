@@ -693,6 +693,8 @@ export interface VellumClientInterface {
   signInWithOAuth(provider: string, payload?: SignInOAuthPayload): Promise<AuthState>;
   /** Google / GitHub sign-in in a popup (call from a click). Resolves to `MfaRequiredResult` when a second factor is required. */
   signInWithPopup(provider: string, options?: OAuthPopupOptions): Promise<AuthState | MfaRequiredResult>;
+  /** Link Google or GitHub to the signed-in user's account in a popup. */
+  linkWithPopup(provider: string, options?: OAuthPopupOptions): Promise<AuthState | MfaRequiredResult>;
   /** Full-page redirect sign-in; finish with `getRedirectResult()` when your app loads again. */
   signInWithRedirect(provider: string, options?: OAuthRedirectOptions): Promise<void>;
   getRedirectResult(): Promise<AuthState | MfaRequiredResult | null>;

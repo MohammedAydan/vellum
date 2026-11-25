@@ -362,4 +362,40 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     expect((await authed("DELETE", "/identities/password")).status).toBe(412);
     expect((await authed("DELETE", "/identities/github")).status).toBe(404);
   });
+
+  it("link: a signed-in user adds Google to their account (any email), another user cannot take the same Google account", async () => {
+    const f = await fixture();
+    const mk = async (email: string) => (await (await f.call("POST", "/sign-up/email", f.publicKeyStr, { email, password: "First-pass-1234!" })).json()) as { accessToken: string };
+    const a = await mk("a-link@example.com");
+    const b = await mk("b-link@example.com");
+    mock.googleClaims = (nonce) => ({ iss: "https://accounts.google.com", aud: "google-client", sub: "g-link", email: "other-mailbox@example.com", email_verified: true, name: "L", exp: Math.floor(Date.now() / 1000) + 600, nonce });
+    const authed = (method: string, url: string, token: string, body?: unknown) =>
+      f.platform.fetch(new Request(`http://localhost${f.base}${url}`, {
+        method,
+        headers: { "content-type": "application/json", "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${token}` },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      }));
+    const runLink = async (token: string) => {
+      const { verifier, challenge } = pkce();
+      const res = await authed("POST", "/oauth/google/start", token, { redirectUri: REDIRECT, codeChallenge: challenge, state: "cs1", link: true });
+      expect(res.status).toBe(200);
+      const authorize = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
+      lastNonce = authorize.searchParams.get("nonce") ?? "";
+      const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+      cb.searchParams.set("code", "good-code");
+      cb.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+      const back = await f.platform.fetch(new Request(`http://localhost${cb.pathname}${cb.search}`, { redirect: "manual" }));
+      return { loc: new URL(back.headers.get("location") ?? ""), verifier };
+    };
+    const noAuth = await f.call("POST", "/oauth/google/start", f.publicKeyStr, { redirectUri: REDIRECT, codeChallenge: pkce().challenge, link: true });
+    expect(noAuth.status).toBe(401);
+    const first = await runLink(a.accessToken);
+    expect(first.loc.searchParams.get("vellum_code")).toBeTruthy();
+    const ids = (await (await authed("GET", "/identities", a.accessToken)).json()) as { identities: { provider: string }[] };
+    expect(ids.identities.map((i) => i.provider).sort()).toEqual(["google", "password"]);
+    const second = await runLink(b.accessToken);
+    expect(second.loc.searchParams.get("error")).toBe("access_denied");
+    const bIds = (await (await authed("GET", "/identities", b.accessToken)).json()) as { identities: { provider: string }[] };
+    expect(bIds.identities.map((i) => i.provider)).toEqual(["password"]);
+  });
 });
