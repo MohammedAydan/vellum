@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Features
+
+- `batchWrite` takes `ifVersion` and `exists` on every operation (flat, or inside `preconditions` / `precondition`), so a multi-document write is conditional in one round trip: all preconditions are checked first, and a stale one fails the whole batch with 412 and writes nothing. sdk-js exports the `BatchWriteOperation` type. The sdk-js guide now says 100 operations per batch, the real server limit.
+
+- `vellum_flutter`: write batches take `exists` next to `ifVersion` on `set`, `update` and `delete`, and have `create`. The wire format is flat (`type`, `path`, `data`, `ifVersion`, `exists`); a stale version fails the batch with 412.
+
 ## 0.0.4
 
 Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK stays on one shared version. **Upgrade the SDKs together with the API:** 0.0.3 SDKs cannot start social sign-in against this API (the start call moved from `GET` with the key in the URL to `POST` with the key in a header). Update `@vellumdb/sdk-js` and `vellum_flutter` to 0.0.4.
@@ -9,6 +15,8 @@ Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK 
 **Effect for existing users:** on iOS and macOS the Flutter SDK now stores sessions with a stricter Keychain setting, so people signed in with a 0.0.3 app are signed out once after updating. Redirect-less (mobile/desktop polling) sign-in is now off by default for each project: turn it on in Auth Studio (Providers > Redirect-less sign-in) before using it.
 
 ### Security
+
+- drizzle-orm upgraded from 0.38 to 0.45.4. Versions before 0.45.2 do not escape SQL identifiers safely (GHSA-gpj5-g38j-94v9). Vellum builds identifiers from fixed schema names only, so no exploitable path was found, but the fix is taken anyway.
 
 - A request body over the size limit and sent without a `Content-Length` header (chunked uploads) hung until the platform timeout instead of failing with 413, because the body cap awaited `cancel()` on a cloned stream. Any client could hold connections open this way. It now answers 413 at once.
 
