@@ -46,6 +46,7 @@ import type {
   CreateCollectionInput,
   DocumentRecord,
   ListCollectionsOptions,
+  QueriedDocument,
   StorageAdapter,
   TxHandle as StorageTxHandle,
   UpdateCollectionInput,
@@ -1712,7 +1713,7 @@ export class DocumentEngine implements DocumentEnginePort {
         const queryBypass = this.resolveBypassRules(ctx);
         const pageDocs: DocumentRecord[] = [];
         let pageHasMore = false;
-        let pageCursorDoc: DocumentRecord | null = null;
+        let pageCursorDoc: QueriedDocument | null = null;
         let batch = await tx.queryDocuments(compiledPlan);
         let scans = 1;
         // A collection-level `list` allow does not mean every row is readable. Each row also has to pass its
@@ -1734,7 +1735,7 @@ export class DocumentEngine implements DocumentEnginePort {
           const lastRaw = rows[rows.length - 1];
           if (stoppedAt >= 0) {
             pageHasMore = stoppedAt < rows.length - 1 || more;
-            pageCursorDoc = rows[stoppedAt] as DocumentRecord;
+            pageCursorDoc = rows[stoppedAt] as QueriedDocument;
             break;
           }
           if (!more || !lastRaw) break;
