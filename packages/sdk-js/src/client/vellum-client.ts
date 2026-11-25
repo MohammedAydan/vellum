@@ -1135,6 +1135,10 @@ export class VellumClient implements VellumClientInterface {
     return this.auth.signInWithPopup(provider, options);
   }
 
+  public linkWithPopup(provider: string, options?: OAuthPopupOptions): Promise<AuthState | MfaRequiredResult> {
+    return this.auth.linkWithPopup(provider, options);
+  }
+
   public signInWithRedirect(provider: string, options?: OAuthRedirectOptions): Promise<void> {
     return this.auth.signInWithRedirect(provider, options);
   }

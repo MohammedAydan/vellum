@@ -63,6 +63,7 @@ void main() {
           if (pendingLeft-- > 0) return <String, dynamic>{'status': 'pending'};
           return _session();
         }
+        if (url.endsWith('/auth/sign-in/email')) return _session();
         throw StateError('unexpected $url');
       },
     );
@@ -133,5 +134,22 @@ void main() {
     }
     expect(await done.timeout(const Duration(seconds: 5)), isA<VellumSession>());
     await resume.close();
+  });
+
+  test('link requires a signed-in user and then starts with the user token and link flag', () async {
+    final oauth = VellumOAuth.polling(
+      auth: client.auth,
+      pollInterval: const Duration(milliseconds: 5),
+      openUrl: (url) async {},
+    );
+    expect(() => oauth.link('google'), throwsA(isA<VellumException>()));
+    pendingLeft = 0;
+    await client.auth.signInWithEmailAndPassword(email: 'a@example.com', password: 'pw-123456');
+    // The sign-in above hit the fake transport; reset the call log.
+    calls.clear();
+    pendingLeft = 0;
+    await oauth.link('google');
+    expect((calls.first['body']! as Map)['link'], isTrue);
+    expect((calls.first['headers']! as Map).keys.map((k) => k.toString().toLowerCase()), contains('authorization'));
   });
 }

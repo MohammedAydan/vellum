@@ -619,7 +619,10 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       codeChallenge?: unknown;
       state?: unknown;
       delivery?: unknown;
+      link?: unknown;
     };
+    // "link": a signed-in user adds this provider to their own account instead of signing in with it.
+    const linkUserId = body.link === true ? (await requireEndUser(c, platform, tenant)).id : undefined;
     // delivery "poll": no redirect URI and no deep link. The provider returns to this server, which shows a
     // "return to the app" page, and the app collects the result by polling with its PKCE verifier.
     const pollDelivery = body.delivery === "poll";
@@ -646,6 +649,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         clientState,
         verifier,
         nonce,
+        ...(linkUserId !== undefined ? { linkUserId } : {}),
         exp: Date.now() + OAUTH_STATE_TTL_MS,
       },
       masterKey()
@@ -715,7 +719,20 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         displayName: profile.displayName ?? undefined,
         photoUrl: profile.photoUrl,
       };
-      const { user, providerUserId } = await resolveProviderUser(tenant, config, input);
+      let user: AuthUserRecord;
+      let providerUserId: string;
+      if (flow.linkUserId !== undefined) {
+        const owner = await storage.getAuthUserById(tenant.ctx, flow.linkUserId);
+        if (!owner || owner.isDisabled) return fail("access_denied", "The account to link is no longer available");
+        const taken = await storage.getAuthIdentityByProvider(tenant.ctx, providerId, profile.providerUserId);
+        if (taken && taken.userId !== owner.id) {
+          return fail("access_denied", `This ${providerId} account is already linked to another user`);
+        }
+        user = owner;
+        providerUserId = profile.providerUserId;
+      } else {
+        ({ user, providerUserId } = await resolveProviderUser(tenant, config, input));
+      }
       const now = new Date().toISOString();
       await storage.upsertAuthIdentity(tenant.ctx, {
         userId: user.id,

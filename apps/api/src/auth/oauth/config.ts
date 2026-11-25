@@ -146,6 +146,8 @@ export interface FlowState {
   clientState: string | null;
   verifier: string; // our PKCE verifier toward the provider
   nonce: string;
+  /** Set when a signed-in user is linking this provider to their existing account. */
+  linkUserId?: string;
   exp: number;
 }
 

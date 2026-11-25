@@ -75,20 +75,36 @@ class VellumOAuth {
 
   /// Signs in with `google` or `github`. Resolves to [VellumMfaRequired] when a
   /// second factor is needed, otherwise a [VellumSession].
-  Future<VellumAuthResult> signIn(String provider) async {
+  Future<VellumAuthResult> signIn(String provider) => _run(provider, false);
+
+  /// Adds `google` or `github` to the signed-in user's account (the provider's
+  /// email may differ). Fails when that provider account belongs to another user.
+  Future<VellumAuthResult> link(String provider) {
+    if (auth.currentUser == null) {
+      throw const VellumException(
+        code: 'UNAUTHENTICATED',
+        message: 'Sign in before linking a provider',
+        statusCode: 0,
+      );
+    }
+    return _run(provider, true);
+  }
+
+  Future<VellumAuthResult> _run(String provider, bool link) async {
     final verifier = _token(48);
     final state = _token(16);
     final challenge = base64Url
         .encode(crypto.sha256.convert(utf8.encode(verifier)).bytes)
         .replaceAll('=', '');
     if (_openUrl != null) {
-      return _signInPolling(provider, verifier, challenge);
+      return _signInPolling(provider, verifier, challenge, link);
     }
     final start = await auth.oauthStart(
       provider: provider,
       redirectUri: redirectUri,
       codeChallenge: challenge,
       state: state,
+      link: link,
     );
     final String returned;
     try {
@@ -128,10 +144,12 @@ class VellumOAuth {
     String provider,
     String verifier,
     String challenge,
+    bool link,
   ) async {
     final start = await auth.oauthStartPoll(
       provider: provider,
       codeChallenge: challenge,
+      link: link,
     );
     try {
       await _openUrl!(start);
