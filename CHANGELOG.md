@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Features
+
+- `batchWrite` takes `ifVersion` and `exists` on every operation (flat, or inside `preconditions` / `precondition`), so a multi-document write is conditional in one round trip: all preconditions are checked first, and a stale one fails the whole batch with 412 and writes nothing. sdk-js exports the `BatchWriteOperation` type. The sdk-js guide now says 100 operations per batch, the real server limit.
+
+- `vellum_flutter`: write batches take `exists` next to `ifVersion` on `set`, `update` and `delete`, and have `create`. The wire format is flat (`type`, `path`, `data`, `ifVersion`, `exists`); a stale version fails the batch with 412.
+
 ### Changed
 
 - Behavior change: queries with an unknown key are now rejected with `INVALID_ARGUMENT` instead of the key being ignored silently. `collectionGroup` queries return a clear not-supported error.
@@ -13,6 +19,10 @@ Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK 
 **Effect for existing users:** on iOS and macOS the Flutter SDK now stores sessions with a stricter Keychain setting, so people signed in with a 0.0.3 app are signed out once after updating. Redirect-less (mobile/desktop polling) sign-in is now off by default for each project: turn it on in Auth Studio (Providers > Redirect-less sign-in) before using it.
 
 ### Security
+
+- drizzle-orm upgraded from 0.38 to 0.45.4. Versions before 0.45.2 do not escape SQL identifiers safely (GHSA-gpj5-g38j-94v9). Vellum builds identifiers from fixed schema names only, so no exploitable path was found, but the fix is taken anyway.
+
+- The console, admin and public site now send an enforced `Content-Security-Policy` with `script-src 'self'` (no inline scripts, no `unsafe-eval`), plus `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` and `frame-ancestors 'none'`. The inline bootstrap and site scripts moved to files (`vellum-bootstrap.js`, `site-early.js`, `site.js`). `style-src` still allows inline styles because the UI uses style attributes. A stale prototype `apps/dashboard/public/index.html` that loaded Tailwind and fonts from third-party hosts was removed. Check a Vercel preview for CSP errors in the browser console before the production deploy.
 
 - Security rules: a query, export or batch read with a public key now also checks each returned row against its own `get` rule when one matches the path. Before, `allow list: if isSignedIn(); allow get: if isParticipant(...)` returned every row to any signed-in user. Hidden rows are skipped and pages are refilled (up to 5 extra batches per request). Aggregates and counts are refused for public keys when the `get` rule depends on the document, since a GROUP BY cannot be filtered per row. Paths with only a `list` rule behave as before. Server keys are unchanged.
 - `GET /collections/:name/export` now needs a server key, like import and clear.
@@ -28,6 +38,8 @@ Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK 
 - Redirect-less sign-in and provider linking now end with a confirmation code. Without it, an attacker could send a victim the authorize URL and collect the victim's session by polling with their own PKCE verifier (device-code phishing), or make a victim's Google account link to the attacker's account. The callback no longer releases the session or links the identity itself: it shows a page naming the project and a warning, and asks the person to type a 6-symbol code that only the initiating app displays (derived from the PKCE challenge). Five wrong codes end the attempt. Redirect-less sign-in is now opt-in per project (Auth Studio > Providers > Redirect-less sign-in, `__settings.allowPollSignIn`, default off) because a fake app can still show the code; start, poll and the callback refuse with "Redirect-less sign-in is turned off for this project" until it is enabled. New `POST /auth/oauth/confirm`. `createVellumOAuth` / `VellumOAuth.polling` require `onConfirmationCode`; sdk-js `linkWithPopup` shows the code (built-in box or `onConfirmationCode`).
 
 ### Features
+
+- sdk-js `addWithRelated` matches Flutter: it takes `idempotencyKey` (sent as `Idempotency-Key`) and runs the collection converter's `toDoc` on the parent document.
 
 - `vellum_flutter`: `signInWithOAuth` now returns `VellumAuthResult` and resolves to `VellumMfaRequired` when the account has a second factor, like the other sign-in methods (it returned `VellumUser` before; no session is stored in the MFA case). Transactions: `tx.create()`, `tx.get` on a missing document returns an `exists == false` snapshot instead of throwing, and the document cache is cleared before `runTransaction` returns. Loopback sign-in accepts port 0 (`http://127.0.0.1:0/callback`): the port is bound per attempt and the real one is sent to the API.
 

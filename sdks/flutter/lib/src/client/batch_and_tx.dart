@@ -14,11 +14,24 @@ class VellumWriteBatch {
   bool get isNotEmpty => _writes.isNotEmpty;
   List<JsonMap> get writes => List<JsonMap>.unmodifiable(_writes);
 
+  /// Creates the document and fails the whole batch if it already exists.
+  VellumWriteBatch create<T>(DocumentReference<T> ref, T value) {
+    _writes.add(<String, Object?>{
+      'type': 'create',
+      'path': validateVellumPath(ref.path, requireEvenSegments: true),
+      'data': ref.toJson(value),
+    });
+    return this;
+  }
+
+  /// [ifVersion] fails the whole batch with 412 when the stored version differs.
+  /// [exists] `true` requires the document to exist, `false` requires it not to.
   VellumWriteBatch set<T>(
     DocumentReference<T> ref,
     T value, {
     bool merge = false,
     int? ifVersion,
+    bool? exists,
   }) {
     _writes.add(<String, Object?>{
       'type': 'set',
@@ -26,6 +39,7 @@ class VellumWriteBatch {
       'data': ref.toJson(value),
       'merge': merge,
       if (ifVersion != null) 'ifVersion': ifVersion,
+      if (exists != null) 'exists': exists,
     });
     return this;
   }
@@ -34,21 +48,28 @@ class VellumWriteBatch {
     DocumentReference<T> ref,
     JsonMap patch, {
     int? ifVersion,
+    bool? exists,
   }) {
     _writes.add(<String, Object?>{
       'type': 'update',
       'path': validateVellumPath(ref.path, requireEvenSegments: true),
       'data': patch,
       if (ifVersion != null) 'ifVersion': ifVersion,
+      if (exists != null) 'exists': exists,
     });
     return this;
   }
 
-  VellumWriteBatch delete<T>(DocumentReference<T> ref, {int? ifVersion}) {
+  VellumWriteBatch delete<T>(
+    DocumentReference<T> ref, {
+    int? ifVersion,
+    bool? exists,
+  }) {
     _writes.add(<String, Object?>{
       'type': 'delete',
       'path': validateVellumPath(ref.path, requireEvenSegments: true),
       if (ifVersion != null) 'ifVersion': ifVersion,
+      if (exists != null) 'exists': exists,
     });
     return this;
   }

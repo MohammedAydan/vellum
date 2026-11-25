@@ -192,7 +192,12 @@ export interface QuotaState {
   };
 }
 
+/** Arbitrary constant key for the billing ledger advisory lock. */
+const LEDGER_LOCK_KEY = "7269003110";
+
 export interface BillingRepository {
+  /** Runs `fn` while holding the cross-instance ledger lock. Optional: single-process stores skip it. */
+  withLedgerLock?<T>(fn: () => Promise<T>): Promise<T>;
   applyUsageDelta(input: UsageDeltaInput): MaybePromise<UsageDeltaResult>;
   getQuotaState(orgId: string, billingMonth: string): MaybePromise<QuotaState | null>;
   getPlan(id: string): MaybePromise<BillingPlanRecord | null>;
@@ -966,36 +971,62 @@ class PgBillingRepository implements BillingRepository {
     this.pool = pool;
   }
 
+  /**
+   * One transaction for the whole delta. Without it a failure after the monthly row was written
+   * made the engine requeue the full delta, counting it twice.
+   */
   public async applyUsageDelta(input: UsageDeltaInput): Promise<UsageDeltaResult> {
-    let authMau: number | null = null;
-    if (input.authUserIds.length > 0) {
-      await this.pool.query(
-        `INSERT INTO usage_active_users (org_id, project_id, billing_month, user_id)
-         SELECT $1::uuid, $2::uuid, $3, u FROM unnest($4::text[]) AS u
-         ON CONFLICT DO NOTHING`,
-        [input.orgId, input.projectId, input.billingMonth, [...input.authUserIds]]
-      );
-      const counted = await this.pool.query(
-        `SELECT count(*)::bigint AS n FROM usage_active_users
-          WHERE org_id = $1::uuid AND project_id = $2::uuid AND billing_month = $3`,
-        [input.orgId, input.projectId, input.billingMonth]
-      );
-      authMau = Number((counted.rows[0] as { n: string | number }).n);
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await this.applyUsageDeltaOn(client, input);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        // the original error is the one that matters
+      }
+      throw error;
+    } finally {
+      client.release();
     }
+  }
+
+  /**
+   * Serializes ledger appends across API instances with a session advisory lock. The hash chain
+   * reads the previous hash, signs, then inserts; two instances doing that at once fork the chain.
+   */
+  public async withLedgerLock<T>(fn: () => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("SELECT pg_advisory_lock($1::bigint)", [LEDGER_LOCK_KEY]);
+      try {
+        return await fn();
+      } finally {
+        await client.query("SELECT pg_advisory_unlock($1::bigint)", [LEDGER_LOCK_KEY]);
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  private async applyUsageDeltaOn(q: pg.Pool | pg.PoolClient, input: UsageDeltaInput): Promise<UsageDeltaResult> {
     const reads = finiteNumber(input.docReads, "docReads");
     const writes = finiteNumber(input.docWrites, "docWrites");
     const deletes = finiteNumber(input.docDeletes, "docDeletes");
     const storage = finiteNumber(input.storageBytes, "storageBytes");
     const egress = finiteNumber(input.egressBytes, "egressBytes");
     const peak = finiteNumber(input.peakConcurrentWs, "peakConcurrentWs");
-    const monthly = await this.pool.query(
+    const monthly = await q.query(
       `INSERT INTO usage_monthly_rollups (
          id, org_id, project_id, billing_month,
          doc_reads, doc_writes, doc_deletes, storage_bytes, egress_bytes,
          auth_mau, peak_concurrent_ws, updated_at
        ) VALUES (
          $1::uuid, $2::uuid, $3::uuid, $4,
-         $5, $6, $7, GREATEST(0, $8::bigint), $9, COALESCE($10::bigint, 0), $11, now()
+         $5, $6, $7, GREATEST(0, $8::bigint), $9, 0, $10, now()
        )
        ON CONFLICT (org_id, project_id, billing_month) DO UPDATE SET
          doc_reads = usage_monthly_rollups.doc_reads + $5,
@@ -1003,13 +1034,35 @@ class PgBillingRepository implements BillingRepository {
          doc_deletes = usage_monthly_rollups.doc_deletes + $7,
          storage_bytes = GREATEST(0, usage_monthly_rollups.storage_bytes + $8::bigint),
          egress_bytes = usage_monthly_rollups.egress_bytes + $9,
-         auth_mau = COALESCE($10::bigint, usage_monthly_rollups.auth_mau),
-         peak_concurrent_ws = GREATEST(usage_monthly_rollups.peak_concurrent_ws, $11),
+         peak_concurrent_ws = GREATEST(usage_monthly_rollups.peak_concurrent_ws, $10),
          updated_at = now()
        RETURNING ${MONTHLY_COLUMNS}`,
-      [crypto.randomUUID(), input.orgId, input.projectId, input.billingMonth, reads, writes, deletes, storage, egress, authMau, peak]
+      [crypto.randomUUID(), input.orgId, input.projectId, input.billingMonth, reads, writes, deletes, storage, egress, peak]
     );
-    const daily = await this.pool.query(
+    // The monthly upsert above holds this (org, project, month) row lock until COMMIT, so
+    // transactions for the same row run one after another. Counting users only now means each
+    // count sees every earlier committed insert. Counting before the lock let a stale, smaller
+    // count overwrite a larger one under concurrent flushes.
+    let monthlyRow = monthly.rows[0] as Record<string, unknown> | undefined;
+    if (input.authUserIds.length > 0) {
+      await q.query(
+        `INSERT INTO usage_active_users (org_id, project_id, billing_month, user_id)
+         SELECT $1::uuid, $2::uuid, $3, u FROM unnest($4::text[]) AS u
+         ON CONFLICT DO NOTHING`,
+        [input.orgId, input.projectId, input.billingMonth, [...input.authUserIds]]
+      );
+      const withMau = await q.query(
+        `UPDATE usage_monthly_rollups SET auth_mau = (
+           SELECT count(*)::bigint FROM usage_active_users
+            WHERE org_id = $1::uuid AND project_id = $2::uuid AND billing_month = $3
+         )
+         WHERE org_id = $1::uuid AND project_id = $2::uuid AND billing_month = $3
+         RETURNING ${MONTHLY_COLUMNS}`,
+        [input.orgId, input.projectId, input.billingMonth]
+      );
+      monthlyRow = withMau.rows[0] as Record<string, unknown> | undefined;
+    }
+    const daily = await q.query(
       `INSERT INTO usage_daily_rollups (
          id, org_id, project_id, usage_date,
          doc_reads, doc_writes, doc_deletes, egress_bytes, updated_at
@@ -1023,7 +1076,7 @@ class PgBillingRepository implements BillingRepository {
        RETURNING ${DAILY_COLUMNS}`,
       [crypto.randomUUID(), input.orgId, input.projectId, input.usageDate, reads, writes, deletes, egress]
     );
-    const mRow = monthly.rows[0] as Record<string, unknown> | undefined;
+    const mRow = monthlyRow;
     const dRow = daily.rows[0] as Record<string, unknown> | undefined;
     if (!mRow || !dRow) throw new Error("applyUsageDelta returned no row");
     return { monthly: mapMonthlyRow(mRow), daily: mapDailyRow(dRow) };
