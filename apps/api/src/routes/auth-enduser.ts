@@ -918,7 +918,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     tenant: AuthTenant,
     config: ProjectAuthConfig,
     flow: FlowOf,
-    profile: { providerUserId: string; email: string | null; displayName: string | null; photoUrl: string | null; refreshToken?: string | undefined }
+    profile: { providerUserId: string; email: string | null; displayName: string | null; photoUrl: string | null; refreshToken?: string | undefined; audience?: string | undefined }
   ): Promise<Response> {
     const providerId = flow.provider;
     const pollFlow = flow.redirectUri === "";
