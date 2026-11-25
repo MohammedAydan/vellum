@@ -362,7 +362,16 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
           );
         }
         if (byEmail.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
-        user = { ...byEmail, lastSignInAt: now };
+        if (!byEmail.emailVerified) {
+          // Pre-hijacking defence: someone may have registered this address with a password before its real
+          // owner proved control of it. The provider has now proved ownership, so whatever the earlier
+          // registrant set (password, live sessions) is discarded before the account is linked.
+          await storage.revokeAllUserSessions(tenant.ctx, byEmail.id, "email_ownership_proved");
+          const cleaned = await storage.updateAuthUser(tenant.ctx, byEmail.id, { passwordHash: null, emailVerified: true });
+          user = { ...cleaned, lastSignInAt: now };
+        } else {
+          user = { ...byEmail, lastSignInAt: now };
+        }
       } else {
         await checkRegistrationGuards(tenant, config);
         const email = body.email;
@@ -895,6 +904,43 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   });
 
   // ------------------------------------------------------------------ PASSWORD
+
+  // Signed-in password change: needs the current password, ends every other session and returns a fresh one.
+  routes.post("/password/change", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    const config = await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    const body = (await c.req.json().catch(() => ({}))) as { currentPassword?: unknown; newPassword?: unknown };
+    if (typeof body.currentPassword !== "string" || typeof body.newPassword !== "string") {
+      throw new VellumError("INVALID_ARGUMENT", "currentPassword and newPassword are required");
+    }
+    if (!current.passwordHash || !(await verifyPassword(body.currentPassword, current.passwordHash))) {
+      throw new VellumError("UNAUTHENTICATED", "The current password is incorrect");
+    }
+    assertPasswordPolicy(body.newPassword, config);
+    const updated = await storage.updateAuthUser(tenant.ctx, current.id, { passwordHash: await hashPassword(body.newPassword) });
+    await storage.revokeAllUserSessions(tenant.ctx, current.id, "password_changed");
+    c.header("cache-control", "no-store");
+    return c.json(await issueSession(tenant, updated, c));
+  });
+
+  // Self-service account deletion. Password accounts must confirm with their password.
+  routes.delete("/user", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    if (current.passwordHash) {
+      const body = (await c.req.json().catch(() => ({}))) as { password?: unknown };
+      if (typeof body.password !== "string" || !(await verifyPassword(body.password, current.passwordHash))) {
+        throw new VellumError("UNAUTHENTICATED", "Confirm your password to delete the account");
+      }
+    }
+    await storage.revokeAllUserSessions(tenant.ctx, current.id, "account_deleted");
+    await storage.deleteAuthUser(tenant.ctx, current.id);
+    return c.json({ deleted: true });
+  });
 
   routes.post("/password/reset", async (c) => {
     const tenant = await resolveAuthTenant(c, platform);

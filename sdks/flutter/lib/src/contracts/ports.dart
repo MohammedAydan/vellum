@@ -173,6 +173,16 @@ abstract interface class VellumAuthPort {
     required String token,
     required String newPassword,
   });
+  /// Changes the password of the signed-in user. Needs the current password;
+  /// every other session ends and this one continues on a fresh session.
+  Future<VellumUser> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  });
+
+  /// Permanently deletes the signed-in account and signs out locally.
+  /// Password accounts must pass [password]; Google/GitHub accounts need nothing.
+  Future<void> deleteAccount({String? password});
   Future<AuthActionResult> sendEmailVerification({String? email});
   Future<void> confirmEmailVerification(String token);
   Future<VellumUser> updateProfile({

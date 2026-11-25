@@ -665,6 +665,28 @@ export class VellumAuthClient {
     );
   }
 
+  /**
+   * Change the signed-in user's password. Needs the current password, ends every
+   * other session and keeps this one signed in with a fresh session.
+   */
+  public async changePassword(currentPassword: string, newPassword: string): Promise<AuthState> {
+    const epoch = this.state.sessionEpoch;
+    const payload = await this.request<Record<string, unknown>>("POST", "/auth/password/change", { currentPassword, newPassword });
+    this.assertSession(epoch);
+    const session = parseSessionResponse(payload);
+    this.commitUser(session, true);
+    return sanitizeAndClone(session);
+  }
+
+  /**
+   * Permanently delete the signed-in account and sign out locally. Password
+   * accounts must pass their `password`; accounts created with Google or GitHub need nothing extra.
+   */
+  public async deleteAccount(options: { password?: string } = {}): Promise<void> {
+    await this.request("DELETE", "/auth/user", options.password !== undefined ? { password: options.password } : {});
+    await this.signOut();
+  }
+
   public async sendEmailVerification(input: SendEmailVerificationInput = {}): Promise<ActionTokenResult> {
     return parseActionTokenResponse(await this.request("POST", "/auth/email/verify/request", input));
   }

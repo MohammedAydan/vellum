@@ -315,4 +315,42 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     const short = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: "short" });
     expect(short.status).toBe(400);
   });
+
+  it("pre-hijacking: an unverified password account is stripped of its password and sessions when the real owner signs in with Google", async () => {
+    const f = await fixture();
+    const reg = await f.call("POST", "/sign-up/email", f.publicKeyStr, { email: "victim@example.com", password: "Attacker-pass-123!" });
+    expect(reg.status).toBe(201);
+    const attacker = (await reg.json()) as { accessToken: string; refreshToken: string };
+    mock.googleClaims = (nonce) => ({ iss: "https://accounts.google.com", aud: "google-client", sub: "g-victim", email: "victim@example.com", email_verified: true, name: "V", exp: Math.floor(Date.now() / 1000) + 600, nonce });
+    const { back, verifier } = await runFlow(f, "google");
+    const code = new URL(back.headers.get("location") ?? "").searchParams.get("vellum_code") ?? "";
+    const ok = await f.call("POST", "/oauth/exchange", f.publicKeyStr, { code, codeVerifier: verifier });
+    expect(ok.status).toBe(200);
+    const login = await f.call("POST", "/sign-in/email", f.publicKeyStr, { email: "victim@example.com", password: "Attacker-pass-123!" });
+    expect(login.status).toBeGreaterThanOrEqual(400);
+    const refresh = await f.call("POST", "/token/refresh", f.publicKeyStr, { refreshToken: attacker.refreshToken });
+    expect(refresh.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it("password change and account deletion need the current password", async () => {
+    const f = await fixture();
+    const reg = await f.call("POST", "/sign-up/email", f.publicKeyStr, { email: "me@example.com", password: "First-pass-1234!" });
+    const s1 = (await reg.json()) as { accessToken: string; refreshToken: string };
+    const authed = (method: string, url: string, body?: unknown, token = s1.accessToken) =>
+      f.platform.fetch(new Request(`http://localhost${f.base}${url}`, {
+        method,
+        headers: { "content-type": "application/json", "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${token}` },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      }));
+    const bad = await authed("POST", "/password/change", { currentPassword: "nope", newPassword: "Second-pass-1234!" });
+    expect(bad.status).toBe(401);
+    const good = await authed("POST", "/password/change", { currentPassword: "First-pass-1234!", newPassword: "Second-pass-1234!" });
+    expect(good.status).toBe(200);
+    const s2 = (await good.json()) as { accessToken: string; refreshToken: string };
+    expect((await f.call("POST", "/token/refresh", f.publicKeyStr, { refreshToken: s1.refreshToken })).status).toBeGreaterThanOrEqual(400);
+    expect((await f.call("POST", "/sign-in/email", f.publicKeyStr, { email: "me@example.com", password: "Second-pass-1234!" })).status).toBe(200);
+    expect((await authed("DELETE", "/user", {}, s2.accessToken)).status).toBe(401);
+    expect((await authed("DELETE", "/user", { password: "Second-pass-1234!" }, s2.accessToken)).status).toBe(200);
+    expect((await f.call("POST", "/sign-in/email", f.publicKeyStr, { email: "me@example.com", password: "Second-pass-1234!" })).status).toBeGreaterThanOrEqual(400);
+  });
 });

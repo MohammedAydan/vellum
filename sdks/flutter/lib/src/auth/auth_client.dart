@@ -653,6 +653,37 @@ class VellumAuth implements VellumAuthPort {
   /// Supplying it alone has no effect (the server rejects an empty patch); use
   /// [sendPasswordResetEmail] followed by [confirmPasswordReset] instead.
   @override
+  Future<VellumUser> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final expectedEpoch = _sessionEpoch;
+    final res = await client.request(
+      'POST',
+      '/auth/password/change',
+      body: <String, Object?>{
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      },
+    );
+    _requireCurrentEpoch(expectedEpoch);
+    final user = VellumUser.fromSession(res);
+    _sessionEpoch++;
+    await _setCurrentUser(user);
+    return user;
+  }
+
+  @override
+  Future<void> deleteAccount({String? password}) async {
+    await client.request(
+      'DELETE',
+      '/auth/user',
+      body: <String, Object?>{if (password != null) 'password': password},
+    );
+    await signOut();
+  }
+
+  @override
   Future<VellumUser> updateProfile({
     String? email,
     String? displayName,

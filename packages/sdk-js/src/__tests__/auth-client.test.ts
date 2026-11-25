@@ -414,3 +414,35 @@ describe("@vellumdb/sdk-js - realtime re-authentication after token rotation", (
     unsubscribe();
   });
 });
+
+describe("@vellumdb/sdk-js - password change and account deletion", () => {
+  it("changePassword sends both passwords with the bearer token and keeps the new session", async () => {
+    const next = makeJwt({ sub: "usr_1", exp: Math.floor(Date.now() / 1000) + 9000 });
+    const { calls, fetch } = recorder(({ url }) => {
+      if (url.endsWith("/auth/sign-in/email")) return json(session());
+      if (url.endsWith("/auth/password/change")) return json(session(next, "refresh_2"));
+      return json({});
+    });
+    const db = createClient({ projectId: "p", apiKey: "pk_test", customFetch: fetch });
+    await db.signInWithEmailAndPassword("a@b.c", "password123");
+    const state = await db.changePassword("password123", "newPassword456");
+    const call = calls.find((c) => c.url.endsWith("/auth/password/change"));
+    expect(call?.body).toEqual({ currentPassword: "password123", newPassword: "newPassword456" });
+    expect(headersOf(call)["authorization"]).toBe(`Bearer ${FIRST_TOKEN}`);
+    expect(state.refreshToken).toBe("refresh_2");
+    expect(db.currentUser?.accessToken).toBe(next);
+  });
+
+  it("deleteAccount calls DELETE /auth/user and signs out locally", async () => {
+    const { calls, fetch } = recorder(({ url }) => {
+      if (url.endsWith("/auth/sign-in/email")) return json(session());
+      return json({ deleted: true });
+    });
+    const db = createClient({ projectId: "p", apiKey: "pk_test", customFetch: fetch });
+    await db.signInWithEmailAndPassword("a@b.c", "password123");
+    await db.deleteAccount({ password: "password123" });
+    const call = calls.find((c) => c.url.endsWith("/auth/user") && c.init?.method === "DELETE");
+    expect(call?.body).toEqual({ password: "password123" });
+    expect(db.currentUser).toBeNull();
+  });
+});
