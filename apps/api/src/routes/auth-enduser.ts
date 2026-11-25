@@ -580,31 +580,34 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     return new Response(null, { status: 302, headers: { location: url.toString(), "cache-control": "no-store" } });
   }
 
-  routes.get("/oauth/:provider/start", async (c) => {
+  // The publishable key travels in the X-Vellum-Api-Key header of a POST and never in a URL,
+  // so it cannot leak through browser history, logs or Referer headers. The response is the
+  // provider's authorize URL (it carries only the sealed, short-lived flow state).
+  routes.post("/oauth/:provider/start", async (c) => {
     const tenant = await resolveAuthTenant(c, platform);
     const providerId = c.req.param("provider") ?? "";
     const provider = getProvider(providerId);
-    // A browser navigation cannot send headers, so the publishable key travels in the query.
-    const apiKey = c.req.query("apiKey") ?? "";
-    const keyRecord = apiKey ? await verifyApiKeyAsync(apiKey, platform.controlStore, platform.apiKeyPepper) : null;
-    if (!keyRecord || keyRecord.projectId !== tenant.projectId) {
-      throw new VellumError("UNAUTHENTICATED", "A valid project apiKey query parameter is required");
-    }
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
     const creds = resolveProviderCredentials(config.oauthProviders, providerId, masterKey());
     if (!creds.enabled || !creds.clientId || !creds.clientSecret) {
       throw new VellumError("PERMISSION_DENIED", `Sign-in with ${providerId} is not enabled for this project`);
     }
-    const redirectUri = c.req.query("redirectUri") ?? "";
+    const body = (await c.req.json().catch(() => ({}))) as {
+      redirectUri?: unknown;
+      codeChallenge?: unknown;
+      state?: unknown;
+    };
+    const redirectUri = typeof body.redirectUri === "string" ? body.redirectUri : "";
     if (!isRedirectAllowed(redirectAllowlist(config.oauthProviders), redirectUri)) {
       throw new VellumError("INVALID_ARGUMENT", "redirectUri is not in this project's allowed redirect list");
     }
-    const challenge = c.req.query("codeChallenge") ?? "";
+    const challenge = typeof body.codeChallenge === "string" ? body.codeChallenge : "";
     if (!/^[A-Za-z0-9_-]{43}$/.test(challenge)) {
       throw new VellumError("INVALID_ARGUMENT", "codeChallenge must be a base64url SHA-256 (S256) challenge");
     }
-    const clientState = c.req.query("state") ?? null;
+    const clientState = typeof body.state === "string" ? body.state : null;
     if (clientState !== null && clientState.length > 512) {
       throw new VellumError("INVALID_ARGUMENT", "state is too long");
     }
@@ -623,14 +626,23 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       },
       masterKey()
     );
-    const location = buildAuthorizeUrl(provider, {
+    const authorizeUrl = buildAuthorizeUrl(provider, {
       clientId: creds.clientId,
       callbackUrl: callbackUrlFor(c, tenant.projectId, providerId),
       state,
       codeChallenge: s256(verifier),
       nonce,
     });
-    return new Response(null, { status: 302, headers: { location, "cache-control": "no-store" } });
+    c.header("cache-control", "no-store");
+    return c.json({ authorizeUrl });
+  });
+
+  // Old SDKs sent the key in the query string. That is no longer accepted.
+  routes.get("/oauth/:provider/start", () => {
+    throw new VellumError(
+      "INVALID_ARGUMENT",
+      "This sign-in start URL is no longer supported because it put the API key in the URL. Update your Vellum SDK."
+    );
   });
 
   routes.get("/oauth/:provider/callback", async (c) => {

@@ -49,7 +49,7 @@ class VellumOAuth {
     final challenge = base64Url
         .encode(crypto.sha256.convert(utf8.encode(verifier)).bytes)
         .replaceAll('=', '');
-    final start = auth.oauthStartUri(
+    final start = await auth.oauthStart(
       provider: provider,
       redirectUri: redirectUri,
       codeChallenge: challenge,
