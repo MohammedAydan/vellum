@@ -56,3 +56,44 @@ describe('collection export pagination', () => {
     expect((await send('GET','/collections/exported/export?limit=-1')).status).toBe(400);
   });
 });
+
+describe('batchWrite with version preconditions across documents', () => {
+  const write = (type: string, path: string, data: unknown, extra: object = {}) => ({type, path, data, ...extra});
+  it('commits every document when all versions match, in one request', async () => {
+    const {send} = await fixture();
+    await send('PUT','/documents/items/a',{data:{n:0}},'k1');
+    await send('PUT','/documents/items/b',{data:{n:0}},'k2');
+    const res = await send('POST','/batchWrite',{writes:[
+      write('update','items/a',{n:1},{ifVersion:1}),
+      write('update','items/b',{n:1},{preconditions:{ifVersion:1}}),
+    ]},'k3');
+    expect(res.status).toBe(200);
+    expect((await (await send('GET','/documents/items/a')).json()).data.n).toBe(1);
+    expect((await (await send('GET','/documents/items/b')).json()).data.n).toBe(1);
+  });
+  it('applies none of the writes when one version is stale', async () => {
+    const {send} = await fixture();
+    await send('PUT','/documents/items/a',{data:{n:0}},'k1');
+    await send('PUT','/documents/items/b',{data:{n:0}},'k2');
+    await send('PATCH','/documents/items/b',{data:{n:5}},'k3'); // b is now version 2
+    for (const route of ['/batchWrite','/documents:batchWrite']) {
+      const res = await send('POST',route,{writes:[
+        write('update','items/a',{n:1},{ifVersion:1}),
+        write('update','items/b',{n:1},{precondition:{version:1}}),
+      ]},`stale-${route}`);
+      expect(res.status).toBe(412);
+      expect((await (await send('GET','/documents/items/a')).json()).data.n).toBe(0);
+      expect((await (await send('GET','/documents/items/b')).json()).data.n).toBe(5);
+    }
+  });
+  it('exists:false makes a batch create-if-absent across documents', async () => {
+    const {send} = await fixture();
+    await send('PUT','/documents/items/a',{data:{n:0}},'k1');
+    const res = await send('POST','/batchWrite',{writes:[
+      write('set','items/a',{n:9},{exists:false}),
+      write('set','items/c',{n:9},{exists:false}),
+    ]},'k2');
+    expect(res.status).toBe(412);
+    expect((await send('GET','/documents/items/c')).status).toBe(404);
+  });
+});
