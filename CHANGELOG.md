@@ -4,7 +4,6 @@
 
 ### Security
 
-- Account pre-hijacking: when a Google or GitHub sign-in proves ownership of an email that already has an unverified password account, the password and live sessions of that earlier registration are now discarded before the accounts are linked.
 - Social sign-in no longer puts the API key in a URL. `POST /auth/oauth/:provider/start` takes the key in the `X-Vellum-Api-Key` header and returns the provider's authorize URL. The old `GET .../start?apiKey=...` is refused. sdk-js and `vellum_flutter` use the new call; apps must update to the next SDK release.
 
 ### Features
