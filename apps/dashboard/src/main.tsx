@@ -20,10 +20,34 @@ import { dictionaries } from "./i18n/index.js";
 import "@vellum/ui/index.css";
 import "./index.css";
 
+/** Shown while a route loads. Delayed so fast navigations do not flash. */
+function RoutePending(): React.JSX.Element {
+  return (
+    <div role="status" aria-live="polite" className="flex min-h-[40vh] items-center justify-center gap-3 text-sm text-muted-foreground">
+      <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none" aria-hidden="true" />
+      <span>Loading</span>
+    </div>
+  );
+}
+
+function RouteNotFound(): React.JSX.Element {
+  return (
+    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center">
+      <h1 className="text-xl font-semibold">Page not found</h1>
+      <p className="text-sm text-muted-foreground">This page does not exist or has moved.</p>
+      <a href="/app" className="text-sm font-medium underline underline-offset-4">Go to the console</a>
+    </div>
+  );
+}
+
 const router = createRouter({
   routeTree,
   // Served at `/`; kept explicit so the three frontends share one origin.
   basepath: "/",
+  defaultPendingComponent: RoutePending,
+  defaultPendingMs: 200,
+  defaultPendingMinMs: 300,
+  defaultNotFoundComponent: RouteNotFound,
   context: {
     queryClient,
   },
@@ -42,7 +66,9 @@ function DirectionFromLocale({ children }: { children: React.ReactNode }): React
 }
 
 const rootElement = document.getElementById("root");
-if (rootElement && !rootElement.innerHTML) {
+if (rootElement && (!rootElement.innerHTML || rootElement.hasAttribute("data-splash"))) {
+  rootElement.removeAttribute("data-splash");
+  rootElement.innerHTML = "";
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <React.StrictMode>
