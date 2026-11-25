@@ -103,7 +103,7 @@ Do not rely on cross-type ordering to validate a numeric range. hasKey is not a 
 
 ## Queries are not per-document get checks
 
-An ordinary query checks list once against a synthetic document path under its collection, with resource.data and request.data both null. It does not re-run get for each result and does not inject owner filters. Aggregates also use the collection-level list gate. Granting list on a mixed-owner collection can expose rows whose individual get would fail. Adding a where(ownerId == uid) in an untrusted client is not an access-control boundary because the client can omit it.
+An ordinary query checks list once against a synthetic document path under its collection, with resource.data and request.data both null. With a public key, each returned row must also pass its own get rule (when one matches the path): rows whose get denies are left out, pages are refilled, and the cursor stays valid. A path with only a list rule has no row-level rule, so list alone decides. Aggregates and counts cannot be filtered row by row: with a public key they are refused when get depends on the document (for example resource.data.participantIds), and allowed when get passes without it. Export is for server keys only. Server keys bypass these rules. Adding a where(ownerId == uid) in an untrusted client is not an access-control boundary because the client can omit it.
 
 Use private user subcollections and compare path.userId for both get and list, as in the example. A rule requiring resource.data.ownerId for list denies the collection-level check, even if the query includes an owner filter. Do not compare the final document wildcard to uid for list; that segment is a synthetic marker, not a real record id.
 

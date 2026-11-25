@@ -4,6 +4,8 @@
 
 ### Security
 
+- Security rules: a query, export or batch read with a public key now also checks each returned row against its own `get` rule when one matches the path. Before, `allow list: if isSignedIn(); allow get: if isParticipant(...)` returned every row to any signed-in user. Hidden rows are skipped and pages are refilled (up to 5 extra batches per request). Aggregates and counts are refused for public keys when the `get` rule depends on the document, since a GROUP BY cannot be filtered per row. Paths with only a `list` rule behave as before. Server keys are unchanged.
+- `GET /collections/:name/export` now needs a server key, like import and clear.
 - Account-keeping changes now prove the account owner, not only the access token: linking a provider (`link: true`), `DELETE /auth/identities/:provider`, `POST /auth/password/change` and `DELETE /auth/user` need `currentPassword` (`password` for delete) for accounts with a password, and a sign-in within the last 10 minutes for accounts without one. Wrong passwords lock out per user, and these endpoints are rate limited (10 per 15 minutes per IP). sdk-js: `linkWithPopup(..., { currentPassword })`, `unlinkProvider(provider, { currentPassword })`; `vellum_flutter` must send the same field.
 - Changing an account email through `PATCH /auth/user` needs `currentPassword` (sdk-js `updateProfile` accepts it). Accounts without a password can only change email with a server key.
 - Development tokens (`devToken`) in password reset and email verification responses are returned only when `NODE_ENV` is `test` or `development`, or `VELLUM_ALLOW_DEV_TOKENS=1` is set.

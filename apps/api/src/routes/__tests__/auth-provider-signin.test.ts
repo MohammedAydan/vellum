@@ -38,7 +38,7 @@ async function fixture() {
       headers: { "content-type": "application/json", "x-vellum-api-key": key, authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     }));
-  return { platform, post, get, patch, del, publicKey, serverKey };
+  return { platform, post, get, patch, del, publicKey, serverKey, projectId: project.id };
 }
 
 describe("POST /sign-in/provider", () => {
@@ -132,5 +132,17 @@ describe("re-authentication for account-keeping changes", () => {
     for (let i = 0; i < 8; i += 1) last = (await del("/user", { password: `wrong-${i}-password` }, publicKey, accessToken)).status;
     expect(last).toBe(429);
     expect((await del("/user", { password: "Password123!" }, publicKey, accessToken)).status).toBe(429);
+  });
+});
+
+describe("GET /collections/:name/export", () => {
+  it("is for server keys only: a publishable key cannot dump a collection", async () => {
+    const { platform, publicKey, serverKey, projectId } = await fixture();
+    const call = (key: string) =>
+      platform.fetch(new Request(`http://localhost/v1/projects/${projectId}/collections/conversations/export`, {
+        headers: { "x-vellum-api-key": key },
+      }));
+    expect((await call(publicKey)).status).toBe(403);
+    expect((await call(serverKey)).status).toBe(200);
   });
 });

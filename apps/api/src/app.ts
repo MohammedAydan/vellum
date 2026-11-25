@@ -1073,6 +1073,8 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     const projectId = c.req.param("projectId");
     const name = c.req.param("name");
     const { apiKeyRecord, authContext } = await authenticateRequest(c, projectId);
+    // Bulk export is backend tooling. A publishable key ships inside apps and must not dump collections.
+    requireServerKey(apiKeyRecord);
     return c.json(
       await platform.documentEngine.exportCollectionDocuments(
         { projectId, apiKeyRecord, authContext },
