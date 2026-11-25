@@ -84,7 +84,7 @@ export default function Page() {
         <Code lang="dart" title="Desktop loopback redirect" code={desktopDart} />
         <P>
           Prefer the native account picker for Google? Add the official <code>google_sign_in</code> package to your own app and pass its
-          ID token to <code>signInWithGoogleIdToken</code>. A token is accepted only if its audience is one of your project's Google client IDs. If you pass the web client ID as <code>serverClientId</code> (as above) that is the ID already configured. If you do not, Google issues the token for the Android or iOS client ID, so add those to "Additional Google client IDs" in Auth Studio > Providers > Google, otherwise sign-in fails.
+          ID token to <code>signInWithGoogleIdToken</code>. A token is accepted only if its audience is one of your project's Google client IDs. If you pass the web client ID as <code>serverClientId</code> (as above) that is the ID already configured. If you do not, Google issues the token for the Android or iOS client ID, so add those to "Additional Google client IDs" in Auth Studio &gt; Providers &gt; Google, otherwise sign-in fails.
         </P>
         <Code lang="dart" title="Native Google with google_sign_in (optional)" code={flutterNativeDart} />
       </Section>

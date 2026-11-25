@@ -81,7 +81,7 @@ export default function Page() {
         <Code lang="dart" title="رجوع loopback على سطح المكتب" code={desktopDart} />
         <P>
           تفضّل منتقي الحسابات الأصلي لـ Google؟ أضف حزمة <code>google_sign_in</code> الرسمية إلى تطبيقك ومرّر رمز الهوية إلى <code>signInWithGoogleIdToken</code>.
-          يُقبل الرمز فقط إذا كان جمهوره (audience) أحد معرّفات عملاء Google في مشروعك. إن مرّرت معرّف عميل الويب كـ<code>serverClientId</code> (كما أعلاه) فهو المعرّف المضبوط أصلا. وإن لم تفعل يصدر Google الرمز لمعرّف عميل Android أو iOS، فأضفهما إلى "معرّفات عملاء Google إضافية" في Auth Studio > Providers > Google وإلا فشل الدخول.
+          يُقبل الرمز فقط إذا كان جمهوره (audience) أحد معرّفات عملاء Google في مشروعك. إن مرّرت معرّف عميل الويب كـ<code>serverClientId</code> (كما أعلاه) فهو المعرّف المضبوط أصلا. وإن لم تفعل يصدر Google الرمز لمعرّف عميل Android أو iOS، فأضفهما إلى "معرّفات عملاء Google إضافية" في Auth Studio &gt; Providers &gt; Google وإلا فشل الدخول.
         </P>
         <Code lang="dart" title="Google الأصلي مع google_sign_in (اختياري)" code={flutterNativeDart} />
       </Section>
