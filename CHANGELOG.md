@@ -8,6 +8,20 @@
 
 - `vellum_flutter`: write batches take `exists` next to `ifVersion` on `set`, `update` and `delete`, and have `create`. The wire format is flat (`type`, `path`, `data`, `ifVersion`, `exists`); a stale version fails the batch with 412.
 
+- `vellum_flutter`: `runTransaction` calls `POST /transactions:rollback` (best effort, never replacing the original error) when the callback or the commit fails, before a conflict retry. It skips the call after `SESSION_CHANGED` and after a successful commit.
+
+- `POST /transactions:rollback` ends a transaction right away instead of leaving it to expire. sdk-js `runTransaction` calls it (best effort) when the callback throws, the call is aborted, or a commit conflict is about to be retried, so abandoned attempts no longer hold their read set until the 15 s window ends.
+
+- `vellum_flutter`: offline support. `PersistentDocumentCacheStore` keeps the document cache across restarts and `VellumOutbox` queues document writes while offline and replays them in order with idempotency keys. Everything on disk is AES-256-GCM encrypted with a device key held in the Keychain or Keystore (not iCloud-synced), bound to the project (endpoint + project id), and for the cache to the signed-in user. A secure-store read failure gives a memory-only key and writes nothing. The queue takes document writes only (strict path allow-list), stores no tokens, is per user, stops on user change or sign-out, and is bounded (200 writes, 256 KB each, 2 MB total, 23 hours). Auth errors and network errors keep entries; permission, not-found and conflict errors drop them with a reason (`rejected`, `conflict`, `expired`, `otherUser`, `failed`); optional `ifVersion` guards. Web is memory-only unless `allowWeb`. Adds the `cryptography` dependency. New `defaultSecureKeyValue()`, `VellumClient.addSignOutHook`.
+
+### Security
+
+- drizzle-orm upgraded from 0.38 to 0.45.4. Versions before 0.45.2 do not escape SQL identifiers safely (GHSA-gpj5-g38j-94v9). Vellum builds identifiers from fixed schema names only, so no exploitable path was found, but the fix is taken anyway.
+
+- The console, admin and public site now send an enforced `Content-Security-Policy` with `script-src 'self'` (no inline scripts, no `unsafe-eval`), plus `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` and `frame-ancestors 'none'`. The inline bootstrap and site scripts moved to files (`vellum-bootstrap.js`, `site-early.js`, `site.js`). `style-src` still allows inline styles because the UI uses style attributes. A stale prototype `apps/dashboard/public/index.html` that loaded Tailwind and fonts from third-party hosts was removed. Check a Vercel preview for CSP errors in the browser console before the production deploy.
+
+- A request body over the size limit and sent without a `Content-Length` header (chunked uploads) hung until the platform timeout instead of failing with 413, because the body cap awaited `cancel()` on a cloned stream. Any client could hold connections open this way. It now answers 413 at once.
+
 ### Breaking
 
 - sdk-js and `vellum_flutter`: `customClaims` is removed from the end-user `signUpWithEmailAndPassword` and `updateProfile` inputs. The API has rejected it for end users since 0.0.4, so passing it only produced an error. Set claims with a server key instead. Reading `user.customClaims` is unchanged.
@@ -24,12 +38,6 @@ Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK 
 
 
 ### Security
-
-- drizzle-orm upgraded from 0.38 to 0.45.4. Versions before 0.45.2 do not escape SQL identifiers safely (GHSA-gpj5-g38j-94v9). Vellum builds identifiers from fixed schema names only, so no exploitable path was found, but the fix is taken anyway.
-
-- The console, admin and public site now send an enforced `Content-Security-Policy` with `script-src 'self'` (no inline scripts, no `unsafe-eval`), plus `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` and `frame-ancestors 'none'`. The inline bootstrap and site scripts moved to files (`vellum-bootstrap.js`, `site-early.js`, `site.js`). `style-src` still allows inline styles because the UI uses style attributes. A stale prototype `apps/dashboard/public/index.html` that loaded Tailwind and fonts from third-party hosts was removed. Check a Vercel preview for CSP errors in the browser console before the production deploy.
-
-- A request body over the size limit and sent without a `Content-Length` header (chunked uploads) hung until the platform timeout instead of failing with 413, because the body cap awaited `cancel()` on a cloned stream. Any client could hold connections open this way. It now answers 413 at once.
 
 - Security rules: a query, export or batch read with a public key now also checks each returned row against its own `get` rule when one matches the path. Before, `allow list: if isSignedIn(); allow get: if isParticipant(...)` returned every row to any signed-in user. Hidden rows are skipped and pages are refilled (up to 5 extra batches per request). Aggregates and counts are refused for public keys when the `get` rule depends on the document, since a GROUP BY cannot be filtered per row. Paths with only a `list` rule behave as before. Server keys are unchanged.
 - `GET /collections/:name/export` now needs a server key, like import and clear.
@@ -48,11 +56,8 @@ Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK 
 
 - sdk-js `addWithRelated` matches Flutter: it takes `idempotencyKey` (sent as `Idempotency-Key`) and runs the collection converter's `toDoc` on the parent document.
 
-- `vellum_flutter`: `runTransaction` calls `POST /transactions:rollback` (best effort, never replacing the original error) when the callback or the commit fails, before a conflict retry. It skips the call after `SESSION_CHANGED` and after a successful commit.
 
-- `POST /transactions:rollback` ends a transaction right away instead of leaving it to expire. sdk-js `runTransaction` calls it (best effort) when the callback throws, the call is aborted, or a commit conflict is about to be retried, so abandoned attempts no longer hold their read set until the 15 s window ends.
 
-- `vellum_flutter`: offline support. `PersistentDocumentCacheStore` keeps the document cache across restarts and `VellumOutbox` queues document writes while offline and replays them in order with idempotency keys. Everything on disk is AES-256-GCM encrypted with a device key held in the Keychain or Keystore (not iCloud-synced), bound to the project (endpoint + project id), and for the cache to the signed-in user. A secure-store read failure gives a memory-only key and writes nothing. The queue takes document writes only (strict path allow-list), stores no tokens, is per user, stops on user change or sign-out, and is bounded (200 writes, 256 KB each, 2 MB total, 23 hours). Auth errors and network errors keep entries; permission, not-found and conflict errors drop them with a reason (`rejected`, `conflict`, `expired`, `otherUser`, `failed`); optional `ifVersion` guards. Web is memory-only unless `allowWeb`. Adds the `cryptography` dependency. New `defaultSecureKeyValue()`, `VellumClient.addSignOutHook`.
 
 - `vellum_flutter`: `signInWithOAuth` now returns `VellumAuthResult` and resolves to `VellumMfaRequired` when the account has a second factor, like the other sign-in methods (it returned `VellumUser` before; no session is stored in the MFA case). Transactions: `tx.create()`, `tx.get` on a missing document returns an `exists == false` snapshot instead of throwing, and the document cache is cleared before `runTransaction` returns. Loopback sign-in accepts port 0 (`http://127.0.0.1:0/callback`): the port is bound per attempt and the real one is sent to the API.
 
