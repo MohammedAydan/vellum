@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:vellum_flutter/vellum_flutter_core.dart';
 
@@ -66,11 +67,62 @@ VellumOAuthLauncher systemBrowserLauncher({
   };
 }
 
+/// Emits whenever the app returns to the foreground, so a redirect-less
+/// sign-in can poll right away instead of waiting for its next timer tick.
+class _ResumeSignals with WidgetsBindingObserver {
+  _ResumeSignals() {
+    _controller = StreamController<void>.broadcast(
+      onListen: () => WidgetsBinding.instance.addObserver(this),
+      onCancel: () => WidgetsBinding.instance.removeObserver(this),
+    );
+  }
+  late final StreamController<void> _controller;
+  Stream<void> get stream => _controller.stream;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_controller.isClosed) {
+      _controller.add(null);
+    }
+  }
+}
+
 /// Ready-to-use [VellumOAuth] wired to the system browser.
+///
+/// With a [redirectUri] the browser returns to your app through a deep link
+/// (custom scheme, or a loopback port on desktop). Without one the SDK uses
+/// redirect-less sign-in: nothing to register in AndroidManifest.xml or
+/// Info.plist, nothing to add in Auth Studio, and it survives the OS recreating
+/// your app while the browser is open. Redirect-less is the recommended choice
+/// on Android and iOS.
 VellumOAuth createVellumOAuth({
   required VellumAuthPort auth,
-  required String redirectUri,
+  String? redirectUri,
 }) {
+  if (redirectUri == null || redirectUri.isEmpty) {
+    return VellumOAuth.polling(
+      auth: auth,
+      resumeSignals: _ResumeSignals().stream,
+      openUrl: (Uri url) async {
+        if (kIsWeb) {
+          throw const VellumException(
+            code: 'UNSUPPORTED',
+            message:
+                'Redirect-less sign-in does not support Flutter web. Use the web SDK flow there.',
+            statusCode: 0,
+          );
+        }
+        final ok = await launchUrl(url, mode: LaunchMode.externalApplication);
+        if (!ok) {
+          throw const VellumException(
+            code: 'CANCELLED',
+            message: 'Could not open the system browser',
+            statusCode: 0,
+          );
+        }
+      },
+    );
+  }
   return VellumOAuth(
     auth: auth,
     redirectUri: redirectUri,

@@ -30,8 +30,40 @@ class VellumOAuth {
     }
   }
 
+  /// Redirect-less sign-in: needs no redirect URI, no deep-link registration
+  /// and no Auth Studio entry. [openUrl] opens the provider page in the system
+  /// browser; the SDK then polls the API (about every [pollInterval]) until the
+  /// browser step is done or [timeout] passes. Safe on Android and iOS even if
+  /// the OS recreates the app while the browser is open, because the only secret
+  /// is the PKCE verifier held by this object. Pass [resumeSignals] (the Flutter
+  /// wrapper does) to poll immediately when the app returns to the foreground.
+  VellumOAuth.polling({
+    required this.auth,
+    required Future<void> Function(Uri url) openUrl,
+    this.pollInterval = const Duration(seconds: 2),
+    this.timeout = const Duration(minutes: 5),
+    Stream<void>? resumeSignals,
+    Random? random,
+  })  : launcher = _noLauncher,
+        redirectUri = '',
+        _openUrl = openUrl,
+        _resume = resumeSignals,
+        _random = random ?? Random.secure();
+
+  static Future<String> _noLauncher(Uri url, String scheme) => Future<String>.error(
+        const VellumException(
+          code: 'UNSUPPORTED',
+          message: 'Polling sign-in does not use a launcher',
+          statusCode: 0,
+        ),
+      );
+
   final VellumAuthPort auth;
   final VellumOAuthLauncher launcher;
+  Future<void> Function(Uri url)? _openUrl;
+  Stream<void>? _resume;
+  Duration pollInterval = const Duration(seconds: 2);
+  Duration timeout = const Duration(minutes: 5);
 
   /// Must be in the project's allowed redirect URIs (Auth Studio).
   final String redirectUri;
@@ -43,17 +75,36 @@ class VellumOAuth {
 
   /// Signs in with `google` or `github`. Resolves to [VellumMfaRequired] when a
   /// second factor is needed, otherwise a [VellumSession].
-  Future<VellumAuthResult> signIn(String provider) async {
+  Future<VellumAuthResult> signIn(String provider) => _run(provider, false);
+
+  /// Adds `google` or `github` to the signed-in user's account (the provider's
+  /// email may differ). Fails when that provider account belongs to another user.
+  Future<VellumAuthResult> link(String provider) {
+    if (auth.currentUser == null) {
+      throw const VellumException(
+        code: 'UNAUTHENTICATED',
+        message: 'Sign in before linking a provider',
+        statusCode: 0,
+      );
+    }
+    return _run(provider, true);
+  }
+
+  Future<VellumAuthResult> _run(String provider, bool link) async {
     final verifier = _token(48);
     final state = _token(16);
     final challenge = base64Url
         .encode(crypto.sha256.convert(utf8.encode(verifier)).bytes)
         .replaceAll('=', '');
-    final start = auth.oauthStartUri(
+    if (_openUrl != null) {
+      return _signInPolling(provider, verifier, challenge, link);
+    }
+    final start = await auth.oauthStart(
       provider: provider,
       redirectUri: redirectUri,
       codeChallenge: challenge,
       state: state,
+      link: link,
     );
     final String returned;
     try {
@@ -87,5 +138,52 @@ class VellumOAuth {
       );
     }
     return auth.exchangeOAuthCode(code: code, codeVerifier: verifier);
+  }
+
+  Future<VellumAuthResult> _signInPolling(
+    String provider,
+    String verifier,
+    String challenge,
+    bool link,
+  ) async {
+    final start = await auth.oauthStartPoll(
+      provider: provider,
+      codeChallenge: challenge,
+      link: link,
+    );
+    try {
+      await _openUrl!(start);
+    } on VellumException {
+      rethrow;
+    } catch (_) {
+      throw const VellumException(
+        code: 'CANCELLED',
+        message: 'Sign-in could not be opened',
+        statusCode: 0,
+      );
+    }
+    final deadline = DateTime.now().add(timeout);
+    var wake = Completer<void>();
+    final sub = _resume?.listen((_) {
+      if (!wake.isCompleted) wake.complete();
+    });
+    try {
+      while (DateTime.now().isBefore(deadline)) {
+        final result = await auth.pollOAuth(codeVerifier: verifier);
+        if (result != null) return result;
+        wake = Completer<void>();
+        await Future.any<void>(<Future<void>>[
+          Future<void>.delayed(pollInterval),
+          wake.future,
+        ]);
+      }
+    } finally {
+      await sub?.cancel();
+    }
+    throw const VellumException(
+      code: 'CANCELLED',
+      message: 'Sign-in timed out. Please try again.',
+      statusCode: 0,
+    );
   }
 }

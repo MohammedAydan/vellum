@@ -14,9 +14,12 @@ const USER = {
 const SESSION = { user: USER, accessToken: TOKEN, refreshToken: "r1", tokenType: "Bearer", sessionId: "s1", expiresAt: "2099-01-01T00:00:00.000Z" };
 
 function mkClient() {
-  const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const calls: Array<{ url: string; body: Record<string, unknown>; headers?: Record<string, string> }> = [];
   const customFetch = (async (url: string | URL | Request, init?: RequestInit) => {
-    calls.push({ url: String(url), body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown> });
+    calls.push({ url: String(url), body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>, headers: (init?.headers ?? {}) as Record<string, string> });
+    if (String(url).includes("/oauth/") && String(url).endsWith("/start")) {
+      return new Response(JSON.stringify({ authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=sealed" }), { status: 200, headers: { "content-type": "application/json" } });
+    }
     return new Response(JSON.stringify(SESSION), { status: 200, headers: { "content-type": "application/json" } });
   }) as unknown as typeof fetch;
   const client = createClient({
@@ -47,37 +50,39 @@ describe("browser OAuth helpers", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("popup: opens the start URL with PKCE, then exchanges the one-time code with the verifier", async () => {
+  it("popup: starts via POST (key in a header, never in a URL), then exchanges the one-time code", async () => {
     const { client, calls } = mkClient();
-    const popup = { closed: false, close: vi.fn(), location: { href: "https://accounts.google.com/x" } };
-    let opened = "";
-    vi.stubGlobal("open", (url: string) => { opened = url; return popup; });
+    const popup = { closed: false, close: vi.fn(), location: { href: "about:blank" } };
+    const opened: string[] = [];
+    vi.stubGlobal("open", (url: string) => { opened.push(url); return popup; });
     const pending = client.signInWithPopup("google");
-    await vi.waitFor(() => expect(opened).not.toBe(""));
-    const start = new URL(opened);
-    expect(start.pathname).toBe("/v1/projects/prj_1/auth/oauth/google/start");
-    expect(start.searchParams.get("apiKey")).toBe("pk_test_abc");
-    expect(start.searchParams.get("redirectUri")).toBe("https://app.example.com/login");
-    const state = start.searchParams.get("state") ?? "";
-    expect(start.searchParams.get("codeChallenge")).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(opened).toEqual(["about:blank"]); // opened synchronously, before any network call
+    await vi.waitFor(() => expect(popup.location.href).toContain("accounts.google.com"));
+    const start = calls[0]!;
+    expect(start.url).toBe("https://api.example.com/v1/projects/prj_1/auth/oauth/google/start");
+    expect(start.url).not.toContain("pk_test_abc");
+    expect(popup.location.href).not.toContain("pk_test_abc");
+    expect(JSON.stringify(start.headers).toLowerCase()).toContain("pk_test_abc");
+    expect(start.body["redirectUri"]).toBe("https://app.example.com/login");
+    expect(start.body["codeChallenge"]).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const state = String(start.body["state"]);
     popup.location.href = `https://app.example.com/login?vellum_code=one-time&state=${state}`;
     const user = await pending;
     expect((user as { email: string }).email).toBe("a@example.com");
-    expect(calls[0]?.url).toContain("/auth/oauth/exchange");
-    expect(calls[0]?.body["code"]).toBe("one-time");
-    expect(String(calls[0]?.body["codeVerifier"]).length).toBeGreaterThanOrEqual(43);
+    expect(calls[1]?.url).toContain("/auth/oauth/exchange");
+    expect(calls[1]?.body["code"]).toBe("one-time");
+    expect(String(calls[1]?.body["codeVerifier"]).length).toBeGreaterThanOrEqual(43);
     expect(popup.close).toHaveBeenCalled();
   });
 
   it("popup: ignores a result for a different state, rejects provider errors", async () => {
-    const { client } = mkClient();
-    const popup = { closed: false, close: vi.fn(), location: { href: "https://accounts.google.com/x" } };
-    let opened = "";
-    vi.stubGlobal("open", (url: string) => { opened = url; return popup; });
+    const { client, calls } = mkClient();
+    const popup = { closed: false, close: vi.fn(), location: { href: "about:blank" } };
+    vi.stubGlobal("open", () => popup);
     const pending = client.signInWithPopup("github");
     pending.catch(() => undefined);
-    await vi.waitFor(() => expect(opened).not.toBe(""));
-    const state = new URL(opened).searchParams.get("state") ?? "";
+    await vi.waitFor(() => expect(popup.location.href).toContain("accounts.google.com"));
+    const state = String(calls[0]?.body["state"]);
     popup.location.href = "https://app.example.com/login?vellum_code=evil&state=other";
     await new Promise((r) => setTimeout(r, 400));
     popup.location.href = `https://app.example.com/login?error=access_denied&error_description=Denied&state=${state}`;
@@ -93,14 +98,14 @@ describe("browser OAuth helpers", () => {
   it("redirect: stores the verifier, navigates, and completes with getRedirectResult", async () => {
     const { client, calls } = mkClient();
     await client.signInWithRedirect("github");
-    const target = new URL(String(loc.assign.mock.calls[0]?.[0]));
-    expect(target.pathname).toContain("/oauth/github/start");
-    const state = target.searchParams.get("state") ?? "";
+    expect(String(loc.assign.mock.calls[0]?.[0])).not.toContain("pk_test_abc");
+    expect(calls[0]?.url).toContain("/oauth/github/start");
+    const state = String(calls[0]?.body["state"]);
     expect(await client.getRedirectResult()).toBeNull(); // not on the return URL yet
     loc.href = `https://app.example.com/login?vellum_code=abc&state=${state}`;
     const user = await client.getRedirectResult();
     expect((user as { id: string }).id).toBe("usr_1");
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(hist.replaceState).toHaveBeenCalled();
     expect(await client.getRedirectResult()).toBeNull(); // single use
   });
@@ -124,6 +129,9 @@ describe("browser OAuth helpers", () => {
     const customFetch = (async (url: string | URL | Request, init?: RequestInit) => {
       const u = String(url);
       calls.push({ url: u, body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown> });
+      if (u.endsWith("/oauth/google/start")) {
+        return new Response(JSON.stringify({ authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=sealed" }), { status: 200, headers: { "content-type": "application/json" } });
+      }
       if (u.endsWith("/oauth/exchange")) {
         return new Response(JSON.stringify({ mfaRequired: true, mfaTicket: "t1", factors: ["totp"], expiresAt: "2099-01-01T00:00:00.000Z" }), { status: 200, headers: { "content-type": "application/json" } });
       }
@@ -134,7 +142,7 @@ describe("browser OAuth helpers", () => {
       customFetch, authStorage: new MemoryAuthStorage(), autoRefresh: false,
     });
     await client.signInWithRedirect("google");
-    const state = new URL(String(loc.assign.mock.calls[0]?.[0])).searchParams.get("state") ?? "";
+    const state = String(calls.find((c) => c.url.endsWith("/oauth/google/start"))?.body["state"]);
     loc.href = `https://app.example.com/login?vellum_code=abc&state=${state}`;
     const result = await client.getRedirectResult();
     expect(result).toMatchObject({ mfaRequired: true, mfaTicket: "t1" });
@@ -148,5 +156,13 @@ describe("browser OAuth helpers", () => {
 
   it("completeOAuthPopup does nothing on a page without a result", () => {
     expect(completeOAuthPopup("https://app.example.com/login")).toBe(false);
+  });
+});
+
+describe("linkWithPopup", () => {
+  it("refuses to run when nobody is signed in and never calls the API", async () => {
+    const { client, calls } = mkClient();
+    await expect(client.linkWithPopup("google")).rejects.toThrow(/Sign in before linking/);
+    expect(calls).toHaveLength(0);
   });
 });

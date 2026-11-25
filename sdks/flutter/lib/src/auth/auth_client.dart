@@ -377,22 +377,75 @@ class VellumAuth implements VellumAuthPort {
   }
 
   @override
-  Uri oauthStartUri({
+  Future<Uri> oauthStart({
     required String provider,
     required String redirectUri,
     required String codeChallenge,
     String? state,
-  }) {
-    return Uri.parse(
-      '${client.baseUrl}/auth/oauth/${Uri.encodeComponent(provider)}/start',
-    ).replace(
-      queryParameters: <String, String>{
-        'apiKey': client.apiKey,
+    bool link = false,
+  }) async {
+    // The API key goes in a header of this POST, never in a URL the browser could expose.
+    final res = await client.request(
+      'POST',
+      '/auth/oauth/${Uri.encodeComponent(provider)}/start',
+      body: <String, Object?>{
         'redirectUri': redirectUri,
         'codeChallenge': codeChallenge,
         if (state != null) 'state': state,
+        if (link) 'link': true,
       },
+      // Linking is done by a signed-in user: the server needs their token.
+      includeAuth: link,
     );
+    final url = res['authorizeUrl'];
+    if (url is! String || url.isEmpty) {
+      throw const VellumException(
+        code: 'INTERNAL',
+        message: 'The server did not return a sign-in URL',
+        statusCode: 0,
+      );
+    }
+    return Uri.parse(url);
+  }
+
+  @override
+  Future<Uri> oauthStartPoll({
+    required String provider,
+    required String codeChallenge,
+    bool link = false,
+  }) async {
+    final res = await client.request(
+      'POST',
+      '/auth/oauth/${Uri.encodeComponent(provider)}/start',
+      body: <String, Object?>{
+        'delivery': 'poll',
+        'codeChallenge': codeChallenge,
+        if (link) 'link': true,
+      },
+      includeAuth: link,
+    );
+    final url = res['authorizeUrl'];
+    if (url is! String || url.isEmpty) {
+      throw const VellumException(
+        code: 'INTERNAL',
+        message: 'The server did not return a sign-in URL',
+        statusCode: 0,
+      );
+    }
+    return Uri.parse(url);
+  }
+
+  @override
+  Future<VellumAuthResult?> pollOAuth({required String codeVerifier}) async {
+    final expectedEpoch = _sessionEpoch;
+    final res = await client.request(
+      'POST',
+      '/auth/oauth/poll',
+      body: <String, Object?>{'codeVerifier': codeVerifier},
+      includeAuth: false,
+    );
+    if (res['status'] == 'pending') return null;
+    return _completeSignIn(res, expectedEpoch);
   }
 
   @override
@@ -598,12 +651,80 @@ class VellumAuth implements VellumAuthPort {
     }
   }
 
+  @override
+  Future<List<VellumSessionInfo>> listSessions() async {
+    final res = await client.request('GET', '/auth/sessions');
+    final list = res['sessions'];
+    if (list is! List) return const <VellumSessionInfo>[];
+    return list
+        .whereType<Map<Object?, Object?>>()
+        .map((m) => VellumSessionInfo.fromJson(Map<String, Object?>.from(m)))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> revokeSession(String sessionId) async {
+    await client.request(
+        'DELETE', '/auth/sessions/${Uri.encodeComponent(sessionId)}');
+  }
+
+  @override
+  Future<VellumLinkedProviders> listLinkedProviders() async {
+    final res = await client.request('GET', '/auth/identities');
+    final list = res['identities'];
+    return VellumLinkedProviders(
+      providers: list is List
+          ? list
+              .whereType<Map<Object?, Object?>>()
+              .map((m) =>
+                  VellumLinkedProvider.fromJson(Map<String, Object?>.from(m)))
+              .toList(growable: false)
+          : const <VellumLinkedProvider>[],
+      hasPassword: res['hasPassword'] == true,
+    );
+  }
+
+  @override
+  Future<void> unlinkProvider(String provider) async {
+    await client.request(
+        'DELETE', '/auth/identities/${Uri.encodeComponent(provider)}');
+  }
+
+  @override
+  Future<VellumUser> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final expectedEpoch = _sessionEpoch;
+    final res = await client.request(
+      'POST',
+      '/auth/password/change',
+      body: <String, Object?>{
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      },
+    );
+    _requireCurrentEpoch(expectedEpoch);
+    final user = VellumUser.fromSession(res);
+    _sessionEpoch++;
+    await _setCurrentUser(user);
+    return user;
+  }
+
+  @override
+  Future<void> deleteAccount({String? password}) async {
+    await client.request(
+      'DELETE',
+      '/auth/user',
+      body: <String, Object?>{if (password != null) 'password': password},
+    );
+    await signOut();
+  }
+
   /// Patches the authenticated end-user's profile and emits the new state.
   ///
-  /// `password` is accepted for parity with the other SDKs, but the v1
-  /// `PATCH /auth/user` contract does not support in-place password changes.
-  /// Supplying it alone has no effect (the server rejects an empty patch); use
-  /// [sendPasswordResetEmail] followed by [confirmPasswordReset] instead.
+  /// Pass [currentPassword] when changing [email] on an account that has a
+  /// password. `password` is not forwarded; use [changePassword] to change it.
   @override
   Future<VellumUser> updateProfile({
     String? email,
@@ -614,11 +735,12 @@ class VellumAuth implements VellumAuthPort {
     JsonMap? metadata,
     JsonMap? customClaims,
     String? password,
+    String? currentPassword,
   }) async {
     final expectedEpoch = _sessionEpoch;
     // `password` is deliberately not forwarded: UpdateProfileRequestSchema
     // strips unknown keys, so sending it would invalidate an otherwise valid
-    // patch. The reset flow is the supported way to change a password.
+    // patch. Use changePassword() to change a password.
     if (password != null && password.isEmpty) {
       throw const VellumException(
         code: 'INVALID_ARGUMENT',
@@ -634,6 +756,8 @@ class VellumAuth implements VellumAuthPort {
       if (phoneVerified != null) 'phoneVerified': phoneVerified,
       if (metadata != null) 'metadata': metadata,
       if (customClaims != null) 'customClaims': customClaims,
+      // Needed when changing the email of an account that has a password.
+      if (currentPassword != null) 'currentPassword': currentPassword,
     };
     final res = await client.request('PATCH', '/auth/user', body: patch);
     _requireCurrentEpoch(expectedEpoch);

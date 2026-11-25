@@ -13,6 +13,8 @@ import { sanitizeAndClone } from "../core/safe-json.js";
 import type {
   ActionTokenResult,
   AuthState,
+  VellumLinkedProvider,
+  VellumSessionInfo,
   AuthStateListener,
   ConfirmEmailVerificationInput,
   ConfirmPasswordResetInput,
@@ -47,7 +49,9 @@ import {
 } from "./jwt-utils.js";
 import {
   cleanUrl,
+  completeOAuthPopup,
   hasPending,
+  openPopup,
   parseCallbackParams,
   prepareFlow,
   runPopup,
@@ -55,6 +59,7 @@ import {
   takePending,
   type OAuthCallbackParams,
   type OAuthPopupOptions,
+  type PreparedFlow,
   type OAuthRedirectOptions,
 } from "./oauth-web.js";
 
@@ -133,6 +138,12 @@ export class VellumAuthClient {
       customToken: null,
     };
     Object.freeze(this);
+    // A page that carries a sign-in result but did not start a redirect sign-in is the return page of
+    // a popup. Browsers that cut the popup/opener link (Google's Cross-Origin-Opener-Policy) need it
+    // forwarded explicitly, so it happens here without any code in the app.
+    try {
+      if (!hasPending()) completeOAuthPopup();
+    } catch { /* not a browser */ }
     // A restored session is hydration, not a sign-in event: no listener emit.
     if (restored) this.scheduleRefresh();
   }
@@ -482,17 +493,38 @@ export class VellumAuthClient {
    * Sign in with `"google"` or `"github"` in a popup. Call it from a click
    * handler. Resolves to `MfaRequiredResult` when a second factor is needed.
    */
-  public async signInWithPopup(provider: string, options: OAuthPopupOptions = {}): Promise<AuthState | MfaRequiredResult> {
-    const cfg = this.requireOAuth();
-    const flow = await prepareFlow(cfg.baseUrl, cfg.apiKey, provider, options.redirectUri);
-    const params = await runPopup(flow, options);
+  public signInWithPopup(provider: string, options: OAuthPopupOptions = {}): Promise<AuthState | MfaRequiredResult> {
+    return this.popupFlow(provider, options, false);
+  }
+
+  /**
+   * Add a Google or GitHub sign-in to the signed-in user's account (any email). Call it from a
+   * click handler. Fails if that provider account already belongs to another user.
+   */
+  public async linkWithPopup(provider: string, options: OAuthPopupOptions = {}): Promise<AuthState | MfaRequiredResult> {
+    if (!this.state.currentUserValue) throw new Error("Sign in before linking a provider");
+    return this.popupFlow(provider, options, true);
+  }
+
+  private async popupFlow(provider: string, options: OAuthPopupOptions, link: boolean): Promise<AuthState | MfaRequiredResult> {
+    this.requireOAuth();
+    const popup = openPopup(options);
+    let flow: PreparedFlow;
+    try {
+      flow = await prepareFlow(this.request, provider, options.redirectUri, link);
+      popup.location.href = flow.startUrl;
+    } catch (error) {
+      try { popup.close(); } catch { /* already closed */ }
+      throw error;
+    }
+    const params = await runPopup(popup, flow, options);
     return this.finishOAuth(params, flow.state, flow.verifier);
   }
 
   /** Full-page redirect sign-in (best on mobile browsers). Finish with `getRedirectResult()` on return. */
   public async signInWithRedirect(provider: string, options: OAuthRedirectOptions = {}): Promise<void> {
-    const cfg = this.requireOAuth();
-    const flow = await prepareFlow(cfg.baseUrl, cfg.apiKey, provider, options.redirectUri);
+    this.requireOAuth();
+    const flow = await prepareFlow(this.request, provider, options.redirectUri);
     savePending({ provider, state: flow.state, verifier: flow.verifier, redirectUri: flow.redirectUri });
     (globalThis as { location: Location }).location.assign(flow.startUrl);
   }
@@ -606,13 +638,10 @@ export class VellumAuthClient {
   public updateProfile(patch: UpdateProfileInput): Promise<VellumAuthUser>;
   public async updateProfile(patch: UpdateProfileInput): Promise<VellumAuthUser> {
     if (patch["password"] !== undefined) {
-      // The end-user API has no authenticated password-change endpoint:
-      // PATCH /auth/user ignores unknown keys and the password reset flow is
-      // the only supported way to change a password. Fail loudly rather than
+      // PATCH /auth/user ignores unknown keys. Fail loudly rather than
       // silently dropping credential material.
       throw new Error(
-        "@vellumdb/sdk-js: updateProfile cannot change a password; " +
-          "use sendPasswordResetEmail() followed by confirmPasswordReset()"
+        "@vellumdb/sdk-js: updateProfile cannot change a password; use changePassword(currentPassword, newPassword)"
       );
     }
     const epoch = this.state.sessionEpoch;
@@ -646,6 +675,48 @@ export class VellumAuthClient {
     return parseSuccessResponse(
       await this.request("POST", "/auth/password/confirm", input, {}, false)
     );
+  }
+
+  public async listSessions(): Promise<VellumSessionInfo[]> {
+    const payload = await this.request<Record<string, unknown>>("GET", "/auth/sessions");
+    const list = Array.isArray(payload["sessions"]) ? (payload["sessions"] as VellumSessionInfo[]) : [];
+    return sanitizeAndClone(list);
+  }
+
+  public async revokeSession(sessionId: string): Promise<void> {
+    await this.request("DELETE", `/auth/sessions/${encodeURIComponent(sessionId)}`);
+  }
+
+  public async listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }> {
+    const payload = await this.request<Record<string, unknown>>("GET", "/auth/identities");
+    const providers = Array.isArray(payload["identities"]) ? (payload["identities"] as VellumLinkedProvider[]) : [];
+    return sanitizeAndClone({ providers, hasPassword: payload["hasPassword"] === true });
+  }
+
+  public async unlinkProvider(provider: string): Promise<void> {
+    await this.request("DELETE", `/auth/identities/${encodeURIComponent(provider)}`);
+  }
+
+  /**
+   * Change the signed-in user's password. Needs the current password, ends every
+   * other session and keeps this one signed in with a fresh session.
+   */
+  public async changePassword(currentPassword: string, newPassword: string): Promise<AuthState> {
+    const epoch = this.state.sessionEpoch;
+    const payload = await this.request<Record<string, unknown>>("POST", "/auth/password/change", { currentPassword, newPassword });
+    this.assertSession(epoch);
+    const session = parseSessionResponse(payload);
+    this.commitUser(session, true);
+    return sanitizeAndClone(session);
+  }
+
+  /**
+   * Permanently delete the signed-in account and sign out locally. Password
+   * accounts must pass their `password`; accounts created with Google or GitHub need nothing extra.
+   */
+  public async deleteAccount(options: { password?: string } = {}): Promise<void> {
+    await this.request("DELETE", "/auth/user", options.password !== undefined ? { password: options.password } : {});
+    await this.signOut();
   }
 
   public async sendEmailVerification(input: SendEmailVerificationInput = {}): Promise<ActionTokenResult> {

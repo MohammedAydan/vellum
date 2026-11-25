@@ -414,3 +414,60 @@ describe("@vellumdb/sdk-js - realtime re-authentication after token rotation", (
     unsubscribe();
   });
 });
+
+describe("@vellumdb/sdk-js - password change and account deletion", () => {
+  it("changePassword sends both passwords with the bearer token and keeps the new session", async () => {
+    const next = makeJwt({ sub: "usr_1", exp: Math.floor(Date.now() / 1000) + 9000 });
+    const { calls, fetch } = recorder(({ url }) => {
+      if (url.endsWith("/auth/sign-in/email")) return json(session());
+      if (url.endsWith("/auth/password/change")) return json(session(next, "refresh_2"));
+      return json({});
+    });
+    const db = createClient({ projectId: "p", apiKey: "pk_test", customFetch: fetch });
+    await db.signInWithEmailAndPassword("a@b.c", "password123");
+    const state = await db.changePassword("password123", "newPassword456");
+    const call = calls.find((c) => c.url.endsWith("/auth/password/change"));
+    expect(call?.body).toEqual({ currentPassword: "password123", newPassword: "newPassword456" });
+    expect(headersOf(call)["authorization"]).toBe(`Bearer ${FIRST_TOKEN}`);
+    expect(state.refreshToken).toBe("refresh_2");
+    expect(db.currentUser?.accessToken).toBe(next);
+  });
+
+  it("deleteAccount calls DELETE /auth/user and signs out locally", async () => {
+    const { calls, fetch } = recorder(({ url }) => {
+      if (url.endsWith("/auth/sign-in/email")) return json(session());
+      return json({ deleted: true });
+    });
+    const db = createClient({ projectId: "p", apiKey: "pk_test", customFetch: fetch });
+    await db.signInWithEmailAndPassword("a@b.c", "password123");
+    await db.deleteAccount({ password: "password123" });
+    const call = calls.find((c) => c.url.endsWith("/auth/user") && c.init?.method === "DELETE");
+    expect(call?.body).toEqual({ password: "password123" });
+    expect(db.currentUser).toBeNull();
+  });
+});
+
+describe("@vellumdb/sdk-js - sessions and linked providers", () => {
+  it("lists sessions, revokes one, lists and unlinks providers", async () => {
+    const { calls, fetch } = recorder(({ url, init }) => {
+      if (url.endsWith("/auth/sign-in/email")) return json(session());
+      if (url.endsWith("/auth/sessions") && init?.method === "GET") {
+        return json({ sessions: [{ id: "s1", userAgent: "ua", ipAddress: null, createdAt: "x", lastRefreshedAt: null, expiresAt: "y" }] });
+      }
+      if (url.endsWith("/auth/identities") && init?.method === "GET") {
+        return json({ identities: [{ provider: "google", email: "a@b.c", lastSignInAt: "x", createdAt: "y" }], hasPassword: false });
+      }
+      return json({ success: true });
+    });
+    const db = createClient({ projectId: "p", apiKey: "pk_test", customFetch: fetch });
+    await db.signInWithEmailAndPassword("a@b.c", "password123");
+    expect((await db.listSessions())[0]?.id).toBe("s1");
+    await db.revokeSession("s1");
+    const linked = await db.listLinkedProviders();
+    expect(linked.providers[0]?.provider).toBe("google");
+    expect(linked.hasPassword).toBe(false);
+    await db.unlinkProvider("google");
+    expect(calls.some((c) => c.url.endsWith("/auth/sessions/s1") && c.init?.method === "DELETE")).toBe(true);
+    expect(calls.some((c) => c.url.endsWith("/auth/identities/google") && c.init?.method === "DELETE")).toBe(true);
+  });
+});

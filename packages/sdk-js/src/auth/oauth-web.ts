@@ -83,19 +83,6 @@ export function parseCallbackParams(href: string): OAuthCallbackParams | null {
   };
 }
 
-export function buildStartUrl(
-  baseUrl: string,
-  provider: string,
-  input: { apiKey: string; redirectUri: string; codeChallenge: string; state: string }
-): string {
-  const url = new URL(`${baseUrl}/auth/oauth/${encodeURIComponent(provider)}/start`);
-  url.searchParams.set("apiKey", input.apiKey);
-  url.searchParams.set("redirectUri", input.redirectUri);
-  url.searchParams.set("codeChallenge", input.codeChallenge);
-  url.searchParams.set("state", input.state);
-  return url.toString();
-}
-
 export interface PreparedFlow {
   startUrl: string;
   state: string;
@@ -103,22 +90,39 @@ export interface PreparedFlow {
   redirectUri: string;
 }
 
+/** Same shape as the auth client's request function (adds the API key header, never a query parameter). */
+export type StartRequest = <R = unknown>(
+  method: string,
+  relativePath: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>,
+  includeAuth?: boolean
+) => Promise<R>;
+
+/**
+ * Asks the API to begin a sign-in. The API key travels in a header of a POST, so it is
+ * never part of a URL. The response is the provider's authorize URL.
+ */
 export async function prepareFlow(
-  baseUrl: string,
-  apiKey: string,
+  request: StartRequest,
   provider: string,
-  redirectUri: string | undefined
+  redirectUri: string | undefined,
+  link = false
 ): Promise<PreparedFlow> {
   const verifier = randomToken(48);
   const state = randomToken(16);
   const target = redirectUri ?? defaultRedirectUri();
-  const startUrl = buildStartUrl(baseUrl, provider, {
-    apiKey,
-    redirectUri: target,
-    codeChallenge: await pkceChallenge(verifier),
-    state,
-  });
-  return { startUrl, state, verifier, redirectUri: target };
+  const res = await request<{ authorizeUrl?: unknown }>(
+    "POST",
+    `/auth/oauth/${encodeURIComponent(provider)}/start`,
+    { redirectUri: target, codeChallenge: await pkceChallenge(verifier), state, ...(link ? { link: true } : {}) },
+    {},
+    link // linking needs the signed-in user's token; a plain sign-in sends none
+  );
+  if (typeof res?.authorizeUrl !== "string" || !res.authorizeUrl) {
+    throw new Error("The server did not return a sign-in URL");
+  }
+  return { startUrl: res.authorizeUrl, state, verifier, redirectUri: target };
 }
 
 /**
@@ -150,8 +154,27 @@ export function completeOAuthPopup(href: string = (globalThis as { location?: Lo
   return true;
 }
 
-/** Open the popup synchronously (inside the click handler) and wait for the result. */
-export function runPopup(flow: PreparedFlow, options: OAuthPopupOptions): Promise<OAuthCallbackParams> {
+/** Open a blank popup synchronously (inside the click handler); it is pointed at the provider once the flow is ready. */
+export function openPopup(options: OAuthPopupOptions): Window {
+  const g = globalThis as {
+    open?: (url: string, name: string, features: string) => Window | null;
+    screenX?: number; screenY?: number; outerWidth?: number; outerHeight?: number;
+  };
+  if (typeof g.open !== "function") throw new Error("signInWithPopup is only available in a browser");
+  const width = 480;
+  const height = 640;
+  const left = Math.max(0, (g.screenX ?? 0) + ((g.outerWidth ?? width) - width) / 2);
+  const top = Math.max(0, (g.screenY ?? 0) + ((g.outerHeight ?? height) - height) / 2);
+  const features = options.popupFeatures ?? `popup=yes,width=${width},height=${height},left=${left},top=${top}`;
+  const popup = g.open("about:blank", OAUTH_POPUP_NAME, features);
+  if (!popup) {
+    throw new Error("The sign-in popup was blocked. Call signInWithPopup from a click handler, or use signInWithRedirect.");
+  }
+  return popup;
+}
+
+/** Wait for the result of a sign-in popup that has already been pointed at the provider. */
+export function runPopup(popup: Window, flow: PreparedFlow, options: OAuthPopupOptions): Promise<OAuthCallbackParams> {
   const g = globalThis as {
     open?: (url: string, name: string, features: string) => Window | null;
     screenX?: number; screenY?: number; outerWidth?: number; outerHeight?: number;
@@ -160,16 +183,6 @@ export function runPopup(flow: PreparedFlow, options: OAuthPopupOptions): Promis
     removeEventListener?: (type: string, listener: (event: MessageEvent) => void) => void;
     location?: Location;
   };
-  if (typeof g.open !== "function") throw new Error("signInWithPopup is only available in a browser");
-  const width = 480;
-  const height = 640;
-  const left = Math.max(0, (g.screenX ?? 0) + ((g.outerWidth ?? width) - width) / 2);
-  const top = Math.max(0, (g.screenY ?? 0) + ((g.outerHeight ?? height) - height) / 2);
-  const features = options.popupFeatures ?? `popup=yes,width=${width},height=${height},left=${left},top=${top}`;
-  const popup = g.open(flow.startUrl, OAUTH_POPUP_NAME, features);
-  if (!popup) {
-    throw new Error("The sign-in popup was blocked. Call signInWithPopup from a click handler, or use signInWithRedirect.");
-  }
   const timeoutMs = options.timeoutMs ?? 5 * 60 * 1000;
   return new Promise<OAuthCallbackParams>((resolve, reject) => {
     let done = false;
@@ -215,15 +228,9 @@ export function runPopup(flow: PreparedFlow, options: OAuthPopupOptions): Promis
         resolve(params);
         return;
       }
-      if (popup.closed) {
-        // Give a BroadcastChannel message one tick to land before declaring cancel.
-        setTimeout(() => {
-          if (!done) {
-            cleanup();
-            reject(new Error("The sign-in popup was closed before sign-in finished"));
-          }
-        }, 400);
-      }
+      // A provider that sets Cross-Origin-Opener-Policy (Google does) cuts our link to the popup and
+      // makes it look closed while the user is still signing in. The result then arrives through the
+      // BroadcastChannel from the return page, so a closed popup is not treated as a cancel.
     }, 250);
     handles.timer = setTimeout(() => {
       if (done) return;

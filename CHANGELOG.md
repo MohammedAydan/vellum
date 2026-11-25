@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- Social sign-in no longer puts the API key in a URL. `POST /auth/oauth/:provider/start` takes the key in the `X-Vellum-Api-Key` header and returns the provider's authorize URL. The old `GET .../start?apiKey=...` is refused. sdk-js and `vellum_flutter` use the new call; apps must update to the next SDK release.
+
+### Features
+
+- Redirect-less social sign-in for mobile and desktop apps: `POST /auth/oauth/:provider/start` with `{"delivery":"poll","codeChallenge":...}` needs no redirect URI; the app collects the result with `POST /auth/oauth/poll` and its PKCE verifier (202 `{"status":"pending"}` until the browser step is done). `createVellumOAuth(auth:)` in `vellum_flutter` uses it when no `redirectUri` is given, so Android and iOS need no manifest, Info.plist or Auth Studio setup.
+
+- End-user `POST /auth/password/change` (current password required, other sessions ended, fresh session returned) and `DELETE /auth/user` (password accounts confirm with their password). sdk-js `changePassword` / `deleteAccount`, `vellum_flutter` `changePassword` / `deleteAccount`.
+
+- End-user `GET /auth/sessions`, `DELETE /auth/sessions/:id`, `GET /auth/identities` and `DELETE /auth/identities/:provider` (refused when it would remove the last way to sign in). sdk-js `listSessions` / `revokeSession` / `listLinkedProviders` / `unlinkProvider`; `vellum_flutter` same names.
+- Docs: Flutter social sign-in now leads with the redirect-less flow (EN + AR); the deep link is optional.
+
+- Link a provider to the signed-in account: `POST /auth/oauth/:provider/start` with `"link": true` and the user's bearer token adds Google or GitHub (any email) to that user; a provider account that belongs to another user is refused. sdk-js `linkWithPopup`, `vellum_flutter` `VellumOAuth.link`.
+
+- `vellum_flutter` session storage: Keychain accessibility is `first_unlock_this_device` on iOS and macOS; the first launch after a fresh install clears the SDK's own session keys (the Keychain survives uninstall; marker kept in `shared_preferences`, so one existing session is signed out on the first launch after updating). Android keeps the plugin's current default cipher. `updateProfile` accepts `currentPassword` (sdk-js too) for email changes.
+- Docs: App Links / Universal Links recommended over custom schemes, Android backup exclusion rules, and when Android/iOS Google client IDs must be added for native Google sign-in.
+
+### Fixes
+
+- Desktop and native sign-in: a loopback redirect (`http://127.0.0.1:<port>/...` or `[::1]`) is always accepted, as RFC 8252 describes, so it no longer needs an entry in the allowed redirect list.
+- sdk-js popup sign-in with Google: providers that set Cross-Origin-Opener-Policy cut the popup link, so the popup looked closed and the result was lost. The return page now forwards the result automatically and a closed-looking popup is no longer treated as a cancel.
+
 ## 0.0.3
 
 Control-plane state moves into the database, social sign-in, serverless realtime, and Relations tooling. Every package and SDK remains on one shared version.

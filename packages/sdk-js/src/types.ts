@@ -390,6 +390,24 @@ export interface VellumAuthUser {
  * material the SDK holds on the client. This is the value delivered to
  * `onAuthStateChanged` listeners and returned by the sign-in methods.
  */
+/** One signed-in device or browser of the current user. */
+export interface VellumSessionInfo {
+  id: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  lastRefreshedAt: string | null;
+  expiresAt: string;
+}
+
+/** A sign-in method linked to the current user. */
+export interface VellumLinkedProvider {
+  provider: string;
+  email: string | null;
+  lastSignInAt: string;
+  createdAt: string;
+}
+
 export interface AuthState extends VellumAuthUser {
   accessToken: string;
   refreshToken: string;
@@ -503,9 +521,13 @@ export type UpdateProfileInput = {
   metadata?: Record<string, unknown>;
   customClaims?: Record<string, unknown>;
   /**
-   * Accepted for cross-SDK parity but not supported by the v1 end-user API,
-   * which has no authenticated password-change route. When supplied,
-   * `updateProfile` throws and directs callers to the reset flow.
+   * Required when changing `email` on an account that has a password: the
+   * account's current password. Not needed for Google/GitHub-only accounts.
+   */
+  currentPassword?: string;
+  /**
+   * Not supported here: `updateProfile` throws when supplied. Use
+   * `changePassword(currentPassword, newPassword)` instead.
    */
   password?: string;
 };
@@ -675,6 +697,8 @@ export interface VellumClientInterface {
   signInWithOAuth(provider: string, payload?: SignInOAuthPayload): Promise<AuthState>;
   /** Google / GitHub sign-in in a popup (call from a click). Resolves to `MfaRequiredResult` when a second factor is required. */
   signInWithPopup(provider: string, options?: OAuthPopupOptions): Promise<AuthState | MfaRequiredResult>;
+  /** Link Google or GitHub to the signed-in user's account in a popup. */
+  linkWithPopup(provider: string, options?: OAuthPopupOptions): Promise<AuthState | MfaRequiredResult>;
   /** Full-page redirect sign-in; finish with `getRedirectResult()` when your app loads again. */
   signInWithRedirect(provider: string, options?: OAuthRedirectOptions): Promise<void>;
   getRedirectResult(): Promise<AuthState | MfaRequiredResult | null>;
@@ -698,6 +722,18 @@ export interface VellumClientInterface {
   sendPasswordResetEmail(email: string): Promise<ActionTokenResult>;
   confirmPasswordReset(input: ConfirmPasswordResetInput): Promise<SuccessResult>;
   confirmPasswordReset(token: string, newPassword: string): Promise<SuccessResult>;
+  /** Active sessions (devices) of the signed-in user. */
+  listSessions(): Promise<VellumSessionInfo[]>;
+  /** Sign one of the user's other sessions out. */
+  revokeSession(sessionId: string): Promise<void>;
+  /** Sign-in methods linked to the account, and whether it has a password. */
+  listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }>;
+  /** Remove a linked sign-in method ("google", "github" or "password"). Refused when it is the last one. */
+  unlinkProvider(provider: string): Promise<void>;
+  /** Change the signed-in user's password (needs the current one); other sessions are ended. */
+  changePassword(currentPassword: string, newPassword: string): Promise<AuthState>;
+  /** Permanently delete the signed-in account. Password accounts must pass `password`. */
+  deleteAccount(options?: { password?: string }): Promise<void>;
   sendEmailVerification(input?: SendEmailVerificationInput): Promise<ActionTokenResult>;
   confirmEmailVerification(input: ConfirmEmailVerificationInput): Promise<EmailVerifyConfirmResult>;
   confirmEmailVerification(token: string): Promise<EmailVerifyConfirmResult>;

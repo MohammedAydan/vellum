@@ -85,18 +85,15 @@ function pkce() {
   return { verifier, challenge: createHash("sha256").update(verifier).digest("base64url") };
 }
 
-async function start(f: Awaited<ReturnType<typeof fixture>>, provider: string, challenge: string, extra = "") {
-  return f.platform.fetch(new Request(
-    `http://localhost${f.base}/oauth/${provider}/start?apiKey=${f.publicKeyStr}&redirectUri=${encodeURIComponent(REDIRECT)}&codeChallenge=${challenge}&state=cs1${extra}`,
-    { redirect: "manual" }
-  ));
+async function start(f: Awaited<ReturnType<typeof fixture>>, provider: string, challenge: string, redirectUri = REDIRECT) {
+  return f.call("POST", `/oauth/${provider}/start`, f.publicKeyStr, { redirectUri, codeChallenge: challenge, state: "cs1" });
 }
 
 async function runFlow(f: Awaited<ReturnType<typeof fixture>>, provider: string) {
   const { verifier, challenge } = pkce();
   const res = await start(f, provider, challenge);
-  expect(res.status).toBe(302);
-  const authorize = new URL(res.headers.get("location") ?? "");
+  expect(res.status).toBe(200);
+  const authorize = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
   lastNonce = authorize.searchParams.get("nonce") ?? "";
   expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
   const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
@@ -217,16 +214,21 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
   it("refuses redirect URIs outside the allowlist and bad PKCE input", async () => {
     const f = await fixture();
     const { challenge } = pkce();
-    const evil = await f.platform.fetch(new Request(
-      `http://localhost${f.base}/oauth/google/start?apiKey=${f.publicKeyStr}&redirectUri=${encodeURIComponent("https://evil.example/cb")}&codeChallenge=${challenge}`,
-      { redirect: "manual" }
-    ));
+    const evil = await start(f, "google", challenge, "https://evil.example/cb");
     expect(evil.status).toBe(400);
     const noPkce = await start(f, "google", "short");
     expect(noPkce.status).toBe(400);
-    const noKey = await f.platform.fetch(new Request(
-      `http://localhost${f.base}/oauth/google/start?redirectUri=${encodeURIComponent(REDIRECT)}&codeChallenge=${challenge}`, { redirect: "manual" }));
+    const noKey = await f.call("POST", "/oauth/google/start", "", { redirectUri: REDIRECT, codeChallenge: challenge });
     expect(noKey.status).toBe(401);
+    // Native loopback redirects are accepted on any port without being listed.
+    const loop = await start(f, "google", challenge, "http://127.0.0.1:4455/callback");
+    expect(loop.status).toBe(200);
+    // The old GET start URL (API key in the query string) is refused.
+    const legacy = await f.platform.fetch(new Request(
+      `http://localhost${f.base}/oauth/google/start?apiKey=${f.publicKeyStr}&redirectUri=${encodeURIComponent(REDIRECT)}&codeChallenge=${challenge}`,
+      { redirect: "manual" }
+    ));
+    expect(legacy.status).toBe(400);
   });
 
   it("rejects a tampered state", async () => {
@@ -280,5 +282,120 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     for (const bad of ["javascript:alert(1)", "http://evil.example/cb", "https://a.example/cb#frag", "not a url"]) {
       expect(() => mergeOAuthProviders({}, { __settings: { redirectUris: [bad] } }, undefined)).toThrow();
     }
+  });
+
+  it("poll delivery: no redirect URI, no deep link; the verifier holder collects the session once", async () => {
+    const f = await fixture();
+    const { verifier, challenge } = pkce();
+    const res = await f.call("POST", "/oauth/google/start", f.publicKeyStr, { delivery: "poll", codeChallenge: challenge });
+    expect(res.status).toBe(200);
+    const authorize = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
+    lastNonce = authorize.searchParams.get("nonce") ?? "";
+    mock.googleClaims = (nonce) => ({ iss: "https://accounts.google.com", aud: "google-client", sub: "g-poll", email: "poll@example.com", email_verified: true, name: "P", exp: Math.floor(Date.now() / 1000) + 600, nonce });
+    const pending = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: verifier });
+    expect(pending.status).toBe(202);
+    expect(((await pending.json()) as { status: string }).status).toBe("pending");
+    const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+    cb.searchParams.set("code", "good-code");
+    cb.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+    const back = await f.platform.fetch(new Request(`http://localhost${cb.pathname}${cb.search}`, { redirect: "manual" }));
+    expect(back.status).toBe(200);
+    expect(back.headers.get("content-type")).toContain("text/html");
+    const html = await back.text();
+    expect(html).not.toContain("vellum_code");
+    const wrong = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: pkce().verifier });
+    expect(wrong.status).toBe(202);
+    const ok = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: verifier });
+    expect(ok.status).toBe(200);
+    const session = (await ok.json()) as { accessToken?: string; user?: { email?: string } };
+    expect(session.accessToken).toBeTruthy();
+    expect(session.user?.email).toBe("poll@example.com");
+    const again = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: verifier });
+    expect(again.status).toBe(202);
+    const short = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: "short" });
+    expect(short.status).toBe(400);
+  });
+
+  it("password change and account deletion need the current password", async () => {
+    const f = await fixture();
+    const reg = await f.call("POST", "/sign-up/email", f.publicKeyStr, { email: "me@example.com", password: "First-pass-1234!" });
+    const s1 = (await reg.json()) as { accessToken: string; refreshToken: string };
+    const authed = (method: string, url: string, body?: unknown, token = s1.accessToken) =>
+      f.platform.fetch(new Request(`http://localhost${f.base}${url}`, {
+        method,
+        headers: { "content-type": "application/json", "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${token}` },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      }));
+    const bad = await authed("POST", "/password/change", { currentPassword: "nope", newPassword: "Second-pass-1234!" });
+    expect(bad.status).toBe(401);
+    const good = await authed("POST", "/password/change", { currentPassword: "First-pass-1234!", newPassword: "Second-pass-1234!" });
+    expect(good.status).toBe(200);
+    const s2 = (await good.json()) as { accessToken: string; refreshToken: string };
+    expect((await f.call("POST", "/token/refresh", f.publicKeyStr, { refreshToken: s1.refreshToken })).status).toBeGreaterThanOrEqual(400);
+    expect((await f.call("POST", "/sign-in/email", f.publicKeyStr, { email: "me@example.com", password: "Second-pass-1234!" })).status).toBe(200);
+    expect((await authed("DELETE", "/user", {}, s2.accessToken)).status).toBe(401);
+    expect((await authed("DELETE", "/user", { password: "Second-pass-1234!" }, s2.accessToken)).status).toBe(200);
+    expect((await f.call("POST", "/sign-in/email", f.publicKeyStr, { email: "me@example.com", password: "Second-pass-1234!" })).status).toBeGreaterThanOrEqual(400);
+  });
+
+  it("lists and revokes own sessions, lists linked sign-in methods and refuses to remove the last one", async () => {
+    const f = await fixture();
+    const reg = await f.call("POST", "/sign-up/email", f.publicKeyStr, { email: "sess@example.com", password: "First-pass-1234!" });
+    const s1 = (await reg.json()) as { accessToken: string; refreshToken: string };
+    const second = await f.call("POST", "/sign-in/email", f.publicKeyStr, { email: "sess@example.com", password: "First-pass-1234!" });
+    const s2 = (await second.json()) as { refreshToken: string };
+    const authed = (method: string, url: string) =>
+      f.platform.fetch(new Request(`http://localhost${f.base}${url}`, {
+        method,
+        headers: { "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${s1.accessToken}` },
+      }));
+    const list = (await (await authed("GET", "/sessions")).json()) as { sessions: { id: string }[] };
+    expect(list.sessions.length).toBe(2);
+    expect(JSON.stringify(list)).not.toContain("refresh");
+    expect((await authed("DELETE", `/sessions/${list.sessions[0]!.id}`)).status).toBe(200);
+    expect(((await (await authed("GET", "/sessions")).json()) as { sessions: unknown[] }).sessions.length).toBe(1);
+    expect((await authed("DELETE", "/sessions/00000000-0000-0000-0000-000000000000")).status).toBe(404);
+    expect(s2.refreshToken).toBeTruthy();
+    const ids = (await (await authed("GET", "/identities")).json()) as { identities: { provider: string }[]; hasPassword: boolean };
+    expect(ids.identities.map((i) => i.provider)).toEqual(["password"]);
+    expect(ids.hasPassword).toBe(true);
+    expect((await authed("DELETE", "/identities/password")).status).toBe(412);
+    expect((await authed("DELETE", "/identities/github")).status).toBe(404);
+  });
+
+  it("link: a signed-in user adds Google to their account (any email), another user cannot take the same Google account", async () => {
+    const f = await fixture();
+    const mk = async (email: string) => (await (await f.call("POST", "/sign-up/email", f.publicKeyStr, { email, password: "First-pass-1234!" })).json()) as { accessToken: string };
+    const a = await mk("a-link@example.com");
+    const b = await mk("b-link@example.com");
+    mock.googleClaims = (nonce) => ({ iss: "https://accounts.google.com", aud: "google-client", sub: "g-link", email: "other-mailbox@example.com", email_verified: true, name: "L", exp: Math.floor(Date.now() / 1000) + 600, nonce });
+    const authed = (method: string, url: string, token: string, body?: unknown) =>
+      f.platform.fetch(new Request(`http://localhost${f.base}${url}`, {
+        method,
+        headers: { "content-type": "application/json", "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${token}` },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      }));
+    const runLink = async (token: string) => {
+      const { verifier, challenge } = pkce();
+      const res = await authed("POST", "/oauth/google/start", token, { redirectUri: REDIRECT, codeChallenge: challenge, state: "cs1", link: true });
+      expect(res.status).toBe(200);
+      const authorize = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
+      lastNonce = authorize.searchParams.get("nonce") ?? "";
+      const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+      cb.searchParams.set("code", "good-code");
+      cb.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+      const back = await f.platform.fetch(new Request(`http://localhost${cb.pathname}${cb.search}`, { redirect: "manual" }));
+      return { loc: new URL(back.headers.get("location") ?? ""), verifier };
+    };
+    const noAuth = await f.call("POST", "/oauth/google/start", f.publicKeyStr, { redirectUri: REDIRECT, codeChallenge: pkce().challenge, link: true });
+    expect(noAuth.status).toBe(401);
+    const first = await runLink(a.accessToken);
+    expect(first.loc.searchParams.get("vellum_code")).toBeTruthy();
+    const ids = (await (await authed("GET", "/identities", a.accessToken)).json()) as { identities: { provider: string }[] };
+    expect(ids.identities.map((i) => i.provider).sort()).toEqual(["google", "password"]);
+    const second = await runLink(b.accessToken);
+    expect(second.loc.searchParams.get("error")).toBe("access_denied");
+    const bIds = (await (await authed("GET", "/identities", b.accessToken)).json()) as { identities: { provider: string }[] };
+    expect(bIds.identities.map((i) => i.provider)).toEqual(["password"]);
   });
 });

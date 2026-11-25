@@ -123,15 +123,31 @@ abstract interface class VellumAuthPort {
   /// Browser-based Google / GitHub sign-in is driven by [VellumOAuth] (and the
   /// `vellum_flutter_oauth` package); these are its building blocks.
   ///
-  /// URL that starts the server-side OAuth flow for [provider]. The server
-  /// returns to [redirectUri] (it must be in the project's allowed list) with a
+  /// Starts the server-side OAuth flow for [provider] and returns the provider's
+  /// authorize URL. The API key is sent as a header, never in a URL. The server
+  /// returns to [redirectUri] (a loopback `http://127.0.0.1:<port>/...` is always
+  /// accepted, anything else must be in the project's allowed list) with a
   /// one-time `vellum_code`.
-  Uri oauthStartUri({
+  Future<Uri> oauthStart({
     required String provider,
     required String redirectUri,
     required String codeChallenge,
     String? state,
+    bool link = false,
   });
+
+  /// Starts a redirect-less sign-in: no redirect URI, no deep link, no app
+  /// registration. Open the returned URL in the system browser, then call
+  /// [pollOAuth] with the PKCE verifier until it resolves.
+  Future<Uri> oauthStartPoll({
+    required String provider,
+    required String codeChallenge,
+    bool link = false,
+  });
+
+  /// Collects the result of [oauthStartPoll]. Resolves to `null` while the
+  /// browser step is still in progress.
+  Future<VellumAuthResult?> pollOAuth({required String codeVerifier});
 
   /// Trades the one-time `vellum_code` plus the PKCE [codeVerifier] for a session.
   Future<VellumAuthResult> exchangeOAuthCode({
@@ -159,6 +175,28 @@ abstract interface class VellumAuthPort {
     required String token,
     required String newPassword,
   });
+  /// Active sessions (devices) of the signed-in user.
+  Future<List<VellumSessionInfo>> listSessions();
+
+  /// Signs one of the user's sessions out.
+  Future<void> revokeSession(String sessionId);
+
+  /// Sign-in methods linked to the account.
+  Future<VellumLinkedProviders> listLinkedProviders();
+
+  /// Removes a linked sign-in method. Refused when it is the last one.
+  Future<void> unlinkProvider(String provider);
+
+  /// Changes the password of the signed-in user. Needs the current password;
+  /// every other session ends and this one continues on a fresh session.
+  Future<VellumUser> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  });
+
+  /// Permanently deletes the signed-in account and signs out locally.
+  /// Password accounts must pass [password]; Google/GitHub accounts need nothing.
+  Future<void> deleteAccount({String? password});
   Future<AuthActionResult> sendEmailVerification({String? email});
   Future<void> confirmEmailVerification(String token);
   Future<VellumUser> updateProfile({
@@ -170,6 +208,7 @@ abstract interface class VellumAuthPort {
     JsonMap? metadata,
     JsonMap? customClaims,
     String? password,
+    String? currentPassword,
   });
   Future<void> signOut({bool allSessions = false});
   void dispose();

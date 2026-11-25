@@ -118,6 +118,9 @@ export function isRedirectAllowed(allowlist: string[], uri: string): boolean {
     return false;
   }
   const target = new URL(uri);
+  // RFC 8252: native apps receive the result on a loopback IP literal with an ephemeral port.
+  // The code only ever reaches the user's own machine and is bound to the client's PKCE verifier.
+  if (target.protocol === "http:" && (target.hostname === "127.0.0.1" || target.hostname === "[::1]")) return true;
   return allowlist.some((entry) => {
     let allowed: URL;
     try {
@@ -143,6 +146,8 @@ export interface FlowState {
   clientState: string | null;
   verifier: string; // our PKCE verifier toward the provider
   nonce: string;
+  /** Set when a signed-in user is linking this provider to their existing account. */
+  linkUserId?: string;
   exp: number;
 }
 

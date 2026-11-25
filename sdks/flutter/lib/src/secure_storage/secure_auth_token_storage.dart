@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vellum_flutter/vellum_flutter_core.dart';
 
 /// Minimal key/value surface the session store needs (a seam for tests).
@@ -9,6 +11,14 @@ abstract interface class SecureKeyValue {
   Future<void> write(String key, String value);
   Future<void> delete(String key);
 }
+
+/// The session lives in the Keychain on Apple platforms, readable only after
+/// the first unlock and never copied to another device or a backup. On Android
+/// the plugin's current default (a Keystore-wrapped AES-GCM key) is used.
+const FlutterSecureStorage _defaultSecureStore = FlutterSecureStorage(
+  iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
+  mOptions: MacOsOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
+);
 
 class _FlutterSecureKeyValue implements SecureKeyValue {
   const _FlutterSecureKeyValue(this._store);
@@ -30,9 +40,53 @@ class _FlutterSecureKeyValue implements SecureKeyValue {
 /// session, an insecure web origin, a locked keychain, ...) the session is
 /// kept in memory for the life of the process instead of failing the app.
 class SecureAuthTokenStorage implements AuthTokenStorage {
-  SecureAuthTokenStorage({SecureKeyValue? storage, String namespace = 'vellum'})
-      : _store = storage ?? const _FlutterSecureKeyValue(FlutterSecureStorage()),
-        _prefix = namespace;
+  /// [firstLaunchCheck] resolves to true exactly once per install. The Keychain
+  /// survives an uninstall on iOS and macOS, so a session left by a previous
+  /// install would otherwise sign the user straight back in. The marker lives in
+  /// SharedPreferences, which is removed with the app. Only this SDK's own keys
+  /// are removed, never other Keychain items of your app.
+  SecureAuthTokenStorage({
+    SecureKeyValue? storage,
+    String namespace = 'vellum',
+    Future<bool> Function()? firstLaunchCheck,
+    bool? clearOnFirstLaunch,
+  })  : _store = storage ?? const _FlutterSecureKeyValue(_defaultSecureStore),
+        _prefix = namespace,
+        _firstLaunchCheck = firstLaunchCheck ??
+            (storage == null ? (() => _sharedPrefsFirstLaunch(namespace)) : null),
+        _clearOnFirstLaunch = clearOnFirstLaunch ??
+            (!kIsWeb &&
+                (defaultTargetPlatform == TargetPlatform.iOS ||
+                    defaultTargetPlatform == TargetPlatform.macOS));
+
+  static Future<bool> _sharedPrefsFirstLaunch(String namespace) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = '${namespace}_install_marker';
+    if (prefs.getBool(key) == true) return false;
+    await prefs.setBool(key, true);
+    return true;
+  }
+
+  final Future<bool> Function()? _firstLaunchCheck;
+  final bool _clearOnFirstLaunch;
+  Future<void>? _freshInstallGuard;
+
+  Future<void> _ensureFreshInstall() => _freshInstallGuard ??= _runFreshInstallGuard();
+
+  Future<void> _runFreshInstallGuard() async {
+    final check = _firstLaunchCheck;
+    if (check == null) return;
+    try {
+      final first = await check();
+      if (first && _clearOnFirstLaunch) {
+        for (final key in <String>[_accessKey, _refreshKey, _userKey]) {
+          await _store.delete(key);
+        }
+      }
+    } catch (_) {
+      // No marker store available (for example in a unit test): leave the session alone.
+    }
+  }
 
   final SecureKeyValue _store;
   final String _prefix;
@@ -47,6 +101,7 @@ class SecureAuthTokenStorage implements AuthTokenStorage {
   String get _userKey => '${_prefix}_user';
 
   Future<String?> _read(String key) async {
+    await _ensureFreshInstall();
     if (_secureUnavailable) return null;
     try {
       return await _store.read(key);
@@ -57,6 +112,7 @@ class SecureAuthTokenStorage implements AuthTokenStorage {
   }
 
   Future<void> _write(String key, String? value) async {
+    await _ensureFreshInstall();
     if (_secureUnavailable) return;
     try {
       if (value == null) {

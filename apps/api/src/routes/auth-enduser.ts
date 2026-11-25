@@ -40,7 +40,6 @@ import {
   TokenRefreshRequestSchema,
   UpdateProfileRequestSchema,
 } from "@vellum/api-contract";
-import { verifyApiKeyAsync } from "@vellum/authorization";
 import { THROTTLE_SCOPES, type ProjectAuthConfig } from "@vellum/database-control";
 import type { AuthUserRecord, UpdateAuthUserInput } from "@vellum/storage";
 import {
@@ -79,6 +78,8 @@ const TOKEN_TYPE_PASSWORD_RESET = "password_reset";
 const TOKEN_TYPE_EMAIL_VERIFICATION = "email_verification";
 const TOKEN_TYPE_MFA_CHALLENGE = "mfa_challenge";
 const TOKEN_TYPE_OAUTH_EXCHANGE = "oauth_exchange";
+/** Redirect-less mobile/desktop sign-in: the app polls with its PKCE verifier instead of receiving a deep link. */
+const TOKEN_TYPE_OAUTH_POLL = "oauth_poll";
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const OAUTH_CODE_TTL_MS = 2 * 60 * 1000;
 const ACTION_TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -580,31 +581,60 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     return new Response(null, { status: 302, headers: { location: url.toString(), "cache-control": "no-store" } });
   }
 
-  routes.get("/oauth/:provider/start", async (c) => {
+  /** Static page shown after a redirect-less sign-in. It carries no token and no user data. */
+  function returnToAppPage(ok: boolean, description: string): Response {
+    const safe = description.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+    const message = ok ? "You are signed in. You can close this tab and return to the app." : `Sign-in did not complete. ${safe}`;
+    return new Response(
+      `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${ok ? "Signed in" : "Sign-in failed"}</title><body style="font-family:system-ui,sans-serif;text-align:center;margin:20vh 1.5rem 0"><p>${message}</p></body></html>`,
+      {
+        status: ok ? 200 : 400,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+          "referrer-policy": "no-referrer",
+          "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+          "x-content-type-options": "nosniff",
+        },
+      }
+    );
+  }
+
+  // The publishable key travels in the X-Vellum-Api-Key header of a POST and never in a URL,
+  // so it cannot leak through browser history, logs or Referer headers. The response is the
+  // provider's authorize URL (it carries only the sealed, short-lived flow state).
+  routes.post("/oauth/:provider/start", async (c) => {
     const tenant = await resolveAuthTenant(c, platform);
     const providerId = c.req.param("provider") ?? "";
     const provider = getProvider(providerId);
-    // A browser navigation cannot send headers, so the publishable key travels in the query.
-    const apiKey = c.req.query("apiKey") ?? "";
-    const keyRecord = apiKey ? await verifyApiKeyAsync(apiKey, platform.controlStore, platform.apiKeyPepper) : null;
-    if (!keyRecord || keyRecord.projectId !== tenant.projectId) {
-      throw new VellumError("UNAUTHENTICATED", "A valid project apiKey query parameter is required");
-    }
+    await requireProjectApiKey(c, platform, tenant);
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
     const creds = resolveProviderCredentials(config.oauthProviders, providerId, masterKey());
     if (!creds.enabled || !creds.clientId || !creds.clientSecret) {
       throw new VellumError("PERMISSION_DENIED", `Sign-in with ${providerId} is not enabled for this project`);
     }
-    const redirectUri = c.req.query("redirectUri") ?? "";
-    if (!isRedirectAllowed(redirectAllowlist(config.oauthProviders), redirectUri)) {
+    const body = (await c.req.json().catch(() => ({}))) as {
+      redirectUri?: unknown;
+      codeChallenge?: unknown;
+      state?: unknown;
+      delivery?: unknown;
+      link?: unknown;
+    };
+    // "link": a signed-in user adds this provider to their own account instead of signing in with it.
+    const linkUserId = body.link === true ? (await requireEndUser(c, platform, tenant)).id : undefined;
+    // delivery "poll": no redirect URI and no deep link. The provider returns to this server, which shows a
+    // "return to the app" page, and the app collects the result by polling with its PKCE verifier.
+    const pollDelivery = body.delivery === "poll";
+    const redirectUri = pollDelivery ? "" : typeof body.redirectUri === "string" ? body.redirectUri : "";
+    if (!pollDelivery && !isRedirectAllowed(redirectAllowlist(config.oauthProviders), redirectUri)) {
       throw new VellumError("INVALID_ARGUMENT", "redirectUri is not in this project's allowed redirect list");
     }
-    const challenge = c.req.query("codeChallenge") ?? "";
+    const challenge = typeof body.codeChallenge === "string" ? body.codeChallenge : "";
     if (!/^[A-Za-z0-9_-]{43}$/.test(challenge)) {
       throw new VellumError("INVALID_ARGUMENT", "codeChallenge must be a base64url SHA-256 (S256) challenge");
     }
-    const clientState = c.req.query("state") ?? null;
+    const clientState = typeof body.state === "string" ? body.state : null;
     if (clientState !== null && clientState.length > 512) {
       throw new VellumError("INVALID_ARGUMENT", "state is too long");
     }
@@ -619,18 +649,28 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         clientState,
         verifier,
         nonce,
+        ...(linkUserId !== undefined ? { linkUserId } : {}),
         exp: Date.now() + OAUTH_STATE_TTL_MS,
       },
       masterKey()
     );
-    const location = buildAuthorizeUrl(provider, {
+    const authorizeUrl = buildAuthorizeUrl(provider, {
       clientId: creds.clientId,
       callbackUrl: callbackUrlFor(c, tenant.projectId, providerId),
       state,
       codeChallenge: s256(verifier),
       nonce,
     });
-    return new Response(null, { status: 302, headers: { location, "cache-control": "no-store" } });
+    c.header("cache-control", "no-store");
+    return c.json({ authorizeUrl });
+  });
+
+  // Old SDKs sent the key in the query string. That is no longer accepted.
+  routes.get("/oauth/:provider/start", () => {
+    throw new VellumError(
+      "INVALID_ARGUMENT",
+      "This sign-in start URL is no longer supported because it put the API key in the URL. Update your Vellum SDK."
+    );
   });
 
   routes.get("/oauth/:provider/callback", async (c) => {
@@ -643,11 +683,14 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     }
     const config = await ensureAuthConfig(platform, tenant.projectId);
     // The allowlist is re-checked: it may have changed since the flow began.
-    if (!isRedirectAllowed(redirectAllowlist(config.oauthProviders), flow.redirectUri)) {
+    const pollFlow = flow.redirectUri === "";
+    if (!pollFlow && !isRedirectAllowed(redirectAllowlist(config.oauthProviders), flow.redirectUri)) {
       throw new VellumError("INVALID_ARGUMENT", "redirectUri is no longer allowed for this project");
     }
     const fail = (error: string, description: string) =>
-      redirectWith(flow.redirectUri, { error, error_description: description, state: flow.clientState });
+      pollFlow
+        ? returnToAppPage(false, description)
+        : redirectWith(flow.redirectUri, { error, error_description: description, state: flow.clientState });
     const providerError = c.req.query("error");
     if (providerError) return fail("access_denied", "The sign-in was cancelled or denied");
     const code = c.req.query("code");
@@ -676,7 +719,20 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         displayName: profile.displayName ?? undefined,
         photoUrl: profile.photoUrl,
       };
-      const { user, providerUserId } = await resolveProviderUser(tenant, config, input);
+      let user: AuthUserRecord;
+      let providerUserId: string;
+      if (flow.linkUserId !== undefined) {
+        const owner = await storage.getAuthUserById(tenant.ctx, flow.linkUserId);
+        if (!owner || owner.isDisabled) return fail("access_denied", "The account to link is no longer available");
+        const taken = await storage.getAuthIdentityByProvider(tenant.ctx, providerId, profile.providerUserId);
+        if (taken && taken.userId !== owner.id) {
+          return fail("access_denied", `This ${providerId} account is already linked to another user`);
+        }
+        user = owner;
+        providerUserId = profile.providerUserId;
+      } else {
+        ({ user, providerUserId } = await resolveProviderUser(tenant, config, input));
+      }
       const now = new Date().toISOString();
       await storage.upsertAuthIdentity(tenant.ctx, {
         userId: user.id,
@@ -693,6 +749,15 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
         tokenType: TOKEN_TYPE_OAUTH_EXCHANGE,
         expiresAt: new Date(Date.now() + OAUTH_CODE_TTL_MS).toISOString(),
       });
+      if (pollFlow) {
+        await storage.saveAuthToken(tenant.ctx, {
+          userId: user.id,
+          tokenHash: sha256(`poll:${flow.clientChallenge}`),
+          tokenType: TOKEN_TYPE_OAUTH_POLL,
+          expiresAt: new Date(Date.now() + OAUTH_CODE_TTL_MS).toISOString(),
+        });
+        return returnToAppPage(true, "");
+      }
       return redirectWith(flow.redirectUri, { vellum_code: oneTime, state: flow.clientState });
     } catch (error) {
       if (error instanceof VellumError) {
@@ -703,6 +768,20 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       return fail("server_error", "Sign-in failed. Please try again.");
     }
   });
+
+  async function finishOAuthSession(c: Context, tenant: Awaited<ReturnType<typeof resolveAuthTenant>>, config: Awaited<ReturnType<typeof ensureAuthConfig>>, userId: string) {
+    const user = await storage.getAuthUserById(tenant.ctx, userId);
+    if (!user) throw new VellumError("UNAUTHENTICATED", "The linked end-user no longer exists");
+    if (user.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
+    const now = new Date().toISOString();
+    const mfa = config.enableTotpMfa ? await storage.getAuthMfa(tenant.ctx, user.id) : null;
+    if (mfa?.verified) {
+      const { token, expiresAt } = await persistActionToken(tenant, user.id, TOKEN_TYPE_MFA_CHALLENGE, MFA_TICKET_TTL_MS);
+      return c.json({ mfaRequired: true, mfaTicket: token, factors: ["totp"], expiresAt });
+    }
+    await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
+    return c.json(await issueSession(tenant, { ...user, lastSignInAt: now }, c));
+  }
 
   routes.post("/oauth/exchange", async (c) => {
     const tenant = await resolveAuthTenant(c, platform);
@@ -718,17 +797,34 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       sha256(`${body.code}:${s256(body.codeVerifier)}`),
       TOKEN_TYPE_OAUTH_EXCHANGE
     );
-    const user = await storage.getAuthUserById(tenant.ctx, record.userId);
-    if (!user) throw new VellumError("UNAUTHENTICATED", "The linked end-user no longer exists");
-    if (user.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
-    const now = new Date().toISOString();
-    const mfa = config.enableTotpMfa ? await storage.getAuthMfa(tenant.ctx, user.id) : null;
-    if (mfa?.verified) {
-      const { token, expiresAt } = await persistActionToken(tenant, user.id, TOKEN_TYPE_MFA_CHALLENGE, MFA_TICKET_TTL_MS);
-      return c.json({ mfaRequired: true, mfaTicket: token, factors: ["totp"], expiresAt });
+    c.header("cache-control", "no-store");
+    return finishOAuthSession(c, tenant, config, record.userId);
+  });
+
+  // Redirect-less sign-in: the app polls until the browser step finished. Returns 202 {status:"pending"}
+  // while waiting, otherwise the same body as /oauth/exchange. Only the holder of the PKCE verifier can collect it.
+  routes.post("/oauth/poll", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    const config = await ensureAuthConfig(platform, tenant.projectId);
+    checkAccessGuards(config);
+    const body = (await c.req.json().catch(() => ({}))) as { codeVerifier?: unknown };
+    if (typeof body.codeVerifier !== "string" || body.codeVerifier.length < 43 || body.codeVerifier.length > 128) {
+      throw new VellumError("INVALID_ARGUMENT", "codeVerifier is required");
     }
-    await storage.updateAuthUser(tenant.ctx, user.id, { lastSignInAt: now });
-    return c.json(await issueSession(tenant, { ...user, lastSignInAt: now }, c));
+    let userId: string;
+    try {
+      const record = await storage.consumeAuthToken(tenant.ctx, sha256(`poll:${s256(body.codeVerifier)}`), TOKEN_TYPE_OAUTH_POLL);
+      userId = record.userId;
+    } catch (error) {
+      if (error instanceof VellumError && error.code === "UNAUTHENTICATED") {
+        c.header("cache-control", "no-store");
+        return c.json({ status: "pending" }, 202);
+      }
+      throw error;
+    }
+    c.header("cache-control", "no-store");
+    return finishOAuthSession(c, tenant, config, userId);
   });
 
   /** Native Google (google_sign_in, Google Identity Services): the app sends a Google ID token. */
@@ -833,7 +929,113 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     return c.json({ user: publicUser(updated) });
   });
 
+  // ------------------------------------------------------------ SESSIONS AND LINKED SIGN-IN METHODS
+
+  routes.get("/sessions", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    const now = Date.now();
+    const sessions = (await storage.listUserSessions(tenant.ctx, current.id))
+      .filter((s) => !s.revoked && Date.parse(s.expiresAt) > now)
+      .map((s) => ({
+        id: s.id,
+        userAgent: s.userAgent,
+        ipAddress: s.ipAddress,
+        createdAt: s.createdAt,
+        lastRefreshedAt: s.rotatedAt,
+        expiresAt: s.expiresAt,
+      }));
+    c.header("cache-control", "no-store");
+    return c.json({ sessions });
+  });
+
+  routes.delete("/sessions/:sessionId", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    const id = c.req.param("sessionId");
+    const owned = (await storage.listUserSessions(tenant.ctx, current.id)).find((s) => s.id === id);
+    if (!owned) throw new VellumError("NOT_FOUND", "Session not found");
+    await storage.revokeAuthSession(tenant.ctx, owned.id, "revoked_by_user");
+    return c.json({ success: true });
+  });
+
+  routes.get("/identities", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    const identities = (await storage.listUserIdentities(tenant.ctx, current.id)).map((i) => ({
+      provider: i.provider,
+      email: typeof i.identityData["email"] === "string" ? i.identityData["email"] : null,
+      lastSignInAt: i.lastSignInAt,
+      createdAt: i.createdAt,
+    }));
+    return c.json({ identities, hasPassword: current.passwordHash !== null });
+  });
+
+  // Unlinking is refused when it would leave the account with no way to sign in.
+  routes.delete("/identities/:provider", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    const provider = c.req.param("provider") ?? "";
+    const identities = await storage.listUserIdentities(tenant.ctx, current.id);
+    const target = identities.find((i) => i.provider === provider);
+    if (!target) throw new VellumError("NOT_FOUND", "That sign-in method is not linked to this account");
+    const remaining = identities.filter((i) => i.provider !== provider && i.provider !== "password").length;
+    if (provider === "password") {
+      if (remaining === 0) throw new VellumError("FAILED_PRECONDITION", "Link another sign-in method before removing the password");
+      await storage.updateAuthUser(tenant.ctx, current.id, { passwordHash: null });
+    } else if (remaining === 0 && current.passwordHash === null) {
+      throw new VellumError("FAILED_PRECONDITION", "This is the only way to sign in to the account; add a password or another provider first");
+    }
+    await storage.deleteAuthIdentity(tenant.ctx, current.id, provider);
+    return c.json({ success: true });
+  });
+
   // ------------------------------------------------------------------ PASSWORD
+
+  // Signed-in password change: needs the current password, ends every other session and returns a fresh one.
+  routes.post("/password/change", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    const config = await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    const body = (await c.req.json().catch(() => ({}))) as { currentPassword?: unknown; newPassword?: unknown };
+    if (typeof body.currentPassword !== "string" || typeof body.newPassword !== "string") {
+      throw new VellumError("INVALID_ARGUMENT", "currentPassword and newPassword are required");
+    }
+    if (!current.passwordHash || !(await verifyPassword(body.currentPassword, current.passwordHash))) {
+      throw new VellumError("UNAUTHENTICATED", "The current password is incorrect");
+    }
+    assertPasswordPolicy(body.newPassword, config);
+    const updated = await storage.updateAuthUser(tenant.ctx, current.id, { passwordHash: await hashPassword(body.newPassword) });
+    await storage.revokeAllUserSessions(tenant.ctx, current.id, "password_changed");
+    c.header("cache-control", "no-store");
+    return c.json(await issueSession(tenant, updated, c));
+  });
+
+  // Self-service account deletion. Password accounts must confirm with their password.
+  routes.delete("/user", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    await ensureAuthConfig(platform, tenant.projectId);
+    const current = await requireEndUser(c, platform, tenant);
+    if (current.passwordHash) {
+      const body = (await c.req.json().catch(() => ({}))) as { password?: unknown };
+      if (typeof body.password !== "string" || !(await verifyPassword(body.password, current.passwordHash))) {
+        throw new VellumError("UNAUTHENTICATED", "Confirm your password to delete the account");
+      }
+    }
+    await storage.revokeAllUserSessions(tenant.ctx, current.id, "account_deleted");
+    await storage.deleteAuthUser(tenant.ctx, current.id);
+    return c.json({ deleted: true });
+  });
 
   routes.post("/password/reset", async (c) => {
     const tenant = await resolveAuthTenant(c, platform);
