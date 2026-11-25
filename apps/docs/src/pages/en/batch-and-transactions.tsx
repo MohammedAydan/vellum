@@ -38,7 +38,7 @@ export default function Page() {
               <strong>Step 1 — Lock the transaction row first:</strong>{" "}
               <code>SELECT status, expires_at, read_set FROM transactions WHERE token_hash = $1 AND project_id = $2::uuid FOR UPDATE</code>.
               This serializes concurrent commits on the same token and races against rollback or
-              expiration (5,000 ms interactive window).
+              expiration (15,000 ms interactive window).
             </>,
             <>
               <strong>Step 2 — Pre-lock every read-set document in deterministic order:</strong>{" "}

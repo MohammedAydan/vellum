@@ -11,7 +11,7 @@ export const SYSTEM_LIMITS = {
   MAX_FIELD_NAME_LENGTH: 256, // 256 chars per field key
   MAX_BATCH_OPERATIONS: 100, // 100 operations per atomic batch / tx
   MAX_BATCH_PAYLOAD_BYTES: 5_242_880, // 5 MiB
-  MAX_TRANSACTION_DURATION_MS: 5_000, // 5,000 ms OCC interactive window
+  MAX_TRANSACTION_DURATION_MS: 15_000, // 15,000 ms OCC interactive window (a remote client needs several round trips)
   MAX_WHERE_CLAUSES: 10, // 10 filters per query
   MAX_DISJUNCTIVE_VALUES: 30, // 30 values in `in` / `not-in` / `array-contains-any`
   MAX_ORDER_BY_FIELDS: 3, // 3 orderBy fields per query

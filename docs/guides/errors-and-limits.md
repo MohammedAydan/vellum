@@ -68,7 +68,7 @@ In the SDK, failed requests throw an `Error` with `code`, `status`, `details`, a
 | `UNAUTHENTICATED` | 401 | Missing, malformed, invalid, expired, or revoked API key / token. |
 | `PERMISSION_DENIED` | 403 | Missing server-key scope, or security rules denied the operation. |
 | `NOT_FOUND` | 404 | Reading or deleting a document that does not exist. |
-| `TRANSACTION_TIMEOUT` | 408 | Transaction exceeded 5 seconds. |
+| `TRANSACTION_TIMEOUT` | 408 | Transaction exceeded 15 seconds. |
 | `ALREADY_EXISTS` | 409 | `create` on an occupied path, or duplicate composite index. |
 | `ABORTED_CONFLICT` | 409 | OCC read-set version changed before commit. |
 | `FAILED_PRECONDITION` | 412 | `ifVersion` / `exists` mismatch, invalid increment target, or missing required index. |
@@ -107,7 +107,7 @@ These constants come from `@vellum/coreSYSTEM_LIMITS` and are enforced at the en
 | `MAX_FIELD_NAME_LENGTH` | 256 characters | `INVALID_FIELD_NAME` (400) |
 | `MAX_BATCH_OPERATIONS` | 100 operations | `BATCH_SIZE_EXCEEDED` (400) |
 | `MAX_BATCH_PAYLOAD_BYTES` | 5,242,880 (5 MiB) | `PAYLOAD_TOO_LARGE` (413) |
-| `MAX_TRANSACTION_DURATION_MS` | 5,000 ms | `TRANSACTION_TIMEOUT` (408) |
+| `MAX_TRANSACTION_DURATION_MS` | 15,000 ms | `TRANSACTION_TIMEOUT` (408) |
 | `MAX_WHERE_CLAUSES` | 10 filters | `QUERY_TOO_COMPLEX` (400) |
 | `MAX_DISJUNCTIVE_VALUES` | 30 elements | `QUERY_TOO_COMPLEX` (400) |
 | `MAX_ORDER_BY_FIELDS` | 3 fields | `QUERY_TOO_COMPLEX` (400) |

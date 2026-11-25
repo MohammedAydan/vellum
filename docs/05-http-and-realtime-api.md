@@ -33,7 +33,7 @@ Data Plane requests authenticate via `x-vellum-api-key` (or legacy `x-project-ke
 | `DELETE` | `/v1/projects/:projectId/documents/*path` | `documents:write` or Rules `delete` | Soft-delete a document (writes tombstone + `realtime_outbox` event). |
 | `POST` | `/v1/projects/:projectId/query` | `documents:read` or Rules `list` | Execute structured query (`where`, `or`, `orderBy`, `limit`, `select`, `startAt`/`startAfter`, `include`). |
 | `POST` | `/v1/projects/:projectId/batchWrite` | `documents:write` + Rules | Atomic multi-document batch (up to `100` operations, `5 MiB` cap, optional `Idempotency-Key` with 24 h durable replay). Also aliased at `/documents:batchWrite`. |
-| `POST` | `/v1/projects/:projectId/transactions:begin` | `documents:read` | Begin an OCC transaction and issue an HMAC-SHA256 `transactionToken` (`5,000 ms` window). |
+| `POST` | `/v1/projects/:projectId/transactions:begin` | `documents:read` | Begin an OCC transaction and issue an HMAC-SHA256 `transactionToken` (`15,000 ms` window). |
 | `POST` | `/v1/projects/:projectId/transactions:commit` | `documents:write` + Rules | Lock transaction row + read-set (`ORDER BY path ASC FOR UPDATE`), verify versions, and commit atomically (`409 ABORTED_CONFLICT` / `ALREADY_COMMITTED` / `ALREADY_ROLLED_BACK`). |
 
 ### 1.3 Collections & Composite Indexes
