@@ -344,10 +344,11 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     const s1 = (await reg.json()) as { accessToken: string; refreshToken: string };
     const second = await f.call("POST", "/sign-in/email", f.publicKeyStr, { email: "sess@example.com", password: "First-pass-1234!" });
     const s2 = (await second.json()) as { refreshToken: string };
-    const authed = (method: string, url: string) =>
+    const authed = (method: string, url: string, body?: unknown) =>
       f.platform.fetch(new Request(`http://localhost${f.base}${url}`, {
         method,
-        headers: { "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${s1.accessToken}` },
+        headers: { "content-type": "application/json", "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${s1.accessToken}` },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       }));
     const list = (await (await authed("GET", "/sessions")).json()) as { sessions: { id: string }[] };
     expect(list.sessions.length).toBe(2);
@@ -359,8 +360,9 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     const ids = (await (await authed("GET", "/identities")).json()) as { identities: { provider: string }[]; hasPassword: boolean };
     expect(ids.identities.map((i) => i.provider)).toEqual(["password"]);
     expect(ids.hasPassword).toBe(true);
-    expect((await authed("DELETE", "/identities/password")).status).toBe(412);
-    expect((await authed("DELETE", "/identities/github")).status).toBe(404);
+    expect((await authed("DELETE", "/identities/password")).status).toBe(401);
+    expect((await authed("DELETE", "/identities/password", { currentPassword: "First-pass-1234!" })).status).toBe(412);
+    expect((await authed("DELETE", "/identities/github", { currentPassword: "First-pass-1234!" })).status).toBe(404);
   });
 
   it("link: a signed-in user adds Google to their account (any email), another user cannot take the same Google account", async () => {
@@ -377,7 +379,7 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
       }));
     const runLink = async (token: string) => {
       const { verifier, challenge } = pkce();
-      const res = await authed("POST", "/oauth/google/start", token, { redirectUri: REDIRECT, codeChallenge: challenge, state: "cs1", link: true });
+      const res = await authed("POST", "/oauth/google/start", token, { redirectUri: REDIRECT, codeChallenge: challenge, state: "cs1", link: true, currentPassword: "First-pass-1234!" });
       expect(res.status).toBe(200);
       const authorize = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
       lastNonce = authorize.searchParams.get("nonce") ?? "";

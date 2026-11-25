@@ -731,7 +731,7 @@ export interface VellumClientInterface {
   /** Sign-in methods linked to the account, and whether it has a password. */
   listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }>;
   /** Remove a linked sign-in method ("google", "github" or "password"). Refused when it is the last one. */
-  unlinkProvider(provider: string): Promise<void>;
+  unlinkProvider(provider: string, options?: { currentPassword?: string }): Promise<void>;
   /** Change the signed-in user's password (needs the current one); other sessions are ended. */
   changePassword(currentPassword: string, newPassword: string): Promise<AuthState>;
   /** Permanently delete the signed-in account. Password accounts must pass `password`. */

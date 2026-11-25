@@ -1240,8 +1240,8 @@ export class VellumClient implements VellumClientInterface {
     return this.auth.listLinkedProviders();
   }
 
-  public unlinkProvider(provider: string): Promise<void> {
-    return this.auth.unlinkProvider(provider);
+  public unlinkProvider(provider: string, options?: { currentPassword?: string }): Promise<void> {
+    return this.auth.unlinkProvider(provider, options);
   }
 
   public changePassword(currentPassword: string, newPassword: string): Promise<AuthState> {

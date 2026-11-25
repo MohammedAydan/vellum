@@ -332,6 +332,16 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     authRateLimit({ max: 600, windowMs: 15 * 60 * 1000, countAll: true, scope: "enduser-oauth-poll", keyFrom: endUserIpKey }, platform.controlStore.throttle)
   );
 
+  // Endpoints that check the current password for a signed-in user: 10 attempts / 15 min per (project, ip). Email changes through PATCH /user have their own per-user lockout.
+  for (const [method, path, scope] of [
+    ["POST", "password/change", "enduser-password-change"],
+    ["DELETE", "user", "enduser-delete-user"],
+    ["DELETE", "identities/:provider", "enduser-unlink"],
+  ] as const) {
+    const limit = authRateLimit({ max: 10, windowMs: 15 * 60 * 1000, countAll: true, scope, keyFrom: endUserIpKey }, platform.controlStore.throttle);
+    app.use(`/v1/projects/:projectId/auth/${path}`, async (c, next) => (c.req.method === method ? limit(c, next) : next()));
+  }
+
   // 5 requests / 15 min — every request counts (no account enumeration).
   app.use(
     "/v1/projects/:projectId/auth/password/reset",

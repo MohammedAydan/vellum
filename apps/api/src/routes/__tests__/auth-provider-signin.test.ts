@@ -32,7 +32,13 @@ async function fixture() {
       headers: { "content-type": "application/json", "x-vellum-api-key": key, authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     }));
-  return { platform, post, get, patch, publicKey, serverKey };
+  const del = (url: string, body: unknown, key: string, token: string) =>
+    platform.fetch(new Request(`http://localhost${base}${url}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json", "x-vellum-api-key": key, authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    }));
+  return { platform, post, get, patch, del, publicKey, serverKey };
 }
 
 describe("POST /sign-in/provider", () => {
@@ -105,5 +111,26 @@ describe("PATCH /user email change", () => {
     const ok = await patch("/user", { email: "new@example.com", currentPassword: "Password123!" }, publicKey, accessToken);
     expect(ok.status).toBe(200);
     expect((await patch("/user", { displayName: "Still fine" }, publicKey, accessToken)).status).toBe(200);
+  });
+});
+
+describe("re-authentication for account-keeping changes", () => {
+  it("refuses link, unlink, password change and delete without the current password", async () => {
+    const { post, del, publicKey } = await fixture();
+    const signup = await post("/sign-up/email", { email: "re@example.com", password: "Password123!", displayName: "R" }, publicKey);
+    const { accessToken } = (await signup.json()) as { accessToken: string };
+    expect((await del("/identities/google", {}, publicKey, accessToken)).status).toBe(401);
+    expect((await del("/user", {}, publicKey, accessToken)).status).toBe(401);
+    expect((await del("/user", { password: "wrong-password" }, publicKey, accessToken)).status).toBe(401);
+  });
+
+  it("locks out repeated wrong passwords", async () => {
+    const { post, del, publicKey } = await fixture();
+    const signup = await post("/sign-up/email", { email: "lock@example.com", password: "Password123!", displayName: "L" }, publicKey);
+    const { accessToken } = (await signup.json()) as { accessToken: string };
+    let last = 0;
+    for (let i = 0; i < 8; i += 1) last = (await del("/user", { password: `wrong-${i}-password` }, publicKey, accessToken)).status;
+    expect(last).toBe(429);
+    expect((await del("/user", { password: "Password123!" }, publicKey, accessToken)).status).toBe(429);
   });
 });

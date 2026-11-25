@@ -511,7 +511,7 @@ export class VellumAuthClient {
     const popup = openPopup(options);
     let flow: PreparedFlow;
     try {
-      flow = await prepareFlow(this.request, provider, options.redirectUri, link);
+      flow = await prepareFlow(this.request, provider, options.redirectUri, link, options.currentPassword);
       popup.location.href = flow.startUrl;
     } catch (error) {
       try { popup.close(); } catch { /* already closed */ }
@@ -693,8 +693,12 @@ export class VellumAuthClient {
     return sanitizeAndClone({ providers, hasPassword: payload["hasPassword"] === true });
   }
 
-  public async unlinkProvider(provider: string): Promise<void> {
-    await this.request("DELETE", `/auth/identities/${encodeURIComponent(provider)}`);
+  public async unlinkProvider(provider: string, options: { currentPassword?: string } = {}): Promise<void> {
+    await this.request(
+      "DELETE",
+      `/auth/identities/${encodeURIComponent(provider)}`,
+      options.currentPassword !== undefined ? { currentPassword: options.currentPassword } : {}
+    );
   }
 
   /**

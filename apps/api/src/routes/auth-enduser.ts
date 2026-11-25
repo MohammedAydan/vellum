@@ -227,6 +227,33 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     );
   }
 
+  /** Fresh sign-in window for accounts that have no password to confirm with. */
+  const REAUTH_WINDOW_MS = 10 * 60 * 1000;
+
+  /**
+   * Proves the caller holds the account, not just a stolen access token, before a change that
+   * would let an attacker keep access. Password accounts confirm the password (with a per-user
+   * failure lockout); accounts without a password must have signed in within the last 10 minutes.
+   */
+  async function confirmAccountOwner(tenant: AuthTenant, current: AuthUserRecord, password: unknown): Promise<void> {
+    if (current.passwordHash) {
+      const failureKey = sha256(`reauth:${current.id}`);
+      if (await mfaLockedOut(tenant, failureKey)) {
+        throw new VellumError("TOO_MANY_REQUESTS", "Too many invalid attempts. Try again later.");
+      }
+      if (typeof password !== "string" || !(await verifyPassword(password, current.passwordHash))) {
+        await recordMfaFailure(tenant, failureKey);
+        throw new VellumError("UNAUTHENTICATED", "currentPassword is required and must be correct for this change");
+      }
+      await clearMfaFailures(tenant, failureKey);
+      return;
+    }
+    const last = current.lastSignInAt ? Date.parse(current.lastSignInAt) : 0;
+    if (!(Date.now() - last < REAUTH_WINDOW_MS)) {
+      throw new VellumError("UNAUTHENTICATED", "Sign in again to make this change");
+    }
+  }
+
   /** A TOTP code must not work twice: remember the codes that were accepted for a short time. */
   async function totpCodeWasUsed(tenant: AuthTenant, userId: string, code: string): Promise<boolean> {
     return storage
@@ -620,9 +647,15 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       state?: unknown;
       delivery?: unknown;
       link?: unknown;
+      currentPassword?: unknown;
     };
     // "link": a signed-in user adds this provider to their own account instead of signing in with it.
-    const linkUserId = body.link === true ? (await requireEndUser(c, platform, tenant)).id : undefined;
+    let linkUserId: string | undefined;
+    if (body.link === true) {
+      const owner = await requireEndUser(c, platform, tenant);
+      await confirmAccountOwner(tenant, owner, body.currentPassword);
+      linkUserId = owner.id;
+    }
     // delivery "poll": no redirect URI and no deep link. The provider returns to this server, which shows a
     // "return to the app" page, and the app collects the result by polling with its PKCE verifier.
     const pollDelivery = body.delivery === "poll";
@@ -1006,6 +1039,8 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     await ensureAuthConfig(platform, tenant.projectId);
     const current = await requireEndUser(c, platform, tenant);
     const provider = c.req.param("provider") ?? "";
+    const unlinkBody = (await c.req.json().catch(() => ({}))) as { currentPassword?: unknown };
+    await confirmAccountOwner(tenant, current, unlinkBody.currentPassword);
     const identities = await storage.listUserIdentities(tenant.ctx, current.id);
     const target = identities.find((i) => i.provider === provider);
     if (!target) throw new VellumError("NOT_FOUND", "That sign-in method is not linked to this account");
@@ -1032,9 +1067,8 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     if (typeof body.currentPassword !== "string" || typeof body.newPassword !== "string") {
       throw new VellumError("INVALID_ARGUMENT", "currentPassword and newPassword are required");
     }
-    if (!current.passwordHash || !(await verifyPassword(body.currentPassword, current.passwordHash))) {
-      throw new VellumError("UNAUTHENTICATED", "The current password is incorrect");
-    }
+    if (!current.passwordHash) throw new VellumError("UNAUTHENTICATED", "The current password is incorrect");
+    await confirmAccountOwner(tenant, current, body.currentPassword);
     assertPasswordPolicy(body.newPassword, config);
     const updated = await storage.updateAuthUser(tenant.ctx, current.id, { passwordHash: await hashPassword(body.newPassword) });
     await storage.revokeAllUserSessions(tenant.ctx, current.id, "password_changed");
@@ -1048,12 +1082,8 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     await requireProjectApiKey(c, platform, tenant);
     await ensureAuthConfig(platform, tenant.projectId);
     const current = await requireEndUser(c, platform, tenant);
-    if (current.passwordHash) {
-      const body = (await c.req.json().catch(() => ({}))) as { password?: unknown };
-      if (typeof body.password !== "string" || !(await verifyPassword(body.password, current.passwordHash))) {
-        throw new VellumError("UNAUTHENTICATED", "Confirm your password to delete the account");
-      }
-    }
+    const deleteBody = (await c.req.json().catch(() => ({}))) as { password?: unknown };
+    await confirmAccountOwner(tenant, current, deleteBody.password);
     await storage.revokeAllUserSessions(tenant.ctx, current.id, "account_deleted");
     await storage.deleteAuthUser(tenant.ctx, current.id);
     return c.json({ deleted: true });

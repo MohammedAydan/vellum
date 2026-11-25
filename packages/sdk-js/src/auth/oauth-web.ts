@@ -14,6 +14,8 @@ export interface OAuthPopupOptions {
    * redirect URIs. Defaults to the current page without query or hash.
    */
   redirectUri?: string;
+  /** Required by `linkWithPopup` for accounts that have a password. */
+  currentPassword?: string;
   /** Give up after this many milliseconds. Default 5 minutes. */
   timeoutMs?: number;
   /** Popup window features. Defaults to a centered 480x640 window. */
@@ -107,7 +109,8 @@ export async function prepareFlow(
   request: StartRequest,
   provider: string,
   redirectUri: string | undefined,
-  link = false
+  link = false,
+  currentPassword?: string
 ): Promise<PreparedFlow> {
   const verifier = randomToken(48);
   const state = randomToken(16);
@@ -115,7 +118,7 @@ export async function prepareFlow(
   const res = await request<{ authorizeUrl?: unknown }>(
     "POST",
     `/auth/oauth/${encodeURIComponent(provider)}/start`,
-    { redirectUri: target, codeChallenge: await pkceChallenge(verifier), state, ...(link ? { link: true } : {}) },
+    { redirectUri: target, codeChallenge: await pkceChallenge(verifier), state, ...(link ? { link: true, ...(currentPassword !== undefined ? { currentPassword } : {}) } : {}) },
     {},
     link // linking needs the signed-in user's token; a plain sign-in sends none
   );
