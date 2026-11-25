@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createClient } from "../index.js";
 
-type Call = { method: string; url: string; body: { data?: Record<string, unknown>; writes?: Array<{ type: string; path: string; data: Record<string, unknown> }> } | null };
+type Call = { headers?: Record<string, string>; method: string; url: string; body: { data?: Record<string, unknown>; writes?: Array<{ type: string; path: string; data: Record<string, unknown> }> } | null };
 function setup() {
   const calls: Call[] = [];
   const db = createClient({
     projectId: "p",
     apiKey: "pk_test",
     customFetch: (async (input, init) => {
-      calls.push({ method: init?.method ?? "GET", url: String(input), body: init?.body ? JSON.parse(String(init.body)) : null });
+      calls.push({ headers: (init?.headers ?? {}) as Record<string, string>, method: init?.method ?? "GET", url: String(input), body: init?.body ? JSON.parse(String(init.body)) : null });
       return new Response(JSON.stringify({ ok: true, path: "x/y", documentId: "y", version: 1, data: {} }), {
         headers: { "content-type": "application/json" },
       });
@@ -59,5 +59,20 @@ describe("addWithRelated", () => {
     await expect(
       db.collection("orders").addWithRelated({}, { items: { collection: "i", docs: Array.from({ length: 500 }, () => ({})) } }),
     ).rejects.toThrow(/500/);
+  });
+});
+
+describe("addWithRelated parity", () => {
+  it("sends the Idempotency-Key header and applies the collection converter to the parent", async () => {
+    const { db, calls } = setup();
+    const conv = { toDoc: (v: { n: number }) => ({ n: v.n, via: "conv" }), fromDoc: (s: { data(): Record<string, unknown> | undefined }) => ({ n: Number(s.data()?.["n"]) }) };
+    await db
+      .collection("orders")
+      .withConverter(conv)
+      .addWithRelated({ n: 1 }, { items: { collection: "items", docs: [{ a: 1 }] } }, { idempotencyKey: "k-1" });
+    const h = new Headers(calls[0]!.headers as Record<string, string>);
+    expect(h.get("idempotency-key")).toBe("k-1");
+    expect(calls[0]!.body!.writes![0]!.data["via"]).toBe("conv");
+    expect(calls[0]!.body!.writes![0]!.data["n"]).toBe(1);
   });
 });

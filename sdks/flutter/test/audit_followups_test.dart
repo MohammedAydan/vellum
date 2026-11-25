@@ -18,6 +18,7 @@ VellumClient _client(
 
 void main() {
   transactionRollback();
+  batchPreconditions();
   group('signInWithOAuth', () {
     test('returns VellumMfaRequired and stores no session', () async {
       final client = _client((m, url, body) async {
@@ -223,6 +224,40 @@ void transactionRollback() {
         throwsA(isA<VellumException>().having((e) => e.code, 'code', 'SESSION_CHANGED')),
       );
       expect(rollbacks, 0);
+    });
+  });
+}
+
+void batchPreconditions() {
+  group('batch write preconditions', () {
+    test('flat wire format with ifVersion and exists, 412 surfaces as an exception', () async {
+      Map<String, Object?>? sent;
+      final client = _client((m, url, body) async {
+        sent = body;
+        throw const VellumException(code: 'FAILED_PRECONDITION', message: 'stale', statusCode: 412);
+      });
+      final a = client.collection('items').doc('a');
+      final b = client.collection('items').doc('b');
+      final batch = client
+          .batch()
+          .set(a, <String, Object?>{'n': 1}, ifVersion: 3)
+          .update(b, <String, Object?>{'n': 2}, ifVersion: 7, exists: true)
+          .delete(client.collection('items').doc('c'), exists: false)
+          .create(client.collection('items').doc('d'), <String, Object?>{'n': 4});
+      await expectLater(
+        batch.commit(),
+        throwsA(isA<VellumException>().having((e) => e.statusCode, 'status', 412)),
+      );
+      final writes = (sent!['writes'] as List).cast<Map<String, Object?>>();
+      expect(writes[0], <String, Object?>{
+        'type': 'set', 'path': 'items/a', 'data': <String, Object?>{'n': 1}, 'merge': false, 'ifVersion': 3,
+      });
+      expect(writes[1], <String, Object?>{
+        'type': 'update', 'path': 'items/b', 'data': <String, Object?>{'n': 2}, 'ifVersion': 7, 'exists': true,
+      });
+      expect(writes[2], <String, Object?>{'type': 'delete', 'path': 'items/c', 'exists': false});
+      expect(writes[3]['type'], 'create');
+      expect(writes[3].containsKey('ifVersion'), isFalse);
     });
   });
 }

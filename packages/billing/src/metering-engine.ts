@@ -426,7 +426,11 @@ export class UsageMeteringEngine implements MeteringPort {
       );
     }
 
-    await this.appendFlushLedgerEntries(orgAggregates, cycleId);
+    if (this.billing.withLedgerLock) {
+      await this.billing.withLedgerLock(() => this.appendFlushLedgerEntries(orgAggregates, cycleId));
+    } else {
+      await this.appendFlushLedgerEntries(orgAggregates, cycleId);
+    }
     return { flushedGroups: flushed, ledgerSeq: this.ledgerSeq };
   }
 
