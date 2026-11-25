@@ -135,6 +135,18 @@ abstract interface class VellumAuthPort {
     String? state,
   });
 
+  /// Starts a redirect-less sign-in: no redirect URI, no deep link, no app
+  /// registration. Open the returned URL in the system browser, then call
+  /// [pollOAuth] with the PKCE verifier until it resolves.
+  Future<Uri> oauthStartPoll({
+    required String provider,
+    required String codeChallenge,
+  });
+
+  /// Collects the result of [oauthStartPoll]. Resolves to `null` while the
+  /// browser step is still in progress.
+  Future<VellumAuthResult?> pollOAuth({required String codeVerifier});
+
   /// Trades the one-time `vellum_code` plus the PKCE [codeVerifier] for a session.
   Future<VellumAuthResult> exchangeOAuthCode({
     required String code,

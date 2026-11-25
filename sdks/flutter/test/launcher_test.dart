@@ -61,4 +61,16 @@ void main() {
       throwsA(isA<TimeoutException>()),
     );
   });
+
+  test('createVellumOAuth without a redirect URI uses redirect-less sign-in', () {
+    final client = VellumClient(
+      endpoint: 'https://api.example.com',
+      projectId: 'p',
+      apiKey: 'pk_test_abc',
+      httpTransport: (m, u, h, b) async => <String, dynamic>{},
+    );
+    final oauth = createVellumOAuth(auth: client.auth);
+    expect(oauth.redirectUri, '');
+    client.auth.dispose();
+  });
 }
