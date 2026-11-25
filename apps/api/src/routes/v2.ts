@@ -356,10 +356,10 @@ export function createIndexAdvisor(
   platform: VellumPlatformContext,
   recorder: IndexRecommendationRecorder
 ): IndexAdviseFn {
+  // In production a missing base URL means "no one-click link", never a link to the operator's localhost.
   const dashboardBaseUrl =
     process.env["VELLUM_DASHBOARD_BASE_URL"] ??
-    process.env["VELLUM_DASHBOARD_BASE_URL"] ??
-    "http://localhost:3000";
+    (process.env["NODE_ENV"] === "production" ? "" : "http://localhost:3000");
   const analyze = analyzeQueryIndexCoverage;
   return async (c, query, tenant, options) => {
     try {

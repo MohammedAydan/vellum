@@ -31,7 +31,7 @@ describe("hardening/transactions — cleanupExpired", () => {
       await engine.beginTransaction(TENANT);
     }
     await engine.beginTransaction(OTHER_TENANT);
-    vi.setSystemTime(T0 + 6_000); // > MAX_TRANSACTION_DURATION_MS (5s)
+    vi.setSystemTime(T0 + 16_000); // > MAX_TRANSACTION_DURATION_MS (15s)
 
     expect(await engine.transactions.cleanupExpired(TENANT, 2)).toBe(2);
     expect(await engine.transactions.cleanupExpired(TENANT, 2)).toBe(1);
@@ -59,7 +59,7 @@ describe("hardening/transactions — cleanupExpired", () => {
     expect(await engine.transactions.cleanupExpired(TENANT, 1000)).toBe(2);
     expect(await engine.transactions.cleanupExpired(TENANT, 1000)).toBe(0);
 
-    vi.setSystemTime(T0 + 8 * 24 * 60 * 60 * 1000 + 6_000);
+    vi.setSystemTime(T0 + 8 * 24 * 60 * 60 * 1000 + 16_000);
     expect(await engine.transactions.cleanupExpired(TENANT, 1000)).toBe(1);
     expect(young.transactionToken).toBeTruthy();
   });
@@ -119,7 +119,7 @@ describe("hardening/transactions — distinct terminal error codes", () => {
     installClock();
     const { engine } = createFixture();
     const tx = await engine.beginTransaction(TENANT);
-    vi.setSystemTime(T0 + 6_000);
+    vi.setSystemTime(T0 + 16_000);
     await engine.transactions.cleanupExpired(TENANT, 100);
     await expect(
       engine.rollbackTransaction({ ...TENANT, transactionToken: tx.transactionToken })

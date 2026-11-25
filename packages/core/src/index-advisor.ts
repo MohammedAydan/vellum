@@ -172,6 +172,8 @@ export function analyzeQueryIndexCoverage(
   for (const clause of orderByClauses) {
     if (!clause || typeof clause.field !== "string" || clause.field.length === 0) continue;
     const field = clause.field;
+    // The engine appends documentId as a tie-breaker to every ordering. It never needs its own index entry.
+    if (field === "documentId" || field === "__name__") continue;
     allFields.add(field);
     if (equalityLookup.has(field) || sortLookup.has(field)) continue;
     sortLookup.add(field);
@@ -261,12 +263,16 @@ export function analyzeQueryIndexCoverage(
   };
   const suggestPayload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   const base = options.dashboardBaseUrl.replace(/\/+$/, "");
-  const dashboardUrl = `${base}/app/orgs/${options.orgId}/projects/${options.projectId}/indexes?suggest=${suggestPayload}`;
+  // No configured dashboard origin: give the payload but no link (a relative or localhost link helps nobody).
+  const dashboardUrl =
+    base === ""
+      ? undefined
+      : `${base}/app/orgs/${options.orgId}/projects/${options.projectId}/indexes?suggest=${suggestPayload}`;
 
   result.recommendedFields = canonical;
   result.fingerprint = fingerprint;
   result.suggestPayload = suggestPayload;
-  result.dashboardUrl = dashboardUrl;
+  if (dashboardUrl !== undefined) result.dashboardUrl = dashboardUrl;
   return result;
 }
 
@@ -343,10 +349,10 @@ export function decodeSuggestPayload(payload: string): IndexSuggestionPayload | 
 export function buildIndexSuggestionHeaders(
   result: IndexCoverageResult
 ): Record<string, string> {
-  if (result.covered || !result.suggestPayload || !result.dashboardUrl) return {};
+  if (result.covered || !result.suggestPayload) return {};
   const payload = decodeSuggestPayload(result.suggestPayload);
   return {
     "x-vellum-index-suggestion": payload ? JSON.stringify(payload) : result.suggestPayload,
-    "x-vellum-index-url": result.dashboardUrl,
+    ...(result.dashboardUrl ? { "x-vellum-index-url": result.dashboardUrl } : {}),
   };
 }

@@ -13,7 +13,7 @@ import type { WebSocketFactory, WebSocketLike } from "./realtime-transport.js";
 import { SseSocket, type SseSocketOptions } from "./sse-socket.js";
 
 const STICKY_MS = 10 * 60_000;
-const DEFAULT_WS_OPEN_TIMEOUT_MS = 4_000;
+const DEFAULT_WS_OPEN_TIMEOUT_MS = 2_500;
 const stickyFallback = new Map<string, number>();
 
 function hostKey(url: string): string {
