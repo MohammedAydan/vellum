@@ -823,19 +823,37 @@ export class VellumClient implements VellumClientInterface {
         async get<DocT = Record<string, unknown>>(docRef: string | { path: string }): Promise<DocumentSnapshot<DocT>> {
           const path = typeof docRef === "string" ? docRef : docRef.path;
           const encoded = encodeResourcePath(path, "document path");
-          const doc = await transport.request<{
-            documentId: string;
-            path: string;
-            version: number;
-            data: DocT;
-          }>(
-            "GET",
-            `/documents/${encoded}?transactionToken=${encodeURIComponent(transactionToken)}`,
-            undefined,
-            {},
-            true,
-            signal
-          );
+          let doc: { documentId: string; path: string; version: number; data: DocT };
+          try {
+            doc = await transport.request<{
+              documentId: string;
+              path: string;
+              version: number;
+              data: DocT;
+            }>(
+              "GET",
+              `/documents/${encoded}?transactionToken=${encodeURIComponent(transactionToken)}`,
+              undefined,
+              {},
+              true,
+              signal
+            );
+          } catch (err) {
+            // A missing document is a normal read inside a transaction (create-if-absent
+            // patterns). Return a non-existing snapshot instead of aborting the transaction.
+            if ((err as { status?: number }).status === 404) {
+              const segments = path.split("/");
+              return Object.freeze({
+                id: segments[segments.length - 1] ?? "",
+                path,
+                version: 0,
+                exists: false,
+                data: () => undefined as unknown as DocT,
+                raw: Object.freeze({}),
+              });
+            }
+            throw err;
+          }
           return Object.freeze({
             id: doc.documentId,
             path: doc.path,
