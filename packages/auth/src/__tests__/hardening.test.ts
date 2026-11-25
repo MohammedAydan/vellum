@@ -128,3 +128,24 @@ describe("@vellum/auth - Cryptographic & Protocol Hardening", () => {
     expect(() => svc.verifyAccess("not.valid!.jwt")).toThrow();
   });
 });
+
+import { assertPublicSmtpHost } from "../mailer.js";
+import { afterEach, beforeEach } from "vitest";
+
+describe("SMTP host SSRF guard", () => {
+  const saved = process.env["NODE_ENV"];
+  beforeEach(() => {
+    process.env["NODE_ENV"] = "production";
+  });
+  afterEach(() => {
+    process.env["NODE_ENV"] = saved;
+  });
+  it("rejects loopback, private, link-local and metadata hosts", async () => {
+    for (const host of ["localhost", "127.0.0.1", "10.1.2.3", "192.168.0.5", "172.16.0.1", "169.254.169.254", "::1", "fd00::1", "db.internal", "[::1]".slice(1, 4)]) {
+      await expect(assertPublicSmtpHost(host)).rejects.toThrow();
+    }
+  });
+  it("accepts a public IP literal", async () => {
+    await expect(assertPublicSmtpHost("8.8.8.8")).resolves.toBeUndefined();
+  });
+});
