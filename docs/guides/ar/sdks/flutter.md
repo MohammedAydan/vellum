@@ -7,7 +7,7 @@ description: دليل تقني شامل لحزمة vellum_flutter بلغة Dart 
 
 # مجموعة Flutter البرمجية (`vellum_flutter`)
 
-الدليل التقني الشامل لحزمة `vellum_flutter` الإصدار `0.0.4`، المستند بالكامل إلى التنفيذ الفعلي في `sdks/flutter/lib/vellum_flutter.dart`.
+الدليل التقني الشامل لحزمة `vellum_flutter` الإصدار `0.0.5`، المستند بالكامل إلى التنفيذ الفعلي في `sdks/flutter/lib/vellum_flutter.dart`.
 
 حزمة Dart خالصة (`>=3.4.0 <4.0.0`) آمنة تمامًا ضد القيم الفارغة (null-safe) ولا تعتمد على محرك Flutter، لذا تعمل بسلاسة على iOS وAndroid وWeb وسطح المكتب وخدمات Dart الخلفية.
 
@@ -17,7 +17,7 @@ description: دليل تقني شامل لحزمة vellum_flutter بلغة Dart 
 
 ```yaml
 dependencies:
-  vellum_flutter: ^0.0.4
+  vellum_flutter: ^0.0.5
 ```
 
 ```dart

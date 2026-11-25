@@ -587,7 +587,7 @@
   "info": {
     "description": "Firestore-inspired multi-tenant document database API with Tagged Wire Format, composite indexes, OCC transactions, and WebSocket realtime listeners. The tenant is the project: every resource is addressed as `/v1/projects/{projectId}/...`. API keys use the `pk_`/`sk_` prefixes and are scoped to a project.",
     "title": "Document Database SaaS Public HTTP & Realtime API",
-    "version": "0.0.4"
+    "version": "0.0.5"
   },
   "openapi": "3.1.0",
   "paths": {

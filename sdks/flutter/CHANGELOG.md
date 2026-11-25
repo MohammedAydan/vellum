@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.5
+
+Lockstep release with the platform. Requires the 0.0.5 API for batch preconditions and transaction rollback.
+
+- Write batches take `exists` next to `ifVersion` and have `create`; a stale precondition fails the whole batch with 412.
+- `runTransaction` rolls the transaction back on the server when the callback or the commit fails.
+- Offline support: `PersistentDocumentCacheStore` and `VellumOutbox` keep an encrypted cache and queue writes while offline.
+- Breaking: `customClaims` is removed from `signUpWithEmailAndPassword` and `updateProfile`. Set claims with a server key.
+
+Full platform notes are in the root CHANGELOG.
+
 ## 0.0.4
 
 Lockstep release with the platform. Requires the 0.0.4 API: social sign-in now starts with a `POST` and the key in a header, so 0.0.3 cannot start it.
