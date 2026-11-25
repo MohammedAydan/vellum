@@ -5,7 +5,7 @@
  */
 
 import { VellumError } from "@vellum/core";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createPrivateKey, timingSafeEqual } from "node:crypto";
 import { decryptSecret, encryptSecret } from "@vellum/auth";
 
 export const SETTINGS_KEY = "__settings";
@@ -62,6 +62,7 @@ export function mergeOAuthProviders(existing: Rec, incoming: Rec, masterKey: str
     const secret = next["clientSecret"];
     delete next["clientSecret"];
     delete next["hasClientSecret"]; // read-only flag from the public view
+    if (name === "apple") normalizeAppleEntry(next, typeof secret === "string" ? secret : "");
     if (typeof secret === "string" && secret.length > 0) {
       next["clientSecretEncrypted"] = encryptSecret(secret, masterKey);
     } else if (typeof previous["clientSecretEncrypted"] === "string") {
@@ -72,11 +73,48 @@ export function mergeOAuthProviders(existing: Rec, incoming: Rec, masterKey: str
   return out;
 }
 
+const APPLE_ID_PATTERN = /^[A-Z0-9]{10}$/;
+
+/**
+ * Apple stores a Team ID, a Key ID and the .p8 private key instead of a client secret. They are checked when saved
+ * so a typo shows up in the dashboard and not as a failed sign-in later. The key must be an EC (P-256) private key.
+ */
+function normalizeAppleEntry(entry: Rec, secret: string): void {
+  for (const field of ["teamId", "keyId"] as const) {
+    const value = entry[field];
+    if (value === undefined || value === "") {
+      delete entry[field];
+      continue;
+    }
+    if (typeof value !== "string" || !APPLE_ID_PATTERN.test(value.trim().toUpperCase())) {
+      throw new VellumError("INVALID_ARGUMENT", `Apple ${field === "teamId" ? "Team ID" : "Key ID"} must be 10 letters or digits`);
+    }
+    entry[field] = value.trim().toUpperCase();
+  }
+  if (secret.length > 0) {
+    try {
+      const key = createPrivateKey(secret);
+      if (key.asymmetricKeyType !== "ec" || key.asymmetricKeyDetails?.namedCurve !== "prime256v1") throw new Error("not P-256");
+    } catch {
+      throw new VellumError("INVALID_ARGUMENT", "The Apple private key must be the contents of the .p8 file (an EC P-256 private key)");
+    }
+  }
+}
+
 export interface ResolvedProvider {
   enabled: boolean;
   clientId: string;
   clientSecret: string;
   audiences: string[];
+  /** Apple only. */
+  teamId: string;
+  keyId: string;
+}
+
+/** True when everything needed to run the browser (code) flow is present. */
+export function hasWebCredentials(provider: string, creds: ResolvedProvider): boolean {
+  if (!creds.clientId || !creds.clientSecret) return false;
+  return provider !== "apple" || (creds.teamId !== "" && creds.keyId !== "");
 }
 
 export function resolveProviderCredentials(
@@ -105,6 +143,8 @@ export function resolveProviderCredentials(
     clientId,
     clientSecret,
     audiences: clientId ? [clientId, ...extra] : extra,
+    teamId: typeof entry["teamId"] === "string" ? entry["teamId"] : "",
+    keyId: typeof entry["keyId"] === "string" ? entry["keyId"] : "",
   };
 }
 
@@ -219,7 +259,7 @@ export interface ConfirmTicket {
   clientChallenge: string;
   clientState: string | null;
   linkUserId?: string;
-  profile: { providerUserId: string; email: string | null; displayName: string | null; photoUrl: string | null };
+  profile: { providerUserId: string; email: string | null; displayName: string | null; photoUrl: string | null; refreshToken?: string | undefined };
   attempts: number;
   exp: number;
 }

@@ -1,14 +1,13 @@
 import {
-  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterDeepLinkDart, androidBackupXml, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
-} from "../../social-login-examples";
+  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterDeepLinkDart, androidBackupXml, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart, flutterAppleDart, appleJsTs } from "../../social-login-examples";
 import { AlphaNotice, Callout, Code, CodeTabs, Doc, P, PageLink, Section, UL } from "../../ui";
 
 export default function Page() {
   return (
     <Doc
       eyebrow="المفاهيم الأساسية"
-      title="تسجيل الدخول الاجتماعي (Google وGitHub)"
-      description="دع المستخدمين يسجّلون الدخول بحساب Google أو GitHub من الويب أو من تطبيق Flutter. ينفّذ Vellum خطوات OAuth على الخادم، فلا يتعامل تطبيقك مع أي سر خاص بالمزوّد."
+      title="تسجيل الدخول الاجتماعي (Google وGitHub وApple)"
+      description="دع المستخدمين يسجّلون الدخول بحساب Google أو GitHub أو Apple من الويب أو من تطبيق Flutter. ينفّذ Vellum خطوات OAuth على الخادم، فلا يتعامل تطبيقك مع أي سر خاص بالمزوّد."
     >
       <AlphaNotice lang="ar" />
       <Callout tone="warning" title="يتطلب الإصدار 0.0.3 أو أحدث">
@@ -17,7 +16,7 @@ export default function Page() {
 
       <Section id="how" title="كيف يعمل">
         <UL items={[
-          <>يبدأ تطبيقك العملية. يرسل Vellum المستخدم إلى Google أو GitHub ويستقبل النتيجة على الخادم.</>,
+          <>يبدأ تطبيقك العملية. يرسل Vellum المستخدم إلى Google أو GitHub أو Apple ويستقبل النتيجة على الخادم.</>,
           <>يتحقق Vellum من الهوية لدى المزوّد. يُقبل فقط بريد إلكتروني موثّق، ولا يُربط حساب موجود إلا
           عندما يكون هذا البريد موثّقاً.</>,
           <>يعود المستخدم إلى تطبيقك برمز يُستخدم مرة واحدة. يبدّله تطبيقك بجلسة. يعمل الرمز مرة واحدة ولمدة
@@ -27,7 +26,7 @@ export default function Page() {
 
       <Section id="setup" title="إعداد المزوّد">
         <UL items={[
-          <>أنشئ OAuth client لدى Google (من نوع Web application) أو OAuth App لدى GitHub.</>,
+          <>أنشئ OAuth client لدى Google (من نوع Web application) أو OAuth App لدى GitHub، أو Services ID لدى Apple (انظر أدناه).</>,
           <>سجّل عنوان Callback هذا لدى المزوّد:
           <code> /v1/projects/&lt;projectId&gt;/auth/oauth/google/callback</code> أو
           <code> /auth/oauth/github/callback</code> على عنوان الـ API الخاص بك.</>,
@@ -96,8 +95,33 @@ export default function Page() {
         <Code lang="dart" title="Google الأصلي مع google_sign_in (اختياري)" code={flutterNativeDart} />
       </Section>
 
+      <Section id="apple" title="تسجيل الدخول بحساب Apple">
+        <P>
+          إذا كان تطبيق iOS يقدّم الدخول بـGoogle أو GitHub فإن بند App Store رقم 4.8 يشترط خياراً مماثلاً يحمي الخصوصية، أي عملياً Sign in with Apple.
+          في بوابة Apple Developer أنشئ Services ID (وهو معرّف عميل الويب) وفعّل Sign in with Apple له وسجّل رابط الرجوع (callback) أعلاه.
+          ثم أنشئ مفتاح Sign in with Apple ونزّل ملف <code>.p8</code> مرة واحدة فقط. في Auth Studio &gt; Providers &gt; Apple أدخل Services ID ومعرّف الفريق (Team ID) ومعرّف المفتاح (Key ID) والصق محتوى ملف <code>.p8</code>.
+          يُشفَّر المفتاح عند التخزين ولا يُعاد أبداً. يوقّع Vellum منه سراً قصير العمر لكل عملية تبادل.
+        </P>
+        <P>
+          تقبل Apple رابط رجوع HTTPS فقط على نطاق حقيقي: بلا <code>localhost</code> وبلا عنوان IP وبلا جزء fragment. لاختبار تدفق الويب محلياً استخدم نفقاً (tunnel) أو نطاقاً تجريبياً.
+          لا توثّق Apple دعم PKCE في نقطة الرموز لديها، لذلك لا يرسل Vellum تحدّي الشيفرة إلى Apple. تبقى state ورمز التأكيد يحميان التدفق من جهة Vellum.
+        </P>
+        <P>
+          في التدفق الأصلي على iOS وAndroid أضف معرّفات حزم التطبيق (bundle IDs) إلى معرّفات العملاء الإضافية. يُقبل رمز الهوية فقط إذا كان جمهوره Services ID أو أحد هذه المعرّفات.
+          مرّر nonce عشوائياً: أعطِ Apple قيمته المجزأة بـSHA-256 وأعطِ Vellum القيمة الخام. يُرفض الرمز الذي يحمل nonce إذا لم يُرسَل nonce.
+          يفشل تسجيل الدخول إذا حذفت Apple مطالبة البريد الإلكتروني، وقد يحدث ذلك لمستخدم يخفي بريده لاحقاً. في Flutter مرّر الـnonce دائماً كما في المثال: جزّئه لـApple وأعطِ Vellum القيمة الخام.
+          لا ترسل Apple اسم المستخدم إلا في أول تسجيل دخول، لذا مرّر <code>givenName</code> و<code>familyName</code> حينها. وقد تخفي Apple البريد الحقيقي خلف عنوان وسيط، ويقبله Vellum فقط عندما تعلّمه Apple موثّقاً.
+        </P>
+        <P>
+          عندما يحذف المستخدم حسابه أو يفك ربط Apple يلغي Vellum منحة Apple كما تشترط Apple. يحتاج هذا إلى <code>authorizationCode</code> من تسجيل الدخول، فمرّره.
+        </P>
+        <Code lang="dart" title="Apple الأصلي مع sign_in_with_apple (اختياري)" code={flutterAppleDart} />
+        <Code lang="ts" title="JavaScript" code={appleJsTs} />
+      </Section>
+
       <Section id="security" title="ملاحظات أمنية">
         <UL items={[
+          <>تُفحص رموز Apple بمفاتيح Apple المنشورة والجهة المُصدرة والجمهور وانتهاء الصلاحية وقيمة nonce.</>,
           <>لا تصل رموز المزوّد إلى تطبيقك. تُفحص رموز Google بمفاتيح Google المنشورة والجهة المُصدرة والجمهور وانتهاء الصلاحية.</>,
           <>يحتاج مستخدمو GitHub إلى بريد أساسي موثّق. لا يُوثق بالبريد المعروض في الملف العام أبداً.</>,
           <>إذا فُعّل عامل ثانٍ للحساب، يعيد تسجيل الدخول تحدّياً تكمله بـ <code>verifyMfaChallenge</code>.</>,

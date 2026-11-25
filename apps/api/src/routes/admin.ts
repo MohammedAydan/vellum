@@ -64,6 +64,7 @@ const FORBIDDEN_SECRET_KEYS: ReadonlySet<string> = new Set([
   "refreshTokenHash",
   "previousRefreshTokenHash",
   "clientSecretEncrypted",
+  "appleRefreshTokenEncrypted",
   "platformSmtpPassEncrypted",
   "apiKeySecretHash",
   "secretHash",

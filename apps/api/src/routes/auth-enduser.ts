@@ -45,9 +45,13 @@ import type { AuthUserRecord, UpdateAuthUserInput } from "@vellum/storage";
 import {
   buildAuthorizeUrl,
   completeAuthorization,
+  exchangeAppleNativeCode,
   getProvider,
+  parseAppleUserField,
   randomUrlToken,
+  revokeAppleToken,
   s256,
+  verifyAppleIdToken,
   verifyGoogleIdToken,
 } from "../auth/oauth/providers.js";
 import {
@@ -56,6 +60,7 @@ import {
   CONFIRM_TTL_MS,
   codesMatch,
   confirmationCode,
+  hasWebCredentials,
   openJson,
   openState,
   POLL_DISABLED_MESSAGE,
@@ -361,6 +366,56 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     displayName?: string | undefined;
     photoUrl?: string | null | undefined;
     metadata?: Record<string, unknown> | undefined;
+    /** Apple: refresh token (and the client ID it belongs to) kept so the grant can be revoked on deletion. */
+    appleRefreshToken?: string | undefined;
+    appleClientId?: string | undefined;
+  }
+
+  /**
+   * Identity row data. For Apple it also carries the encrypted refresh token, so deleting the account (or unlinking
+   * Apple) can revoke the grant with Apple as App Store rule 5.1.1(v) requires. An existing token is kept when a
+   * sign-in does not bring a new one.
+   */
+  async function identityDataWithApple(
+    tenant: AuthTenant,
+    userId: string,
+    provider: string,
+    email: string | null,
+    refreshToken: string | undefined,
+    clientId: string | undefined
+  ): Promise<Record<string, unknown>> {
+    const data: Record<string, unknown> = { email, provider };
+    if (provider !== "apple") return data;
+    if (refreshToken) {
+      data["appleRefreshTokenEncrypted"] = encryptSecret(refreshToken, masterKey());
+      if (clientId) data["appleClientId"] = clientId;
+      return data;
+    }
+    const previous = (await storage.listUserIdentities(tenant.ctx, userId)).find((i) => i.provider === "apple");
+    for (const key of ["appleRefreshTokenEncrypted", "appleClientId"]) {
+      const value = previous?.identityData[key];
+      if (typeof value === "string") data[key] = value;
+    }
+    return data;
+  }
+
+  /** Best effort: ask Apple to revoke the stored grant. Never blocks deleting the account. */
+  async function revokeAppleGrant(tenant: AuthTenant, config: ProjectAuthConfig, userId: string): Promise<void> {
+    try {
+      const identity = (await storage.listUserIdentities(tenant.ctx, userId)).find((i) => i.provider === "apple");
+      const encrypted = identity?.identityData["appleRefreshTokenEncrypted"];
+      if (typeof encrypted !== "string") return;
+      const creds = resolveProviderCredentials(config.oauthProviders, "apple", masterKey());
+      if (!hasWebCredentials("apple", creds)) return;
+      const storedClient = identity?.identityData["appleClientId"];
+      await revokeAppleToken(
+        { clientId: creds.clientId, clientSecret: creds.clientSecret, teamId: creds.teamId, keyId: creds.keyId },
+        decryptSecret(encrypted, masterKey()),
+        typeof storedClient === "string" ? storedClient : creds.clientId
+      );
+    } catch {
+      platform.logger.warn("Apple token revocation failed", { projectId: tenant.projectId });
+    }
   }
 
   let decoyHash: Promise<string> | null = null;
@@ -457,7 +512,14 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       userId: user.id,
       provider: body.provider,
       providerUserId,
-      identityData: { email: body.email ?? user.email, provider: body.provider },
+      identityData: await identityDataWithApple(
+        tenant,
+        user.id,
+        body.provider,
+        body.email ?? user.email,
+        body.appleRefreshToken,
+        body.appleClientId
+      ),
       lastSignInAt: now,
     });
     return await issueSession(tenant, user, c);
@@ -647,7 +709,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const config = await ensureAuthConfig(platform, tenant.projectId);
     checkAccessGuards(config);
     const creds = resolveProviderCredentials(config.oauthProviders, providerId, masterKey());
-    if (!creds.enabled || !creds.clientId || !creds.clientSecret) {
+    if (!creds.enabled || !hasWebCredentials(providerId, creds)) {
       throw new VellumError("PERMISSION_DENIED", `Sign-in with ${providerId} is not enabled for this project`);
     }
     const body = (await c.req.json().catch(() => ({}))) as {
@@ -718,11 +780,41 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     );
   });
 
-  routes.get("/oauth/:provider/callback", async (c) => {
+  // Providers that return the result in the URL (Google, GitHub) use GET. Apple posts it as a form
+  // (response_mode=form_post), so the code never appears in a URL, a log or a Referer header.
+  routes.get("/oauth/:provider/callback", (c) => {
+    if (getProvider(c.req.param("provider") ?? "").formPost) {
+      throw new VellumError("INVALID_ARGUMENT", "This provider returns its result with a POST request");
+    }
+    return handleOAuthCallback(c, {
+      state: c.req.query("state") ?? "",
+      code: c.req.query("code"),
+      error: c.req.query("error"),
+    });
+  });
+
+  routes.post("/oauth/:provider/callback", async (c) => {
+    if (!getProvider(c.req.param("provider") ?? "").formPost) {
+      throw new VellumError("INVALID_ARGUMENT", "This provider returns its result with a GET request");
+    }
+    const form = await c.req.parseBody().catch(() => ({}) as Record<string, string | File>);
+    const text = (key: string): string | undefined => (typeof form[key] === "string" ? (form[key] as string) : undefined);
+    return handleOAuthCallback(c, {
+      state: text("state") ?? "",
+      code: text("code"),
+      error: text("error"),
+      user: text("user"),
+    });
+  });
+
+  async function handleOAuthCallback(
+    c: Context,
+    params: { state: string; code: string | undefined; error: string | undefined; user?: string | undefined }
+  ): Promise<Response> {
     const tenant = await resolveAuthTenant(c, platform);
     const providerId = c.req.param("provider") ?? "";
     const provider = getProvider(providerId);
-    const flow = openState(c.req.query("state") ?? "", masterKey());
+    const flow = openState(params.state, masterKey());
     if (flow.p !== tenant.projectId || flow.provider !== providerId) {
       throw new VellumError("UNAUTHENTICATED", "Sign-in session expired or invalid. Please try again.");
     }
@@ -737,14 +829,14 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       pollFlow
         ? returnToAppPage(false, description)
         : redirectWith(flow.redirectUri, { error, error_description: description, state: flow.clientState });
-    const providerError = c.req.query("error");
+    const providerError = params.error;
     if (providerError) return fail("access_denied", "The sign-in was cancelled or denied");
-    const code = c.req.query("code");
+    const code = params.code;
     if (!code) return fail("invalid_request", "Missing authorization code");
     try {
       checkAccessGuards(config);
       const creds = resolveProviderCredentials(config.oauthProviders, providerId, masterKey());
-      if (!creds.enabled || !creds.clientId || !creds.clientSecret) {
+      if (!creds.enabled || !hasWebCredentials(providerId, creds)) {
         return fail("access_denied", `Sign-in with ${providerId} is not enabled`);
       }
       const profile = await completeAuthorization(provider, creds, {
@@ -756,6 +848,10 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       });
       if (!profile.email || !profile.emailVerified) {
         return fail("access_denied", `${providerId} did not return a verified email address`);
+      }
+      // Apple sends the name only once, as a form field next to the code.
+      if (providerId === "apple" && !profile.displayName) {
+        profile.displayName = parseAppleUserField(params.user);
       }
       // Poll sign-in and account linking are completed only after the person at the browser types the
       // confirmation code shown inside the app. Without it, a phishing link could hand the victim's session
@@ -782,7 +878,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     } catch (error) {
       return oauthFailure(flow, error);
     }
-  });
+  }
 
   interface FlowOf {
     provider: string;
@@ -822,7 +918,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     tenant: AuthTenant,
     config: ProjectAuthConfig,
     flow: FlowOf,
-    profile: { providerUserId: string; email: string | null; displayName: string | null; photoUrl: string | null }
+    profile: { providerUserId: string; email: string | null; displayName: string | null; photoUrl: string | null; refreshToken?: string | undefined; audience?: string | undefined }
   ): Promise<Response> {
     const providerId = flow.provider;
     const pollFlow = flow.redirectUri === "";
@@ -855,7 +951,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       userId: user.id,
       provider: providerId,
       providerUserId,
-      identityData: { email: profile.email, provider: providerId },
+      identityData: await identityDataWithApple(tenant, user.id, providerId, profile.email, profile.refreshToken, profile.audience),
       lastSignInAt: now,
     });
     // One-time code, bound to the client's PKCE challenge: useless without the verifier.
@@ -1038,6 +1134,65 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     );
   });
 
+  /**
+   * Native Sign in with Apple (iOS, macOS, Android via the system sheet or web view of sign_in_with_apple): the app
+   * sends the identityToken. `nonce` is the raw nonce the app used (the token carries it or its SHA-256).
+   * Apple gives the name only on the first authorization, in the app, so the app passes it as givenName/familyName.
+   * Pass the authorizationCode too so the grant can be revoked when the account is deleted.
+   */
+  routes.post("/oauth/apple/id-token", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    const config = await ensureAuthConfig(platform, tenant.projectId);
+    checkAccessGuards(config);
+    const creds = resolveProviderCredentials(config.oauthProviders, "apple", masterKey());
+    if (!creds.enabled || creds.audiences.length === 0) {
+      throw new VellumError("PERMISSION_DENIED", "Sign-in with apple is not enabled for this project");
+    }
+    const body = (await c.req.json().catch(() => ({}))) as {
+      idToken?: unknown;
+      nonce?: unknown;
+      authorizationCode?: unknown;
+      givenName?: unknown;
+      familyName?: unknown;
+    };
+    if (typeof body.idToken !== "string" || body.idToken.length === 0) {
+      throw new VellumError("INVALID_ARGUMENT", "idToken is required");
+    }
+    const profile = await verifyAppleIdToken(body.idToken, {
+      audiences: creds.audiences,
+      ...(typeof body.nonce === "string" && body.nonce.length > 0 ? { nonce: body.nonce } : {}),
+    });
+    if (!profile.email || !profile.emailVerified) {
+      throw new VellumError("PERMISSION_DENIED", "apple did not return a verified email address");
+    }
+    const name = [body.givenName, body.familyName]
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+      .join(" ")
+      .trim()
+      .slice(0, 200);
+    let appleRefreshToken: string | undefined;
+    if (typeof body.authorizationCode === "string" && body.authorizationCode.length > 0 && hasWebCredentials("apple", creds)) {
+      const token = await exchangeAppleNativeCode(
+        { clientId: creds.clientId, clientSecret: creds.clientSecret, teamId: creds.teamId, keyId: creds.keyId },
+        { authorizationCode: body.authorizationCode, clientId: profile.audience ?? creds.clientId, expectedSub: profile.providerUserId }
+      );
+      if (token) appleRefreshToken = token;
+    }
+    return c.json(
+      await signInWithProviderIdentity(tenant, config, c, {
+        provider: "apple",
+        providerUserId: profile.providerUserId,
+        email: profile.email,
+        emailVerified: true,
+        displayName: name || undefined,
+        photoUrl: null,
+        appleRefreshToken,
+        appleClientId: profile.audience,
+      })
+    );
+  });
+
   // -------------------------------------------------------------------- TOKENS
 
   routes.post("/token/refresh", async (c) => {
@@ -1196,6 +1351,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     } else if (remaining === 0 && current.passwordHash === null) {
       throw new VellumError("FAILED_PRECONDITION", "This is the only way to sign in to the account; add a password or another provider first");
     }
+    if (provider === "apple") await revokeAppleGrant(tenant, await ensureAuthConfig(platform, tenant.projectId), current.id);
     await storage.deleteAuthIdentity(tenant.ctx, current.id, provider);
     return c.json({ success: true });
   });
@@ -1229,6 +1385,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const current = await requireEndUser(c, platform, tenant);
     const deleteBody = (await c.req.json().catch(() => ({}))) as { password?: unknown };
     await confirmAccountOwner(tenant, current, deleteBody.password);
+    await revokeAppleGrant(tenant, await ensureAuthConfig(platform, tenant.projectId), current.id);
     await storage.revokeAllUserSessions(tenant.ctx, current.id, "account_deleted");
     await storage.deleteAuthUser(tenant.ctx, current.id);
     return c.json({ deleted: true });

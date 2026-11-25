@@ -17,6 +17,8 @@
 
 ### Features
 
+- Sign in with Apple. Web (Services ID, `form_post` callback) and native (`POST /auth/oauth/apple/id-token`, ID token plus raw or hashed nonce, bundle IDs as audiences). The `.p8` key is encrypted at rest, Team ID and Key ID are validated, the first-sign-in name is kept, and the Apple grant is revoked when the user deletes their account or unlinks Apple. Auth Studio has an Apple card (EN+AR). sdk-js `signInWithAppleIdToken` and `popup/redirect("apple")`; `vellum_flutter` `signInWithAppleIdToken` and `VellumOAuth.signIn('apple')`. Docs EN+AR.
+
 - Redirect-less social sign-in for mobile and desktop apps: `POST /auth/oauth/:provider/start` with `{"delivery":"poll","codeChallenge":...}` needs no redirect URI; the app collects the result with `POST /auth/oauth/poll` and its PKCE verifier (202 `{"status":"pending"}` until the browser step is done). `createVellumOAuth(auth:)` in `vellum_flutter` uses it when no `redirectUri` is given, so Android and iOS need no manifest, Info.plist or Auth Studio setup.
 
 - End-user `POST /auth/password/change` (current password required, other sessions ended, fresh session returned) and `DELETE /auth/user` (password accounts confirm with their password). sdk-js `changePassword` / `deleteAccount`, `vellum_flutter` `changePassword` / `deleteAccount`.

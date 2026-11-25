@@ -48,7 +48,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: t("Authentication", "المصادقة"),
     items: [
       { slug: "end-user-auth", title: t("End-user authentication", "مصادقة المستخدمين النهائيين"), desc: t("EdDSA-only end-user tokens, refresh rotation, MFA and the exact auth REST paths.", "رموز EdDSA حصراً للمستخدمين النهائيين، وتدوير الرموز، وMFA، ومسارات المصادقة الدقيقة."), keywords: ["EdDSA", "JWT", "refresh", "mfa"] },
-      { slug: "social-login", title: t("Social sign-in", "تسجيل الدخول الاجتماعي"), desc: t("Sign in with Google or GitHub on the web and in Flutter: popup, redirect, native Google and security notes.", "تسجيل الدخول بحساب Google أو GitHub على الويب وفي Flutter: نافذة منبثقة وإعادة توجيه وGoogle الأصلي وملاحظات أمنية."), keywords: ["google", "github", "oauth", "social", "popup", "redirect", "google_sign_in"] },
+      { slug: "social-login", title: t("Social sign-in", "تسجيل الدخول الاجتماعي"), desc: t("Sign in with Google, GitHub or Apple on the web and in Flutter: popup, redirect, native Google and Apple, and security notes.", "تسجيل الدخول بحساب Google أو GitHub أو Apple على الويب وفي Flutter: نافذة منبثقة وإعادة توجيه وGoogle وApple الأصليان وملاحظات أمنية."), keywords: ["google", "github", "apple", "oauth", "social", "popup", "redirect", "google_sign_in"] },
     ],
   },
   {

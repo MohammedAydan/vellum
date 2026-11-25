@@ -160,7 +160,7 @@ export function ProvidersPanel({ projectId }: { projectId: string }) {
         <CardContent className="space-y-3">
           <p className="text-[11px] text-muted-foreground">{t("authStudio.providers.callbackDescription")}</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            {(["google", "github"] as const).map((provider) => {
+            {(["google", "github", "apple"] as const).map((provider) => {
               const oauth = readOAuthDraft(config, provider);
               const configured = Boolean(oauth.clientId && oauth.hasSecret);
               return (
@@ -256,7 +256,8 @@ function OAuthConnectionDialog({
   React.useEffect(() => setDraft(initial), [initial]);
 
   const save = async () => {
-    if (!draft.clientId.trim() || (!draft.clientSecret.trim() && !draft.hasSecret)) {
+    const appleMissing = provider === "apple" && (!draft.teamId.trim() || !draft.keyId.trim());
+    if (!draft.clientId.trim() || (!draft.clientSecret.trim() && !draft.hasSecret) || appleMissing) {
       toast.error(t("authStudio.providers.providerSaveFailed"));
       return;
     }
@@ -269,7 +270,8 @@ function OAuthConnectionDialog({
           enabled: draft.enabled,
           clientId: draft.clientId.trim(),
           ...(draft.clientSecret.trim() ? { clientSecret: draft.clientSecret.trim() } : {}),
-          ...(provider === "google" ? { additionalClientIds: extraIds } : {}),
+          ...(provider === "google" || provider === "apple" ? { additionalClientIds: extraIds } : {}),
+          ...(provider === "apple" ? { teamId: draft.teamId.trim(), keyId: draft.keyId.trim() } : {}),
         },
       };
       await apiFetch(
@@ -308,7 +310,7 @@ function OAuthConnectionDialog({
             <span>{t("authStudio.providers.oauthEnabled")}</span>
           </label>
           <div className="space-y-1.5">
-            <Label htmlFor="oauth-client-id" className="text-xs">{t("authStudio.providers.clientId")}</Label>
+            <Label htmlFor="oauth-client-id" className="text-xs">{provider === "apple" ? t("authStudio.providers.appleServicesId") : t("authStudio.providers.clientId")}</Label>
             <Input
               id="oauth-client-id"
               value={draft.clientId}
@@ -316,6 +318,34 @@ function OAuthConnectionDialog({
               className="h-8 font-mono text-xs"
             />
           </div>
+          {provider === "apple" ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="oauth-apple-team" className="text-xs">{t("authStudio.providers.appleTeamId")}</Label>
+                  <Input id="oauth-apple-team" value={draft.teamId} maxLength={10} onChange={(event) => setDraft({ ...draft, teamId: event.target.value })} className="h-8 font-mono text-xs" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="oauth-apple-key" className="text-xs">{t("authStudio.providers.appleKeyId")}</Label>
+                  <Input id="oauth-apple-key" value={draft.keyId} maxLength={10} onChange={(event) => setDraft({ ...draft, keyId: event.target.value })} className="h-8 font-mono text-xs" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="oauth-client-secret" className="text-xs">{t("authStudio.providers.applePrivateKey")}</Label>
+                <textarea
+                  id="oauth-client-secret"
+                  value={draft.clientSecret}
+                  onChange={(event) => setDraft({ ...draft, clientSecret: event.target.value })}
+                  placeholder={draft.hasSecret ? t("authStudio.providers.clientSecretKeep") : "-----BEGIN PRIVATE KEY-----"}
+                  rows={4}
+                  className="w-full rounded-md border bg-background px-2 py-1.5 font-mono text-xs"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <p className="text-[11px] text-muted-foreground">{t("authStudio.providers.applePrivateKeyHelp")}</p>
+              </div>
+            </>
+          ) : (
           <div className="space-y-1.5">
             <Label htmlFor="oauth-client-secret" className="text-xs">{t("authStudio.providers.clientSecret")}</Label>
             <Input
@@ -328,9 +358,10 @@ function OAuthConnectionDialog({
               autoComplete="off"
             />
           </div>
-          {provider === "google" ? (
+          )}
+          {provider === "google" || provider === "apple" ? (
             <div className="space-y-1.5">
-              <Label htmlFor="oauth-extra-ids" className="text-xs">{t("authStudio.providers.extraClientIds")}</Label>
+              <Label htmlFor="oauth-extra-ids" className="text-xs">{provider === "apple" ? t("authStudio.providers.appleBundleIds") : t("authStudio.providers.extraClientIds")}</Label>
               <textarea
                 id="oauth-extra-ids"
                 value={draft.additionalClientIds}
@@ -338,7 +369,7 @@ function OAuthConnectionDialog({
                 rows={3}
                 className="w-full rounded-md border bg-background px-2 py-1.5 font-mono text-xs"
               />
-              <p className="text-[11px] text-muted-foreground">{t("authStudio.providers.extraClientIdsHelp")}</p>
+              <p className="text-[11px] text-muted-foreground">{provider === "apple" ? t("authStudio.providers.appleBundleIdsHelp") : t("authStudio.providers.extraClientIdsHelp")}</p>
             </div>
           ) : null}
           <ConsoleCopyableField

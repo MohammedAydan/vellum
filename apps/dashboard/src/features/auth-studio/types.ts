@@ -81,4 +81,7 @@ export interface OAuthDraft {
   hasSecret: boolean;
   /** Extra Google client IDs accepted for native ID tokens, one per line. */
   additionalClientIds: string;
+  /** Apple only. */
+  teamId: string;
+  keyId: string;
 }

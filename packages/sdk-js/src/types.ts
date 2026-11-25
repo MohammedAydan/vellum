@@ -704,6 +704,15 @@ export interface VellumClientInterface {
   getRedirectResult(): Promise<AuthState | MfaRequiredResult | null>;
   /** Sign in with a Google ID token from Google Identity Services or `google_sign_in`. Verified by the server. */
   signInWithGoogleIdToken(idToken: string, options?: { nonce?: string }): Promise<AuthState | MfaRequiredResult>;
+  /**
+   * Sign in with the identityToken from Sign in with Apple (native or Apple's JS). `nonce` is the raw nonce you gave Apple
+   * (or its SHA-256, as Apple's native sheet expects); `authorizationCode` lets Vellum revoke the grant when the account is deleted;
+   * Apple sends the name only the first time, so pass `givenName`/`familyName` from that first response.
+   */
+  signInWithAppleIdToken(
+    idToken: string,
+    options?: { nonce?: string; authorizationCode?: string; givenName?: string; familyName?: string }
+  ): Promise<AuthState | MfaRequiredResult>;
   /** Complete an MFA challenge with the ticket returned by a sign-in. */
   verifyMfaChallenge(input: VerifyMfaChallengeInput): Promise<AuthState>;
   verifyMfaChallenge(
@@ -728,7 +737,7 @@ export interface VellumClientInterface {
   revokeSession(sessionId: string): Promise<void>;
   /** Sign-in methods linked to the account, and whether it has a password. */
   listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }>;
-  /** Remove a linked sign-in method ("google", "github" or "password"). Refused when it is the last one. */
+  /** Remove a linked sign-in method ("google", "github", "apple" or "password"). Refused when it is the last one. */
   unlinkProvider(provider: string, options?: { currentPassword?: string }): Promise<void>;
   /** Change the signed-in user's password (needs the current one); other sessions are ended. */
   changePassword(currentPassword: string, newPassword: string): Promise<AuthState>;

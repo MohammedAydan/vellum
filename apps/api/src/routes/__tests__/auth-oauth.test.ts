@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createHash, createSign, generateKeyPairSync, randomBytes } from "node:crypto";
+import { createHash, createSign, createVerify, generateKeyPairSync, randomBytes } from "node:crypto";
 import { generateProjectApiKey } from "@vellum/authorization";
 import { generateTotpCode } from "@vellum/auth";
 import { createVellumPlatform } from "../../index.js";
@@ -7,6 +7,9 @@ import { clearOAuthKeyCache } from "../../auth/oauth/providers.js";
 
 const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const jwk = { ...(publicKey.export({ format: "jwk" }) as Record<string, unknown>), kid: "k1", alg: "RS256", use: "sig" };
+const ec = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+const APPLE_P8 = ec.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+const apple = { tokenCalls: [] as URLSearchParams[], revokeCalls: [] as URLSearchParams[], claims: (_nonce: string): Record<string, unknown> => ({}), secretOk: false };
 const REDIRECT = "https://app.example.com/auth/callback";
 
 function b64(obj: unknown): string {
@@ -32,6 +35,24 @@ function installFetch() {
       const params = new URLSearchParams(String(init?.body));
       if (params.get("code") !== "good-code" || !params.get("code_verifier")) return json({ error: "invalid_grant" }, 400);
       return json({ access_token: "at", id_token: signIdToken(mock.googleClaims(lastNonce)) });
+    }
+    if (url === "https://appleid.apple.com/auth/keys") return json({ keys: [jwk] });
+    if (url === "https://appleid.apple.com/auth/token") {
+      const params = new URLSearchParams(String(init?.body));
+      apple.tokenCalls.push(params);
+      const parts = (params.get("client_secret") ?? "").split(".");
+      const head = JSON.parse(Buffer.from(parts[0] ?? "", "base64url").toString() || "{}") as Record<string, unknown>;
+      const claims = JSON.parse(Buffer.from(parts[1] ?? "", "base64url").toString() || "{}") as Record<string, unknown>;
+      apple.secretOk =
+        head["alg"] === "ES256" && head["kid"] === "KEY1234567" && claims["iss"] === "TEAM123456" &&
+        claims["aud"] === "https://appleid.apple.com" && claims["sub"] === params.get("client_id") &&
+        createVerify("SHA256").update(`${parts[0]}.${parts[1]}`).verify({ key: ec.publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(parts[2] ?? "", "base64url"));
+      if (params.get("code") !== "good-code" || !apple.secretOk) return json({ error: "invalid_grant" }, 400);
+      return json({ access_token: "aat", refresh_token: "apple-refresh", id_token: signIdToken(apple.claims(lastNonce)) });
+    }
+    if (url === "https://appleid.apple.com/auth/revoke") {
+      apple.revokeCalls.push(new URLSearchParams(String(init?.body)));
+      return new Response("", { status: 200 });
     }
     if (url === "https://github.com/login/oauth/access_token") {
       const params = new URLSearchParams(String(init?.body));
@@ -74,6 +95,7 @@ async function fixture(opts: { poll?: boolean } = {}) {
     oauthProviders: mergeOAuthProviders({}, {
       google: { enabled: true, clientId: "google-client", clientSecret: "gsecret" },
       github: { enabled: true, clientId: "gh-client", clientSecret: "ghsecret" },
+      apple: { enabled: true, clientId: "com.example.web", additionalClientIds: ["com.example.app"], teamId: "team123456", keyId: "KEY1234567", clientSecret: APPLE_P8 },
       __settings: { redirectUris: [REDIRECT, "myapp://auth"], ...(opts.poll === false ? {} : { allowPollSignIn: true }) },
     }, process.env["MASTER_ENCRYPTION_KEY"]),
   });
@@ -539,5 +561,145 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     const html = await (await f.platform.fetch(new Request(`http://localhost${cb.pathname}?code=good-code&state=${authorize.searchParams.get("state")}`))).text();
     expect(html).toContain("turned off for this project");
     expect(html).not.toContain("confirmation code");
+  });
+
+  describe("Sign in with Apple", () => {
+    const appleClaims = (aud: string, extra: Record<string, unknown> = {}) => (nonce: string) => ({
+      iss: "https://appleid.apple.com", aud, sub: "apple-001", exp: Math.floor(Date.now() / 1000) + 600,
+      email: "Tim@Privaterelay.AppleId.com", email_verified: "true", nonce, ...extra,
+    });
+    beforeEach(() => {
+      apple.tokenCalls = [];
+      apple.revokeCalls = [];
+      apple.secretOk = false;
+      apple.claims = appleClaims("com.example.web");
+    });
+
+    it("web flow: form_post callback, ES256 client secret, name from the user field, no PKCE sent to Apple", async () => {
+      const f = await fixture();
+      const { verifier, challenge } = pkce();
+      const res = await start(f, "apple", challenge);
+      expect(res.status).toBe(200);
+      const authorize = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
+      lastNonce = authorize.searchParams.get("nonce") ?? "";
+      expect(authorize.origin + authorize.pathname).toBe("https://appleid.apple.com/auth/authorize");
+      expect(authorize.searchParams.get("response_mode")).toBe("form_post");
+      expect(authorize.searchParams.get("scope")).toBe("name email");
+      expect(authorize.searchParams.get("code_challenge")).toBeNull();
+      const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+      // GET is refused for a form_post provider.
+      const get = await f.platform.fetch(new Request(`http://localhost${cb.pathname}?code=good-code&state=${authorize.searchParams.get("state")}`));
+      expect(get.status).toBe(400);
+      const back = await f.platform.fetch(new Request(`http://localhost${cb.pathname}`, {
+        method: "POST",
+        redirect: "manual",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ code: "good-code", state: authorize.searchParams.get("state") ?? "", user: JSON.stringify({ name: { firstName: "Tim", lastName: "Apple" } }) }),
+      }));
+      expect(back.status).toBe(302);
+      expect(back.headers.get("location")).not.toContain("error");
+      expect(apple.secretOk).toBe(true);
+      expect(apple.tokenCalls[0]?.get("code_verifier")).toBeNull();
+      const target = new URL(back.headers.get("location") ?? "");
+      const ok = await f.call("POST", "/oauth/exchange", f.publicKeyStr, { code: target.searchParams.get("vellum_code"), codeVerifier: verifier });
+      expect(ok.status).toBe(200);
+      const session = (await ok.json()) as { user: { email: string; displayName?: string } };
+      expect(session.user.email).toBe("tim@privaterelay.appleid.com");
+      expect(session.user.displayName).toBe("Tim Apple");
+    });
+
+    it("web flow: rejects a wrong nonce, a bundle-ID audience, an unverified email and a bad client secret", async () => {
+      for (const claims of [
+        appleClaims("com.example.web", { nonce: "other" }),
+        appleClaims("com.example.app"), // a bundle ID is not a valid audience for the web flow
+        appleClaims("com.example.web", { email_verified: false }),
+        appleClaims("com.example.web", { iss: "https://evil.example" }),
+      ]) {
+        const f = await fixture();
+        apple.claims = claims;
+        const authorize = new URL(((await (await start(f, "apple", pkce().challenge)).json()) as { authorizeUrl: string }).authorizeUrl);
+        lastNonce = authorize.searchParams.get("nonce") ?? "";
+        const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+        const back = await f.platform.fetch(new Request(`http://localhost${cb.pathname}`, { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code: "good-code", state: authorize.searchParams.get("state") ?? "" }) }));
+        expect(new URL(back.headers.get("location") ?? "").searchParams.get("vellum_code")).toBeNull();
+        expect(new URL(back.headers.get("location") ?? "").searchParams.get("error")).toBeTruthy();
+      }
+    });
+
+    it("native id-token: accepts the app bundle ID, hashed or raw nonce, takes the name, refuses replay without a nonce", async () => {
+      const f = await fixture();
+      const raw = "raw-nonce-123";
+      const hashed = createHash("sha256").update(raw).digest("hex");
+      apple.claims = () => appleClaims("com.example.app")(hashed);
+      const ok = await f.call("POST", "/oauth/apple/id-token", f.publicKeyStr, {
+        idToken: signIdToken(appleClaims("com.example.app")(hashed)), nonce: raw, givenName: "Tim", familyName: "Cook", authorizationCode: "good-code",
+      });
+      expect(ok.status).toBe(200);
+      const session = (await ok.json()) as { accessToken: string; user: { displayName?: string } };
+      expect(session.user.displayName).toBe("Tim Cook");
+      // The authorization code was exchanged with the bundle ID as client (for later revocation).
+      expect(apple.tokenCalls[0]?.get("client_id")).toBe("com.example.app");
+      expect(apple.tokenCalls[0]?.get("redirect_uri")).toBeNull();
+      const raw2 = await f.call("POST", "/oauth/apple/id-token", f.publicKeyStr, { idToken: signIdToken(appleClaims("com.example.app")(raw)), nonce: raw });
+      expect(raw2.status).toBe(200);
+      const missing = await f.call("POST", "/oauth/apple/id-token", f.publicKeyStr, { idToken: signIdToken(appleClaims("com.example.app")(hashed)) });
+      expect(missing.status).toBe(401);
+      const wrong = await f.call("POST", "/oauth/apple/id-token", f.publicKeyStr, { idToken: signIdToken(appleClaims("com.example.app")(hashed)), nonce: "nope" });
+      expect(wrong.status).toBe(401);
+      const stranger = await f.call("POST", "/oauth/apple/id-token", f.publicKeyStr, { idToken: signIdToken(appleClaims("com.evil.app")(hashed)), nonce: raw });
+      expect(stranger.status).toBe(401);
+      const expired = await f.call("POST", "/oauth/apple/id-token", f.publicKeyStr, { idToken: signIdToken({ ...appleClaims("com.example.app")(hashed), exp: 1 }), nonce: raw });
+      expect(expired.status).toBe(401);
+      const unverified = await f.call("POST", "/oauth/apple/id-token", f.publicKeyStr, { idToken: signIdToken(appleClaims("com.example.app", { sub: "apple-002", email_verified: false })(hashed)), nonce: raw });
+      expect(unverified.status).toBe(403);
+    });
+
+    it("deleting the account revokes the Apple grant", async () => {
+      const f = await fixture();
+      const raw = "n1";
+      const res = await f.call("POST", "/oauth/apple/id-token", f.publicKeyStr, {
+        idToken: signIdToken(appleClaims("com.example.app")(raw)), nonce: raw, authorizationCode: "good-code",
+      });
+      const session = (await res.json()) as { accessToken: string };
+      // A second Apple sign-in without a code must keep the stored token.
+      await f.call("POST", "/oauth/apple/id-token", f.publicKeyStr, { idToken: signIdToken(appleClaims("com.example.app")(raw)), nonce: raw });
+      const del = await f.platform.fetch(new Request(`http://localhost${f.base}/user`, { method: "DELETE", headers: { "content-type": "application/json", "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${session.accessToken}` } }));
+      expect(del.status).toBe(200);
+      expect(apple.revokeCalls).toHaveLength(1);
+      expect(apple.revokeCalls[0]?.get("token")).toBe("apple-refresh");
+      expect(apple.revokeCalls[0]?.get("client_id")).toBe("com.example.app");
+    });
+
+    it("a code that belongs to another Apple user is not stored on this identity", async () => {
+      const f = await fixture();
+      const raw = "n2";
+      // Apple's token response carries user B's id_token while the caller's verified token is user A's.
+      apple.claims = appleClaims("com.example.app", { sub: "apple-B" });
+      const res = await f.call("POST", "/oauth/apple/id-token", f.publicKeyStr, {
+        idToken: signIdToken(appleClaims("com.example.app", { sub: "apple-A" })(raw)), nonce: raw, authorizationCode: "good-code",
+      });
+      expect(res.status).toBe(200);
+      const session = (await res.json()) as { accessToken: string };
+      expect(apple.tokenCalls).toHaveLength(1);
+      const del = await f.platform.fetch(new Request(`http://localhost${f.base}/user`, { method: "DELETE", headers: { "content-type": "application/json", "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${session.accessToken}` } }));
+      expect(del.status).toBe(200);
+      expect(apple.revokeCalls).toHaveLength(0);
+    });
+
+    it("saving the config validates Team ID, Key ID and the .p8, and never returns the key", async () => {
+      const { mergeOAuthProviders } = await import("../../auth/oauth/config.js");
+      const key = process.env["MASTER_ENCRYPTION_KEY"];
+      expect(() => mergeOAuthProviders({}, { apple: { enabled: true, clientId: "x", teamId: "short", keyId: "KEY1234567", clientSecret: APPLE_P8 } }, key)).toThrow(/Team ID/);
+      expect(() => mergeOAuthProviders({}, { apple: { enabled: true, clientId: "x", teamId: "TEAM123456", keyId: "KEY1234567", clientSecret: "not a key" } }, key)).toThrow(/\.p8/);
+      const rsa = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+      expect(() => mergeOAuthProviders({}, { apple: { enabled: true, clientId: "x", teamId: "TEAM123456", keyId: "KEY1234567", clientSecret: rsa } }, key)).toThrow(/EC P-256/);
+      const k1 = generateKeyPairSync("ec", { namedCurve: "secp256k1" }).privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+      expect(() => mergeOAuthProviders({}, { apple: { enabled: true, clientId: "x", teamId: "TEAM123456", keyId: "KEY1234567", clientSecret: k1 } }, key)).toThrow(/P-256/);
+      const merged = mergeOAuthProviders({}, { apple: { enabled: true, clientId: "x", teamId: "team123456", keyId: "key1234567", clientSecret: APPLE_P8 } }, key) as Record<string, Record<string, unknown>>;
+      expect(merged["apple"]?.["teamId"]).toBe("TEAM123456");
+      expect(JSON.stringify(merged)).not.toContain("BEGIN PRIVATE KEY");
+      const { sanitizeAdminPayload } = await import("../admin.js");
+      expect(JSON.stringify(sanitizeAdminPayload(merged))).not.toContain("clientSecretEncrypted");
+    });
   });
 });
