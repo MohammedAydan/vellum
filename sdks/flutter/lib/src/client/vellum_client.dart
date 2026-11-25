@@ -972,6 +972,7 @@ class VellumClient implements VellumClientPort {
       final txContext =
           TransactionContext(client: this, transactionToken: txToken);
 
+      var committed = false;
       try {
         final result = await updateFn(txContext);
         await request(
@@ -982,6 +983,7 @@ class VellumClient implements VellumClientPort {
             'writes': txContext.stagedWrites,
           },
         );
+        committed = true;
         // The commit changed documents the cache may hold: drop them now, not in
         // the background, so the next read cannot return a stale copy.
         final store = documentCache;
@@ -991,8 +993,13 @@ class VellumClient implements VellumClientPort {
           } catch (_) {}
         }
         return result;
-      } on VellumException catch (err) {
-        if (err.code == 'ABORTED_CONFLICT' && attempt + 1 < maxAttempts) {
+      } catch (err) {
+        // Release the server-side transaction (and its locks) before retrying or
+        // giving up. Best effort: it never replaces the original error.
+        if (!committed) await _rollbackQuietly(txToken, err);
+        if (err is VellumException &&
+            err.code == 'ABORTED_CONFLICT' &&
+            attempt + 1 < maxAttempts) {
           final backoffMs = computeReconnectBackoffMs(attempt);
           await Future<void>.delayed(Duration(milliseconds: backoffMs));
           continue;
@@ -1005,6 +1012,18 @@ class VellumClient implements VellumClientPort {
       message: 'Transaction exhausted maximum retry attempts',
       statusCode: 409,
     );
+  }
+
+  Future<void> _rollbackQuietly(String txToken, Object cause) async {
+    // After a session change the token no longer belongs to this user.
+    if (cause is VellumException && cause.code == 'SESSION_CHANGED') return;
+    try {
+      await request(
+        'POST',
+        '/transactions:rollback',
+        body: <String, Object?>{'transactionToken': txToken},
+      );
+    } catch (_) {}
   }
 
   /* --------------------------- Collections lifecycle ---------------------- */
