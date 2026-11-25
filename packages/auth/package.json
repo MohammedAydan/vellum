@@ -25,6 +25,6 @@
     "@vellum/database-control": "workspace:*",
     "@vellum/storage": "workspace:*",
     "@vellum/document-engine": "workspace:*",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^10.6.1"
   }
 }

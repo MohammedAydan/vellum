@@ -65,7 +65,7 @@
     "@storybook/react-vite": "^9.1.21",
     "@tailwindcss/vite": "^4.3.5",
     "@types/node": "^26.6.6",
-    "@types/nodemailer": "^6.4.24",
+    "@types/nodemailer": "^8.0.2",
     "@types/ws": "^8.18.2",
     "@vitest/coverage-v8": "^2.1.8",
     "drizzle-orm": "^0.38.3",
@@ -82,7 +82,7 @@
     "ws": "^8.23.0"
   },
   "dependencies": {
-    "nodemailer": "^6.10.1"
+    "nodemailer": "^10.6.1"
   },
   "packageManager": "pnpm@10.15.0+sha512.486ebc259d3e999a4e8691ce03b5cac4a71cbeca39372a9b762cb500cfdf0873e2cb16abe3d951b1ee2cf012503f027b98b6584e4df22524e0c7450d9ec7aa7b"
 }
