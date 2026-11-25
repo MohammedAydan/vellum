@@ -19,7 +19,7 @@ const ruleset: SecurityRulesetRecord = {
 match /posts/{postId} {
   allow get: if resource.data.visibility == 'public';
   allow write: if false;
-}`).ast,
+}`).ast as unknown as Record<string, unknown>,
 };
 
 function makeControlStore() {
@@ -95,7 +95,7 @@ describe("realtime: resource-based get rules", () => {
     expect(sync).toMatchObject({ type: "initial_sync" });
     expect((sync as Extract<ServerFrame, { type: "initial_sync" }>).documents).toHaveLength(1);
 
-    await session.handleClientFrame({ type: "subscribe", subId: "s2", path: "posts/priv" }).catch(() => undefined);
+    await Promise.resolve(session.handleClientFrame({ type: "subscribe", subId: "s2", path: "posts/priv" })).catch(() => undefined);
     const syncs = frames.filter((f) => f.type === "initial_sync") as Extract<ServerFrame, { type: "initial_sync" }>[];
     expect(syncs.every((s) => s.subId !== "s2" || s.documents.length === 0)).toBe(true);
     expect(JSON.stringify(frames)).not.toContain('"private"');
@@ -113,11 +113,11 @@ describe("realtime: resource-based get rules", () => {
 
   it("never leaks a collection query's hidden documents", async () => {
     const { session, frames } = await connect();
-    await session.handleClientFrame({
+    await Promise.resolve(session.handleClientFrame({
       type: "subscribe",
       subId: "q1",
       query: { collectionPath: "posts" },
-    } as never).catch(() => undefined);
+    } as never)).catch(() => undefined);
     expect(JSON.stringify(frames)).not.toContain('"private"');
     expect(JSON.stringify(frames)).not.toContain("posts/priv");
   });
