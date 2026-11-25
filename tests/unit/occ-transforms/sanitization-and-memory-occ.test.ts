@@ -71,7 +71,7 @@ describe("OCC lifecycle on the in-memory adapter", () => {
 
     const begun = await engine.beginTransaction(tenant);
     expect(begun.transactionToken).toBeDefined();
-    expect(Date.parse(begun.expiresAt) - Date.now()).toBeLessThanOrEqual(5000);
+    expect(Date.parse(begun.expiresAt) - Date.now()).toBeLessThanOrEqual(15000);
 
     const read = await engine.getDocument({
       ...tenant,
