@@ -373,6 +373,20 @@ class VellumClient implements VellumClientPort {
   /// [DocumentCacheStore] to persist to disk, or set `enableCache: false`.
   final DocumentCacheStore? documentCache;
 
+  final List<Future<void> Function()> _signOutHooks = <Future<void> Function()>[];
+
+  /// Registers cleanup that runs when the user signs out (the offline outbox
+  /// uses it to drop queued writes). Hook errors never block sign-out.
+  void addSignOutHook(Future<void> Function() hook) => _signOutHooks.add(hook);
+
+  Future<void> runSignOutHooks() async {
+    for (final hook in List<Future<void> Function()>.of(_signOutHooks)) {
+      try {
+        await hook();
+      } catch (_) {}
+    }
+  }
+
   /// Clears stored documents (used on sign-out / user change).
   void clearDocumentCache() {
     final store = documentCache;

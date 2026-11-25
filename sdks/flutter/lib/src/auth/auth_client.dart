@@ -834,6 +834,7 @@ class VellumAuth implements VellumAuthPort {
     // session while sign-out is executing or after it completes.
     _sessionEpoch++;
     client.clearCache();
+    await client.runSignOutHooks();
     client.realtime.dispose();
     _refreshTimer?.cancel();
     _refreshTimer = null;

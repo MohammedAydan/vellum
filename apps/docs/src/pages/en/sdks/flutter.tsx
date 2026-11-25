@@ -143,6 +143,54 @@ final rawResults = await db.writeBatchChunked(
         />
       </Section>
 
+      <Section id="offline" title="Persistent cache &amp; offline write queue">
+        <P>
+          <code>PersistentDocumentCacheStore</code> keeps the document cache across restarts and <code>VellumOutbox</code> queues document writes while offline.
+          Both encrypt everything with AES-256-GCM. The key is created on the device, kept in the Keychain or Keystore (never synced to iCloud), and is specific to the project. The cache is also bound to the signed-in user; a different user or project finds nothing.
+          If the secure store cannot be read the key stays in memory and nothing is written. Sign-out deletes both blobs and the key.
+          On web the key sits next to the data, so encryption adds no protection: nothing is written to disk on web unless you pass <code>allowWeb: true</code>.
+        </P>
+        <P>
+          The queue accepts document writes only (never auth calls, query strings or <code>..</code> paths) and stores no token or API key: they are added when the write is replayed.
+          Each entry has an idempotency key, belongs to the user who made it, and is never replayed for another user or project.
+          It is limited to 200 writes, 256 KB each, 2 MB in all (1 MB on web); a write that does not fit throws <code>RESOURCE_EXHAUSTED</code>.
+          Entries older than 23 hours are dropped (<code>expired</code>), because the server remembers idempotency keys for 24 hours and increments or array transforms must not run twice.
+          Replay keeps the entry and stops on network errors, 401, 403 UNAUTHENTICATED, 408, 429 and 5xx; after 8 such failures it is dropped as <code>failed</code>.
+          400, 403 PERMISSION_DENIED and 404 are dropped as <code>rejected</code>, and 409 or 412 as <code>conflict</code>. Writes are last-writer-wins unless you pass <code>ifVersion</code>.
+          Cached documents stay readable offline for up to 14 days, even if your rules changed since. Call <code>flush()</code> when the app resumes or the connection returns.
+        </P>
+        <Code lang="dart" title="Offline cache and outbox" code={`import 'package:vellum_flutter/vellum_flutter.dart';
+
+final box = VellumEncryptedBox(keyStore: defaultSecureKeyValue());
+final cache = PersistentDocumentCacheStore(box: box);
+
+final db = VellumClient(
+  endpoint: 'https://api.example.com',
+  projectId: 'prj_1',
+  apiKey: 'pk_...',
+  cacheStore: cache,
+);
+cache.attach(db); // binds the cache to this project and clears it on sign-out
+
+final outbox = VellumOutbox(
+  client: db,
+  box: box,
+  onDropped: (entry, reason, error) {
+    // reason: rejected, conflict, expired, otherUser or failed. Tell the user.
+  },
+);
+
+// After the session is restored (the user is known):
+await cache.load();
+await outbox.load();
+
+// Offline: queue the write instead of failing. Pass the version the user saw
+// so a change made meanwhile is reported as a conflict, not overwritten.
+await outbox.enqueueSet(db.collection('notes').doc('n1'), {'text': 'hello'}, ifVersion: 3);
+// Later (app resumed, connection back):
+await outbox.flush();`} />
+      </Section>
+
       <Section id="auth-and-lifecycle" title="Reactive auth, sessionEpoch &amp; dispose()">
         <P>
           <code>db.auth.authStateChanges</code> immediately emits the current{" "}
