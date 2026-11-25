@@ -57,6 +57,21 @@ describe('collection export pagination', () => {
   });
 });
 
+describe('transactions:rollback', () => {
+  it('ends a transaction so a later commit is refused, and rejects a missing token', async () => {
+    const {send} = await fixture();
+    const begin = await send('POST','/transactions:begin',{},'b1');
+    const {transactionToken} = await begin.json();
+    const rb = await send('POST','/transactions:rollback',{transactionToken},'r1');
+    expect(rb.status).toBe(200);
+    expect((await rb.json()).status).toBe('rolled_back');
+    const commit = await send('POST','/transactions:commit',{transactionToken,writes:[{type:'set',path:'items/x',data:{n:1}}]},'c1');
+    expect(commit.status).toBe(409);
+    expect((await send('GET','/documents/items/x')).status).toBe(404);
+    expect((await send('POST','/transactions:rollback',{},'r2')).status).toBe(400);
+  });
+});
+
 describe('request body size cap without Content-Length', () => {
   it('answers 413 instead of hanging on an oversized body', async () => {
     const {send} = await fixture();

@@ -89,3 +89,29 @@ describe("row-level reads: list allow does not expose rows whose get denies", ()
     expect(a.documents).toHaveLength(4);
   });
 });
+
+describe("query spec strictness", () => {
+  const mk = async () => {
+    const engine = new DocumentEngine({ controlStore: new Control(), dataStore: new DataPlaneStore() });
+    await engine.createDocument({ ...TENANT, path: "things/a", data: { n: 1 } });
+    await engine.createDocument({ ...TENANT, path: "things/b", data: { n: 2 } });
+    return engine;
+  };
+  it("rejects a misspelled key instead of returning every row", async () => {
+    const engine = await mk();
+    await expect(
+      engine.executeQuery({ ...TENANT, querySpec: { collectionPath: "things", wher: [{ field: "n", op: "==", value: 1 }], limit: 10 } as never })
+    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+  });
+  it("rejects collectionGroup with a clear error", async () => {
+    const engine = await mk();
+    await expect(
+      engine.executeQuery({ ...TENANT, querySpec: { collectionGroup: "things", limit: 10 } as never })
+    ).rejects.toThrow(/collectionGroup queries are not supported/);
+  });
+  it("still accepts valid keys", async () => {
+    const engine = await mk();
+    const res = await engine.executeQuery({ ...TENANT, querySpec: { collectionPath: "things", where: [{ field: "n", op: "==", value: 1 }], limit: 10 } });
+    expect(res.documents).toHaveLength(1);
+  });
+});

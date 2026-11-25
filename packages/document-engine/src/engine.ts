@@ -252,6 +252,12 @@ const BLIND_WRITE_MAX_ATTEMPTS = 25;
 /** Upper bound on extra query batches read to fill a page when some rows are hidden by `get` rules. */
 const MAX_ROW_FILTER_SCANS = 5;
 
+const ALLOWED_QUERY_KEYS: ReadonlySet<string> = new Set([
+  "collectionPath", "collection", "where", "or", "orderBy", "limit", "cursor",
+  "startAt", "startAfter", "endAt", "endBefore", "select", "include", "search",
+  "ttlSeconds", "expiresAt", "collectionGroup",
+]);
+
 export class DocumentEngine implements DocumentEnginePort {
   public readonly controlStore: ControlStoreLike;
   public readonly dataStore: StorageAdapter;
@@ -1630,6 +1636,22 @@ export class DocumentEngine implements DocumentEnginePort {
     }
     const includes: IncludeSpec[] | null =
       Array.isArray(rawInclude) ? (rawInclude as IncludeSpec[]) : null;
+    // A misspelled key ("wher", "orderby", "count") used to be ignored, so the query ran
+    // without that clause and returned every row. Refuse unknown keys instead.
+    if (rawSpec["collectionGroup"] !== undefined && rawSpec["collectionGroup"] !== null) {
+      throw new VellumError(
+        "INVALID_ARGUMENT",
+        "collectionGroup queries are not supported yet. Query one collectionPath instead."
+      );
+    }
+    const unknownKeys = Object.keys(rawSpec).filter((k) => !ALLOWED_QUERY_KEYS.has(k));
+    if (unknownKeys.length > 0) {
+      throw new VellumError(
+        "INVALID_ARGUMENT",
+        `Unknown query field${unknownKeys.length > 1 ? "s" : ""}: ${unknownKeys.slice(0, 5).join(", ")}. Allowed: ${[...ALLOWED_QUERY_KEYS].join(", ")}`,
+        { unknownKeys: unknownKeys.slice(0, 5) }
+      );
+    }
     const { include: _strippedInclude, ...validationSpec } = rawSpec;
     const normalizedQuery = validateAndNormalizeQuery(validationSpec);
     // A request that supplies both cursors is ambiguous: `startAfter ?? startAt`

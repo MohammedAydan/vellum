@@ -12,6 +12,10 @@
 
 - sdk-js and `vellum_flutter`: `customClaims` is removed from the end-user `signUpWithEmailAndPassword` and `updateProfile` inputs. The API has rejected it for end users since 0.0.4, so passing it only produced an error. Set claims with a server key instead. Reading `user.customClaims` is unchanged.
 
+### Changed
+
+- Behavior change: queries with an unknown key are now rejected with `INVALID_ARGUMENT` instead of the key being ignored silently. `collectionGroup` queries return a clear not-supported error.
+
 ## 0.0.4
 
 Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK stays on one shared version. **Upgrade the SDKs together with the API:** 0.0.3 SDKs cannot start social sign-in against this API (the start call moved from `GET` with the key in the URL to `POST` with the key in a header). Update `@vellumdb/sdk-js` and `vellum_flutter` to 0.0.4.
@@ -45,6 +49,8 @@ Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK 
 - sdk-js `addWithRelated` matches Flutter: it takes `idempotencyKey` (sent as `Idempotency-Key`) and runs the collection converter's `toDoc` on the parent document.
 
 - `vellum_flutter`: `runTransaction` calls `POST /transactions:rollback` (best effort, never replacing the original error) when the callback or the commit fails, before a conflict retry. It skips the call after `SESSION_CHANGED` and after a successful commit.
+
+- `POST /transactions:rollback` ends a transaction right away instead of leaving it to expire. sdk-js `runTransaction` calls it (best effort) when the callback throws, the call is aborted, or a commit conflict is about to be retried, so abandoned attempts no longer hold their read set until the 15 s window ends.
 
 - `vellum_flutter`: offline support. `PersistentDocumentCacheStore` keeps the document cache across restarts and `VellumOutbox` queues document writes while offline and replays them in order with idempotency keys. Everything on disk is AES-256-GCM encrypted with a device key held in the Keychain or Keystore (not iCloud-synced), bound to the project (endpoint + project id), and for the cache to the signed-in user. A secure-store read failure gives a memory-only key and writes nothing. The queue takes document writes only (strict path allow-list), stores no tokens, is per user, stops on user change or sign-out, and is bounded (200 writes, 256 KB each, 2 MB total, 23 hours). Auth errors and network errors keep entries; permission, not-found and conflict errors drop them with a reason (`rejected`, `conflict`, `expired`, `otherUser`, `failed`); optional `ifVersion` guards. Web is memory-only unless `allowWeb`. Adds the `cryptography` dependency. New `defaultSecureKeyValue()`, `VellumClient.addSignOutHook`.
 

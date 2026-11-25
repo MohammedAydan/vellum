@@ -113,7 +113,7 @@ describe("engine-hardening / security — cursor tampering & AST bypass", () => 
         apiKeyRecord: publicKey(),
         querySpec: { collection: "users", bypassRules: true } as never,
       })
-    ).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" }); // unknown keys are rejected before rules, bypassRules is never honoured
   });
 });
 
