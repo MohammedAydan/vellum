@@ -638,13 +638,10 @@ export class VellumAuthClient {
   public updateProfile(patch: UpdateProfileInput): Promise<VellumAuthUser>;
   public async updateProfile(patch: UpdateProfileInput): Promise<VellumAuthUser> {
     if (patch["password"] !== undefined) {
-      // The end-user API has no authenticated password-change endpoint:
-      // PATCH /auth/user ignores unknown keys and the password reset flow is
-      // the only supported way to change a password. Fail loudly rather than
+      // PATCH /auth/user ignores unknown keys. Fail loudly rather than
       // silently dropping credential material.
       throw new Error(
-        "@vellumdb/sdk-js: updateProfile cannot change a password; " +
-          "use sendPasswordResetEmail() followed by confirmPasswordReset()"
+        "@vellumdb/sdk-js: updateProfile cannot change a password; use changePassword(currentPassword, newPassword)"
       );
     }
     const epoch = this.state.sessionEpoch;

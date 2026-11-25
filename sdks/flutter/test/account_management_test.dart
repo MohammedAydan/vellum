@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vellum_flutter/vellum_flutter.dart';
 
@@ -112,5 +111,15 @@ void main() {
     await client.auth.unlinkProvider('google');
     expect(calls.any((c) => c['method'] == 'DELETE' && c['url'].toString().endsWith('/auth/sessions/s1')), isTrue);
     expect(calls.any((c) => c['method'] == 'DELETE' && c['url'].toString().endsWith('/auth/identities/google')), isTrue);
+  });
+
+  test('updateProfile forwards currentPassword when changing the email', () async {
+    await client.auth.signInWithEmailAndPassword(email: 'a@example.com', password: 'old-password-1');
+    await client.auth.updateProfile(email: 'new@example.com', currentPassword: 'old-password-1');
+    final patch = calls.lastWhere((c) => c['method'] == 'PATCH');
+    expect(patch['body'], <String, Object?>{
+      'email': 'new@example.com',
+      'currentPassword': 'old-password-1',
+    });
   });
 }

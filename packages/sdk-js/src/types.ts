@@ -521,9 +521,13 @@ export type UpdateProfileInput = {
   metadata?: Record<string, unknown>;
   customClaims?: Record<string, unknown>;
   /**
-   * Accepted for cross-SDK parity but not supported by the v1 end-user API,
-   * which has no authenticated password-change route. When supplied,
-   * `updateProfile` throws and directs callers to the reset flow.
+   * Required when changing `email` on an account that has a password: the
+   * account's current password. Not needed for Google/GitHub-only accounts.
+   */
+  currentPassword?: string;
+  /**
+   * Not supported here: `updateProfile` throws when supplied. Use
+   * `changePassword(currentPassword, newPassword)` instead.
    */
   password?: string;
 };

@@ -1,5 +1,5 @@
 import {
-  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterDeepLinkDart, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
+  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterDeepLinkDart, androidBackupXml, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
 } from "../../social-login-examples";
 import { AlphaNotice, Callout, Code, CodeTabs, Doc, P, PageLink, Section, UL } from "../../ui";
 
@@ -66,12 +66,22 @@ export default function Page() {
           على Windows وLinux يمكنك أيضا استخدام loopback بمنفذ ثابت. المشغّل المدمج لا يغطي Flutter web؛ استخدم مسار الويب هناك.
         </P>
         <Code lang="dart" title="رابط عميق (اختياري)" code={flutterDeepLinkDart} />
+        <P>
+          إذا استخدمت رابطا عميقا ففضّل Android App Links (روابط <code>https://</code> موثّقة عبر <code>assetlinks.json</code>) أو iOS Universal Links
+          (<code>apple-app-site-association</code>) على المخطط المخصص: أي تطبيق آخر يستطيع تسجيل نفس المخطط المخصص، أما رابط https الموثّق فلا يفتح إلا تطبيقك. استخدم رابط https هذا كقيمة <code>redirectUri</code> وأضفه إلى قائمة عناوين الرجوع المسموحة.
+          الرمز المؤقت مرتبط أيضا بـPKCE verifier فلا يمكن استبداله لو اعترضه تطبيق آخر، لكن الروابط الموثّقة تمنع المحاولة من الأساس.
+        </P>
+        <P>
+          تُحفظ الجلسة في Keychain (على iOS وmacOS، متاحة بعد أول فتح قفل ولا تُنسخ إلى جهاز آخر) وفي مخزن Android المدعوم بـKeystore. على iOS يبقى Keychain بعد حذف التطبيق، لذلك يمسح الـSDK مفاتيح جلسته عند أول تشغيل بعد تثبيت جديد.
+          على Android أبعد ملف مخزن الجلسة عن النسخ الاحتياطي حتى لا تُستعاد بيانات مشفّرة بدون مفتاحها:
+        </P>
+        <Code lang="xml" title="استبعاد ملف التخزين الآمن من نسخ Android الاحتياطي" code={androidBackupXml} />
         <Code lang="xml" title="AndroidManifest.xml (داخل MainActivity)" code={androidManifest} />
         <Code lang="xml" title="Info.plist (iOS وmacOS)" code={iosPlist} />
         <Code lang="dart" title="رجوع loopback على سطح المكتب" code={desktopDart} />
         <P>
           تفضّل منتقي الحسابات الأصلي لـ Google؟ أضف حزمة <code>google_sign_in</code> الرسمية إلى تطبيقك ومرّر رمز الهوية إلى <code>signInWithGoogleIdToken</code>.
-          أضف معرّفات عملاء Android وiOS إلى إعدادات Google في مشروعك ليُقبل رمزها.
+          يُقبل الرمز فقط إذا كان جمهوره (audience) أحد معرّفات عملاء Google في مشروعك. إن مرّرت معرّف عميل الويب كـ<code>serverClientId</code> (كما أعلاه) فهو المعرّف المضبوط أصلا. وإن لم تفعل يصدر Google الرمز لمعرّف عميل Android أو iOS، فأضفهما إلى "معرّفات عملاء Google إضافية" في Auth Studio > Providers > Google وإلا فشل الدخول.
         </P>
         <Code lang="dart" title="Google الأصلي مع google_sign_in (اختياري)" code={flutterNativeDart} />
       </Section>

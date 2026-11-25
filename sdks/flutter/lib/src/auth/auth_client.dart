@@ -651,19 +651,13 @@ class VellumAuth implements VellumAuthPort {
     }
   }
 
-  /// Patches the authenticated end-user's profile and emits the new state.
-  ///
-  /// `password` is accepted for parity with the other SDKs, but the v1
-  /// `PATCH /auth/user` contract does not support in-place password changes.
-  /// Supplying it alone has no effect (the server rejects an empty patch); use
-  /// [sendPasswordResetEmail] followed by [confirmPasswordReset] instead.
   @override
   Future<List<VellumSessionInfo>> listSessions() async {
     final res = await client.request('GET', '/auth/sessions');
     final list = res['sessions'];
     if (list is! List) return const <VellumSessionInfo>[];
     return list
-        .whereType<Map>()
+        .whereType<Map<Object?, Object?>>()
         .map((m) => VellumSessionInfo.fromJson(Map<String, Object?>.from(m)))
         .toList(growable: false);
   }
@@ -681,7 +675,7 @@ class VellumAuth implements VellumAuthPort {
     return VellumLinkedProviders(
       providers: list is List
           ? list
-              .whereType<Map>()
+              .whereType<Map<Object?, Object?>>()
               .map((m) =>
                   VellumLinkedProvider.fromJson(Map<String, Object?>.from(m)))
               .toList(growable: false)
@@ -727,6 +721,10 @@ class VellumAuth implements VellumAuthPort {
     await signOut();
   }
 
+  /// Patches the authenticated end-user's profile and emits the new state.
+  ///
+  /// Pass [currentPassword] when changing [email] on an account that has a
+  /// password. `password` is not forwarded; use [changePassword] to change it.
   @override
   Future<VellumUser> updateProfile({
     String? email,
@@ -737,11 +735,12 @@ class VellumAuth implements VellumAuthPort {
     JsonMap? metadata,
     JsonMap? customClaims,
     String? password,
+    String? currentPassword,
   }) async {
     final expectedEpoch = _sessionEpoch;
     // `password` is deliberately not forwarded: UpdateProfileRequestSchema
     // strips unknown keys, so sending it would invalidate an otherwise valid
-    // patch. The reset flow is the supported way to change a password.
+    // patch. Use changePassword() to change a password.
     if (password != null && password.isEmpty) {
       throw const VellumException(
         code: 'INVALID_ARGUMENT',
@@ -757,6 +756,8 @@ class VellumAuth implements VellumAuthPort {
       if (phoneVerified != null) 'phoneVerified': phoneVerified,
       if (metadata != null) 'metadata': metadata,
       if (customClaims != null) 'customClaims': customClaims,
+      // Needed when changing the email of an account that has a password.
+      if (currentPassword != null) 'currentPassword': currentPassword,
     };
     final res = await client.request('PATCH', '/auth/user', body: patch);
     _requireCurrentEpoch(expectedEpoch);

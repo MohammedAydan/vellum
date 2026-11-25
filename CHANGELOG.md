@@ -17,6 +17,9 @@
 
 - Link a provider to the signed-in account: `POST /auth/oauth/:provider/start` with `"link": true` and the user's bearer token adds Google or GitHub (any email) to that user; a provider account that belongs to another user is refused. sdk-js `linkWithPopup`, `vellum_flutter` `VellumOAuth.link`.
 
+- `vellum_flutter` session storage: Keychain accessibility is `first_unlock_this_device` on iOS and macOS; the first launch after a fresh install clears the SDK's own session keys (the Keychain survives uninstall; marker kept in `shared_preferences`, so one existing session is signed out on the first launch after updating). Android keeps the plugin's current default cipher. `updateProfile` accepts `currentPassword` (sdk-js too) for email changes.
+- Docs: App Links / Universal Links recommended over custom schemes, Android backup exclusion rules, and when Android/iOS Google client IDs must be added for native Google sign-in.
+
 ### Fixes
 
 - Desktop and native sign-in: a loopback redirect (`http://127.0.0.1:<port>/...` or `[::1]`) is always accepted, as RFC 8252 describes, so it no longer needs an entry in the allowed redirect list.

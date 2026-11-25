@@ -1,5 +1,5 @@
 import {
-  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterDeepLinkDart, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
+  popupTs, redirectTs, gisTs, callbackTs, flutterBrowserDart, flutterDeepLinkDart, androidBackupXml, flutterNativeDart, flutterPubspec, androidManifest, iosPlist, desktopDart,
 } from "../../social-login-examples";
 import { AlphaNotice, Callout, Code, CodeTabs, Doc, P, PageLink, Section, UL } from "../../ui";
 
@@ -67,12 +67,24 @@ export default function Page() {
           your app like any deep link. On Windows and Linux you can also use a loopback redirect with a fixed port. The built-in launcher does not cover Flutter web; use the web SDK flow there.
         </P>
         <Code lang="dart" title="Deep link (optional)" code={flutterDeepLinkDart} />
+        <P>
+          If you use a deep link, prefer Android App Links (<code>https://</code> links verified through <code>assetlinks.json</code>) or iOS Universal Links
+          (<code>apple-app-site-association</code>) over a custom scheme: any other app can register the same custom scheme, while a verified https link
+          can only open your app. Use that https URL as the <code>redirectUri</code> and add it to the allowed redirect list. The one-time code is also bound to the PKCE verifier,
+          so a link intercepted by another app cannot be redeemed, but verified links remove the attempt entirely.
+        </P>
+        <P>
+          Sessions are kept in the Keychain (iOS and macOS, available after the first unlock and never copied to another device) and in an
+          Android Keystore-backed store. On iOS the Keychain survives an uninstall, so the SDK clears its own session keys on the first launch after a fresh install. On Android, keep the session store
+          out of backups so a restored backup never carries encrypted data without its key:
+        </P>
+        <Code lang="xml" title="Exclude the secure storage file from Android backups" code={androidBackupXml} />
         <Code lang="xml" title="AndroidManifest.xml (inside MainActivity)" code={androidManifest} />
         <Code lang="xml" title="Info.plist (iOS and macOS)" code={iosPlist} />
         <Code lang="dart" title="Desktop loopback redirect" code={desktopDart} />
         <P>
           Prefer the native account picker for Google? Add the official <code>google_sign_in</code> package to your own app and pass its
-          ID token to <code>signInWithGoogleIdToken</code>. Add your Android and iOS client IDs to the Google settings of your project so their tokens are accepted.
+          ID token to <code>signInWithGoogleIdToken</code>. A token is accepted only if its audience is one of your project's Google client IDs. If you pass the web client ID as <code>serverClientId</code> (as above) that is the ID already configured. If you do not, Google issues the token for the Android or iOS client ID, so add those to "Additional Google client IDs" in Auth Studio > Providers > Google, otherwise sign-in fails.
         </P>
         <Code lang="dart" title="Native Google with google_sign_in (optional)" code={flutterNativeDart} />
       </Section>

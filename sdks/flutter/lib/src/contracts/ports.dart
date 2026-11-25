@@ -208,6 +208,7 @@ abstract interface class VellumAuthPort {
     JsonMap? metadata,
     JsonMap? customClaims,
     String? password,
+    String? currentPassword,
   });
   Future<void> signOut({bool allSessions = false});
   void dispose();
