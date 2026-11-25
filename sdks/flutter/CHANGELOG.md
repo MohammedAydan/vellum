@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.4
+
+Lockstep release with the platform. Requires the 0.0.4 API: social sign-in now starts with a `POST` and the key in a header, so 0.0.3 cannot start it.
+
+- `signInWithOAuth` returns `VellumAuthResult` and resolves to `VellumMfaRequired` when a second factor is needed.
+- Redirect-less sign-in and provider linking show a confirmation code (`onConfirmationCode`). Redirect-less sign-in must be enabled per project in Auth Studio.
+- `link` and `unlink` take `currentPassword`; email change needs it too.
+- Loopback sign-in on desktop can use a free port (session factory).
+- `tx.create`, and `tx.get` reports `exists: false` for a missing document.
+- Sign in with Apple (web and native ID token).
+- iOS and macOS Keychain accessibility is stricter: people signed in with a 0.0.3 app are signed out once.
+
+Full platform notes are in the root CHANGELOG.
+
 ## 0.0.3
 
 Lockstep release with the platform. `vellum_flutter` is now a single Flutter package.

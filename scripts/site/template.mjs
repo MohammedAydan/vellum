@@ -4,11 +4,13 @@ import { CSS } from "./css.mjs";
 import { highlight } from "./highlight.mjs";
 
 export { CSS };
+/** Runs in <head> before first paint so `.js` styles apply without a flash. */
+export const EARLY_JS = 'document.documentElement.classList.add("js")';
 export const escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const esc = escapeHtml;
 const json = (o) => JSON.stringify(o).replace(/</g, "\\u003c");
 
-const JS = `(function(){var d=document,r=d.documentElement;try{var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target)}})},{rootMargin:"0px 0px -8% 0px",threshold:.08});d.querySelectorAll(".rv").forEach(function(n){io.observe(n)})}catch(_){d.querySelectorAll(".rv").forEach(function(n){n.classList.add("in")})}
+export const JS = `(function(){var d=document,r=d.documentElement;try{var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target)}})},{rootMargin:"0px 0px -8% 0px",threshold:.08});d.querySelectorAll(".rv").forEach(function(n){io.observe(n)})}catch(_){d.querySelectorAll(".rv").forEach(function(n){n.classList.add("in")})}
 d.querySelectorAll("[data-copy]").forEach(function(b){b.addEventListener("click",function(){var t=b.getAttribute("data-copy");(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){var o=b.textContent;b.textContent=b.getAttribute("data-done");setTimeout(function(){b.textContent=o},1400)}).catch(function(){})})});
 d.querySelectorAll(".cell").forEach(function(c){c.addEventListener("pointermove",function(e){var b=c.getBoundingClientRect();c.style.setProperty("--mx",(e.clientX-b.left)+"px")})})})();`;
 
@@ -36,7 +38,7 @@ ${canonical ? `<meta property="og:url" content="${canonical}">` : ""}
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:description" content="${escapeHtml(desc)}">
 <meta name="twitter:image" content="${origin}/og-image.png">
-<script>document.documentElement.classList.add("js")</script>
+<script src="/site-early.js"></script>
 <link rel="stylesheet" href="/site.css">
 ${(ld || []).map((o) => `<script type="application/ld+json">${json(o)}</script>`).join("\n")}
 </head>`;
@@ -69,7 +71,7 @@ function chrome({ lang, otherHref, body }) {
 <p>${t.footer.beta}</p>
 <p>&copy; ${new Date().getFullYear()} Vellum</p>
 </div></footer>
-<script>${JS}</script>`;
+<script src="/site.js" defer></script>`;
 }
 
 /* ---------- components ---------- */
@@ -188,7 +190,7 @@ export function renderPage({ page, lang, origin, routeOf }) {
     ld.push({ "@context": "https://schema.org", "@graph": [
       org,
       { "@type": "WebSite", "@id": `${origin}/#site`, name: "Vellum", url: origin, inLanguage: ["en", "ar"], publisher: { "@id": `${origin}/#org` } },
-      { "@type": "SoftwareApplication", name: "Vellum", applicationCategory: "DeveloperApplication", operatingSystem: "Web, Node.js, Flutter", softwareVersion: "0.0.3", description: page.desc.en, url: origin, license: "https://opensource.org/licenses/MIT", publisher: { "@id": `${origin}/#org` } },
+      { "@type": "SoftwareApplication", name: "Vellum", applicationCategory: "DeveloperApplication", operatingSystem: "Web, Node.js, Flutter", softwareVersion: "0.0.4", description: page.desc.en, url: origin, license: "https://opensource.org/licenses/MIT", publisher: { "@id": `${origin}/#org` } },
     ] });
     ld.push({ "@context": "https://schema.org", "@type": "FAQPage", inLanguage: lang, mainEntity: FAQ[lang].map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) });
   } else {

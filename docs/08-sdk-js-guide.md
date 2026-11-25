@@ -1,6 +1,6 @@
 # JavaScript / TypeScript SDK Guide (`@vellumdb/sdk-js`)
 
-Complete engineering guide for `@vellumdb/sdk-js` v0.0.3 — grounded directly in `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`.
+Complete engineering guide for `@vellumdb/sdk-js` v0.0.4 — grounded directly in `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`.
 
 > **Security Note**: The document plane is API-key scoped with an optional end-user EdDSA bearer token. Use publishable `pk_` keys in browsers and reserve secret `sk_` keys strictly for trusted server environments.
 
@@ -302,11 +302,19 @@ for await (const doc of db
 ### `batchWrite()` & `batchWriteChunked()`
 
 ```ts
-// Single atomic batch (up to 500 operations)
+// Single atomic batch (up to 100 operations)
 await db.batchWrite([
   { type: "set", path: "items/a", data: { price: 10 }, merge: true },
   { type: "update", path: "items/b", data: { stock: fieldOp.increment(-1) } },
   { type: "delete", path: "items/c" },
+]);
+
+// Conditional batch across documents, one round trip. Every precondition is checked before
+// anything is written: if any document is stale, none change and you get FAILED_PRECONDITION (412).
+await db.batchWrite([
+  { type: "update", path: "accounts/a", data: { balance: 90 }, ifVersion: 4 },
+  { type: "update", path: "accounts/b", data: { balance: 110 }, ifVersion: 7 },
+  { type: "set", path: "audit/t1", data: { from: "a", to: "b" }, exists: false },
 ]);
 
 // Auto-chunked bulk write for thousands of operations

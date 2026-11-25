@@ -1,6 +1,6 @@
 {
   "name": "@vellum/database-data",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -28,7 +28,7 @@
   "dependencies": {
     "@vellum/core": "workspace:*",
     "@neondatabase/serverless": "^0.10.4",
-    "drizzle-orm": "^0.38.3",
+    "drizzle-orm": "^0.45.4",
     "pg": "^8.13.3"
   },
   "devDependencies": {
