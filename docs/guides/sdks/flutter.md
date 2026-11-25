@@ -7,7 +7,7 @@ description: Practical Dart reference for vellum_flutter — client setup, CRUD,
 
 # Flutter SDK (`vellum_flutter`)
 
-Practical Dart API reference for `vellum_flutter` v0.0.4 derived from `sdks/flutter/lib/vellum_flutter.dart`. A single Flutter package (Dart `>=3.4.0 <4.0.0`, Flutter `>=3.22.0`), strictly null-safe, with encrypted persistent sessions and Google/GitHub sign-in built in.
+Practical Dart API reference for `vellum_flutter` v0.0.5 derived from `sdks/flutter/lib/vellum_flutter.dart`. A single Flutter package (Dart `>=3.4.0 <4.0.0`, Flutter `>=3.22.0`), strictly null-safe, with encrypted persistent sessions and Google/GitHub sign-in built in.
 
 ```dart
 import 'package:vellum_flutter/vellum_flutter.dart';

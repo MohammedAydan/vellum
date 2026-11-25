@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.0.5
+
+Transaction rollback, conditional batch writes, an offline cache for Flutter, a stricter Content Security Policy and a billing race fix. Every package and SDK stays on one shared version. Upgrade the SDKs together with the API. **Breaking:** `customClaims` is removed from the end-user sign-up and profile calls in both SDKs (see Breaking below).
+
 ### Features
 
 - `batchWrite` takes `ifVersion` and `exists` on every operation (flat, or inside `preconditions` / `precondition`), so a multi-document write is conditional in one round trip: all preconditions are checked first, and a stale one fails the whole batch with 412 and writes nothing. sdk-js exports the `BatchWriteOperation` type. The sdk-js guide now says 100 operations per batch, the real server limit.

@@ -23,14 +23,14 @@ const faq = {
     ["What is Vellum?", "Vellum is a multi-tenant document database platform that runs entirely on PostgreSQL. It gives you collections of typed JSON documents, a REST and WebSocket API, declarative security rules, end-user authentication and official JavaScript and Flutter SDKs."],
     ["Does Vellum need Redis or a message broker?", "No. PostgreSQL is the only stateful dependency. Realtime streaming uses LISTEN/NOTIFY with a durable outbox, and access decisions are read from the database on every request."],
     ["Which SDKs are available?", "The JavaScript and TypeScript SDK is published on npm as @vellumdb/sdk-js, and the Flutter SDK is published on pub.dev as vellum_flutter."],
-    ["Is Vellum production ready?", "Vellum is in public beta (version 0.0.4). Every package shares one version, and APIs may still change before a stable release."],
+    ["Is Vellum production ready?", "Vellum is in public beta (version 0.0.5). Every package shares one version, and APIs may still change before a stable release."],
     ["Can an AI coding assistant use Vellum?", "Yes. The docs publish llms.txt, llms-full.txt, a Markdown version of every page, a ready prompt and a public OpenAPI file for the data API."],
   ],
   ar: [
     ["ما هو Vellum؟", "Vellum منصة قاعدة بيانات مستندات متعددة المستأجرين تعمل بالكامل على PostgreSQL. توفر مجموعات من مستندات JSON المنمّطة، وواجهة REST وWebSocket، وقواعد أمان تصريحية، ومصادقة للمستخدمين النهائيين، وحزم رسمية لـ JavaScript وFlutter."],
     ["هل يحتاج Vellum إلى Redis أو وسيط رسائل؟", "لا. PostgreSQL هو المكوّن الوحيد الذي يحفظ الحالة. البث الفوري يعتمد على LISTEN/NOTIFY مع صندوق إرسال دائم، وقرارات الوصول تُقرأ من قاعدة البيانات في كل طلب."],
     ["ما الحزم البرمجية المتاحة؟", "حزمة JavaScript وTypeScript منشورة على npm باسم @vellumdb/sdk-js، وحزمة Flutter منشورة على pub.dev باسم vellum_flutter."],
-    ["هل Vellum جاهز للإنتاج؟", "Vellum في مرحلة تجريبية عامة (الإصدار 0.0.4). كل الحزم تشترك في إصدار واحد، وقد تتغير واجهات البرمجة قبل الإصدار المستقر."],
+    ["هل Vellum جاهز للإنتاج؟", "Vellum في مرحلة تجريبية عامة (الإصدار 0.0.5). كل الحزم تشترك في إصدار واحد، وقد تتغير واجهات البرمجة قبل الإصدار المستقر."],
     ["هل يستطيع مساعد برمجة بالذكاء الاصطناعي استخدام Vellum؟", "نعم. يوفر التوثيق ملفات llms.txt وllms-full.txt ونسخة Markdown لكل صفحة وتعليمات جاهزة وملف OpenAPI عامًا لواجهة البيانات."],
   ],
 };
@@ -133,7 +133,7 @@ export const PAGES = [
     body: {
       en: {
         h1: "SDKs",
-        lead: "One package per platform. Both are at version 0.0.4 and share the platform version.",
+        lead: "One package per platform. Both are at version 0.0.5 and share the platform version.",
         install: [["JavaScript and TypeScript (npm)", "npm install @vellumdb/sdk-js"], ["Flutter (pub.dev)", "flutter pub add vellum_flutter"]],
         sections: [
           ["JavaScript and TypeScript", "Works in browsers and Node.js. Includes auto-generated ids, automatic token refresh, caching, document references and Google and GitHub sign-in with popup or redirect."],
@@ -144,7 +144,7 @@ export const PAGES = [
       },
       ar: {
         h1: "الحزم البرمجية",
-        lead: "حزمة واحدة لكل منصة. كلتاهما بالإصدار 0.0.4 وتشتركان في إصدار المنصة.",
+        lead: "حزمة واحدة لكل منصة. كلتاهما بالإصدار 0.0.5 وتشتركان في إصدار المنصة.",
         install: [["JavaScript وTypeScript (npm)", "npm install @vellumdb/sdk-js"], ["Flutter (pub.dev)", "flutter pub add vellum_flutter"]],
         sections: [
           ["JavaScript وTypeScript", "تعمل في المتصفح وNode.js. تشمل معرّفات تلقائية وتجديدًا تلقائيًا للرموز وتخزينًا مؤقتًا ومراجع للمستندات وتسجيل دخول عبر Google وGitHub بنافذة منبثقة أو إعادة توجيه."],
