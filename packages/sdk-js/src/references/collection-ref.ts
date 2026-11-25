@@ -98,10 +98,12 @@ export class CollectionReference<T = Record<string, unknown>>
   public async addWithRelated(
     data: T,
     related: Record<string, RelatedWrite>,
-    options: RequestOptions = {}
+    options: RequestOptions & { idempotencyKey?: string } = {}
   ): Promise<DocumentReferenceInterface<T>> {
     const parent = this.doc();
-    const parentData: Record<string, unknown> = { ...(replaceDocumentReferences(data) as Record<string, unknown>) };
+    // A converter's toDoc applies to the parent, like add() and set() do.
+    const plain = this.converter ? this.converter.toDoc(data) : (data as unknown as Record<string, unknown>);
+    const parentData: Record<string, unknown> = { ...(replaceDocumentReferences(plain) as Record<string, unknown>) };
     const writes: Array<{ type: "set"; path: string; data: Record<string, unknown> }> = [];
     for (const [field, spec] of Object.entries(related)) {
       encodePathSegment(spec.collection, "related collection");
@@ -124,7 +126,14 @@ export class CollectionReference<T = Record<string, unknown>>
     if (writes.length > 500) {
       throw new Error("@vellumdb/sdk-js: addWithRelated supports at most 500 documents per call");
     }
-    await this.colCtx.request("POST", "/batchWrite", { writes }, {}, true, options.signal);
+    await this.colCtx.request(
+      "POST",
+      "/batchWrite",
+      { writes },
+      options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {},
+      true,
+      options.signal
+    );
     for (const w of writes) this.colCtx.invalidateDocCache(w.path);
     return parent;
   }
