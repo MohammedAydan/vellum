@@ -57,6 +57,18 @@ describe('collection export pagination', () => {
   });
 });
 
+describe('request body size cap without Content-Length', () => {
+  it('answers 413 instead of hanging on an oversized body', async () => {
+    const {send} = await fixture();
+    const res = await Promise.race([
+      send('PUT','/documents/items/huge',{data:{s:'x'.repeat(1_100_000)}},'huge-1'),
+      new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 3000)),
+    ]);
+    expect(res).not.toBe('hung');
+    expect((res as Response).status).toBe(413);
+  });
+});
+
 describe('batchWrite with version preconditions across documents', () => {
   const write = (type: string, path: string, data: unknown, extra: object = {}) => ({type, path, data, ...extra});
   it('commits every document when all versions match, in one request', async () => {

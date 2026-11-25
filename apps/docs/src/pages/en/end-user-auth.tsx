@@ -129,7 +129,7 @@ export default function Page() {
         <Api method="POST" path={`${PREFIX}/sign-up/email`}>
           <P>
             Requires <code>email</code> and <code>password</code>; optional <code>displayName</code>,
-            <code> photoUrl</code>, <code>phoneNumber</code>, <code>metadata</code>, and <code>customClaims</code>.
+            <code> photoUrl</code>, <code>phoneNumber</code>, and <code>metadata</code>. Claims cannot be set by end users; use a server key with the admin API.
             Existing emails return <code>ALREADY_EXISTS</code>, and a full project returns
             <code> QUOTA_EXCEEDED</code>.
           </P>
