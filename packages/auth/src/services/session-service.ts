@@ -102,7 +102,7 @@ export function createAuthSessionService(
     return key;
   }
 
-  async function mint(ctx: TenantContext, user: AuthUserRecord, config: ProjectAuthConfig) {
+  async function mint(ctx: TenantContext, user: AuthUserRecord, config: ProjectAuthConfig, sessionId: string) {
     const now = Math.floor(Date.now() / 1000);
     const accessTtl =
       Number.isFinite(config.accessTokenTtlSeconds) && config.accessTokenTtlSeconds > 0
@@ -122,6 +122,7 @@ export function createAuthSessionService(
       iat: now,
       exp: now + accessTtl,
       auth_time: now,
+      sid: sessionId,
     };
     return signEndUserAccessToken(payload, privateKeyFor(config), config.jwtKeyId);
   }
@@ -143,7 +144,7 @@ export function createAuthSessionService(
       ipAddress: input.ipAddress ?? null,
       expiresAt,
     });
-    const accessToken = await mint(input.ctx, input.user, config);
+    const accessToken = await mint(input.ctx, input.user, config, session.id);
     return {
       accessToken,
       refreshToken: rawRefreshToken,
@@ -244,7 +245,7 @@ export function createAuthSessionService(
       }
       throw new VellumError("UNAUTHENTICATED", "Session rotation failed");
     }
-    const accessToken = await mint(ctx, user, config);
+    const accessToken = await mint(ctx, user, config, session.id);
     return {
       accessToken,
       refreshToken: newToken,

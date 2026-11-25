@@ -106,6 +106,13 @@ export async function resolveEndUserAuth(
     if (err instanceof VellumError && err.code === "TOKEN_EXPIRED") throw err;
     throw new VellumError("UNAUTHENTICATED", "Invalid end-user access token");
   }
+  // Tokens carry the id of the session they were issued for. A signed-out, revoked or
+  // expired session, or a disabled user, must stop working now, not when the token expires.
+  // One indexed query. Tokens minted before this check existed carry no sid and expire within their TTL.
+  if (typeof payload.sid === "string") {
+    const active = await platform.dataStore.isAuthSessionActive({ projectId }, payload.sid, payload.sub);
+    if (!active) throw new VellumError("UNAUTHENTICATED", "Invalid end-user access token");
+  }
   return {
     uid: payload.sub,
     claims: payload.claims ?? {},

@@ -22,7 +22,11 @@ async function fixture() {
       headers: { "content-type": "application/json", "x-vellum-api-key": key },
       body: JSON.stringify(body),
     }));
-  return { platform, post, publicKey, serverKey };
+  const get = (url: string, key: string, token: string) =>
+    platform.fetch(new Request(`http://localhost${base}${url}`, {
+      headers: { "x-vellum-api-key": key, authorization: `Bearer ${token}` },
+    }));
+  return { platform, post, get, publicKey, serverKey };
 }
 
 describe("POST /sign-in/provider", () => {
@@ -71,5 +75,16 @@ describe("POST /sign-in/provider", () => {
     expect(await link.json()).toHaveProperty("accessToken");
     const created = await post("/sign-in/provider", { provider: "github", providerUserId: "g9", email: "fresh@example.com", emailVerified: true }, serverKey);
     expect(created.status).toBe(200);
+  });
+});
+
+describe("access token session binding", () => {
+  it("stops working as soon as the session is signed out", async () => {
+    const { get, post, publicKey } = await fixture();
+    const signup = await post("/sign-up/email", { email: "bind@example.com", password: "Password123!", displayName: "B" }, publicKey);
+    const { accessToken, refreshToken } = (await signup.json()) as { accessToken: string; refreshToken: string };
+    expect((await get("/user", publicKey, accessToken)).status).toBe(200);
+    expect((await post("/sign-out", { refreshToken }, publicKey)).status).toBe(200);
+    expect((await get("/user", publicKey, accessToken)).status).toBe(401);
   });
 });
