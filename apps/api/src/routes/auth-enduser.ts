@@ -985,11 +985,23 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   ): Response {
     const esc = (v: string) => v.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
     const project = esc(tenant.project.name);
-    const who = email ? ` (${esc(email)})` : "";
+    const names: Record<string, string> = { google: "Google", github: "GitHub", apple: "Apple" };
+    const providerName = esc(names[provider] ?? provider);
+    const who = email ? `<span class="who">${esc(email)}</span>` : "";
     const action = linking
-      ? `Link your ${esc(provider)} account${who} to your <b>${project}</b> account`
-      : `Sign in to <b>${project}</b> with ${esc(provider)}${who}`;
-    const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirm</title><body style="font-family:system-ui,sans-serif;max-width:26rem;margin:10vh auto 0;padding:0 1.25rem"><h1 style="font-size:1.2rem">${action}</h1><p>Enter the confirmation code shown in the app you are using.</p><p style="color:#8a1c1c"><b>Only continue if you started this just now in that app.</b> If someone sent you this link, or the app shows no code, close this page: it is an attempt to access your account.</p>${error ? `<p style="color:#8a1c1c">${esc(error)}</p>` : ""}<form method="post" action="${esc(`${publicBaseUrl(c)}/v1/projects/${tenant.projectId}/auth/oauth/confirm`)}"><input type="hidden" name="ticket" value="${esc(ticket)}"><input name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" required autofocus style="font:1.4rem monospace;letter-spacing:.2em;text-transform:uppercase;width:100%;box-sizing:border-box;padding:.5rem"><button type="submit" style="margin-top:1rem;padding:.6rem 1.2rem;font-size:1rem">Confirm</button></form></body></html>`;
+      ? `Link your ${providerName} account to <b>${project}</b>`
+      : `Sign in to <b>${project}</b> with ${providerName}`;
+    const css =
+      "*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.25rem;background:#f4f4f5;color:#18181b;font:16px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}" +
+      "main{width:100%;max-width:24rem;background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:1.75rem}" +
+      "h1{margin:0 0 .25rem;font-size:1.15rem;font-weight:600}.who{display:block;margin-top:.15rem;font-size:.9rem;font-weight:400;color:#71717a}" +
+      "p{margin:.9rem 0 0;color:#52525b;font-size:.95rem}.note{padding:.7rem .85rem;background:#f4f4f5;border-left:3px solid #3b5bdb;border-radius:4px;color:#27272a}" +
+      "input{display:block;width:100%;margin-top:1.1rem;padding:.65rem .75rem;border:1px solid #d4d4d8;border-radius:8px;background:#fff;color:#18181b;font:600 1.4rem ui-monospace,Menlo,Consolas,monospace;letter-spacing:.25em;text-align:center;text-transform:uppercase}" +
+      "input:focus{outline:2px solid #3b5bdb;outline-offset:1px;border-color:#3b5bdb}" +
+      "button{width:100%;margin-top:.9rem;padding:.7rem 1rem;border:0;border-radius:8px;background:#3b5bdb;color:#fff;font:600 1rem system-ui,sans-serif;cursor:pointer}button:hover{background:#364fc7}" +
+      ".err{color:#18181b;font-weight:600}" +
+      "@media(prefers-color-scheme:dark){body{background:#18181b;color:#f4f4f5}main{background:#27272a;border-color:#3f3f46}p{color:#a1a1aa}.note{background:#18181b;color:#e4e4e7}.who{color:#a1a1aa}input{background:#18181b;border-color:#52525b;color:#f4f4f5}.err{color:#f4f4f5}}";
+    const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Confirm sign-in</title><style>${css}</style><body><main><h1>${action}${who}</h1><p>Enter the confirmation code shown in the app you are using.</p><p class="note"><b>Only continue if you started this just now in that app.</b> If someone sent you this link, or the app shows no code, close this page: it is an attempt to access your account.</p>${error ? `<p class="err">${esc(error)}</p>` : ""}<form method="post" action="${esc(`${publicBaseUrl(c)}/v1/projects/${tenant.projectId}/auth/oauth/confirm`)}"><input type="hidden" name="ticket" value="${esc(ticket)}"><input name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" required autofocus aria-label="Confirmation code"><button type="submit">Confirm</button></form></main></body></html>`;
     return new Response(html, {
       status: 200,
       headers: {

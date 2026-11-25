@@ -498,7 +498,7 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     cb.searchParams.set("code", "good-code");
     cb.searchParams.set("state", authorize.searchParams.get("state") ?? "");
     const html = await (await f.platform.fetch(new Request(`http://localhost${cb.pathname}${cb.search}`))).text();
-    expect(html).toContain("Link your google account");
+    expect(html).toContain("Link your Google account");
     await submitConfirm(f, html, "WRONG1");
     const ids = (await (await authed("GET", "/identities")).json()) as { identities: { provider: string }[] };
     expect(ids.identities.map((i) => i.provider)).toEqual(["password"]);
