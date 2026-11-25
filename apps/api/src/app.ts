@@ -68,6 +68,28 @@ import { loadProject } from "./project-lookup.js";
 import { attachFortressMiddleware } from "./middleware/fortress.js";
 import { createFortressRoutes } from "./routes/fortress.js";
 
+
+/**
+ * Accepts the version/exists preconditions of a batch write in any of the shapes the API has
+ * documented: flat `ifVersion` / `exists`, or a nested `preconditions` / `precondition` object.
+ */
+function normalizeWritePreconditions(raw: unknown): BatchMutation[] {
+  if (!Array.isArray(raw)) return raw as BatchMutation[];
+  return raw.map((m) => {
+    if (m === null || typeof m !== "object") return m;
+    const w = m as Record<string, unknown> & {
+      preconditions?: Record<string, unknown> | null;
+      precondition?: Record<string, unknown> | null;
+    };
+    const { preconditions, precondition, ...rest } = w;
+    return {
+      ...rest,
+      ifVersion: w["ifVersion"] ?? preconditions?.["ifVersion"] ?? preconditions?.["version"] ?? precondition?.["ifVersion"] ?? precondition?.["version"],
+      exists: w["exists"] ?? preconditions?.["exists"] ?? precondition?.["exists"],
+    };
+  }) as BatchMutation[];
+}
+
 export interface VellumPlatformContext {
   controlStore: ControlPlaneRepository;
   dataStore: StorageAdapter;
@@ -685,7 +707,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     const { apiKeyRecord, authContext } = await authenticateRequest(c, projectId);
 
     const body = await c.req.json();
-    const writes = (body.writes ?? body.operations) as BatchMutation[];
+    const writes = normalizeWritePreconditions(body.writes ?? body.operations);
     const result = await platform.documentEngine.batchWrite({
       projectId,
       writes,
@@ -701,7 +723,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     const { apiKeyRecord, authContext } = await authenticateRequest(c, projectId);
 
     const body = await c.req.json();
-    const writes = (body.writes ?? body.operations) as BatchMutation[];
+    const writes = normalizeWritePreconditions(body.writes ?? body.operations);
     const result = await platform.documentEngine.batchWrite({
       projectId,
       writes,

@@ -74,6 +74,7 @@ import type {
   UpdateProfileInput,
   VerifyMfaChallengeInput,
   CachePolicy,
+  BatchWriteOperation,
 } from "../types.js";
 
 interface HubConnection {
@@ -761,7 +762,10 @@ export class VellumClient implements VellumClientInterface {
   /* Batch writes & Transactions                                            */
   /* --------------------------------------------------------------------- */
 
-  public async batchWrite(writes: unknown[], options: RequestOptions = {}): Promise<unknown> {
+  public async batchWrite(
+    writes: Array<BatchWriteOperation | Record<string, unknown>>,
+    options: RequestOptions = {}
+  ): Promise<unknown> {
     const res = await this.transport.request("POST", "/batchWrite", { writes }, {}, true, options.signal);
     for (const op of writes) {
       if (isRecord(op) && typeof op["path"] === "string" && op["path"].length > 0) {
