@@ -99,7 +99,6 @@ abstract interface class VellumAuthPort {
     String? photoUrl,
     String? phoneNumber,
     JsonMap? metadata,
-    JsonMap? customClaims,
   });
   Future<VellumAuthResult> signInWithEmailAndPassword({
     required String email,
@@ -226,7 +225,6 @@ abstract interface class VellumAuthPort {
     String? phoneNumber,
     bool? phoneVerified,
     JsonMap? metadata,
-    JsonMap? customClaims,
     String? password,
     String? currentPassword,
   });

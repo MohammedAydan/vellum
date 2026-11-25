@@ -456,7 +456,6 @@ export interface SignUpWithEmailAndPasswordInput {
   photoUrl?: string | null;
   phoneNumber?: string | null;
   metadata?: Record<string, unknown>;
-  customClaims?: Record<string, unknown>;
 }
 
 export interface SignInWithEmailAndPasswordInput {
@@ -519,7 +518,6 @@ export type UpdateProfileInput = {
   phoneNumber?: string | null;
   phoneVerified?: boolean;
   metadata?: Record<string, unknown>;
-  customClaims?: Record<string, unknown>;
   /**
    * Required when changing `email` on an account that has a password: the
    * account's current password. Not needed for Google/GitHub-only accounts.

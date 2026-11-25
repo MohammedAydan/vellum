@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Breaking
+
+- sdk-js and `vellum_flutter`: `customClaims` is removed from the end-user `signUpWithEmailAndPassword` and `updateProfile` inputs. The API has rejected it for end users since 0.0.4, so passing it only produced an error. Set claims with a server key instead. Reading `user.customClaims` is unchanged.
+
 ### Security
 
 - Security rules: a query, export or batch read with a public key now also checks each returned row against its own `get` rule when one matches the path. Before, `allow list: if isSignedIn(); allow get: if isParticipant(...)` returned every row to any signed-in user. Hidden rows are skipped and pages are refilled (up to 5 extra batches per request). Aggregates and counts are refused for public keys when the `get` rule depends on the document, since a GROUP BY cannot be filtered per row. Paths with only a `list` rule behave as before. Server keys are unchanged.
