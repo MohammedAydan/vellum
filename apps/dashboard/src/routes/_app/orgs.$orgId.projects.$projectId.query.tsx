@@ -285,7 +285,7 @@ function QueryPlaygroundPage() {
       };
       const includeList = toFieldList(targetInclude);
       const selectList = toFieldList(targetSelect);
-      if (includeList.length > 0) queryPayload["include"] = includeList;
+      if (includeList.length > 0) queryPayload["include"] = includeList.map((field) => ({ field }));
       if (selectList.length > 0) queryPayload["select"] = selectList;
       if (targetWheres.length > 0) {
         queryPayload["where"] = targetWheres
