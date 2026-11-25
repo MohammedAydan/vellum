@@ -780,7 +780,7 @@ export class VellumClient implements VellumClientInterface {
     options: BatchWriteChunkedOptions = {}
   ): Promise<BatchWriteChunkedResult> {
     return runBatchWriteChunked(
-      { batchWrite: (writes, reqOpts) => this.batchWrite(writes, reqOpts) },
+      { batchWrite: (writes, reqOpts) => this.batchWrite(writes as Parameters<VellumClient["batchWrite"]>[0], reqOpts) },
       operations,
       options
     );
