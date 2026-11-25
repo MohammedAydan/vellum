@@ -283,7 +283,9 @@ export function attachFortressMiddleware(
             if (done) break;
             totalBytes += value.byteLength;
             if (totalBytes > limit) {
-              await reader.cancel().catch(() => undefined);
+              // Do not await: `cancel()` on a cloned (tee'd) branch only settles once the other
+              // branch is cancelled too, so awaiting it hung every oversized chunked body.
+              void reader.cancel().catch(() => undefined);
               throw new VellumError(
                 isBatch ? "PAYLOAD_TOO_LARGE" : "DOCUMENT_TOO_LARGE",
                 `Request body exceeds ${limit} bytes`,

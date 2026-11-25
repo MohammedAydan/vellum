@@ -56,3 +56,15 @@ describe('collection export pagination', () => {
     expect((await send('GET','/collections/exported/export?limit=-1')).status).toBe(400);
   });
 });
+
+describe('request body size cap without Content-Length', () => {
+  it('answers 413 instead of hanging on an oversized body', async () => {
+    const {send} = await fixture();
+    const res = await Promise.race([
+      send('PUT','/documents/items/huge',{data:{s:'x'.repeat(1_100_000)}},'huge-1'),
+      new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 3000)),
+    ]);
+    expect(res).not.toBe('hung');
+    expect((res as Response).status).toBe(413);
+  });
+});

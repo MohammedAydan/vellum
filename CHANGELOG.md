@@ -10,6 +10,8 @@ Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK 
 
 ### Security
 
+- A request body over the size limit and sent without a `Content-Length` header (chunked uploads) hung until the platform timeout instead of failing with 413, because the body cap awaited `cancel()` on a cloned stream. Any client could hold connections open this way. It now answers 413 at once.
+
 - Security rules: a query, export or batch read with a public key now also checks each returned row against its own `get` rule when one matches the path. Before, `allow list: if isSignedIn(); allow get: if isParticipant(...)` returned every row to any signed-in user. Hidden rows are skipped and pages are refilled (up to 5 extra batches per request). Aggregates and counts are refused for public keys when the `get` rule depends on the document, since a GROUP BY cannot be filtered per row. Paths with only a `list` rule behave as before. Server keys are unchanged.
 - `GET /collections/:name/export` now needs a server key, like import and clear.
 - Account-keeping changes now prove the account owner, not only the access token: linking a provider (`link: true`), `DELETE /auth/identities/:provider`, `POST /auth/password/change` and `DELETE /auth/user` need `currentPassword` (`password` for delete) for accounts with a password, and a sign-in within the last 10 minutes for accounts without one. Wrong passwords lock out per user, and these endpoints are rate limited (10 per 15 minutes per IP). sdk-js: `linkWithPopup(..., { currentPassword })`, `unlinkProvider(provider, { currentPassword })`; `vellum_flutter` must send the same field.
