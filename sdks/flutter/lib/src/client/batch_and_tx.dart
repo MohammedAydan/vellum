@@ -77,12 +77,28 @@ class TransactionContext {
 
   TransactionContext({required this.client, required this.transactionToken});
 
+  /// Reads [ref] inside the transaction. A missing document gives a snapshot
+  /// with `exists == false` (version 0) instead of throwing, so the callback can
+  /// branch on it and then [create] the document.
   Future<DocumentSnapshot<T>> get<T>(DocumentReference<T> ref) async {
     final encodedPath = encodeVellumPath(ref.path);
-    final res = await client.request(
-      'GET',
-      '/documents/$encodedPath?transactionToken=${Uri.encodeQueryComponent(transactionToken)}',
-    );
+    final JsonMap res;
+    try {
+      res = await client.request(
+        'GET',
+        '/documents/$encodedPath?transactionToken=${Uri.encodeQueryComponent(transactionToken)}',
+      );
+    } on VellumException catch (err) {
+      if (err.code == 'NOT_FOUND' || err.statusCode == 404) {
+        return DocumentSnapshot<T>(
+          id: ref.path.split('/').last,
+          path: ref.path,
+          version: 0,
+          data: null,
+        );
+      }
+      rethrow;
+    }
     final rawData = (res['data'] as Map).cast<String, Object?>();
     return DocumentSnapshot<T>(
       id: res['documentId'] as String,
@@ -90,6 +106,15 @@ class TransactionContext {
       version: (res['version'] as num).toInt(),
       data: ref.fromJson(rawData, res['documentId'] as String),
     );
+  }
+
+  /// Stages a write that fails the commit if the document already exists.
+  void create<T>(DocumentReference<T> ref, T value) {
+    stagedWrites.add({
+      'type': 'create',
+      'path': ref.path,
+      'data': ref.toJson(value),
+    });
   }
 
   void set<T>(DocumentReference<T> ref, T value, {bool merge = false}) {

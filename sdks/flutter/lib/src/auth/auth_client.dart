@@ -341,7 +341,7 @@ class VellumAuth implements VellumAuthPort {
   }
 
   @override
-  Future<VellumUser> signInWithOAuth({
+  Future<VellumAuthResult> signInWithOAuth({
     required String provider,
     String? idToken,
     String? accessToken,
@@ -370,10 +370,20 @@ class VellumAuth implements VellumAuthPort {
       includeAuth: false,
     );
     _requireCurrentEpoch(expectedEpoch);
+    if (res['mfaRequired'] == true) {
+      // No session was issued: currentUser is deliberately left untouched.
+      return VellumMfaRequired(
+        mfaTicket: _requireAuthString(res['mfaTicket'], 'mfaTicket'),
+        factors: (res['factors'] is List)
+            ? (res['factors'] as List).whereType<String>().toList()
+            : const <String>[],
+        expiresAt: res['expiresAt'] is String ? res['expiresAt'] as String : '',
+      );
+    }
     final user = VellumUser.fromSession(res);
     _sessionEpoch++;
     await _setCurrentUser(user);
-    return user;
+    return VellumSession(user);
   }
 
   @override

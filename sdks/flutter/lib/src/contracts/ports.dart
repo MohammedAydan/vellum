@@ -109,7 +109,9 @@ abstract interface class VellumAuthPort {
     String? displayName,
     JsonMap? metadata,
   });
-  Future<VellumUser> signInWithOAuth({
+  /// Resolves to [VellumMfaRequired] when the account has a second factor, like
+  /// the other sign-in methods. No session is stored in that case.
+  Future<VellumAuthResult> signInWithOAuth({
     required String provider,
     String? idToken,
     String? accessToken,

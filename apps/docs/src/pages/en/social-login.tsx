@@ -72,7 +72,7 @@ export default function Page() {
         </P>
         <P>
           Prefer a deep link? Pass a custom scheme such as <code>myapp://auth-callback</code>, add it to the allowed redirect list, and register the scheme in
-          your app like any deep link. On Windows and Linux you can also use a loopback redirect with a fixed port. The built-in launcher does not cover Flutter web; use the web SDK flow there.
+          your app like any deep link. On Windows and Linux you can also use a loopback redirect with a fixed port or with port 0 (the OS picks a free port per attempt; the API accepts any port on 127.0.0.1). The built-in launcher does not cover Flutter web; use the web SDK flow there.
         </P>
         <Code lang="dart" title="Deep link (optional)" code={flutterDeepLinkDart} />
         <P>
