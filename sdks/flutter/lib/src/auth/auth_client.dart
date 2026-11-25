@@ -377,22 +377,32 @@ class VellumAuth implements VellumAuthPort {
   }
 
   @override
-  Uri oauthStartUri({
+  Future<Uri> oauthStart({
     required String provider,
     required String redirectUri,
     required String codeChallenge,
     String? state,
-  }) {
-    return Uri.parse(
-      '${client.baseUrl}/auth/oauth/${Uri.encodeComponent(provider)}/start',
-    ).replace(
-      queryParameters: <String, String>{
-        'apiKey': client.apiKey,
+  }) async {
+    // The API key goes in a header of this POST, never in a URL the browser could expose.
+    final res = await client.request(
+      'POST',
+      '/auth/oauth/${Uri.encodeComponent(provider)}/start',
+      body: <String, Object?>{
         'redirectUri': redirectUri,
         'codeChallenge': codeChallenge,
         if (state != null) 'state': state,
       },
+      includeAuth: false,
     );
+    final url = res['authorizeUrl'];
+    if (url is! String || url.isEmpty) {
+      throw const VellumException(
+        code: 'INTERNAL',
+        message: 'The server did not return a sign-in URL',
+        statusCode: 0,
+      );
+    }
+    return Uri.parse(url);
   }
 
   @override

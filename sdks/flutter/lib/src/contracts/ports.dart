@@ -123,10 +123,12 @@ abstract interface class VellumAuthPort {
   /// Browser-based Google / GitHub sign-in is driven by [VellumOAuth] (and the
   /// `vellum_flutter_oauth` package); these are its building blocks.
   ///
-  /// URL that starts the server-side OAuth flow for [provider]. The server
-  /// returns to [redirectUri] (it must be in the project's allowed list) with a
+  /// Starts the server-side OAuth flow for [provider] and returns the provider's
+  /// authorize URL. The API key is sent as a header, never in a URL. The server
+  /// returns to [redirectUri] (a loopback `http://127.0.0.1:<port>/...` is always
+  /// accepted, anything else must be in the project's allowed list) with a
   /// one-time `vellum_code`.
-  Uri oauthStartUri({
+  Future<Uri> oauthStart({
     required String provider,
     required String redirectUri,
     required String codeChallenge,

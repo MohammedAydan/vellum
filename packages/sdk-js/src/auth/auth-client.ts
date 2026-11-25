@@ -47,7 +47,9 @@ import {
 } from "./jwt-utils.js";
 import {
   cleanUrl,
+  completeOAuthPopup,
   hasPending,
+  openPopup,
   parseCallbackParams,
   prepareFlow,
   runPopup,
@@ -55,6 +57,7 @@ import {
   takePending,
   type OAuthCallbackParams,
   type OAuthPopupOptions,
+  type PreparedFlow,
   type OAuthRedirectOptions,
 } from "./oauth-web.js";
 
@@ -133,6 +136,12 @@ export class VellumAuthClient {
       customToken: null,
     };
     Object.freeze(this);
+    // A page that carries a sign-in result but did not start a redirect sign-in is the return page of
+    // a popup. Browsers that cut the popup/opener link (Google's Cross-Origin-Opener-Policy) need it
+    // forwarded explicitly, so it happens here without any code in the app.
+    try {
+      if (!hasPending()) completeOAuthPopup();
+    } catch { /* not a browser */ }
     // A restored session is hydration, not a sign-in event: no listener emit.
     if (restored) this.scheduleRefresh();
   }
@@ -483,16 +492,24 @@ export class VellumAuthClient {
    * handler. Resolves to `MfaRequiredResult` when a second factor is needed.
    */
   public async signInWithPopup(provider: string, options: OAuthPopupOptions = {}): Promise<AuthState | MfaRequiredResult> {
-    const cfg = this.requireOAuth();
-    const flow = await prepareFlow(cfg.baseUrl, cfg.apiKey, provider, options.redirectUri);
-    const params = await runPopup(flow, options);
+    this.requireOAuth();
+    const popup = openPopup(options);
+    let flow: PreparedFlow;
+    try {
+      flow = await prepareFlow(this.request, provider, options.redirectUri);
+      popup.location.href = flow.startUrl;
+    } catch (error) {
+      try { popup.close(); } catch { /* already closed */ }
+      throw error;
+    }
+    const params = await runPopup(popup, flow, options);
     return this.finishOAuth(params, flow.state, flow.verifier);
   }
 
   /** Full-page redirect sign-in (best on mobile browsers). Finish with `getRedirectResult()` on return. */
   public async signInWithRedirect(provider: string, options: OAuthRedirectOptions = {}): Promise<void> {
-    const cfg = this.requireOAuth();
-    const flow = await prepareFlow(cfg.baseUrl, cfg.apiKey, provider, options.redirectUri);
+    this.requireOAuth();
+    const flow = await prepareFlow(this.request, provider, options.redirectUri);
     savePending({ provider, state: flow.state, verifier: flow.verifier, redirectUri: flow.redirectUri });
     (globalThis as { location: Location }).location.assign(flow.startUrl);
   }

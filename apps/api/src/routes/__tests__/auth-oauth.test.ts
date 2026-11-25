@@ -85,18 +85,15 @@ function pkce() {
   return { verifier, challenge: createHash("sha256").update(verifier).digest("base64url") };
 }
 
-async function start(f: Awaited<ReturnType<typeof fixture>>, provider: string, challenge: string, extra = "") {
-  return f.platform.fetch(new Request(
-    `http://localhost${f.base}/oauth/${provider}/start?apiKey=${f.publicKeyStr}&redirectUri=${encodeURIComponent(REDIRECT)}&codeChallenge=${challenge}&state=cs1${extra}`,
-    { redirect: "manual" }
-  ));
+async function start(f: Awaited<ReturnType<typeof fixture>>, provider: string, challenge: string, redirectUri = REDIRECT) {
+  return f.call("POST", `/oauth/${provider}/start`, f.publicKeyStr, { redirectUri, codeChallenge: challenge, state: "cs1" });
 }
 
 async function runFlow(f: Awaited<ReturnType<typeof fixture>>, provider: string) {
   const { verifier, challenge } = pkce();
   const res = await start(f, provider, challenge);
-  expect(res.status).toBe(302);
-  const authorize = new URL(res.headers.get("location") ?? "");
+  expect(res.status).toBe(200);
+  const authorize = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
   lastNonce = authorize.searchParams.get("nonce") ?? "";
   expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
   const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
@@ -217,16 +214,21 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
   it("refuses redirect URIs outside the allowlist and bad PKCE input", async () => {
     const f = await fixture();
     const { challenge } = pkce();
-    const evil = await f.platform.fetch(new Request(
-      `http://localhost${f.base}/oauth/google/start?apiKey=${f.publicKeyStr}&redirectUri=${encodeURIComponent("https://evil.example/cb")}&codeChallenge=${challenge}`,
-      { redirect: "manual" }
-    ));
+    const evil = await start(f, "google", challenge, "https://evil.example/cb");
     expect(evil.status).toBe(400);
     const noPkce = await start(f, "google", "short");
     expect(noPkce.status).toBe(400);
-    const noKey = await f.platform.fetch(new Request(
-      `http://localhost${f.base}/oauth/google/start?redirectUri=${encodeURIComponent(REDIRECT)}&codeChallenge=${challenge}`, { redirect: "manual" }));
+    const noKey = await f.call("POST", "/oauth/google/start", "", { redirectUri: REDIRECT, codeChallenge: challenge });
     expect(noKey.status).toBe(401);
+    // Native loopback redirects are accepted on any port without being listed.
+    const loop = await start(f, "google", challenge, "http://127.0.0.1:4455/callback");
+    expect(loop.status).toBe(200);
+    // The old GET start URL (API key in the query string) is refused.
+    const legacy = await f.platform.fetch(new Request(
+      `http://localhost${f.base}/oauth/google/start?apiKey=${f.publicKeyStr}&redirectUri=${encodeURIComponent(REDIRECT)}&codeChallenge=${challenge}`,
+      { redirect: "manual" }
+    ));
+    expect(legacy.status).toBe(400);
   });
 
   it("rejects a tampered state", async () => {

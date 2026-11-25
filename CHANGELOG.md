@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- Social sign-in no longer puts the API key in a URL. `POST /auth/oauth/:provider/start` takes the key in the `X-Vellum-Api-Key` header and returns the provider's authorize URL. The old `GET .../start?apiKey=...` is refused. sdk-js and `vellum_flutter` use the new call; apps must update to the next SDK release.
+
+### Fixes
+
+- Desktop and native sign-in: a loopback redirect (`http://127.0.0.1:<port>/...` or `[::1]`) is always accepted, as RFC 8252 describes, so it no longer needs an entry in the allowed redirect list.
+- sdk-js popup sign-in with Google: providers that set Cross-Origin-Opener-Policy cut the popup link, so the popup looked closed and the result was lost. The return page now forwards the result automatically and a closed-looking popup is no longer treated as a cancel.
+
 ## 0.0.3
 
 Control-plane state moves into the database, social sign-in, serverless realtime, and Relations tooling. Every package and SDK remains on one shared version.

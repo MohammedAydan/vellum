@@ -43,13 +43,22 @@ Map<String, dynamic> _session() => <String, dynamic>{
 void main() {
   late List<Map<String, Object?>> posts;
   late VellumClient client;
+  late List<Map<String, Object?>> starts;
   setUp(() {
+    starts = <Map<String, Object?>>[];
     posts = <Map<String, Object?>>[];
     client = VellumClient(
       endpoint: 'https://api.example.com',
       projectId: 'prj_1',
       apiKey: 'pk_test_abc',
       httpTransport: (method, url, headers, body) async {
+        if (url.endsWith('/auth/oauth/google/start') ||
+            url.endsWith('/auth/oauth/github/start')) {
+          starts.add(<String, Object?>{'url': url, 'body': body, 'headers': headers});
+          return <String, dynamic>{
+            'authorizeUrl': 'https://accounts.google.com/o/oauth2/v2/auth?state=sealed',
+          };
+        }
         posts.add(<String, Object?>{'url': url, 'body': body});
         if (url.endsWith('/auth/oauth/exchange') &&
             (body as Map)['code'] == 'mfa') {
@@ -67,7 +76,7 @@ void main() {
   tearDown(() => client.auth.dispose());
 
   test(
-      'start URL carries the key, redirect URI and a valid S256 challenge; exchange sends the verifier',
+      'start is a POST with the key in a header (never a URL), a redirect URI and a valid S256 challenge; exchange sends the verifier',
       () async {
     late Uri started;
     final oauth = VellumOAuth(
@@ -76,14 +85,18 @@ void main() {
       launcher: (url, scheme) async {
         started = url;
         expect(scheme, 'myapp');
-        return 'myapp://auth-callback?vellum_code=one-time&state=${url.queryParameters['state']}';
+        return 'myapp://auth-callback?vellum_code=one-time&state=${(starts.last['body']! as Map)['state']}';
       },
     );
     final result = await oauth.signIn('google');
     expect(result, isA<VellumSession>());
-    expect(started.path, '/v1/projects/prj_1/auth/oauth/google/start');
-    expect(started.queryParameters['apiKey'], 'pk_test_abc');
-    expect(started.queryParameters['redirectUri'], 'myapp://auth-callback');
+    expect(starts.single['url'], endsWith('/v1/projects/prj_1/auth/oauth/google/start'));
+    expect(starts.single['url'].toString(), isNot(contains('pk_test_abc')));
+    expect(started.toString(), isNot(contains('pk_test_abc')));
+    expect(
+        (starts.single['headers']! as Map).values.join(','), contains('pk_test_abc'));
+    final startBody = starts.single['body']! as Map;
+    expect(startBody['redirectUri'], 'myapp://auth-callback');
     final sent = posts.single['body']! as Map;
     expect(sent['code'], 'one-time');
     final expected = base64Url
@@ -91,7 +104,7 @@ void main() {
             .convert(utf8.encode(sent['codeVerifier'] as String))
             .bytes)
         .replaceAll('=', '');
-    expect(started.queryParameters['codeChallenge'], expected);
+    expect(startBody['codeChallenge'], expected);
     expect(client.auth.currentUser?.id, 'usr_1');
   });
 
@@ -135,7 +148,7 @@ void main() {
       auth: client.auth,
       redirectUri: 'myapp://auth-callback',
       launcher: (url, scheme) async =>
-          'myapp://auth-callback?vellum_code=mfa&state=${url.queryParameters['state']}',
+          'myapp://auth-callback?vellum_code=mfa&state=${(starts.last['body']! as Map)['state']}',
     );
     expect(await oauth.signIn('google'), isA<VellumMfaRequired>());
     expect(client.auth.currentUser, isNull);
