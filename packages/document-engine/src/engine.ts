@@ -18,6 +18,7 @@ import {
 } from "@vellum/core";
 import {
   authorizeOperation,
+  hasRowLevelGetRule,
   type ApiKeyRecord,
   type SecurityRulesetRecord,
   type AuthContext,
@@ -45,6 +46,7 @@ import type {
   CreateCollectionInput,
   DocumentRecord,
   ListCollectionsOptions,
+  QueriedDocument,
   StorageAdapter,
   TxHandle as StorageTxHandle,
   UpdateCollectionInput,
@@ -247,6 +249,9 @@ function defaultTtlExpiry(config: CollectionConfig | null, nowMs: number): strin
 /** Bounded server-side retries for contended blind (precondition-free) writes. */
 const BLIND_WRITE_MAX_ATTEMPTS = 25;
 
+/** Upper bound on extra query batches read to fill a page when some rows are hidden by `get` rules. */
+const MAX_ROW_FILTER_SCANS = 5;
+
 export class DocumentEngine implements DocumentEnginePort {
   public readonly controlStore: ControlStoreLike;
   public readonly dataStore: StorageAdapter;
@@ -425,6 +430,38 @@ export class DocumentEngine implements DocumentEnginePort {
    * an explicit `internal: true` marker from a trusted system component. A
    * bypass flag without that marker is always a privilege-escalation attempt.
    */
+  /**
+   * True when the caller may `get` this stored document. Bulk reads (queries, export) use it so a
+   * collection-level `list` allow never hands out rows whose own `get` rule would deny the caller.
+   * Server keys and system callers pass; only a rule denial hides the row.
+   */
+  private canReadRow(
+    apiKey: ApiKeyRecord | null,
+    ruleset: SecurityRulesetRecord | null,
+    authCtx: AuthContext,
+    bypassRules: boolean,
+    row: DocumentRecord
+  ): boolean {
+    try {
+      authorizeOperation({
+        apiKeyRecord: apiKey,
+        rulesetRecord: ruleset,
+        operation: "get",
+        path: row.path,
+        authContext: authCtx,
+        resourceData: row.data,
+        bypassRules,
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof VellumError && error.code === "PERMISSION_DENIED") {
+        // No per-document get rule for this path: `list` was the only gate and it already passed.
+        return !hasRowLevelGetRule(ruleset, row.path);
+      }
+      throw error;
+    }
+  }
+
   private resolveBypassRules(ctx: EngineContext): boolean {
     const internal = ctx as InternalEngineContext;
     if (internal.bypassRules !== true) return false;
@@ -1673,11 +1710,59 @@ export class DocumentEngine implements DocumentEnginePort {
 
         // Execute the compiled plan inside the tenant transaction. On Postgres/Neon
         // this is real SQL; on the in-memory adapter it is the equivalent evaluator.
-        const resultRows = await tx.queryDocuments(compiledPlan);
-        this.telemetry.counter("db.round_trips", 1);
-        this.telemetry.histogram("db.round_trips", 1);
+        const queryBypass = this.resolveBypassRules(ctx);
+        const pageDocs: DocumentRecord[] = [];
+        let pageHasMore = false;
+        let pageCursorDoc: QueriedDocument | null = null;
+        let batch = await tx.queryDocuments(compiledPlan);
+        let scans = 1;
+        // A collection-level `list` allow does not mean every row is readable. Each row also has to pass its
+        // own `get` rule. Denied rows are skipped and the scan continues (bounded) so pages stay full and the
+        // cursor stays valid. Server keys and system callers see every row.
+        for (;;) {
+          const more = batch.length > normalizedQuery.limit;
+          const rows = batch.slice(0, normalizedQuery.limit);
+          let stoppedAt = -1;
+          for (let i = 0; i < rows.length; i += 1) {
+            const row = rows[i] as DocumentRecord;
+            if (!this.canReadRow(apiKey, ruleset, authCtx, queryBypass, row)) continue;
+            pageDocs.push(row);
+            if (pageDocs.length >= normalizedQuery.limit) {
+              stoppedAt = i;
+              break;
+            }
+          }
+          const lastRaw = rows[rows.length - 1];
+          if (stoppedAt >= 0) {
+            pageHasMore = stoppedAt < rows.length - 1 || more;
+            pageCursorDoc = rows[stoppedAt] as QueriedDocument;
+            break;
+          }
+          if (!more || !lastRaw) break;
+          if (scans >= MAX_ROW_FILTER_SCANS) {
+            pageHasMore = true;
+            pageCursorDoc = lastRaw;
+            break;
+          }
+          const resumeCursor: CursorPayload = {
+            qHash,
+            vals: normalizedQuery.orderBy.map((o) => extractDocFieldValue(lastRaw, o.field)),
+            docId: lastRaw.documentId,
+            sortKey: lastRaw.sortKeyHex,
+          };
+          const nextPlan = compileQueryToParameterizedSql({
+            projectId: ctx.projectId,
+            normalizedQuery,
+            matchedCompositeIndex: matchedIndex,
+            cursor: resumeCursor,
+            cursorMode: "startAfter",
+          });
+          batch = await tx.queryDocuments(nextPlan);
+          scans += 1;
+        }
+        this.telemetry.counter("db.round_trips", scans);
+        this.telemetry.histogram("db.round_trips", scans);
 
-        const pageDocs = resultRows.slice(0, normalizedQuery.limit);
         const formattedDocs = pageDocs.map((d) => this.formatPublicDoc(d, normalizedQuery.select));
 
         // Short-circuit BEFORE relation expansion: the base page alone already
@@ -1721,8 +1806,8 @@ export class DocumentEngine implements DocumentEnginePort {
         }
 
         let nextCursor: string | null = null;
-        if (resultRows.length > normalizedQuery.limit) {
-          const lastDoc = pageDocs[pageDocs.length - 1];
+        if (pageHasMore) {
+          const lastDoc = pageCursorDoc;
           if (lastDoc) {
             const vals = normalizedQuery.orderBy.map((o) => extractDocFieldValue(lastDoc, o.field));
             nextCursor = encodeQueryCursor(
@@ -1815,6 +1900,33 @@ export class DocumentEngine implements DocumentEnginePort {
       authContext: authCtx,
       bypassRules: this.resolveBypassRules(ctx),
     });
+
+    // A SQL GROUP BY cannot be filtered row by row, so an aggregate is only allowed when `get` is also
+    // granted for the whole collection, not per document. Otherwise it would count rows the caller cannot read.
+    try {
+      authorizeOperation({
+        apiKeyRecord: apiKey,
+        rulesetRecord: ruleset,
+        operation: "get",
+        path: `${collectionPath}/__collection_check__`,
+        collectionLevel: true,
+        authContext: authCtx,
+        bypassRules: this.resolveBypassRules(ctx),
+      });
+    } catch (error) {
+      if (
+        error instanceof VellumError &&
+        error.code === "PERMISSION_DENIED" &&
+        hasRowLevelGetRule(ruleset, `${collectionPath}/__collection_check__`)
+      ) {
+        throw new VellumError(
+          "PERMISSION_DENIED",
+          `Aggregates and counts on '${collectionPath}' are not allowed because its get rule depends on each document. Read the documents with a query or use a server key.`,
+          { collectionPath }
+        );
+      }
+      throw error;
+    }
 
     if (typeof this.dataStore.aggregateDocuments !== "function") {
       throw new VellumError(
@@ -2589,6 +2701,7 @@ export class DocumentEngine implements DocumentEnginePort {
       authContext: authCtx,
       bypassRules: this.resolveBypassRules(ctx),
     });
+    const exportBypass = this.resolveBypassRules(ctx);
     const tenant = this.tenantOf(ctx);
     const cursor = opts?.cursor ?? null;
     const requestedLimit = opts?.limit;
@@ -2645,6 +2758,11 @@ export class DocumentEngine implements DocumentEnginePort {
 
         const kept = rows.slice(0, take);
         for (const row of kept) {
+          if (!this.canReadRow(apiKey, ruleset, authCtx, exportBypass, row)) {
+            afterDocumentId = row.documentId;
+            if (Number.isFinite(remaining)) remaining -= 1;
+            continue;
+          }
           documents.push({
             id: row.documentId,
             path: row.path,

@@ -26,14 +26,14 @@
   <main class="main">
     <div class="breadcrumb">المجموعات البرمجية <span>/</span> <strong>مجموعة Flutter البرمجية (vellum_flutter)</strong></div>
     <article class="article"><h1 id="مجموعة-flutter-البرمجية-vellum-flutter">مجموعة Flutter البرمجية (<code class="inline-code">vellum_flutter</code>)<a class="anchor" href="#مجموعة-flutter-البرمجية-vellum-flutter" aria-label="Link to section">#</a></h1>
-<p>الدليل التقني الشامل لحزمة <code class="inline-code">vellum_flutter</code> الإصدار <code class="inline-code">0.0.1</code>، المستند بالكامل إلى التنفيذ الفعلي في <code class="inline-code">sdks/flutter/lib/vellum_flutter.dart</code>.</p>
+<p>الدليل التقني الشامل لحزمة <code class="inline-code">vellum_flutter</code> الإصدار <code class="inline-code">0.0.3</code>، المستند بالكامل إلى التنفيذ الفعلي في <code class="inline-code">sdks/flutter/lib/vellum_flutter.dart</code>.</p>
 <p>حزمة Dart خالصة (<code class="inline-code">&gt;=3.4.0 &lt;4.0.0</code>) آمنة تمامًا ضد القيم الفارغة (null-safe) ولا تعتمد على محرك Flutter، لذا تعمل بسلاسة على iOS وAndroid وWeb وسطح المكتب وخدمات Dart الخلفية.</p>
 <hr>
 <h2 id="التثبيت-وتهيئة-العميل-vellumclient">التثبيت وتهيئة العميل (<code class="inline-code">VellumClient</code>)<a class="anchor" href="#التثبيت-وتهيئة-العميل-vellumclient" aria-label="Link to section">#</a></h2>
 <div class="code-block">
   <div class="cb-head"><span class="cb-lang">YAML</span><button class="cb-copy" type="button">نسخ</button></div>
   <pre><code class="hl-code">dependencies:
-  vellum_flutter: ^<span class="hl-number">0.0</span>.<span class="hl-number">1</span></code></pre>
+  vellum_flutter: ^<span class="hl-number">0.0</span>.<span class="hl-number">3</span></code></pre>
 </div>
 <div class="code-block">
   <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">نسخ</button></div>
@@ -179,7 +179,7 @@
 </div>
 <hr>
 <h2 id="مصادقة-eddsa-التفاعلية-والتخلص-من-الموارد-dispose-close">مصادقة EdDSA التفاعلية والتخلص من الموارد (<code class="inline-code">dispose()</code> / <code class="inline-code">close()</code>)<a class="anchor" href="#مصادقة-eddsa-التفاعلية-والتخلص-من-الموارد-dispose-close" aria-label="Link to section">#</a></h2>
-<ul><li>استعد الجلسة عند بدء التطبيق عبر <code class="inline-code">await client.auth.restore()</code> بعد حقن <code class="inline-code">AuthTokenStorage</code> آمن (مثل <code class="inline-code">flutter_secure_storage</code>).</li><li>يحمي العداد الرتيب <code class="inline-code">sessionEpoch</code> من سباقات تجديد الرمز بعد <code class="inline-code">signOut()</code> أو <code class="inline-code">dispose()</code>، بينما تدمج <code class="inline-code">refreshOnUnauthorized</code> أخطاء <code class="inline-code">401</code> المتزامنة في طلب تجديد واحد (single-flight).</li><li>تعيد <code class="inline-code">signInWithEmailAndPassword</code> نوعًا مغلقًا <code class="inline-code">VellumAuthResult</code> (<code class="inline-code">VellumSession</code> أو <code class="inline-code">VellumMfaRequired</code>) لمطابقة شاملة في Dart 3.</li><li>استدعِ <code class="inline-code">client.dispose()</code> (أو <code class="inline-code">client.close()</code>) عند إنهاء العميل لتحرير المؤقتات واتصالات WebSocket والذاكرة المؤقتة.</li></ul>
+<ul><li>استعد الجلسة عند بدء التطبيق عبر <code class="inline-code">await client.auth.restore()</code> ؛ تُحفظ الجلسة مشفّرة افتراضياً ويمكنك تمرير <code class="inline-code">AuthTokenStorage</code> خاص بك.</li><li>يحمي العداد الرتيب <code class="inline-code">sessionEpoch</code> من سباقات تجديد الرمز بعد <code class="inline-code">signOut()</code> أو <code class="inline-code">dispose()</code>، بينما تدمج <code class="inline-code">refreshOnUnauthorized</code> أخطاء <code class="inline-code">401</code> المتزامنة في طلب تجديد واحد (single-flight).</li><li>تعيد <code class="inline-code">signInWithEmailAndPassword</code> نوعًا مغلقًا <code class="inline-code">VellumAuthResult</code> (<code class="inline-code">VellumSession</code> أو <code class="inline-code">VellumMfaRequired</code>) لمطابقة شاملة في Dart 3.</li><li>استدعِ <code class="inline-code">client.dispose()</code> (أو <code class="inline-code">client.close()</code>) عند إنهاء العميل لتحرير المؤقتات واتصالات WebSocket والذاكرة المؤقتة.</li></ul>
 <h2 id="البنية-المعيارية-والحماية-ضد-التلاعب">البنية المعيارية والحماية ضد التلاعب<a class="anchor" href="#البنية-المعيارية-والحماية-ضد-التلاعب" aria-label="Link to section">#</a></h2>
 <p>حزمة <code class="inline-code">vellum_flutter</code> مقسّمة إلى 13 وحدة نظيفة داخل <code class="inline-code">lib/src/{core,models,auth,realtime,client}/</code> خلف <code class="inline-code">lib/vellum_flutter.dart</code> (Dart نقي متوافق مع الويب بدون <code class="inline-code">dart:io</code>) مع تغليف المجموعات بـ <code class="inline-code">Map.unmodifiable</code>/<code class="inline-code">List.unmodifiable</code> وإخفاء التوكنات والمفاتيح في <code class="inline-code">toString()</code>.</p></article>
     <footer class="article-foot"><span>VELLUM v1 · التصميم الافتراضي الرسمي لـ shadcn/ui</span><span>مولَّد من docs/guides — لا تعدّل HTML مباشرة.</span></footer>

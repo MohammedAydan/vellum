@@ -479,7 +479,7 @@ function isNonMonotoneOnResource(node: unknown, depth = 0): boolean {
 export type { ApiKeyRecord, SecurityRulesetRecord } from "@vellum/database-control";
 
 export interface AuthorizeOperationParams {
-  apiKeyRecord: ApiKeyRecord;
+  apiKeyRecord: ApiKeyRecord | null;
   rulesetRecord: SecurityRulesetRecord | null;
   operation: "get" | "list" | "create" | "update" | "delete" | "indexes:manage";
   path: string;
@@ -506,6 +506,24 @@ export interface AuthorizationResult {
   allowed: boolean;
   mode: "server_key_scope" | "security_rules_ast" | "system_bypass";
   matchedRule?: string;
+}
+
+/**
+ * True when some rule for this path defines a per-document `get` (or `read`). Bulk reads use it to decide
+ * whether rows need their own `get` check on top of the collection-level `list` check: a path whose rules
+ * only grant `list` has no row-level rule to apply.
+ */
+export function hasRowLevelGetRule(rulesetRecord: { rulesAst?: unknown } | null | undefined, path: string): boolean {
+  const rulesAst = rulesetRecord?.rulesAst as SecurityRulesetAst | undefined;
+  if (!rulesAst || !Array.isArray(rulesAst.rules)) return false;
+  const max = Math.min(rulesAst.rules.length, MAX_RULES_PER_RULESET);
+  for (let i = 0; i < max; i += 1) {
+    const rule = rulesAst.rules[i];
+    if (!rule || typeof rule.match !== "string" || !rule.allow || typeof rule.allow !== "object") continue;
+    if (!matchRulePathPattern(rule.match, path)) continue;
+    if (hasOwn.call(rule.allow, "get") || hasOwn.call(rule.allow, "read")) return true;
+  }
+  return false;
 }
 
 /**
