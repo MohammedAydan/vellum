@@ -80,6 +80,27 @@ async function fixture() {
   return { platform, project, call, publicKeyStr, serverKey, base };
 }
 
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+/** What an app computes from its own PKCE challenge and shows to the user. */
+function appCode(challenge: string): string {
+  const d = createHash("sha256").update(`vellum-confirm:${challenge}`).digest();
+  return Array.from({ length: 6 }, (_, i) => CODE_ALPHABET[(d[i] as number) & 31]).join("");
+}
+
+/** Submits the browser confirmation form like the user's browser would. */
+async function submitConfirm(f: Awaited<ReturnType<typeof fixture>>, html: string, code: string) {
+  const ticket = /name="ticket" value="([^"]+)"/.exec(html)?.[1] ?? "";
+  expect(ticket).not.toBe("");
+  return f.platform.fetch(
+    new Request(`http://localhost${f.base}/oauth/confirm`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ ticket, code }),
+    })
+  );
+}
+
 function pkce() {
   const verifier = randomBytes(48).toString("base64url");
   return { verifier, challenge: createHash("sha256").update(verifier).digest("base64url") };
@@ -303,6 +324,16 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     expect(back.headers.get("content-type")).toContain("text/html");
     const html = await back.text();
     expect(html).not.toContain("vellum_code");
+    // Not released yet: the browser page asks for the code shown in the app and names the project.
+    expect(html).toContain("confirmation code");
+    expect(html).toContain("<b>P</b>");
+    const early = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: verifier });
+    expect(early.status).toBe(202);
+    const miss = await submitConfirm(f, html, "AAAAAA");
+    expect(await miss.text()).toContain("does not match");
+    const done = await submitConfirm(f, html, appCode(challenge).toLowerCase().replace(/(...)(...)/, "$1-$2"));
+    expect(done.status).toBe(200);
+    expect(await done.text()).toContain("signed in");
     const wrong = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: pkce().verifier });
     expect(wrong.status).toBe(202);
     const ok = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: verifier });
@@ -387,7 +418,10 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
       cb.searchParams.set("code", "good-code");
       cb.searchParams.set("state", authorize.searchParams.get("state") ?? "");
       const back = await f.platform.fetch(new Request(`http://localhost${cb.pathname}${cb.search}`, { redirect: "manual" }));
-      return { loc: new URL(back.headers.get("location") ?? ""), verifier };
+      const html = await back.text();
+      // Linking waits for the code shown in the app.
+      const done = await submitConfirm(f, html, appCode(challenge));
+      return { loc: new URL(done.headers.get("location") ?? "http://none.invalid/"), verifier, html };
     };
     const noAuth = await f.call("POST", "/oauth/google/start", f.publicKeyStr, { redirectUri: REDIRECT, codeChallenge: pkce().challenge, link: true });
     expect(noAuth.status).toBe(401);
@@ -399,5 +433,67 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     expect(second.loc.searchParams.get("error")).toBe("access_denied");
     const bIds = (await (await authed("GET", "/identities", b.accessToken)).json()) as { identities: { provider: string }[] };
     expect(bIds.identities.map((i) => i.provider)).toEqual(["password"]);
+  });
+
+  it("attack: device-code phishing. A victim who signs in through the attacker's link cannot release the session without the attacker's code", async () => {
+    const f = await fixture();
+    const attacker = pkce();
+    const res = await f.call("POST", "/oauth/google/start", f.publicKeyStr, { delivery: "poll", codeChallenge: attacker.challenge });
+    const authorize = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
+    lastNonce = authorize.searchParams.get("nonce") ?? "";
+    mock.googleClaims = (nonce) => ({ iss: "https://accounts.google.com", aud: "google-client", sub: "g-victim", email: "victim@example.com", email_verified: true, name: "V", exp: Math.floor(Date.now() / 1000) + 600, nonce });
+    const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+    cb.searchParams.set("code", "good-code");
+    cb.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+    const html = await (await f.platform.fetch(new Request(`http://localhost${cb.pathname}${cb.search}`))).text();
+    expect(html).toContain("Only continue if you started this just now");
+    // The victim has no code to type, so every guess fails and the attempt locks after five.
+    let last = html;
+    for (let i = 0; i < 5; i++) last = await (await submitConfirm(f, last, `GUESS${i}`)).text();
+    expect(last).toContain("Too many wrong codes");
+    const poll = await f.call("POST", "/oauth/poll", f.publicKeyStr, { codeVerifier: attacker.verifier });
+    expect(poll.status).toBe(202);
+    // No account was created for the victim either.
+    const victim = await f.platform.fetch(new Request(`http://localhost${f.base}/sign-in/email`, { method: "POST", headers: { "content-type": "application/json", "x-vellum-api-key": f.publicKeyStr }, body: JSON.stringify({ email: "victim@example.com", password: "x" }) }));
+    expect(victim.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it("attack: link CSRF. A victim's Google account is not attached to the attacker's account unless the code is entered", async () => {
+    const f = await fixture();
+    const signUp = (await (await f.call("POST", "/sign-up/email", f.publicKeyStr, { email: "attacker@example.com", password: "First-pass-1234!" })).json()) as { accessToken: string };
+    const authed = (method: string, url: string, body?: unknown) =>
+      f.platform.fetch(new Request(`http://localhost${f.base}${url}`, {
+        method,
+        headers: { "content-type": "application/json", "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${signUp.accessToken}` },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      }));
+    const { challenge } = pkce();
+    const res = await authed("POST", "/oauth/google/start", { delivery: "poll", codeChallenge: challenge, link: true, currentPassword: "First-pass-1234!" });
+    const authorize = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
+    lastNonce = authorize.searchParams.get("nonce") ?? "";
+    mock.googleClaims = (nonce) => ({ iss: "https://accounts.google.com", aud: "google-client", sub: "g-victim-2", email: "victim2@example.com", email_verified: true, name: "V", exp: Math.floor(Date.now() / 1000) + 600, nonce });
+    const cb = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+    cb.searchParams.set("code", "good-code");
+    cb.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+    const html = await (await f.platform.fetch(new Request(`http://localhost${cb.pathname}${cb.search}`))).text();
+    expect(html).toContain("Link your google account");
+    await submitConfirm(f, html, "WRONG1");
+    const ids = (await (await authed("GET", "/identities")).json()) as { identities: { provider: string }[] };
+    expect(ids.identities.map((i) => i.provider)).toEqual(["password"]);
+  });
+
+  it("confirmation code: stable, 6 symbols, tolerant of case and dashes, and a tampered ticket is refused", async () => {
+    const { confirmationCode, codesMatch } = await import("../../auth/oauth/config.js");
+    const code = confirmationCode("c".repeat(43));
+    expect(code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+    expect(confirmationCode("c".repeat(43))).toBe(code);
+    expect(code).toBe("C9F58F"); // shared test vector with vellum_flutter
+    expect(confirmationCode("d".repeat(43))).not.toBe(code);
+    expect(codesMatch(` ${code.slice(0, 3).toLowerCase()}-${code.slice(3)} `, code)).toBe(true);
+    expect(codesMatch(code + "A", code)).toBe(false);
+    expect(codesMatch("", code)).toBe(false);
+    const f = await fixture();
+    const bad = await f.platform.fetch(new Request(`http://localhost${f.base}/oauth/confirm`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ ticket: "AAAA", code }) }));
+    expect(await bad.text()).toContain("expired");
   });
 });

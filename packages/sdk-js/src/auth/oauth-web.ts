@@ -20,6 +20,12 @@ export interface OAuthPopupOptions {
   timeoutMs?: number;
   /** Popup window features. Defaults to a centered 480x640 window. */
   popupFeatures?: string;
+  /**
+   * Linking a provider asks the person to type a short code into the provider page. This is called with that code
+   * so you can show it in your UI; return a function to hide it again (called when the flow ends). When omitted,
+   * a small built-in box is shown in the corner of the page.
+   */
+  onConfirmationCode?: (code: string) => void | (() => void);
 }
 
 export interface OAuthRedirectOptions {
@@ -61,6 +67,39 @@ export async function pkceChallenge(verifier: string): Promise<string> {
   return b64url(new Uint8Array(digest));
 }
 
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/**
+ * The code the person types into the browser page to approve a provider link. Derived from the PKCE challenge the
+ * server stored: sha256("vellum-confirm:" + challenge), first six bytes masked to 5 bits.
+ */
+export async function confirmationCode(challenge: string): Promise<string> {
+  const digest = new Uint8Array(
+    await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(`vellum-confirm:${challenge}`))
+  );
+  let out = "";
+  for (let i = 0; i < 6; i++) out += CODE_ALPHABET[(digest[i] as number) & 31];
+  return out;
+}
+
+/** Built-in code display used when the app passes no onConfirmationCode. Returns the remover. */
+export function showDefaultConfirmationCode(code: string): () => void {
+  const doc = (globalThis as { document?: Document }).document;
+  if (!doc?.body) return () => undefined;
+  const box = doc.createElement("div");
+  box.setAttribute("role", "status");
+  box.style.cssText =
+    "position:fixed;right:16px;bottom:16px;z-index:2147483647;background:#111;color:#fff;padding:14px 18px;border-radius:10px;font:14px system-ui,sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.35)";
+  const label = doc.createElement("div");
+  label.textContent = "Type this code into the sign-in window:";
+  const value = doc.createElement("div");
+  value.textContent = code;
+  value.style.cssText = "font:700 26px monospace;letter-spacing:.25em;margin-top:6px";
+  box.append(label, value);
+  doc.body.append(box);
+  return () => box.remove();
+}
+
 export function defaultRedirectUri(): string {
   const loc = (globalThis as { location?: Location }).location;
   if (!loc) throw new Error("redirectUri is required outside a browser");
@@ -90,6 +129,8 @@ export interface PreparedFlow {
   state: string;
   verifier: string;
   redirectUri: string;
+  /** The PKCE challenge sent to the server (the confirmation code is derived from it). */
+  challenge: string;
 }
 
 /** Same shape as the auth client's request function (adds the API key header, never a query parameter). */
@@ -115,17 +156,18 @@ export async function prepareFlow(
   const verifier = randomToken(48);
   const state = randomToken(16);
   const target = redirectUri ?? defaultRedirectUri();
+  const challenge = await pkceChallenge(verifier);
   const res = await request<{ authorizeUrl?: unknown }>(
     "POST",
     `/auth/oauth/${encodeURIComponent(provider)}/start`,
-    { redirectUri: target, codeChallenge: await pkceChallenge(verifier), state, ...(link ? { link: true, ...(currentPassword !== undefined ? { currentPassword } : {}) } : {}) },
+    { redirectUri: target, codeChallenge: challenge, state, ...(link ? { link: true, ...(currentPassword !== undefined ? { currentPassword } : {}) } : {}) },
     {},
     link // linking needs the signed-in user's token; a plain sign-in sends none
   );
   if (typeof res?.authorizeUrl !== "string" || !res.authorizeUrl) {
     throw new Error("The server did not return a sign-in URL");
   }
-  return { startUrl: res.authorizeUrl, state, verifier, redirectUri: target };
+  return { startUrl: res.authorizeUrl, state, verifier, redirectUri: target, challenge };
 }
 
 /**

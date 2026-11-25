@@ -14,7 +14,7 @@ export * from "./cache/doc-store.js";
 export * from "./auth/jwt-utils.js";
 export * from "./auth/auth-storage.js";
 export * from "./auth/auth-client.js";
-export { completeOAuthPopup, type OAuthPopupOptions, type OAuthRedirectOptions } from "./auth/oauth-web.js";
+export { completeOAuthPopup, confirmationCode, type OAuthPopupOptions, type OAuthRedirectOptions } from "./auth/oauth-web.js";
 export * from "./realtime/realtime-transport.js";
 export * from "./realtime/sse-socket.js";
 export * from "./realtime/fallback-socket.js";

@@ -69,7 +69,7 @@ void main() {
       apiKey: 'pk_test_abc',
       httpTransport: (m, u, h, b) async => <String, dynamic>{},
     );
-    final oauth = createVellumOAuth(auth: client.auth);
+    final oauth = createVellumOAuth(auth: client.auth, onConfirmationCode: (_) {});
     expect(oauth.redirectUri, '');
     client.auth.dispose();
   });

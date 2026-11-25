@@ -34,9 +34,14 @@ import { completeOAuthPopup } from "@vellumdb/sdk-js";
 completeOAuthPopup();`;
 
 export const flutterBrowserDart = `// Android, iOS, macOS, Windows, Linux: nothing to register anywhere.
-final oauth = createVellumOAuth(auth: db.auth);
+String? code; // show it while sign-in runs, for example with setState
+final oauth = createVellumOAuth(
+  auth: db.auth,
+  onConfirmationCode: (c) => setState(() => code = c), // e.g. "K7M2QP"
+);
 
 final result = await oauth.signIn('github'); // or 'google'
+setState(() => code = null);
 if (result is VellumMfaRequired) {
   // finish with db.auth.verifyMfaChallenge(...)
 }`;
@@ -45,6 +50,7 @@ export const flutterDeepLinkDart = `// Optional: come back to your app through a
 final oauth = createVellumOAuth(
   auth: db.auth,
   redirectUri: 'myapp://auth-callback', // must be in the allowed redirect list
+  onConfirmationCode: showCode, // needed for oauth.link(...)
 );`;
 
 export const androidBackupXml = `<!-- AndroidManifest.xml: <application android:dataExtractionRules="@xml/data_extraction_rules"

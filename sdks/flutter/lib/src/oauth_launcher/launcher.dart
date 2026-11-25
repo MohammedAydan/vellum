@@ -95,13 +95,23 @@ class _ResumeSignals with WidgetsBindingObserver {
 /// Info.plist, nothing to add in Auth Studio, and it survives the OS recreating
 /// your app while the browser is open. Redirect-less is the recommended choice
 /// on Android and iOS.
+///
+/// [onConfirmationCode] receives the short code the person must type into the
+/// browser page to finish a redirect-less sign-in or any provider link. Show it
+/// in a dialog or banner and hide it when the `signIn`/`link` future completes.
+/// It is required for redirect-less sign-in.
 VellumOAuth createVellumOAuth({
   required VellumAuthPort auth,
   String? redirectUri,
+  VellumConfirmationCodeCallback? onConfirmationCode,
 }) {
   if (redirectUri == null || redirectUri.isEmpty) {
+    if (onConfirmationCode == null) {
+      throw ArgumentError.notNull('onConfirmationCode');
+    }
     return VellumOAuth.polling(
       auth: auth,
+      onConfirmationCode: onConfirmationCode,
       resumeSignals: _ResumeSignals().stream,
       openUrl: (Uri url) async {
         if (kIsWeb) {
@@ -126,6 +136,7 @@ VellumOAuth createVellumOAuth({
   return VellumOAuth(
     auth: auth,
     redirectUri: redirectUri,
+    onConfirmationCode: onConfirmationCode,
     launcher: systemBrowserLauncher(redirectUri: redirectUri),
   );
 }

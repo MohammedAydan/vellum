@@ -52,10 +52,17 @@ import {
 } from "../auth/oauth/providers.js";
 import {
   isRedirectAllowed,
+  CONFIRM_MAX_ATTEMPTS,
+  CONFIRM_TTL_MS,
+  codesMatch,
+  confirmationCode,
+  openJson,
   openState,
   redirectAllowlist,
   resolveProviderCredentials,
+  sealJson,
   sealState,
+  type ConfirmTicket,
 } from "../auth/oauth/config.js";
 import type { VellumPlatformContext } from "../app.js";
 import {
@@ -744,61 +751,189 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       if (!profile.email || !profile.emailVerified) {
         return fail("access_denied", `${providerId} did not return a verified email address`);
       }
-      const input: ProviderSignInInput = {
-        provider: providerId,
-        providerUserId: profile.providerUserId,
-        email: profile.email,
-        emailVerified: true,
-        displayName: profile.displayName ?? undefined,
-        photoUrl: profile.photoUrl,
-      };
-      let user: AuthUserRecord;
-      let providerUserId: string;
-      if (flow.linkUserId !== undefined) {
-        const owner = await storage.getAuthUserById(tenant.ctx, flow.linkUserId);
-        if (!owner || owner.isDisabled) return fail("access_denied", "The account to link is no longer available");
-        const taken = await storage.getAuthIdentityByProvider(tenant.ctx, providerId, profile.providerUserId);
-        if (taken && taken.userId !== owner.id) {
-          return fail("access_denied", `This ${providerId} account is already linked to another user`);
-        }
-        user = owner;
-        providerUserId = profile.providerUserId;
-      } else {
-        ({ user, providerUserId } = await resolveProviderUser(tenant, config, input));
+      // Poll sign-in and account linking are completed only after the person at the browser types the
+      // confirmation code shown inside the app. Without it, a phishing link could hand the victim's session
+      // to an attacker's app (poll) or attach the victim's identity to the attacker's account (link).
+      if (pollFlow || flow.linkUserId !== undefined) {
+        const ticket = sealJson(
+          {
+            kind: "oauth-confirm",
+            p: tenant.projectId,
+            provider: providerId,
+            redirectUri: flow.redirectUri,
+            clientChallenge: flow.clientChallenge,
+            clientState: flow.clientState,
+            ...(flow.linkUserId !== undefined ? { linkUserId: flow.linkUserId } : {}),
+            profile,
+            attempts: 0,
+            exp: Date.now() + CONFIRM_TTL_MS,
+          } satisfies ConfirmTicket,
+          masterKey()
+        );
+        return confirmPage(c, tenant, ticket, providerId, profile.email, flow.linkUserId !== undefined, null);
       }
-      const now = new Date().toISOString();
-      await storage.upsertAuthIdentity(tenant.ctx, {
-        userId: user.id,
-        provider: providerId,
-        providerUserId,
-        identityData: { email: profile.email, provider: providerId },
-        lastSignInAt: now,
-      });
-      // One-time code, bound to the client's PKCE challenge: useless without the verifier.
-      const oneTime = newOpaqueToken();
+      return await finalizeOAuth(c, tenant, config, flowOf(flow), profile);
+    } catch (error) {
+      return oauthFailure(flow, error);
+    }
+  });
+
+  interface FlowOf {
+    provider: string;
+    redirectUri: string;
+    clientChallenge: string;
+    clientState: string | null;
+    linkUserId?: string | undefined;
+  }
+
+  function flowOf(flow: FlowOf): FlowOf {
+    return {
+      provider: flow.provider,
+      redirectUri: flow.redirectUri,
+      clientChallenge: flow.clientChallenge,
+      clientState: flow.clientState,
+      ...(flow.linkUserId !== undefined ? { linkUserId: flow.linkUserId } : {}),
+    };
+  }
+
+  function oauthFailure(flow: FlowOf, error: unknown): Response {
+    const pollFlow = flow.redirectUri === "";
+    const fail = (code: string, description: string) =>
+      pollFlow
+        ? returnToAppPage(false, description)
+        : redirectWith(flow.redirectUri, { error: code, error_description: description, state: flow.clientState });
+    if (error instanceof VellumError) {
+      const denied = error.code === "PERMISSION_DENIED" || error.code === "ALREADY_EXISTS" || error.code === "QUOTA_EXCEEDED";
+      return fail(denied ? "access_denied" : "server_error", error.message);
+    }
+    platform.logger.warn("OAuth callback failed", { provider: flow.provider });
+    return fail("server_error", "Sign-in failed. Please try again.");
+  }
+
+  /** Creates or finds the user, records the identity and hands the result back to the app. */
+  async function finalizeOAuth(
+    c: Context,
+    tenant: AuthTenant,
+    config: ProjectAuthConfig,
+    flow: FlowOf,
+    profile: { providerUserId: string; email: string | null; displayName: string | null; photoUrl: string | null }
+  ): Promise<Response> {
+    const providerId = flow.provider;
+    const pollFlow = flow.redirectUri === "";
+    const input: ProviderSignInInput = {
+      provider: providerId,
+      providerUserId: profile.providerUserId,
+      email: profile.email ?? undefined,
+      emailVerified: true,
+      displayName: profile.displayName ?? undefined,
+      photoUrl: profile.photoUrl,
+    };
+    let user: AuthUserRecord;
+    let providerUserId: string;
+    if (flow.linkUserId !== undefined) {
+      const owner = await storage.getAuthUserById(tenant.ctx, flow.linkUserId);
+      if (!owner || owner.isDisabled) {
+        throw new VellumError("PERMISSION_DENIED", "The account to link is no longer available");
+      }
+      const taken = await storage.getAuthIdentityByProvider(tenant.ctx, providerId, profile.providerUserId);
+      if (taken && taken.userId !== owner.id) {
+        throw new VellumError("PERMISSION_DENIED", `This ${providerId} account is already linked to another user`);
+      }
+      user = owner;
+      providerUserId = profile.providerUserId;
+    } else {
+      ({ user, providerUserId } = await resolveProviderUser(tenant, config, input));
+    }
+    const now = new Date().toISOString();
+    await storage.upsertAuthIdentity(tenant.ctx, {
+      userId: user.id,
+      provider: providerId,
+      providerUserId,
+      identityData: { email: profile.email, provider: providerId },
+      lastSignInAt: now,
+    });
+    // One-time code, bound to the client's PKCE challenge: useless without the verifier.
+    const oneTime = newOpaqueToken();
+    await storage.saveAuthToken(tenant.ctx, {
+      userId: user.id,
+      tokenHash: sha256(`${oneTime}:${flow.clientChallenge}`),
+      tokenType: TOKEN_TYPE_OAUTH_EXCHANGE,
+      expiresAt: new Date(Date.now() + OAUTH_CODE_TTL_MS).toISOString(),
+    });
+    if (pollFlow) {
       await storage.saveAuthToken(tenant.ctx, {
         userId: user.id,
-        tokenHash: sha256(`${oneTime}:${flow.clientChallenge}`),
-        tokenType: TOKEN_TYPE_OAUTH_EXCHANGE,
+        tokenHash: sha256(`poll:${flow.clientChallenge}`),
+        tokenType: TOKEN_TYPE_OAUTH_POLL,
         expiresAt: new Date(Date.now() + OAUTH_CODE_TTL_MS).toISOString(),
       });
-      if (pollFlow) {
-        await storage.saveAuthToken(tenant.ctx, {
-          userId: user.id,
-          tokenHash: sha256(`poll:${flow.clientChallenge}`),
-          tokenType: TOKEN_TYPE_OAUTH_POLL,
-          expiresAt: new Date(Date.now() + OAUTH_CODE_TTL_MS).toISOString(),
-        });
-        return returnToAppPage(true, "");
+      return returnToAppPage(true, "");
+    }
+    return redirectWith(flow.redirectUri, { vellum_code: oneTime, state: flow.clientState });
+  }
+
+  function confirmPage(
+    c: Context,
+    tenant: AuthTenant,
+    ticket: string,
+    provider: string,
+    email: string | null,
+    linking: boolean,
+    error: string | null
+  ): Response {
+    const esc = (v: string) => v.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+    const project = esc(tenant.project.name);
+    const who = email ? ` (${esc(email)})` : "";
+    const action = linking
+      ? `Link your ${esc(provider)} account${who} to your <b>${project}</b> account`
+      : `Sign in to <b>${project}</b> with ${esc(provider)}${who}`;
+    const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirm</title><body style="font-family:system-ui,sans-serif;max-width:26rem;margin:10vh auto 0;padding:0 1.25rem"><h1 style="font-size:1.2rem">${action}</h1><p>Enter the confirmation code shown in the app you are using.</p><p style="color:#8a1c1c"><b>Only continue if you started this just now in that app.</b> If someone sent you this link, or the app shows no code, close this page: it is an attempt to access your account.</p>${error ? `<p style="color:#8a1c1c">${esc(error)}</p>` : ""}<form method="post" action="${esc(`${publicBaseUrl(c)}/v1/projects/${tenant.projectId}/auth/oauth/confirm`)}"><input type="hidden" name="ticket" value="${esc(ticket)}"><input name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" required autofocus style="font:1.4rem monospace;letter-spacing:.2em;text-transform:uppercase;width:100%;box-sizing:border-box;padding:.5rem"><button type="submit" style="margin-top:1rem;padding:.6rem 1.2rem;font-size:1rem">Confirm</button></form></body></html>`;
+    return new Response(html, {
+      status: 200,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  }
+
+  // The person at the browser submits the code they read in the app. Five wrong tries end the attempt.
+  routes.post("/oauth/confirm", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    const form = await c.req.parseBody().catch(() => ({}) as Record<string, string | File>);
+    const rawTicket = typeof form["ticket"] === "string" ? (form["ticket"] as string) : "";
+    const typed = typeof form["code"] === "string" ? (form["code"] as string) : "";
+    let ticket: ConfirmTicket;
+    try {
+      ticket = openJson<ConfirmTicket>(rawTicket, masterKey());
+    } catch {
+      return returnToAppPage(false, "This confirmation expired. Start again from the app.");
+    }
+    if (ticket.kind !== "oauth-confirm" || ticket.p !== tenant.projectId) {
+      return returnToAppPage(false, "This confirmation is not valid. Start again from the app.");
+    }
+    const flow = flowOf(ticket);
+    if (!codesMatch(typed, confirmationCode(ticket.clientChallenge))) {
+      if (ticket.attempts + 1 >= CONFIRM_MAX_ATTEMPTS) {
+        return returnToAppPage(false, "Too many wrong codes. Start again from the app.");
       }
-      return redirectWith(flow.redirectUri, { vellum_code: oneTime, state: flow.clientState });
+      const next = sealJson({ ...ticket, attempts: ticket.attempts + 1 }, masterKey());
+      return confirmPage(c, tenant, next, ticket.provider, ticket.profile.email, ticket.linkUserId !== undefined, "That code does not match.");
+    }
+    try {
+      const config = await ensureAuthConfig(platform, tenant.projectId);
+      checkAccessGuards(config);
+      if (ticket.redirectUri !== "" && !isRedirectAllowed(redirectAllowlist(config.oauthProviders), ticket.redirectUri)) {
+        throw new VellumError("INVALID_ARGUMENT", "redirectUri is no longer allowed for this project");
+      }
+      const response = await finalizeOAuth(c, tenant, config, flow, ticket.profile);
+      // A 302 would replay the POST; 303 makes the browser GET the app's redirect URI.
+      return response.status === 302 ? new Response(null, { status: 303, headers: response.headers }) : response;
     } catch (error) {
-      if (error instanceof VellumError) {
-        const denied = error.code === "PERMISSION_DENIED" || error.code === "ALREADY_EXISTS" || error.code === "QUOTA_EXCEEDED";
-        return fail(denied ? "access_denied" : "server_error", error.message);
-      }
-      platform.logger.warn("OAuth callback failed", { provider: providerId });
-      return fail("server_error", "Sign-in failed. Please try again.");
+      return oauthFailure(flow, error);
     }
   });
 

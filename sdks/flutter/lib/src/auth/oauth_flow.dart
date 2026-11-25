@@ -10,6 +10,22 @@ typedef VellumOAuthLauncher = Future<String> Function(
   String callbackUrlScheme,
 );
 
+/// Receives the confirmation code the person must type into the browser page
+/// to finish a redirect-less sign-in or a provider link. Show it in your UI
+/// (a dialog or banner) and hide it when the `signIn`/`link` future completes.
+typedef VellumConfirmationCodeCallback = void Function(String code);
+
+/// The code derived from a PKCE [challenge]: `sha256("vellum-confirm:" +
+/// challenge)`, first six bytes masked to 5 bits over a 32-symbol alphabet.
+/// The server derives the same code from the challenge it stored.
+String vellumConfirmationCode(String challenge) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  final digest = crypto.sha256.convert(utf8.encode('vellum-confirm:$challenge')).bytes;
+  return String.fromCharCodes(<int>[
+    for (var i = 0; i < 6; i++) alphabet.codeUnitAt(digest[i] & 31),
+  ]);
+}
+
 /// Runs the server-side OAuth flow: start -> provider -> one-time code ->
 /// session. The app never sees a provider token, and the one-time code is
 /// useless without the PKCE verifier that never leaves this object.
@@ -18,6 +34,7 @@ class VellumOAuth {
     required this.auth,
     required this.launcher,
     required this.redirectUri,
+    this.onConfirmationCode,
     Random? random,
   }) : _random = random ?? Random.secure() {
     final scheme = Uri.parse(redirectUri).scheme;
@@ -40,6 +57,7 @@ class VellumOAuth {
   VellumOAuth.polling({
     required this.auth,
     required Future<void> Function(Uri url) openUrl,
+    required VellumConfirmationCodeCallback this.onConfirmationCode,
     this.pollInterval = const Duration(seconds: 2),
     this.timeout = const Duration(minutes: 5),
     Stream<void>? resumeSignals,
@@ -60,6 +78,12 @@ class VellumOAuth {
 
   final VellumAuthPort auth;
   final VellumOAuthLauncher launcher;
+
+  /// Called with the code the person must type into the browser page before a
+  /// redirect-less sign-in or a provider link completes. Required for
+  /// redirect-less sign-in and for [link]; it stops a phishing link from
+  /// signing someone in to, or linking their account to, an attacker's app.
+  final VellumConfirmationCodeCallback? onConfirmationCode;
   Future<void> Function(Uri url)? _openUrl;
   Stream<void>? _resume;
   Duration pollInterval = const Duration(seconds: 2);
@@ -87,6 +111,12 @@ class VellumOAuth {
         statusCode: 0,
       );
     }
+    if (onConfirmationCode == null) {
+      throw ArgumentError(
+        'link() needs onConfirmationCode: the person must type the code shown '
+        'in the app into the browser page to approve the link.',
+      );
+    }
     return _run(provider, true);
   }
 
@@ -106,6 +136,7 @@ class VellumOAuth {
       state: state,
       link: link,
     );
+    if (link) onConfirmationCode!(vellumConfirmationCode(challenge));
     final String returned;
     try {
       returned = await launcher(start, Uri.parse(redirectUri).scheme);
@@ -151,6 +182,7 @@ class VellumOAuth {
       codeChallenge: challenge,
       link: link,
     );
+    onConfirmationCode!(vellumConfirmationCode(challenge));
     try {
       await _openUrl!(start);
     } on VellumException {

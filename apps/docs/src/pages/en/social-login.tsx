@@ -56,6 +56,12 @@ export default function Page() {
         </P>
         <Code lang="bash" title="pubspec.yaml" code={flutterPubspec} />
         <Code lang="dart" title="Sign in" code={flutterBrowserDart} />
+        <Callout tone="warning" title="The confirmation code protects your users">
+          Redirect-less sign-in (and linking a provider to a signed-in account) ends with a code check. Your app shows a short code through <code>onConfirmationCode</code>;
+          the page in the browser asks the person to type it before the sign-in is released. Without this, a link sent by an attacker could sign a victim in to the attacker's
+          app, or attach the victim's Google account to the attacker's account. Show the code in plain sight while <code>signIn</code> runs (a dialog or banner) and hide it when the future completes.
+          The browser page names your project and warns the person to continue only if they started the sign-in themselves. Five wrong codes end the attempt.
+        </Callout>
         <P>
           Without a redirect URI the SDK opens the system browser and collects the result by polling the API with a PKCE verifier that
           never leaves the app. There is nothing to add to AndroidManifest.xml or Info.plist and nothing to add in Auth Studio, and it keeps
