@@ -33,6 +33,7 @@ import {
 } from "@vellum/ui";
 import { ALL_PAGES, NAV_GROUPS, neighbors, pageHref, type Lang, type Localized } from "./nav";
 import { getPage } from "./registry";
+import { PageActions } from "./page-actions";
 
 interface Route { lang: Lang; slug: string }
 
@@ -310,6 +311,9 @@ export default function App() {
             <span>{NAV_GROUPS.find((g) => g.items.some((i) => i.slug === slug))?.title[lang] ?? "—"}</span>
             <ChevronRight size={13} />
             <strong>{meta.title[lang]}</strong>
+            {PageComponent ? (
+              <PageActions slug={slug} lang={lang} getFallbackText={() => articleRef.current?.querySelector(".doc-article")?.textContent ?? ""} />
+            ) : null}
           </div>
           {PageComponent ? (
             <Suspense fallback={<div className="page-loading">{isArabic ? "جارٍ التحميل…" : "Loading…"}</div>}>

@@ -128,6 +128,10 @@ function main() {
     summary.push(`${app.label.padEnd(9)} ${String(countFiles(dest)).padStart(4)} file(s)  ->  dist-frontend/${app.dest}`);
   }
 
+  // Root-level llms.txt so agents that probe /llms.txt find the docs index.
+  const llms = path.join(OUT_DIR, "docs", "llms.txt");
+  if (fs.existsSync(llms)) fs.copyFileSync(llms, path.join(OUT_DIR, "llms.txt"));
+
   fs.writeFileSync(path.join(OUT_DIR, "_redirects"), REDIRECTS);
   fs.writeFileSync(path.join(OUT_DIR, "_headers"), HEADERS);
 
