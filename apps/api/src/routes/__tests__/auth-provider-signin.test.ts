@@ -50,6 +50,19 @@ describe("POST /sign-in/provider", () => {
     expect(res.status).toBe(409);
   });
 
+  it("pre-hijack: a verified provider login takes over an unverified password account and kills the squatter's access", async () => {
+    const { post, publicKey, serverKey } = await fixture();
+    const squat = await post("/sign-up/email", { email: "squat@example.com", password: "Password123!", displayName: "S" }, publicKey);
+    expect(squat.status).toBe(201);
+    const squatSession = (await squat.json()) as { refreshToken: string };
+    const link = await post("/sign-in/provider", { provider: "google", providerUserId: "owner1", email: "squat@example.com", emailVerified: true }, serverKey);
+    expect(link.status).toBe(200);
+    const login = await post("/sign-in/email", { email: "squat@example.com", password: "Password123!" }, publicKey);
+    expect(login.status).toBe(401);
+    const refresh = await post("/token/refresh", { refreshToken: squatSession.refreshToken }, publicKey);
+    expect(refresh.status).toBe(401);
+  });
+
   it("still works for a trusted backend that asserts a verified email", async () => {
     const { post, publicKey, serverKey } = await fixture();
     await post("/sign-up/email", { email: "ok@example.com", password: "Password123!", displayName: "O" }, publicKey);

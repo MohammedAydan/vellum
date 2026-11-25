@@ -326,6 +326,12 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     metadata?: Record<string, unknown> | undefined;
   }
 
+  let decoyHash: Promise<string> | null = null;
+  function timingDecoyHash(): Promise<string> {
+    decoyHash ??= hashPassword(`decoy-${Math.random().toString(36)}-${Date.now()}`);
+    return decoyHash;
+  }
+
   /** Shared by the server-key endpoint and the verified OAuth flows. */
   async function resolveProviderUser(
     tenant: AuthTenant,
@@ -361,7 +367,16 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
           );
         }
         if (byEmail.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
-        user = { ...byEmail, lastSignInAt: now };
+        if (!byEmail.emailVerified) {
+          // Pre-hijacking defence: the password account was created with an email
+          // nobody proved they own. The provider has now proven it, so the proven
+          // owner takes over: drop the squatter's password and every open session.
+          await storage.updateAuthUser(tenant.ctx, byEmail.id, { emailVerified: true, passwordHash: null });
+          await storage.revokeAllUserSessions(tenant.ctx, byEmail.id, "email_ownership_proven_by_provider");
+          user = { ...byEmail, emailVerified: true, passwordHash: null, lastSignInAt: now };
+        } else {
+          user = { ...byEmail, lastSignInAt: now };
+        }
       } else {
         await checkRegistrationGuards(tenant, config);
         const email = body.email;
@@ -476,7 +491,10 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
 
     const body = parseOrThrow(SignInEmailRequestSchema, await c.req.json());
     const user = await storage.getAuthUserByEmail(tenant.ctx, body.email);
-    if (!user || !user.passwordHash || !(await verifyPassword(body.password, user.passwordHash))) {
+    // Always run one scrypt verification so response time does not reveal whether the email exists.
+    const hashToCheck = user?.passwordHash ?? (await timingDecoyHash());
+    const passwordOk = await verifyPassword(body.password, hashToCheck);
+    if (!user || !user.passwordHash || !passwordOk) {
       throw new VellumError("UNAUTHENTICATED", "Invalid email or password");
     }
     if (user.isDisabled) {
