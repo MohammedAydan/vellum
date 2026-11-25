@@ -774,6 +774,24 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     return c.json(result);
   });
 
+  app.post("/v1/projects/:projectId/transactions:rollback", async (c) => {
+    const projectId = c.req.param("projectId");
+    const { apiKeyRecord, authContext } = await authenticateRequest(c, projectId);
+
+    const body = await c.req.json().catch(() => ({}));
+    const transactionToken = (body as { transactionToken?: unknown }).transactionToken;
+    if (typeof transactionToken !== "string" || transactionToken.length === 0) {
+      throw new VellumError("INVALID_ARGUMENT", "transactionToken is required");
+    }
+    await platform.documentEngine.rollbackTransaction({
+      projectId,
+      transactionToken,
+      apiKeyRecord,
+      authContext,
+    });
+    return c.json({ status: "rolled_back" });
+  });
+
   // 6.4 Composite Indexes
   app.get("/v1/projects/:projectId/indexes", async (c) => {
     const projectId = c.req.param("projectId");
