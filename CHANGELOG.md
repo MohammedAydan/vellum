@@ -19,6 +19,8 @@
 
 ### Features
 
+- `POST /transactions:rollback` ends a transaction right away instead of leaving it to expire. sdk-js `runTransaction` calls it (best effort) when the callback throws, the call is aborted, or a commit conflict is about to be retried, so abandoned attempts no longer hold their read set until the 15 s window ends.
+
 - `vellum_flutter`: `signInWithOAuth` now returns `VellumAuthResult` and resolves to `VellumMfaRequired` when the account has a second factor, like the other sign-in methods (it returned `VellumUser` before; no session is stored in the MFA case). Transactions: `tx.create()`, `tx.get` on a missing document returns an `exists == false` snapshot instead of throwing, and the document cache is cleared before `runTransaction` returns. Loopback sign-in accepts port 0 (`http://127.0.0.1:0/callback`): the port is bound per attempt and the real one is sent to the API.
 
 - Sign in with Apple. Web (Services ID, `form_post` callback) and native (`POST /auth/oauth/apple/id-token`, ID token plus raw or hashed nonce, bundle IDs as audiences). The `.p8` key is encrypted at rest, Team ID and Key ID are validated, the first-sign-in name is kept, and the Apple grant is revoked when the user deletes their account or unlinks Apple. Auth Studio has an Apple card (EN+AR). sdk-js `signInWithAppleIdToken` and `popup/redirect("apple")`; `vellum_flutter` `signInWithAppleIdToken` and `VellumOAuth.signIn('apple')`. Docs EN+AR.

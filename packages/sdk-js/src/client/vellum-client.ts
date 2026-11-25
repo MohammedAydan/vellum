@@ -921,6 +921,13 @@ export class VellumClient implements VellumClientInterface {
         return { result: userReturn, commit: commitRes };
       } catch (err: unknown) {
         const errCode = (err as { code?: string } | null | undefined)?.code;
+        // Release the server-side transaction instead of leaving it to expire. Best effort:
+        // the original error is what the caller needs to see.
+        if (errCode !== "SESSION_CHANGED") {
+          await this.transport
+            .request("POST", "/transactions:rollback", { transactionToken }, {}, true)
+            .catch(() => undefined);
+        }
         if (signal?.aborted || errCode === "REQUEST_ABORTED") {
           throw err;
         }
