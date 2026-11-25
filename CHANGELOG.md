@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Behavior change: queries with an unknown key are now rejected with `INVALID_ARGUMENT` instead of the key being ignored silently. `collectionGroup` queries return a clear not-supported error.
+
 ## 0.0.4
 
 Security hardening, sign-in fixes and Sign in with Apple. Every package and SDK stays on one shared version. **Upgrade the SDKs together with the API:** 0.0.3 SDKs cannot start social sign-in against this API (the start call moved from `GET` with the key in the URL to `POST` with the key in a header). Update `@vellumdb/sdk-js` and `vellum_flutter` to 0.0.4.
