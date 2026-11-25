@@ -1222,6 +1222,14 @@ export class VellumClient implements VellumClientInterface {
     return this.auth.updateProfile(patch);
   }
 
+  public changePassword(currentPassword: string, newPassword: string): Promise<AuthState> {
+    return this.auth.changePassword(currentPassword, newPassword);
+  }
+
+  public deleteAccount(options?: { password?: string }): Promise<void> {
+    return this.auth.deleteAccount(options);
+  }
+
   public setCustomToken(token: string | null): void {
     this.auth.setCustomToken(token);
   }

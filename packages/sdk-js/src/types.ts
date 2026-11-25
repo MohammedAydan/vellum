@@ -698,6 +698,10 @@ export interface VellumClientInterface {
   sendPasswordResetEmail(email: string): Promise<ActionTokenResult>;
   confirmPasswordReset(input: ConfirmPasswordResetInput): Promise<SuccessResult>;
   confirmPasswordReset(token: string, newPassword: string): Promise<SuccessResult>;
+  /** Change the signed-in user's password (needs the current one); other sessions are ended. */
+  changePassword(currentPassword: string, newPassword: string): Promise<AuthState>;
+  /** Permanently delete the signed-in account. Password accounts must pass `password`. */
+  deleteAccount(options?: { password?: string }): Promise<void>;
   sendEmailVerification(input?: SendEmailVerificationInput): Promise<ActionTokenResult>;
   confirmEmailVerification(input: ConfirmEmailVerificationInput): Promise<EmailVerifyConfirmResult>;
   confirmEmailVerification(token: string): Promise<EmailVerifyConfirmResult>;
