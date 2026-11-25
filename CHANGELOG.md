@@ -4,7 +4,16 @@
 
 ### Security
 
+- Account-keeping changes now prove the account owner, not only the access token: linking a provider (`link: true`), `DELETE /auth/identities/:provider`, `POST /auth/password/change` and `DELETE /auth/user` need `currentPassword` (`password` for delete) for accounts with a password, and a sign-in within the last 10 minutes for accounts without one. Wrong passwords lock out per user, and these endpoints are rate limited (10 per 15 minutes per IP). sdk-js: `linkWithPopup(..., { currentPassword })`, `unlinkProvider(provider, { currentPassword })`; `vellum_flutter` must send the same field.
+- Changing an account email through `PATCH /auth/user` needs `currentPassword` (sdk-js `updateProfile` accepts it). Accounts without a password can only change email with a server key.
+- Development tokens (`devToken`) in password reset and email verification responses are returned only when `NODE_ENV` is `test` or `development`, or `VELLUM_ALLOW_DEV_TOKENS=1` is set.
+- End-user access tokens are bound to their session (`sid` claim): signing out or revoking a session ends its access token at once. Tokens issued before this change keep working until they expire. Realtime connections of revoked sessions are closed.
+- The control plane refuses anonymous access unless `NODE_ENV` is `test` or `development`, or `VELLUM_ALLOW_ANONYMOUS_CONTROL_PLANE=1` is set. Set this only for local setups.
+- Rules: a negated or `isType` rule over `resource` no longer passes the collection-level check, so queries and aggregates that returned every row are now denied.
+- Provider sign-in that proves an unverified account's email clears that account's password and sessions (blocks email pre-hijacking). Sign-in takes the same time whether or not the account exists.
+- Project SMTP hosts that are private, loopback or link-local are refused. Self-hosted relays opt in with `VELLUM_ALLOW_PRIVATE_SMTP=1`. nodemailer is upgraded to 10.6.1.
 - Social sign-in no longer puts the API key in a URL. `POST /auth/oauth/:provider/start` takes the key in the `X-Vellum-Api-Key` header and returns the provider's authorize URL. The old `GET .../start?apiKey=...` is refused. sdk-js and `vellum_flutter` use the new call; apps must update to the next SDK release.
+- Redirect-less sign-in and provider linking now end with a confirmation code. Without it, an attacker could send a victim the authorize URL and collect the victim's session by polling with their own PKCE verifier (device-code phishing), or make a victim's Google account link to the attacker's account. The callback no longer releases the session or links the identity itself: it shows a page naming the project and a warning, and asks the person to type a 6-symbol code that only the initiating app displays (derived from the PKCE challenge). Five wrong codes end the attempt. Redirect-less sign-in is now opt-in per project (Auth Studio > Providers > Redirect-less sign-in, `__settings.allowPollSignIn`, default off) because a fake app can still show the code; start, poll and the callback refuse with "Redirect-less sign-in is turned off for this project" until it is enabled. New `POST /auth/oauth/confirm`. `createVellumOAuth` / `VellumOAuth.polling` require `onConfirmationCode`; sdk-js `linkWithPopup` shows the code (built-in box or `onConfirmationCode`).
 
 ### Features
 

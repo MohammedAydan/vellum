@@ -5,6 +5,7 @@
  */
 
 import { VellumError } from "@vellum/core";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { decryptSecret, encryptSecret } from "@vellum/auth";
 
 export const SETTINGS_KEY = "__settings";
@@ -21,6 +22,17 @@ export function redirectAllowlist(oauthProviders: Rec): string[] {
 }
 
 /**
+ * Redirect-less (poll) sign-in is off unless the project turns it on in Auth Studio. It trades a little phishing
+ * resistance for needing no deep link, so it is an explicit choice (see the social sign-in docs).
+ */
+export function pollSignInAllowed(oauthProviders: Rec): boolean {
+  return asRec(oauthProviders[SETTINGS_KEY])["allowPollSignIn"] === true;
+}
+
+export const POLL_DISABLED_MESSAGE =
+  "Redirect-less sign-in is turned off for this project. Enable it in Auth Studio (Providers > Redirect-less sign-in) or pass a redirectUri.";
+
+/**
  * Merge an incoming oauthProviders patch into the stored record.
  * - clientSecret (plaintext from the dashboard) is encrypted and stored as
  *   clientSecretEncrypted; an empty or missing secret keeps the stored one.
@@ -30,9 +42,15 @@ export function mergeOAuthProviders(existing: Rec, incoming: Rec, masterKey: str
   const out: Rec = { ...existing };
   for (const [name, raw] of Object.entries(incoming)) {
     if (name === SETTINGS_KEY) {
-      const uris = redirectAllowlist({ [SETTINGS_KEY]: raw });
+      // Settings merge key by key: saving the redirect list must not switch redirect-less sign-in off, and vice versa.
+      const incomingSettings = asRec(raw);
+      const uris = "redirectUris" in incomingSettings ? redirectAllowlist({ [SETTINGS_KEY]: raw }) : redirectAllowlist(existing);
       for (const uri of uris) assertValidRedirectUri(uri);
-      out[name] = { ...asRec(raw), redirectUris: [...new Set(uris)] };
+      const next: Rec = { ...asRec(existing[SETTINGS_KEY]), ...incomingSettings, redirectUris: [...new Set(uris)] };
+      if ("allowPollSignIn" in incomingSettings && typeof incomingSettings["allowPollSignIn"] !== "boolean") {
+        throw new VellumError("INVALID_ARGUMENT", "allowPollSignIn must be true or false");
+      }
+      out[name] = next;
       continue;
     }
     if (raw === null) {
@@ -164,4 +182,55 @@ export function openState(token: string, masterKey: string | undefined): FlowSta
   } catch {
     throw new VellumError("UNAUTHENTICATED", "Sign-in session expired or invalid. Please try again.");
   }
+}
+
+// ------------------------------------------------------------- confirmation code
+
+export const CONFIRM_TTL_MS = 10 * 60 * 1000;
+export const CONFIRM_MAX_ATTEMPTS = 5;
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 32 symbols, no I, O, 0 or 1
+const CODE_LENGTH = 6;
+
+/**
+ * The code the app shows and the person types into the browser page. It is derived from the PKCE challenge, so the
+ * app can compute it from its own verifier and the server from the challenge, and it never travels with the flow.
+ * SDKs implement the same derivation: sha256("vellum-confirm:" + challenge), the first six bytes masked to 5 bits.
+ */
+export function confirmationCode(challenge: string): string {
+  const digest = createHash("sha256").update(`vellum-confirm:${challenge}`).digest();
+  let out = "";
+  for (let i = 0; i < CODE_LENGTH; i++) out += CODE_ALPHABET[(digest[i] as number) & 31];
+  return out;
+}
+
+/** Compares a typed code to the real one, ignoring case, spaces and dashes. */
+export function codesMatch(typed: string, expected: string): boolean {
+  const clean = typed.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const a = Buffer.from(clean.padEnd(CODE_LENGTH + 8, "_"));
+  const b = Buffer.from(expected.padEnd(CODE_LENGTH + 8, "_"));
+  return a.length === b.length && timingSafeEqual(a, b) && clean.length === expected.length;
+}
+
+export interface ConfirmTicket {
+  kind: "oauth-confirm";
+  p: string;
+  provider: string;
+  redirectUri: string;
+  clientChallenge: string;
+  clientState: string | null;
+  linkUserId?: string;
+  profile: { providerUserId: string; email: string | null; displayName: string | null; photoUrl: string | null };
+  attempts: number;
+  exp: number;
+}
+
+/** AES-GCM sealed JSON with an `exp` timestamp (ms). */
+export function sealJson<T extends { exp: number }>(value: T, masterKey: string | undefined): string {
+  return Buffer.from(encryptSecret(JSON.stringify(value), masterKey), "utf8").toString("base64url");
+}
+
+export function openJson<T extends { exp: number }>(token: string, masterKey: string | undefined): T {
+  const value = JSON.parse(decryptSecret(Buffer.from(token, "base64url").toString("utf8"), masterKey)) as T;
+  if (typeof value.exp !== "number" || value.exp < Date.now()) throw new Error("expired");
+  return value;
 }

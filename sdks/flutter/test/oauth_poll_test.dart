@@ -41,6 +41,8 @@ Map<String, dynamic> _session() => <String, dynamic>{
       'expiresAt': '2099-01-01T00:00:00.000Z',
     };
 
+const _serverVector = 'C9F58F';
+
 void main() {
   late List<Map<String, Object?>> calls;
   late int pendingLeft;
@@ -72,8 +74,10 @@ void main() {
 
   test('redirect-less sign-in: no redirect URI, key in a header, polls with the verifier until done', () async {
     Uri? opened;
+    String? shown;
     final oauth = VellumOAuth.polling(
       auth: client.auth,
+      onConfirmationCode: (code) => shown = code,
       pollInterval: const Duration(milliseconds: 5),
       openUrl: (url) async => opened = url,
     );
@@ -93,12 +97,16 @@ void main() {
         .replaceAll('=', '');
     expect(startBody['codeChallenge'], expected);
     expect(client.auth.currentUser?.id, 'usr_1');
+    // The code shown to the user is derived from the challenge, matching the server.
+    expect(shown, vellumConfirmationCode(expected));
+    expect(shown, matches(RegExp(r'^[A-HJ-NP-Z2-9]{6}$')));
   });
 
   test('times out with CANCELLED when the browser step never finishes', () async {
     pendingLeft = 1 << 30;
     final oauth = VellumOAuth.polling(
       auth: client.auth,
+      onConfirmationCode: (_) {},
       pollInterval: const Duration(milliseconds: 5),
       timeout: const Duration(milliseconds: 60),
       openUrl: (url) async {},
@@ -113,6 +121,7 @@ void main() {
   test('a failing browser launch surfaces as CANCELLED and never polls', () async {
     final oauth = VellumOAuth.polling(
       auth: client.auth,
+      onConfirmationCode: (_) {},
       openUrl: (url) async => throw Exception('no browser'),
     );
     await expectLater(oauth.signIn('google'), throwsA(isA<VellumException>()));
@@ -123,6 +132,7 @@ void main() {
     final resume = StreamController<void>();
     final oauth = VellumOAuth.polling(
       auth: client.auth,
+      onConfirmationCode: (_) {},
       pollInterval: const Duration(seconds: 30),
       resumeSignals: resume.stream,
       openUrl: (url) async {},
@@ -139,6 +149,7 @@ void main() {
   test('link requires a signed-in user and then starts with the user token and link flag', () async {
     final oauth = VellumOAuth.polling(
       auth: client.auth,
+      onConfirmationCode: (_) {},
       pollInterval: const Duration(milliseconds: 5),
       openUrl: (url) async {},
     );
@@ -151,5 +162,21 @@ void main() {
     await oauth.link('google');
     expect((calls.first['body']! as Map)['link'], isTrue);
     expect((calls.first['headers']! as Map).keys.map((k) => k.toString().toLowerCase()), contains('authorization'));
+  });
+
+  test('confirmation code derivation is stable and matches the server vector', () {
+    expect(vellumConfirmationCode('c' * 43), vellumConfirmationCode('c' * 43));
+    expect(vellumConfirmationCode('c' * 43), isNot(vellumConfirmationCode('d' * 43)));
+    expect(vellumConfirmationCode('c' * 43), _serverVector);
+  });
+
+  test('polling sign-in and link refuse to run without a code callback', () {
+    expect(() => createVellumOAuth(auth: client.auth), throwsArgumentError);
+    final oauth = VellumOAuth(
+      auth: client.auth,
+      redirectUri: 'myapp://cb',
+      launcher: (u, s) async => 'myapp://cb',
+    );
+    expect(oauth.onConfirmationCode, isNull);
   });
 }

@@ -9,11 +9,15 @@ It requires the Flutter SDK. It is no longer usable from plain Dart servers or C
 ### Sign in with Google or GitHub on Android and iOS
 
 ```dart
-final oauth = createVellumOAuth(auth: client.auth); // no redirect URI
+final oauth = createVellumOAuth(
+  auth: client.auth, // no redirect URI
+  onConfirmationCode: (code) => setState(() => shownCode = code), // show it while signing in
+);
 final result = await oauth.signIn('google'); // or 'github'
+setState(() => shownCode = null);
 ```
 
-Without a `redirectUri` the SDK opens the system browser (Custom Tabs on Android, Safari on iOS) and collects the result by polling the API with a PKCE verifier that never leaves the app. You register nothing in `AndroidManifest.xml` or `Info.plist`, add nothing to Auth Studio, and it keeps working if the OS recreates your app while the browser is open. The user returns to the app after the "you are signed in" page. Pass `redirectUri: 'myapp://auth-callback'` if you prefer a deep link (then register the scheme and add the URI in Auth Studio). Both Google and GitHub need to be enabled and configured in Auth Studio > Providers. For Google's native account picker use `google_sign_in` and `signInWithGoogleIdToken`; add your Android and iOS client IDs as extra allowed audiences.
+Without a `redirectUri` the SDK uses redirect-less sign-in, which you must first turn on in Auth Studio (Providers > Redirect-less sign-in; off by default because a fake app can show the confirmation code too, so deep links or App/Universal Links are safer). It opens the system browser (Custom Tabs on Android, Safari on iOS) and collects the result by polling the API with a PKCE verifier that never leaves the app. You register nothing in `AndroidManifest.xml` or `Info.plist`, add nothing to Auth Studio, and it keeps working if the OS recreates your app while the browser is open. The browser page asks the person to type the short code your app shows through `onConfirmationCode` (required: it stops a phishing link from signing a victim in to someone else's app or linking their account to an attacker's), then they return to the app. Pass `redirectUri: 'myapp://auth-callback'` if you prefer a deep link (then register the scheme and add the URI in Auth Studio). Both Google and GitHub need to be enabled and configured in Auth Studio > Providers. For Google's native account picker use `google_sign_in` and `signInWithGoogleIdToken`; add your Android and iOS client IDs as extra allowed audiences.
 
 ---
 

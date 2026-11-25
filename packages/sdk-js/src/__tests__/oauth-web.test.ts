@@ -166,3 +166,12 @@ describe("linkWithPopup", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("confirmationCode", () => {
+  it("matches the server and Flutter test vector and is stable", async () => {
+    const { confirmationCode } = await import("../auth/oauth-web.js");
+    expect(await confirmationCode("c".repeat(43))).toBe("C9F58F");
+    expect(await confirmationCode("d".repeat(43))).not.toBe("C9F58F");
+    expect(await confirmationCode("x".repeat(43))).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+  });
+});

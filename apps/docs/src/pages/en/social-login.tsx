@@ -56,11 +56,20 @@ export default function Page() {
         </P>
         <Code lang="bash" title="pubspec.yaml" code={flutterPubspec} />
         <Code lang="dart" title="Sign in" code={flutterBrowserDart} />
+        <Callout tone="warning" title="The confirmation code protects your users">
+          Redirect-less sign-in (and linking a provider to a signed-in account) ends with a code check. Your app shows a short code through <code>onConfirmationCode</code>;
+          the page in the browser asks the person to type it before the sign-in is released. Without this, a link sent by an attacker could sign a victim in to the attacker's
+          app, or attach the victim's Google account to the attacker's account. Show the code in plain sight while <code>signIn</code> runs (a dialog or banner) and hide it when the future completes.
+          The browser page names your project and warns the person to continue only if they started the sign-in themselves. Five wrong codes end the attempt.
+        </Callout>
         <P>
           Without a redirect URI the SDK opens the system browser and collects the result by polling the API with a PKCE verifier that
           never leaves the app. There is nothing to add to AndroidManifest.xml or Info.plist and nothing to add in Auth Studio, and it keeps
           working if the OS recreates your app while the browser is open. After signing in, the user returns to your app and the sign-in completes.
-          This is the recommended way on Android and iOS.
+          It is off by default: turn it on in Auth Studio (Providers, "Redirect-less sign-in"), otherwise the SDK reports "Redirect-less sign-in is turned off for this project". Know the tradeoff before you do:
+          the person confirms the sign-in by typing the code your app shows, but a fake app run by an attacker can show that code as well, so a determined phisher can still
+          trick a user into approving a sign-in for the attacker's app. A deep link, and best of all an App Link or Universal Link, only ever reaches your own app, so it does not have this weakness.
+          Use redirect-less sign-in when you cannot register a link, and prefer links for apps that hold sensitive data.
         </P>
         <P>
           Prefer a deep link? Pass a custom scheme such as <code>myapp://auth-callback</code>, add it to the allowed redirect list, and register the scheme in

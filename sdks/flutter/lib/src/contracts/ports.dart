@@ -134,6 +134,7 @@ abstract interface class VellumAuthPort {
     required String codeChallenge,
     String? state,
     bool link = false,
+    String? currentPassword,
   });
 
   /// Starts a redirect-less sign-in: no redirect URI, no deep link, no app
@@ -143,6 +144,7 @@ abstract interface class VellumAuthPort {
     required String provider,
     required String codeChallenge,
     bool link = false,
+    String? currentPassword,
   });
 
   /// Collects the result of [oauthStartPoll]. Resolves to `null` while the
@@ -185,7 +187,10 @@ abstract interface class VellumAuthPort {
   Future<VellumLinkedProviders> listLinkedProviders();
 
   /// Removes a linked sign-in method. Refused when it is the last one.
-  Future<void> unlinkProvider(String provider);
+  ///
+  /// Pass [currentPassword] when the account has a password. Accounts without
+  /// one must have signed in within the last 10 minutes.
+  Future<void> unlinkProvider(String provider, {String? currentPassword});
 
   /// Changes the password of the signed-in user. Needs the current password;
   /// every other session ends and this one continues on a fresh session.

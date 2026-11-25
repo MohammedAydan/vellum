@@ -25,7 +25,7 @@ import {
 import { ShieldAlert, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import type { UnknownRecord, AuthConfigView, OAuthDraft } from "./types.js";
-import { asRecord, asBoolean, errorMessage, readOAuthDraft, readRedirectUris } from "./helpers.js";
+import { asRecord, asBoolean, errorMessage, readAllowPollSignIn, readOAuthDraft, readRedirectUris } from "./helpers.js";
 
 export function ProvidersPanel({ projectId }: { projectId: string }) {
   const { t } = useI18n();
@@ -183,6 +183,12 @@ export function ProvidersPanel({ projectId }: { projectId: string }) {
           </div>
         </CardContent>
       </Card>
+
+      <PollSignInCard
+        projectId={projectId}
+        enabled={readAllowPollSignIn(config)}
+        onSaved={async () => { await refetch(); }}
+      />
 
       <RedirectUrisCard
         projectId={projectId}
@@ -342,6 +348,51 @@ function OAuthConnectionDialog({
           <p className="text-[11px] text-muted-foreground">{t(`authStudio.providers.${provider}Setup`)}</p>
         </div>
     </ConsoleDetailSheet>
+  );
+}
+
+function PollSignInCard({
+  projectId,
+  enabled,
+  onSaved,
+}: {
+  projectId: string;
+  enabled: boolean;
+  onSaved: () => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const [saving, setSaving] = React.useState(false);
+
+  const toggle = async (value: boolean) => {
+    setSaving(true);
+    try {
+      await apiFetch(
+        `/v1/projects/${encodeURIComponent(projectId)}/auth/admin/config`,
+        { method: "PATCH", body: JSON.stringify({ oauthProviders: { __settings: { allowPollSignIn: value } } }) }
+      );
+      toast.success(t("authStudio.providers.pollSignInSaved"));
+      await onSaved();
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, t("authStudio.providers.pollSignInFailed")));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">{t("authStudio.providers.pollSignInTitle")}</CardTitle>
+        <CardDescription className="text-xs">{t("authStudio.providers.pollSignInDescription")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Switch checked={enabled} disabled={saving} onCheckedChange={(value) => void toggle(value)} />
+          <span>{t("authStudio.providers.pollSignInToggle")}</span>
+        </label>
+        <p className="text-[11px] text-muted-foreground">{t("authStudio.providers.pollSignInRisk")}</p>
+      </CardContent>
+    </Card>
   );
 }
 

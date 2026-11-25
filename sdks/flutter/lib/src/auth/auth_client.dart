@@ -383,6 +383,7 @@ class VellumAuth implements VellumAuthPort {
     required String codeChallenge,
     String? state,
     bool link = false,
+    String? currentPassword,
   }) async {
     // The API key goes in a header of this POST, never in a URL the browser could expose.
     final res = await client.request(
@@ -393,6 +394,7 @@ class VellumAuth implements VellumAuthPort {
         'codeChallenge': codeChallenge,
         if (state != null) 'state': state,
         if (link) 'link': true,
+        if (link && currentPassword != null) 'currentPassword': currentPassword,
       },
       // Linking is done by a signed-in user: the server needs their token.
       includeAuth: link,
@@ -413,6 +415,7 @@ class VellumAuth implements VellumAuthPort {
     required String provider,
     required String codeChallenge,
     bool link = false,
+    String? currentPassword,
   }) async {
     final res = await client.request(
       'POST',
@@ -421,6 +424,7 @@ class VellumAuth implements VellumAuthPort {
         'delivery': 'poll',
         'codeChallenge': codeChallenge,
         if (link) 'link': true,
+        if (link && currentPassword != null) 'currentPassword': currentPassword,
       },
       includeAuth: link,
     );
@@ -685,9 +689,14 @@ class VellumAuth implements VellumAuthPort {
   }
 
   @override
-  Future<void> unlinkProvider(String provider) async {
+  Future<void> unlinkProvider(String provider, {String? currentPassword}) async {
     await client.request(
-        'DELETE', '/auth/identities/${Uri.encodeComponent(provider)}');
+      'DELETE',
+      '/auth/identities/${Uri.encodeComponent(provider)}',
+      body: <String, Object?>{
+        if (currentPassword != null) 'currentPassword': currentPassword,
+      },
+    );
   }
 
   @override

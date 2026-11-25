@@ -61,6 +61,8 @@ import {
   type OAuthPopupOptions,
   type PreparedFlow,
   type OAuthRedirectOptions,
+  confirmationCode,
+  showDefaultConfirmationCode,
 } from "./oauth-web.js";
 
 /** The narrow HTTP surface the auth state machine needs from `createClient`. */
@@ -511,14 +513,25 @@ export class VellumAuthClient {
     const popup = openPopup(options);
     let flow: PreparedFlow;
     try {
-      flow = await prepareFlow(this.request, provider, options.redirectUri, link);
+      flow = await prepareFlow(this.request, provider, options.redirectUri, link, options.currentPassword);
       popup.location.href = flow.startUrl;
     } catch (error) {
       try { popup.close(); } catch { /* already closed */ }
       throw error;
     }
-    const params = await runPopup(popup, flow, options);
-    return this.finishOAuth(params, flow.state, flow.verifier);
+    // Linking is approved by typing a code into the provider page, so a link someone else sent you cannot attach
+    // your account to theirs. Show the code while the popup is open.
+    let hideCode: void | (() => void) = undefined;
+    if (link) {
+      const code = await confirmationCode(flow.challenge);
+      hideCode = (options.onConfirmationCode ?? showDefaultConfirmationCode)(code);
+    }
+    try {
+      const params = await runPopup(popup, flow, options);
+      return await this.finishOAuth(params, flow.state, flow.verifier);
+    } finally {
+      if (typeof hideCode === "function") hideCode();
+    }
   }
 
   /** Full-page redirect sign-in (best on mobile browsers). Finish with `getRedirectResult()` on return. */
@@ -693,8 +706,12 @@ export class VellumAuthClient {
     return sanitizeAndClone({ providers, hasPassword: payload["hasPassword"] === true });
   }
 
-  public async unlinkProvider(provider: string): Promise<void> {
-    await this.request("DELETE", `/auth/identities/${encodeURIComponent(provider)}`);
+  public async unlinkProvider(provider: string, options: { currentPassword?: string } = {}): Promise<void> {
+    await this.request(
+      "DELETE",
+      `/auth/identities/${encodeURIComponent(provider)}`,
+      options.currentPassword !== undefined ? { currentPassword: options.currentPassword } : {}
+    );
   }
 
   /**
