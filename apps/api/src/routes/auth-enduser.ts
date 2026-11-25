@@ -362,16 +362,7 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
           );
         }
         if (byEmail.isDisabled) throw new VellumError("PERMISSION_DENIED", "This end-user account is disabled");
-        if (!byEmail.emailVerified) {
-          // Pre-hijacking defence: someone may have registered this address with a password before its real
-          // owner proved control of it. The provider has now proved ownership, so whatever the earlier
-          // registrant set (password, live sessions) is discarded before the account is linked.
-          await storage.revokeAllUserSessions(tenant.ctx, byEmail.id, "email_ownership_proved");
-          const cleaned = await storage.updateAuthUser(tenant.ctx, byEmail.id, { passwordHash: null, emailVerified: true });
-          user = { ...cleaned, lastSignInAt: now };
-        } else {
-          user = { ...byEmail, lastSignInAt: now };
-        }
+        user = { ...byEmail, lastSignInAt: now };
       } else {
         await checkRegistrationGuards(tenant, config);
         const email = body.email;
