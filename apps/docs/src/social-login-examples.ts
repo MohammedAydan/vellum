@@ -126,9 +126,11 @@ export const iosPlist = `<key>CFBundleURLTypes</key>
   </dict>
 </array>`;
 
-export const desktopDart = `// Windows and Linux (and macOS if you prefer): use a loopback redirect with a fixed port.
-// Add exactly this URL to the redirect list in Auth Studio.
+export const desktopDart = `// Windows, Linux and macOS: use a loopback redirect.
+// Port 0 lets the OS pick a free port for every attempt (recommended, RFC 8252):
+// the API accepts any port on 127.0.0.1, so there is nothing to add in Auth Studio.
 final oauth = createVellumOAuth(
   auth: db.auth,
-  redirectUri: 'http://127.0.0.1:4455/callback',
-);`;
+  redirectUri: 'http://127.0.0.1:0/callback',
+);
+// A fixed port also works (for example 'http://127.0.0.1:4455/callback').`;

@@ -982,6 +982,14 @@ class VellumClient implements VellumClientPort {
             'writes': txContext.stagedWrites,
           },
         );
+        // The commit changed documents the cache may hold: drop them now, not in
+        // the background, so the next read cannot return a stale copy.
+        final store = documentCache;
+        if (store != null) {
+          try {
+            await store.clear();
+          } catch (_) {}
+        }
         return result;
       } on VellumException catch (err) {
         if (err.code == 'ABORTED_CONFLICT' && attempt + 1 < maxAttempts) {

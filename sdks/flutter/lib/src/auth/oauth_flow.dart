@@ -10,6 +10,25 @@ typedef VellumOAuthLauncher = Future<String> Function(
   String callbackUrlScheme,
 );
 
+/// One sign-in attempt prepared by a [VellumOAuthSessionFactory]: the redirect
+/// URI to send to the API (known only once the listener is bound) and the
+/// launcher that waits on it. [close] runs when the attempt ends.
+class VellumOAuthSession {
+  const VellumOAuthSession({
+    required this.redirectUri,
+    required this.launcher,
+    required this.close,
+  });
+  final String redirectUri;
+  final VellumOAuthLauncher launcher;
+  final Future<void> Function() close;
+}
+
+/// Builds a [VellumOAuthSession] per attempt. Used for loopback redirects on an
+/// ephemeral port (`http://127.0.0.1:0/callback`), where the real port exists
+/// only after the listener is bound.
+typedef VellumOAuthSessionFactory = Future<VellumOAuthSession> Function();
+
 /// Receives the confirmation code the person must type into the browser page
 /// to finish a redirect-less sign-in or a provider link. Show it in your UI
 /// (a dialog or banner) and hide it when the `signIn`/`link` future completes.
@@ -35,6 +54,7 @@ class VellumOAuth {
     required this.launcher,
     required this.redirectUri,
     this.onConfirmationCode,
+    this.sessionFactory,
     Random? random,
   }) : _random = random ?? Random.secure() {
     final scheme = Uri.parse(redirectUri).scheme;
@@ -63,6 +83,7 @@ class VellumOAuth {
     Stream<void>? resumeSignals,
     Random? random,
   })  : launcher = _noLauncher,
+        sessionFactory = null,
         redirectUri = '',
         _openUrl = openUrl,
         _resume = resumeSignals,
@@ -78,6 +99,10 @@ class VellumOAuth {
 
   final VellumAuthPort auth;
   final VellumOAuthLauncher launcher;
+
+  /// When set, each attempt asks it for its redirect URI and launcher instead of
+  /// using [redirectUri] and [launcher] (loopback with an ephemeral port).
+  final VellumOAuthSessionFactory? sessionFactory;
 
   /// Called with the code the person must type into the browser page before a
   /// redirect-less sign-in or a provider link completes. Required for
@@ -129,6 +154,33 @@ class VellumOAuth {
     if (_openUrl != null) {
       return _signInPolling(provider, verifier, challenge, link, currentPassword);
     }
+    final prepared = await sessionFactory?.call();
+    try {
+      return await _runRedirect(
+        provider,
+        link,
+        currentPassword,
+        verifier,
+        state,
+        challenge,
+        prepared?.redirectUri ?? redirectUri,
+        prepared?.launcher ?? launcher,
+      );
+    } finally {
+      await prepared?.close();
+    }
+  }
+
+  Future<VellumAuthResult> _runRedirect(
+    String provider,
+    bool link,
+    String? currentPassword,
+    String verifier,
+    String state,
+    String challenge,
+    String redirectUri,
+    VellumOAuthLauncher launcher,
+  ) async {
     final start = await auth.oauthStart(
       provider: provider,
       redirectUri: redirectUri,

@@ -17,6 +17,8 @@
 
 ### Features
 
+- `vellum_flutter`: `signInWithOAuth` now returns `VellumAuthResult` and resolves to `VellumMfaRequired` when the account has a second factor, like the other sign-in methods (it returned `VellumUser` before; no session is stored in the MFA case). Transactions: `tx.create()`, `tx.get` on a missing document returns an `exists == false` snapshot instead of throwing, and the document cache is cleared before `runTransaction` returns. Loopback sign-in accepts port 0 (`http://127.0.0.1:0/callback`): the port is bound per attempt and the real one is sent to the API.
+
 - Sign in with Apple. Web (Services ID, `form_post` callback) and native (`POST /auth/oauth/apple/id-token`, ID token plus raw or hashed nonce, bundle IDs as audiences). The `.p8` key is encrypted at rest, Team ID and Key ID are validated, the first-sign-in name is kept, and the Apple grant is revoked when the user deletes their account or unlinks Apple. Auth Studio has an Apple card (EN+AR). sdk-js `signInWithAppleIdToken` and `popup/redirect("apple")`; `vellum_flutter` `signInWithAppleIdToken` and `VellumOAuth.signIn('apple')`. Docs EN+AR.
 
 - Redirect-less social sign-in for mobile and desktop apps: `POST /auth/oauth/:provider/start` with `{"delivery":"poll","codeChallenge":...}` needs no redirect URI; the app collects the result with `POST /auth/oauth/poll` and its PKCE verifier (202 `{"status":"pending"}` until the browser step is done). `createVellumOAuth(auth:)` in `vellum_flutter` uses it when no `redirectUri` is given, so Android and iOS need no manifest, Info.plist or Auth Studio setup.
