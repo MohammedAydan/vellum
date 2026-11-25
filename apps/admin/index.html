@@ -23,23 +23,11 @@
     <!--
       Runtime API base override. A host page may inject
       <meta name="vellum:api-base-url" content="https://api.example.com"> before
-      this script runs; copy it to the global the app reads. Never blocks render
+      this script runs; copy it to the global the app reads (vellum-bootstrap.js, a file so the page CSP can forbid inline scripts). Never blocks render
       and performs no fetch — an unreachable API still yields a normal UI with
       an error state.
     -->
-    <script>
-      (function () {
-        try {
-          var meta = document.querySelector('meta[name="vellum:api-base-url"]');
-          var value = meta && meta.getAttribute("content");
-          if (value && value.trim() && !window.__VELLUM_API_BASE_URL__) {
-            window.__VELLUM_API_BASE_URL__ = value.trim();
-          }
-        } catch (_) {
-          /* bootstrap must never prevent the app from loading */
-        }
-      })();
-    </script>
+    <script src="%BASE_URL%vellum-bootstrap.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
