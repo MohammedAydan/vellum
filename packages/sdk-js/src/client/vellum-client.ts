@@ -31,6 +31,8 @@ import { applyConverterToSnapshot, parseWireDocument, type WireDocument } from "
 import type {
   ActionTokenResult,
   AuthState,
+  VellumLinkedProvider,
+  VellumSessionInfo,
   AuthStateListener,
   BatchWriteChunkedOptions,
   BatchWriteChunkedResult,
@@ -1220,6 +1222,22 @@ export class VellumClient implements VellumClientInterface {
 
   public updateProfile(patch: UpdateProfileInput): Promise<VellumAuthUser> {
     return this.auth.updateProfile(patch);
+  }
+
+  public listSessions(): Promise<VellumSessionInfo[]> {
+    return this.auth.listSessions();
+  }
+
+  public revokeSession(sessionId: string): Promise<void> {
+    return this.auth.revokeSession(sessionId);
+  }
+
+  public listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }> {
+    return this.auth.listLinkedProviders();
+  }
+
+  public unlinkProvider(provider: string): Promise<void> {
+    return this.auth.unlinkProvider(provider);
   }
 
   public changePassword(currentPassword: string, newPassword: string): Promise<AuthState> {

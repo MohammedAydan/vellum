@@ -33,15 +33,19 @@ export const callbackTs = `// Optional. Only needed if a browser cuts the link b
 import { completeOAuthPopup } from "@vellumdb/sdk-js";
 completeOAuthPopup();`;
 
-export const flutterBrowserDart = `final oauth = createVellumOAuth(
-  auth: db.auth,
-  redirectUri: 'myapp://auth-callback', // must be in the allowed redirect list
-);
+export const flutterBrowserDart = `// Android, iOS, macOS, Windows, Linux: nothing to register anywhere.
+final oauth = createVellumOAuth(auth: db.auth);
 
 final result = await oauth.signIn('github'); // or 'google'
 if (result is VellumMfaRequired) {
   // finish with db.auth.verifyMfaChallenge(...)
 }`;
+
+export const flutterDeepLinkDart = `// Optional: come back to your app through a deep link instead.
+final oauth = createVellumOAuth(
+  auth: db.auth,
+  redirectUri: 'myapp://auth-callback', // must be in the allowed redirect list
+);`;
 
 export const flutterNativeDart = `// Optional. Add the official google_sign_in package to your own pubspec;
 // vellum_flutter does not depend on it.

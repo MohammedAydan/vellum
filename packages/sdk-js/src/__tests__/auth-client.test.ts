@@ -446,3 +446,28 @@ describe("@vellumdb/sdk-js - password change and account deletion", () => {
     expect(db.currentUser).toBeNull();
   });
 });
+
+describe("@vellumdb/sdk-js - sessions and linked providers", () => {
+  it("lists sessions, revokes one, lists and unlinks providers", async () => {
+    const { calls, fetch } = recorder(({ url, init }) => {
+      if (url.endsWith("/auth/sign-in/email")) return json(session());
+      if (url.endsWith("/auth/sessions") && init?.method === "GET") {
+        return json({ sessions: [{ id: "s1", userAgent: "ua", ipAddress: null, createdAt: "x", lastRefreshedAt: null, expiresAt: "y" }] });
+      }
+      if (url.endsWith("/auth/identities") && init?.method === "GET") {
+        return json({ identities: [{ provider: "google", email: "a@b.c", lastSignInAt: "x", createdAt: "y" }], hasPassword: false });
+      }
+      return json({ success: true });
+    });
+    const db = createClient({ projectId: "p", apiKey: "pk_test", customFetch: fetch });
+    await db.signInWithEmailAndPassword("a@b.c", "password123");
+    expect((await db.listSessions())[0]?.id).toBe("s1");
+    await db.revokeSession("s1");
+    const linked = await db.listLinkedProviders();
+    expect(linked.providers[0]?.provider).toBe("google");
+    expect(linked.hasPassword).toBe(false);
+    await db.unlinkProvider("google");
+    expect(calls.some((c) => c.url.endsWith("/auth/sessions/s1") && c.init?.method === "DELETE")).toBe(true);
+    expect(calls.some((c) => c.url.endsWith("/auth/identities/google") && c.init?.method === "DELETE")).toBe(true);
+  });
+});

@@ -337,4 +337,29 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
     expect((await authed("DELETE", "/user", { password: "Second-pass-1234!" }, s2.accessToken)).status).toBe(200);
     expect((await f.call("POST", "/sign-in/email", f.publicKeyStr, { email: "me@example.com", password: "Second-pass-1234!" })).status).toBeGreaterThanOrEqual(400);
   });
+
+  it("lists and revokes own sessions, lists linked sign-in methods and refuses to remove the last one", async () => {
+    const f = await fixture();
+    const reg = await f.call("POST", "/sign-up/email", f.publicKeyStr, { email: "sess@example.com", password: "First-pass-1234!" });
+    const s1 = (await reg.json()) as { accessToken: string; refreshToken: string };
+    const second = await f.call("POST", "/sign-in/email", f.publicKeyStr, { email: "sess@example.com", password: "First-pass-1234!" });
+    const s2 = (await second.json()) as { refreshToken: string };
+    const authed = (method: string, url: string) =>
+      f.platform.fetch(new Request(`http://localhost${f.base}${url}`, {
+        method,
+        headers: { "x-vellum-api-key": f.publicKeyStr, authorization: `Bearer ${s1.accessToken}` },
+      }));
+    const list = (await (await authed("GET", "/sessions")).json()) as { sessions: { id: string }[] };
+    expect(list.sessions.length).toBe(2);
+    expect(JSON.stringify(list)).not.toContain("refresh");
+    expect((await authed("DELETE", `/sessions/${list.sessions[0]!.id}`)).status).toBe(200);
+    expect(((await (await authed("GET", "/sessions")).json()) as { sessions: unknown[] }).sessions.length).toBe(1);
+    expect((await authed("DELETE", "/sessions/00000000-0000-0000-0000-000000000000")).status).toBe(404);
+    expect(s2.refreshToken).toBeTruthy();
+    const ids = (await (await authed("GET", "/identities")).json()) as { identities: { provider: string }[]; hasPassword: boolean };
+    expect(ids.identities.map((i) => i.provider)).toEqual(["password"]);
+    expect(ids.hasPassword).toBe(true);
+    expect((await authed("DELETE", "/identities/password")).status).toBe(412);
+    expect((await authed("DELETE", "/identities/github")).status).toBe(404);
+  });
 });

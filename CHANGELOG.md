@@ -12,6 +12,9 @@
 
 - End-user `POST /auth/password/change` (current password required, other sessions ended, fresh session returned) and `DELETE /auth/user` (password accounts confirm with their password). sdk-js `changePassword` / `deleteAccount`, `vellum_flutter` `changePassword` / `deleteAccount`.
 
+- End-user `GET /auth/sessions`, `DELETE /auth/sessions/:id`, `GET /auth/identities` and `DELETE /auth/identities/:provider` (refused when it would remove the last way to sign in). sdk-js `listSessions` / `revokeSession` / `listLinkedProviders` / `unlinkProvider`; `vellum_flutter` same names.
+- Docs: Flutter social sign-in now leads with the redirect-less flow (EN + AR); the deep link is optional.
+
 ### Fixes
 
 - Desktop and native sign-in: a loopback redirect (`http://127.0.0.1:<port>/...` or `[::1]`) is always accepted, as RFC 8252 describes, so it no longer needs an entry in the allowed redirect list.

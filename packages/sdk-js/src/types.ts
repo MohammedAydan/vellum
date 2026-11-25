@@ -390,6 +390,24 @@ export interface VellumAuthUser {
  * material the SDK holds on the client. This is the value delivered to
  * `onAuthStateChanged` listeners and returned by the sign-in methods.
  */
+/** One signed-in device or browser of the current user. */
+export interface VellumSessionInfo {
+  id: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  lastRefreshedAt: string | null;
+  expiresAt: string;
+}
+
+/** A sign-in method linked to the current user. */
+export interface VellumLinkedProvider {
+  provider: string;
+  email: string | null;
+  lastSignInAt: string;
+  createdAt: string;
+}
+
 export interface AuthState extends VellumAuthUser {
   accessToken: string;
   refreshToken: string;
@@ -698,6 +716,14 @@ export interface VellumClientInterface {
   sendPasswordResetEmail(email: string): Promise<ActionTokenResult>;
   confirmPasswordReset(input: ConfirmPasswordResetInput): Promise<SuccessResult>;
   confirmPasswordReset(token: string, newPassword: string): Promise<SuccessResult>;
+  /** Active sessions (devices) of the signed-in user. */
+  listSessions(): Promise<VellumSessionInfo[]>;
+  /** Sign one of the user's other sessions out. */
+  revokeSession(sessionId: string): Promise<void>;
+  /** Sign-in methods linked to the account, and whether it has a password. */
+  listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }>;
+  /** Remove a linked sign-in method ("google", "github" or "password"). Refused when it is the last one. */
+  unlinkProvider(provider: string): Promise<void>;
   /** Change the signed-in user's password (needs the current one); other sessions are ended. */
   changePassword(currentPassword: string, newPassword: string): Promise<AuthState>;
   /** Permanently delete the signed-in account. Password accounts must pass `password`. */

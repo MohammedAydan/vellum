@@ -213,3 +213,66 @@ class AuthActionResult {
       'AuthActionResult(success: $success, devToken: ${devToken != null ? '<redacted>' : 'null'}, '
       'expiresAt: $expiresAt)';
 }
+
+/// One signed-in device or browser of the current user.
+class VellumSessionInfo {
+  final String id;
+  final String? userAgent;
+  final String? ipAddress;
+  final String createdAt;
+  final String? lastRefreshedAt;
+  final String expiresAt;
+
+  const VellumSessionInfo({
+    required this.id,
+    required this.createdAt,
+    required this.expiresAt,
+    this.userAgent,
+    this.ipAddress,
+    this.lastRefreshedAt,
+  });
+
+  factory VellumSessionInfo.fromJson(Map<String, Object?> json) =>
+      VellumSessionInfo(
+        id: json['id'] as String,
+        userAgent: json['userAgent'] as String?,
+        ipAddress: json['ipAddress'] as String?,
+        createdAt: (json['createdAt'] ?? '') as String,
+        lastRefreshedAt: json['lastRefreshedAt'] as String?,
+        expiresAt: (json['expiresAt'] ?? '') as String,
+      );
+}
+
+/// A sign-in method (`google`, `github` or `password`) linked to the user.
+class VellumLinkedProvider {
+  final String provider;
+  final String? email;
+  final String lastSignInAt;
+  final String createdAt;
+
+  const VellumLinkedProvider({
+    required this.provider,
+    required this.lastSignInAt,
+    required this.createdAt,
+    this.email,
+  });
+
+  factory VellumLinkedProvider.fromJson(Map<String, Object?> json) =>
+      VellumLinkedProvider(
+        provider: json['provider'] as String,
+        email: json['email'] as String?,
+        lastSignInAt: (json['lastSignInAt'] ?? '') as String,
+        createdAt: (json['createdAt'] ?? '') as String,
+      );
+}
+
+/// The linked sign-in methods of the current user.
+class VellumLinkedProviders {
+  final List<VellumLinkedProvider> providers;
+  final bool hasPassword;
+
+  const VellumLinkedProviders({
+    required this.providers,
+    required this.hasPassword,
+  });
+}
