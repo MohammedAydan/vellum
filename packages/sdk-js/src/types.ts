@@ -502,6 +502,8 @@ export type UpdateProfileInput = {
   phoneVerified?: boolean;
   metadata?: Record<string, unknown>;
   customClaims?: Record<string, unknown>;
+  /** Required when changing `email` on an account that has a password. */
+  currentPassword?: string;
   /**
    * Accepted for cross-SDK parity but not supported by the v1 end-user API,
    * which has no authenticated password-change route. When supplied,

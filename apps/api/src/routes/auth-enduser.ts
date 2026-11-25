@@ -813,6 +813,28 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const body = parseOrThrow(UpdateProfileRequestSchema, await c.req.json());
     rejectSelfAssignedPrivilege(body);
     const patch: UpdateAuthUserInput = {};
+    if (body.email !== undefined && body.email.toLowerCase() !== (current.email ?? "").toLowerCase()) {
+      // Changing the email moves the password-reset address, so a stolen access token must not be
+      // enough. An account with a password has to prove it; an account without one can only
+      // attach a first email (anonymous upgrade), never replace one.
+      if (current.email !== null) {
+        if (!current.passwordHash) {
+          throw new VellumError(
+            "PERMISSION_DENIED",
+            "This account has no password. Its email can only be changed with a server key."
+          );
+        }
+        const failureKey = sha256(`email-change:${current.id}`);
+        if (await mfaLockedOut(tenant, failureKey)) {
+          throw new VellumError("TOO_MANY_REQUESTS", "Too many invalid attempts. Try again later.");
+        }
+        if (typeof body.currentPassword !== "string" || !(await verifyPassword(body.currentPassword, current.passwordHash))) {
+          await recordMfaFailure(tenant, failureKey);
+          throw new VellumError("UNAUTHENTICATED", "currentPassword is required and must be correct to change the email");
+        }
+        await clearMfaFailures(tenant, failureKey);
+      }
+    }
     if (body.email !== undefined) {
       const email = body.email;
       const collision = await storage.getAuthUserByEmail(tenant.ctx, email);
