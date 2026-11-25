@@ -272,6 +272,54 @@ export default function Page() {
         <Code code={batchAndTx} lang="dart" />
       </Section>
 
+      <Section id="offline" title="ذاكرة مؤقتة دائمة وطابور كتابة دون اتصال">
+        <P>
+          يحفظ <code>PersistentDocumentCacheStore</code> الذاكرة المؤقتة للمستندات بين مرات التشغيل، ويضع <code>VellumOutbox</code> كتابات المستندات في طابور أثناء انقطاع الاتصال.
+          كلاهما يشفّر كل شيء بـAES-256-GCM. يُنشأ المفتاح على الجهاز ويُحفظ في Keychain أو Keystore (ولا يُزامَن مع iCloud) ويخص المشروع. والذاكرة المؤقتة مرتبطة أيضاً بالمستخدم المسجَّل، فلا يجد مستخدم آخر أو مشروع آخر شيئاً.
+          إن تعذّرت قراءة المخزن الآمن يبقى المفتاح في الذاكرة ولا يُكتب شيء. تسجيل الخروج يحذف الكتلتين والمفتاح.
+          على الويب يُحفظ المفتاح بجانب البيانات فلا يضيف التشفير حماية: لا يُكتب شيء على القرص في الويب إلا إذا مرّرت <code>allowWeb: true</code>.
+        </P>
+        <P>
+          يقبل الطابور كتابات المستندات فقط (ولا نداءات المصادقة ولا سلاسل الاستعلام ولا مسارات <code>..</code>) ولا يخزّن أي رمز أو مفتاح API: تُضاف عند إعادة التنفيذ.
+          لكل عنصر مفتاح idempotency ويخص المستخدم الذي أنشأه، ولا يُعاد تنفيذه لمستخدم أو مشروع آخر.
+          الحد 200 كتابة، 256 كيلوبايت لكل منها و2 ميغابايت إجمالاً (1 على الويب)؛ والكتابة التي لا تتسع تُطلق <code>RESOURCE_EXHAUSTED</code>.
+          العناصر الأقدم من 23 ساعة تُحذف (<code>expired</code>) لأن الخادم يتذكر مفاتيح idempotency لمدة 24 ساعة ولا يجوز تنفيذ الزيادة أو تحويلات المصفوفات مرتين.
+          عند أخطاء الشبكة و401 و403 UNAUTHENTICATED و408 و429 و5xx يبقى العنصر وتتوقف الإعادة؛ وبعد 8 إخفاقات يُحذف بسبب <code>failed</code>.
+          الأخطاء 400 و403 PERMISSION_DENIED و404 تحذف العنصر (<code>rejected</code>) و409 أو 412 تحذفه (<code>conflict</code>). الكتابة تأخذ آخر قيمة ما لم تمرّر <code>ifVersion</code>.
+          تبقى المستندات المخزنة مقروءة دون اتصال حتى 14 يوماً حتى لو تغيّرت القواعد. استدعِ <code>flush()</code> عند عودة التطبيق أو الاتصال.
+        </P>
+        <Code lang="dart" title="الذاكرة المؤقتة وطابور الكتابة" code={`import 'package:vellum_flutter/vellum_flutter.dart';
+
+final box = VellumEncryptedBox(keyStore: defaultSecureKeyValue());
+final cache = PersistentDocumentCacheStore(box: box);
+
+final db = VellumClient(
+  endpoint: 'https://api.example.com',
+  projectId: 'prj_1',
+  apiKey: 'pk_...',
+  cacheStore: cache,
+);
+cache.attach(db); // binds the cache to this project and clears it on sign-out
+
+final outbox = VellumOutbox(
+  client: db,
+  box: box,
+  onDropped: (entry, reason, error) {
+    // reason: rejected, conflict, expired, otherUser or failed. Tell the user.
+  },
+);
+
+// After the session is restored (the user is known):
+await cache.load();
+await outbox.load();
+
+// Offline: queue the write instead of failing. Pass the version the user saw
+// so a change made meanwhile is reported as a conflict, not overwritten.
+await outbox.enqueueSet(db.collection('notes').doc('n1'), {'text': 'hello'}, ifVersion: 3);
+// Later (app resumed, connection back):
+await outbox.flush();`} />
+      </Section>
+
       <Section id="end-user-auth" title="مصادقة المستخدمين النهائيين ومعالجة الأخطاء">
         <P>
           يربط <code>client.auth</code> جلسة المستخدم النهائي بطلبات REST وWebSocket تلقائياً، ويجدّد رمز{" "}

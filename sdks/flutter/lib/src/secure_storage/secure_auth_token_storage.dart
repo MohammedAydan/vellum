@@ -16,8 +16,14 @@ abstract interface class SecureKeyValue {
 /// the first unlock and never copied to another device or a backup. On Android
 /// the plugin's current default (a Keystore-wrapped AES-GCM key) is used.
 const FlutterSecureStorage _defaultSecureStore = FlutterSecureStorage(
-  iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
-  mOptions: MacOsOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
+  iOptions: IOSOptions(
+    accessibility: KeychainAccessibility.first_unlock_this_device,
+    synchronizable: false, // never synced to iCloud Keychain
+  ),
+  mOptions: MacOsOptions(
+    accessibility: KeychainAccessibility.first_unlock_this_device,
+    synchronizable: false,
+  ),
 );
 
 class _FlutterSecureKeyValue implements SecureKeyValue {
@@ -34,6 +40,10 @@ class _FlutterSecureKeyValue implements SecureKeyValue {
   @override
   Future<void> delete(String key) => _store.delete(key: key);
 }
+
+/// The platform secure store as a [SecureKeyValue] (Keychain on Apple platforms,
+/// Keystore-wrapped on Android). Used for the offline encryption key.
+SecureKeyValue defaultSecureKeyValue() => const _FlutterSecureKeyValue(_defaultSecureStore);
 
 /// Session storage backed by the platform secure store, with a graceful
 /// fallback: when the secure store is unavailable (no keyring on a Linux
