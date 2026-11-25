@@ -225,7 +225,7 @@ export interface ConfirmTicket {
 }
 
 /** AES-GCM sealed JSON with an `exp` timestamp (ms). */
-export function sealJson(value: { exp: number }, masterKey: string | undefined): string {
+export function sealJson<T extends { exp: number }>(value: T, masterKey: string | undefined): string {
   return Buffer.from(encryptSecret(JSON.stringify(value), masterKey), "utf8").toString("base64url");
 }
 
