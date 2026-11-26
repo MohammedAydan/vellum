@@ -113,6 +113,7 @@ describe("realtime outbox poller (unit)", () => {
     });
     await poller.start();
     try {
+      sink.connections.set("c1", { authenticated: true, closed: false, projectId: TENANT_A.projectId });
       bus.emit(note(TENANT_A, 1));
       await waitFor(() => sink.batches.length > 0);
       await new Promise((r) => setTimeout(r, 120)); // several extra poll ticks + duplicate NOTIFY
@@ -162,6 +163,7 @@ describe("realtime outbox poller (unit)", () => {
   it("detects gaps and filters cross-tenant rows from fan-out", async () => {
     const bus = new FakeBus();
     const sink = new FakeSink();
+    sink.connections.set("c1", { authenticated: true, closed: false, projectId: TENANT_A.projectId });
     const { store, rows } = mutableStore();
     const poller = new OutboxPoller({
       bus,
