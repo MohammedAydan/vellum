@@ -944,7 +944,8 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
   private isAuthorizedForLiveEvent(
     session: ConnectionSession,
     ev: OutboxEvent,
-    ruleset: SecurityRulesetRecord | null
+    ruleset: SecurityRulesetRecord | null,
+    resource: Record<string, unknown> | null = ev.afterData ?? ev.beforeData ?? null
   ): boolean {
     if (!session.apiKeyRecord) return false;
     try {
@@ -954,7 +955,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
         operation: "get",
         path: ev.path,
         authContext: session.authContext,
-        resourceData: ev.afterData ?? ev.beforeData ?? null,
+        resourceData: resource,
       });
       return true;
     } catch {
@@ -1005,7 +1006,39 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     }
 
     // Re-check active security ruleset if present so ruleset revocations apply immediately.
-    if (!this.isAuthorizedForLiveEvent(session, ev, options?.ruleset ?? this.controlStore.getActiveRuleset(session.projectId!) ?? null)) {
+    const activeRuleset = options?.ruleset ?? this.controlStore.getActiveRuleset(session.projectId!) ?? null;
+    if (!this.isAuthorizedForLiveEvent(session, ev, activeRuleset)) {
+      // The new state is no longer readable by this subscriber (for example they were removed from
+      // the document's member list). If the document was in their live result and they could read the
+      // previous state, tell them it left the result instead of leaving a stale row on screen.
+      if (
+        subRecord.normalizedQuery &&
+        ev.collectionPath === subRecord.normalizedQuery.collectionPath &&
+        subRecord.matchedPaths.has(ev.path) &&
+        ev.beforeData &&
+        this.isAuthorizedForLiveEvent(session, ev, activeRuleset, ev.beforeData as Record<string, unknown>)
+      ) {
+        subRecord.seenSeqIds.add(ev.seqId);
+        subRecord.matchedPaths.delete(ev.path);
+        const at = typeof ev.committedAt === "string" ? ev.committedAt : (ev.committedAt as Date).toISOString();
+        session.sendFrame({
+          type: "mutation",
+          subId: subRecord.subId,
+          seqId: Number(ev.seqId),
+          operation: "delete",
+          document: this.projectSubscriptionDocument(options?.document ?? {
+            path: ev.path,
+            collectionPath: ev.collectionPath,
+            collectionGroup: ev.collectionPath.split("/").pop() ?? ev.collectionPath,
+            documentId: ev.documentId,
+            data: structuredClone(ev.beforeData as Record<string, unknown>),
+            version: ev.version,
+            createdAt: at,
+            updatedAt: at,
+          }, subRecord),
+        });
+        if (!session.closed) this.recordUsage(session.projectId!);
+      }
       return;
     }
 
