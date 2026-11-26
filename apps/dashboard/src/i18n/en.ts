@@ -66,6 +66,7 @@ export const en: TranslationDictionary = {
   "auth.createAccountLink": "Create an account",
   "auth.validationEmail": "Please enter a valid email address",
   "auth.validationPassword": "Password must be at least 6 characters",
+  "auth.validationNewPassword": "Password must be at least 8 characters",
   "auth.validationName": "Name must be at least 2 characters",
   "auth.signInError": "Failed to sign in. Please check your email and password.",
 

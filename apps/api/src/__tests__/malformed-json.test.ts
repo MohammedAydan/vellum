@@ -29,4 +29,13 @@ describe("malformed transport JSON", () => {
     app.get("/internal", () => { throw new SyntaxError("internal bug"); });
     expect((await app.request("/internal")).status).toBe(500);
   });
+  it("console sign-up rejects a password shorter than 8 characters", async () => {
+    const platform = createVellumPlatform();
+    const result = await platform.fetch(new Request("http://localhost/v1/auth/sign-up/email", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Test User", email: "short@example.com", password: "abc123" }),
+    }));
+    expect(result.status).toBe(400);
+    expect(await result.json()).toMatchObject({ error: { message: expect.stringContaining("at least 8") } });
+  });
 });

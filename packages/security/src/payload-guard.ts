@@ -128,7 +128,7 @@ export function assertSafeJsonPayload(
 
       totalKeys += 1;
       if (totalKeys > maxObjectKeys) {
-        return failure("INVALID_ARGUMENT", `Total object keys exceed ${maxObjectKeys}`);
+        return failure("INVALID_ARGUMENT", `Total object keys in the request exceed ${maxObjectKeys}. Large batches and transactions count every nested field, so split the work into smaller commits.`);
       }
 
       const outcome = walk(child, depth + 1);

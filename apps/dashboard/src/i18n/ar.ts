@@ -66,6 +66,7 @@ export const ar: TranslationDictionary = {
   "auth.createAccountLink": "أنشئ حساباً",
   "auth.validationEmail": "يرجى إدخال بريد إلكتروني صالح",
   "auth.validationPassword": "يجب أن تتكون كلمة المرور من 6 أحرف على الأقل",
+  "auth.validationNewPassword": "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل",
   "auth.validationName": "يجب أن يتكون الاسم من حرفين على الأقل",
   "auth.signInError": "تعذّر تسجيل الدخول. يرجى التحقق من بريدك الإلكتروني وكلمة المرور.",
 

@@ -25,7 +25,7 @@ function makeSignupSchema(t: (key: string) => string) {
   return z.object({
     name: z.string().min(2, t("auth.validationName")),
     email: z.string().email(t("auth.validationEmail")),
-    password: z.string().min(6, t("auth.validationPassword")),
+    password: z.string().min(8, t("auth.validationNewPassword")),
   });
 }
 
