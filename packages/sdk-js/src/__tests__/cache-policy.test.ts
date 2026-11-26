@@ -56,12 +56,14 @@ describe("CachePolicy", () => {
     await expect(db.collection("posts").doc("a").get()).rejects.toBeDefined();
   });
 
-  it("does not mask real server errors (404) with stored data", async () => {
+  it("does not mask a deleted document with stored data (returns exists=false)", async () => {
     const { db, server } = setup();
     await db.collection("posts").doc("a").get();
     await flush();
     server.delete("posts/a");
-    await expect(db.collection("posts").doc("a").get()).rejects.toMatchObject({ status: 404 });
+    const snap = await db.collection("posts").doc("a").get();
+    expect(snap.exists).toBe(false);
+    expect(snap.metadata?.fromCache).toBe(false);
   });
 
   it("cacheFirst skips the network when fresh; networkOnly always hits it", async () => {
