@@ -916,8 +916,21 @@ class DslParser {
         if (fields.length === 0) return true;
         return {
           op: "all",
+          // A field that is missing on both sides, or null on both sides, is unchanged.
           conditions: fields.map(
-            (f): AstExpressionNode => ({ op: "==", left: { var: `request.data.${f}` }, right: { var: `resource.data.${f}` } })
+            (f): AstExpressionNode => ({
+              op: "any",
+              conditions: [
+                { op: "==", left: { var: `request.data.${f}` }, right: { var: `resource.data.${f}` } },
+                {
+                  op: "all",
+                  conditions: [
+                    { op: "not", condition: { op: "hasKey", left: { var: "request.data" }, right: { val: f } } },
+                    { op: "not", condition: { op: "hasKey", left: { var: "resource.data" }, right: { val: f } } },
+                  ],
+                },
+              ],
+            })
           ),
         };
       }
