@@ -14,6 +14,7 @@
  *   on fan-out payloads so broken/mutating client callbacks cannot affect other subscribers.
  */
 
+import { rtDiagEnabled, rtLog } from "./diag.js";
 import { projectDocumentFields } from "@vellum/document-engine";
 import { enrichRealtimeDocument, fetchRealtimeReferences, validateRealtimeIncludes } from "./relation-includes.js";
 import crypto from "node:crypto";
@@ -857,6 +858,9 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
 
   private async fanOutSingleEvent(projectId: string, ev: OutboxEvent): Promise<void> {
     const tenantSessions = this.connectionsByProject.get(projectId);
+    if (rtDiagEnabled(projectId)) {
+      rtLog("fanout", { project: projectId, seq: ev.seqId, path: ev.path, version: ev.version, op: ev.opType, sessions: tenantSessions?.size ?? 0 });
+    }
     if (!tenantSessions || tenantSessions.size === 0) return;
 
     const collectCandidates = (): Map<SubscriptionRecord, ConnectionSession> => {
@@ -980,10 +984,14 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     options?: { duringReplay?: boolean | undefined; ruleset?: SecurityRulesetRecord | null | undefined; document?: ReturnType<RealtimeGatewayHub["toDocPayload"]> | undefined }
   ): void {
     if (session.closed || session.subscriptions.get(subRecord.subId) !== subRecord) return;
+    const dg = session.projectId !== null && rtDiagEnabled(session.projectId);
+    const note = (outcome: string): void => {
+      if (dg) rtLog("deliver", { project: session.projectId, sub: subRecord.subId, seq: ev.seqId, path: ev.path, version: ev.version, outcome, replaying: subRecord.replaying === true });
+    };
 
     // Exactly-once at the subscription boundary: NOTIFY and the plain poll loop
     // can both surface the same outbox row, and replay can overlap live events.
-    if (subRecord.seenSeqIds.has(ev.seqId)) return;
+    if (subRecord.seenSeqIds.has(ev.seqId)) { note("dup"); return; }
 
     // While a `resumeSeqId` replay is in progress, live fan-out must not overtake
     // the older replayed rows: buffer it and flush in ascending seq order once the
@@ -1001,11 +1009,13 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
         return;
       }
       pending.push(ev);
+      note("buffered");
       return;
     }
 
     // Re-check active security ruleset if present so ruleset revocations apply immediately.
     if (!this.isAuthorizedForLiveEvent(session, ev, options?.ruleset ?? this.controlStore.getActiveRuleset(session.projectId!) ?? null)) {
+      note("unauthorized");
       return;
     }
 
@@ -1020,6 +1030,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
 
     if (subRecord.path) {
       if (ev.path !== subRecord.path) return;
+      note("doc");
       const operation =
         ev.opType === "deleted" ? "delete" : ev.opType === "created" ? "create" : "update";
       session.sendFrame({
@@ -1066,6 +1077,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
 
       const matchesNow = pseudoAfterDoc ? documentMatchesQuery(pseudoAfterDoc, subRecord.normalizedQuery) : false;
       const matchedBefore = subRecord.matchedPaths.has(ev.path);
+      note(`query matchesNow=${matchesNow} matchedBefore=${matchedBefore}`);
 
       if (matchesNow && !matchedBefore) {
         if (subRecord.matchedPaths.size >= MAX_MATCHED_PATHS_PER_SUB) {
