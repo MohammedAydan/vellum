@@ -152,6 +152,23 @@ describe("@vellum/api - production security, reliability & scale hardening", () 
       expect(constantTimeEqual("short", "much-longer-secret")).toBe(false);
     });
 
+    it("uses x-vercel-forwarded-for on Vercel and ignores it elsewhere", async () => {
+      const app = new Hono();
+      app.get("/ip", (c) => c.json({ ip: extractClientIp(c) }));
+      const headers = { "x-forwarded-for": "198.51.100.42, 76.76.21.9", "x-vercel-forwarded-for": "203.0.113.7" };
+      process.env["TRUST_PROXY_HOPS"] = "1";
+      delete process.env["VERCEL"];
+      const off = await app.fetch(new Request("http://localhost/ip", { headers }));
+      expect(((await off.json()) as { ip: string }).ip).toBe("76.76.21.9");
+      process.env["VERCEL"] = "1";
+      try {
+        const on = await app.fetch(new Request("http://localhost/ip", { headers }));
+        expect(((await on.json()) as { ip: string }).ip).toBe("203.0.113.7");
+      } finally {
+        delete process.env["VERCEL"];
+      }
+    });
+
     it("prevents X-Forwarded-For leftmost spoofing and respects TRUST_PROXY_HOPS", async () => {
       const app = new Hono();
       app.get("/ip", (c) => c.json({ ip: extractClientIp(c) }));
