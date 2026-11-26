@@ -173,7 +173,7 @@ describe("@vellumdb/sdk-js - auth storage", () => {
     expect(store.load()).toBeNull();
   });
 
-  it("hydrates a new client from persisted session without emitting a sign-in", async () => {
+  it("hydrates a new client from persisted session and hands it to a new listener once", async () => {
     const storage: AuthStorage = new MemoryAuthStorage();
     const { fetch } = recorder(({ url }) => (url.endsWith("/auth/sign-up/email") ? json(session()) : json({})));
     const first = createClient({ projectId: "p", apiKey: "pk_test", customFetch: fetch, authStorage: storage });
@@ -185,7 +185,8 @@ describe("@vellumdb/sdk-js - auth storage", () => {
 
     expect(second.currentUser?.id).toBe("usr_1");
     expect(await second.getIdToken()).toBe(FIRST_TOKEN);
-    expect(seen).toEqual([]);
+    expect(seen).toHaveLength(1);
+    expect((seen[0] as { id: string }).id).toBe("usr_1");
   });
 });
 
@@ -209,8 +210,10 @@ describe("@vellumdb/sdk-js - signOut and getUser", () => {
     expect(headersOf(signOutCall)["authorization"]).toBeUndefined();
     expect(db.currentUser).toBeNull();
     expect(storage.load()).toBeNull();
-    expect(states).toHaveLength(2);
-    expect(states[1]).toBeNull();
+    // initial state (signed out), sign-in, sign-out
+    expect(states).toHaveLength(3);
+    expect(states[0]).toBeNull();
+    expect(states[2]).toBeNull();
   });
 
   it("revokes all sessions when requested by sending the bearer without a refresh token", async () => {
@@ -243,8 +246,8 @@ describe("@vellumdb/sdk-js - signOut and getUser", () => {
     await db.signOut();
     await db.signInWithEmailAndPassword("a@b.c", "password123");
 
-    expect(seen).toHaveLength(3);
-    expect((seen[2] as { id: string }).id).toBe("usr_1");
+    expect(seen).toHaveLength(4);
+    expect((seen[3] as { id: string }).id).toBe("usr_1");
   });
 
   it("getUser returns the public record and refreshes the local snapshot", async () => {
@@ -469,5 +472,21 @@ describe("@vellumdb/sdk-js - sessions and linked providers", () => {
     await db.unlinkProvider("google");
     expect(calls.some((c) => c.url.endsWith("/auth/sessions/s1") && c.init?.method === "DELETE")).toBe(true);
     expect(calls.some((c) => c.url.endsWith("/auth/identities/google") && c.init?.method === "DELETE")).toBe(true);
+  });
+});
+
+describe("@vellumdb/sdk-js - onAuthStateChanged initial state", () => {
+  it("fires right away with null when signed out, after the call returns, and not again after unsubscribe", async () => {
+    const db = createClient({ projectId: "p", apiKey: "pk_test", customFetch: (async () => json({})) as never });
+    const seen: unknown[] = [];
+    const stop = db.onAuthStateChanged((user) => seen.push(user));
+    expect(seen).toEqual([]);
+    await Promise.resolve();
+    expect(seen).toEqual([null]);
+    stop();
+    const late: unknown[] = [];
+    db.onAuthStateChanged((u) => late.push(u))();
+    await Promise.resolve();
+    expect(late).toEqual([]);
   });
 });

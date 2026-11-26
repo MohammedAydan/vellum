@@ -365,6 +365,19 @@ export class VellumAuthClient {
 
   public onAuthStateChanged(listener: AuthStateListener): () => void {
     this.listeners.add(listener);
+    // Like Firebase: the listener gets the current state right away (null when signed out), then every change.
+    // Delivered on a microtask so `const stop = onAuthStateChanged(...)` has returned first, and skipped when
+    // a sign-in / sign-out already delivered a newer state in between.
+    const startedAt = this.state.sessionEpoch;
+    queueMicrotask(() => {
+      if (!this.listeners.has(listener) || this.state.disposed) return;
+      if (this.state.sessionEpoch !== startedAt) return;
+      try {
+        listener(this.currentUser);
+      } catch {
+        // A misbehaving listener must not break the SDK.
+      }
+    });
     return () => {
       this.listeners.delete(listener);
     };
