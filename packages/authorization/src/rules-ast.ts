@@ -98,7 +98,22 @@ export interface AstOperandVar {
   var: string;
 }
 
-export type AstOperand = AstOperandVal | AstOperandVar | unknown;
+/**
+ * Reads another document. `exists` yields true/false; otherwise the value is the field at `field`
+ * (dotted path inside the document's data, empty for the whole data map). A missing document, an
+ * invalid id or a lookup that was not prefetched makes the whole rule deny.
+ */
+export interface AstOperandDoc {
+  doc: { collection: string; id: unknown; field?: string; exists?: boolean };
+}
+
+export type AstOperand = AstOperandVal | AstOperandVar | AstOperandDoc | unknown;
+
+/** Documents a rule may read, keyed by full path. `null` means the document does not exist. */
+export type RuleLookups = ReadonlyMap<string, Record<string, unknown> | null>;
+
+/** At most this many documents are read per authorization check. */
+export const MAX_RULE_LOOKUPS = 10;
 
 export interface AstExpressionNode {
   op: string;
@@ -135,6 +150,26 @@ export interface RuleEvaluationContext {
   resourceData: Record<string, unknown> | null;
   requestData: Record<string, unknown> | null;
   requestTimeMs: number;
+  lookups?: RuleLookups | undefined;
+  /** Set when a rule needed a document it could not read; the rule is then denied. */
+  lookupState?: { failed: boolean } | undefined;
+}
+
+const LOOKUP_COLLECTION = /^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+)*$/;
+
+function isDocOperand(operand: unknown): operand is AstOperandDoc {
+  return Boolean(operand) && typeof operand === "object" && hasOwn.call(operand as object, "doc");
+}
+
+/** The document path an operand reads, or null when its id is not a usable string right now. */
+function docOperandPath(operand: AstOperandDoc, context: RuleEvaluationContext): string | null {
+  const spec = operand.doc;
+  if (!spec || typeof spec.collection !== "string" || !LOOKUP_COLLECTION.test(spec.collection)) return null;
+  const id = resolveOperand(spec.id, context);
+  if (typeof id !== "string" || id.length === 0 || id.length > 1500) return null;
+  if (id.includes("/") || id === "." || id === ".." || /^__.*__$/.test(id)) return null;
+  for (let i = 0; i < id.length; i += 1) if (id.charCodeAt(i) < 0x20) return null;
+  return `${spec.collection}/${id}`;
 }
 
 /**
@@ -183,6 +218,21 @@ export function validateSecurityRulesetAst(rulesetAst: unknown): boolean {
 }
 
 function validateAstOperand(operand: unknown): void {
+  if (isDocOperand(operand)) {
+    const spec = operand.doc;
+    if (
+      !spec ||
+      typeof spec !== "object" ||
+      typeof spec.collection !== "string" ||
+      !LOOKUP_COLLECTION.test(spec.collection) ||
+      spec.collection.length > 500 ||
+      (spec.field !== undefined && (typeof spec.field !== "string" || spec.field.length > 512 || hasDangerousPathSegment(spec.field)))
+    ) {
+      throw new VellumError("INVALID_ARGUMENT", "Invalid document lookup in security rule AST");
+    }
+    validateAstOperand(spec.id);
+    return;
+  }
   if (operand && typeof operand === "object" && hasOwn.call(operand, "var")) {
     const varPath = (operand as AstOperandVar).var;
     if (typeof varPath !== "string" || varPath.length === 0 || varPath.length > 512 || hasDangerousPathSegment(varPath)) {
@@ -290,6 +340,25 @@ export function matchRulePathPattern(pattern: string, targetPath: string): Recor
 
 function resolveOperand(operand: unknown, context: RuleEvaluationContext): unknown {
   if (operand === null || typeof operand !== "object") return operand;
+  if (isDocOperand(operand)) {
+    const path = docOperandPath(operand, context);
+    const lookup = path !== null && context.lookups ? context.lookups.get(path) : undefined;
+    if (operand.doc.exists === true) {
+      if (path === null || lookup === undefined) {
+        if (context.lookupState) context.lookupState.failed = true;
+        return undefined;
+      }
+      return lookup !== null;
+    }
+    if (lookup === undefined || lookup === null) {
+      if (context.lookupState) context.lookupState.failed = true;
+      return undefined;
+    }
+    const field = operand.doc.field ?? "";
+    if (field === "") return lookup;
+    if (hasDangerousPathSegment(field)) return undefined;
+    return getFieldByPath(lookup, field);
+  }
   if (hasOwn.call(operand, "val")) return (operand as AstOperandVal).val;
   if (hasOwn.call(operand, "var") && typeof (operand as AstOperandVar).var === "string") {
     const varPath = (operand as AstOperandVar).var;
@@ -502,6 +571,8 @@ export interface AuthorizeOperationParams {
    * rules do not count as a collection-level allow.
    */
   collectionLevel?: boolean | undefined;
+  /** Documents read for `get()` / `exists()` in rules (see `collectRuleLookups`). */
+  lookups?: RuleLookups | undefined;
 }
 
 export interface AuthorizationResult {
@@ -544,6 +615,7 @@ export function authorizeOperation({
   requestTimeMs = Date.now(),
   bypassRules = false,
   collectionLevel = false,
+  lookups,
 }: AuthorizeOperationParams): AuthorizationResult {
   // Explicit, auditable system bypass. Must be strictly boolean `true`.
   if (bypassRules === true) {
@@ -627,6 +699,7 @@ export function authorizeOperation({
       continue;
     }
     if (expr !== undefined) {
+      const lookupState = { failed: false };
       const allowed =
         typeof expr === "boolean"
           ? expr
@@ -636,8 +709,11 @@ export function authorizeOperation({
               resourceData,
               requestData,
               requestTimeMs,
+              lookups,
+              lookupState,
             });
-      if (allowed) {
+      // A rule that needed a document it could not read never allows, even through `not`.
+      if (allowed && !lookupState.failed) {
         return { allowed: true, mode: "security_rules_ast", matchedRule: rule.match };
       }
     }
@@ -647,4 +723,88 @@ export function authorizeOperation({
     path: shownPath,
     operation,
   });
+}
+
+
+function rulesExpressionFor(allowObj: Record<string, AstExpression | undefined>, operation: string): AstExpression | undefined {
+  return (
+    (hasOwn.call(allowObj, operation) ? allowObj[operation] : undefined) ??
+    ((operation === "get" || operation === "list") && hasOwn.call(allowObj, "read") ? allowObj["read"] : undefined) ??
+    ((operation === "create" || operation === "update" || operation === "delete") && hasOwn.call(allowObj, "write")
+      ? allowObj["write"]
+      : undefined)
+  );
+}
+
+function containsDocOperand(node: unknown, depth = 0): boolean {
+  if (!node || typeof node !== "object" || depth > 40) return false;
+  if (isDocOperand(node)) return true;
+  for (const value of Object.values(node as Record<string, unknown>)) {
+    if (value && typeof value === "object" && containsDocOperand(value, depth + 1)) return true;
+  }
+  return false;
+}
+
+const LOOKUP_USE_CACHE = new WeakMap<object, boolean>();
+
+/** True when any rule in the ruleset reads another document. Cached per ruleset object. */
+export function rulesetUsesLookups(rulesetRecord: { rulesAst?: unknown } | null | undefined): boolean {
+  const ast = rulesetRecord?.rulesAst;
+  if (!ast || typeof ast !== "object") return false;
+  const cached = LOOKUP_USE_CACHE.get(ast);
+  if (cached !== undefined) return cached;
+  const result = containsDocOperand(ast);
+  LOOKUP_USE_CACHE.set(ast, result);
+  return result;
+}
+
+function collectDocPaths(node: unknown, context: RuleEvaluationContext, out: Set<string>, depth = 0): void {
+  if (!node || typeof node !== "object" || depth > 40 || out.size >= MAX_RULE_LOOKUPS) return;
+  if (isDocOperand(node)) {
+    const path = docOperandPath(node, context);
+    if (path !== null) out.add(path);
+    return;
+  }
+  for (const value of Object.values(node as Record<string, unknown>)) {
+    if (value && typeof value === "object") collectDocPaths(value, context, out, depth + 1);
+  }
+}
+
+/**
+ * The documents the matching rules will ask for, so the caller can read them (one batched read) before
+ * the synchronous check. At most `MAX_RULE_LOOKUPS` paths; anything beyond that is not read and denies.
+ */
+export function collectRuleLookups(params: {
+  rulesetRecord: { rulesAst?: unknown } | null | undefined;
+  operation: string;
+  path: string;
+  authContext?: AuthContext | undefined;
+  resourceData?: Record<string, unknown> | null | undefined;
+  requestData?: Record<string, unknown> | null | undefined;
+  requestTimeMs?: number | undefined;
+}): string[] {
+  const ast = params.rulesetRecord?.rulesAst as SecurityRulesetAst | undefined;
+  if (!ast || !Array.isArray(ast.rules) || !rulesetUsesLookups(params.rulesetRecord)) return [];
+  const out = new Set<string>();
+  const maxRules = Math.min(ast.rules.length, MAX_RULES_PER_RULESET);
+  for (let i = 0; i < maxRules; i += 1) {
+    const rule = ast.rules[i];
+    if (!rule || typeof rule.match !== "string" || !rule.allow || typeof rule.allow !== "object") continue;
+    const pathParams = matchRulePathPattern(rule.match, params.path);
+    if (!pathParams) continue;
+    const expr = rulesExpressionFor(rule.allow, params.operation);
+    if (expr === undefined || typeof expr === "boolean") continue;
+    collectDocPaths(
+      expr,
+      {
+        auth: params.authContext ?? { uid: null, claims: {} },
+        pathParams,
+        resourceData: params.resourceData ?? null,
+        requestData: params.requestData ?? null,
+        requestTimeMs: params.requestTimeMs ?? Date.now(),
+      },
+      out
+    );
+  }
+  return [...out];
 }

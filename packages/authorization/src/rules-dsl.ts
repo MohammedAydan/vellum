@@ -100,6 +100,9 @@ interface VarOperand {
 interface ParamOperand {
   param: string;
 }
+interface DocOperand {
+  doc: { collection: string; id: InternalNode; field?: string; exists?: boolean };
+}
 interface CallPlaceholder {
   call: string;
   args: InternalNode[];
@@ -119,7 +122,7 @@ interface InternalExpressionNode {
   right?: AstOperand;
 }
 
-type InternalNode = boolean | InternalExpressionNode | ValOperand | VarOperand | ParamOperand | CallPlaceholder;
+type InternalNode = boolean | InternalExpressionNode | ValOperand | VarOperand | ParamOperand | DocOperand | CallPlaceholder;
 
 interface UserFunction {
   name: string;
@@ -203,6 +206,12 @@ function isVar(node: InternalNode): node is VarOperand {
 function isParam(node: InternalNode): node is ParamOperand {
   return typeof node === "object" && node !== null && "param" in node;
 }
+function isDoc(node: InternalNode): node is DocOperand {
+  return typeof node === "object" && node !== null && "doc" in node;
+}
+function mapDocId(node: DocOperand, fn: (id: InternalNode) => InternalNode): DocOperand {
+  return { doc: { ...node.doc, id: fn(node.doc.id) } };
+}
 function isCall(node: InternalNode): node is CallPlaceholder {
   return typeof node === "object" && node !== null && "call" in node;
 }
@@ -273,6 +282,7 @@ function cloneNode(node: InternalNode): InternalNode {
   if (isVal(node) || isVar(node) || isParam(node)) {
     return { ...node };
   }
+  if (isDoc(node)) return mapDocId(node, cloneNode);
   if (isCall(node)) {
     return { call: node.call, args: node.args.map(cloneNode), token: node.token };
   }
@@ -811,6 +821,9 @@ class DslParser {
       return this.parseArrayLiteral(params);
     }
     if (t.type === "ident") {
+      if ((t.value === "get" || t.value === "exists") && this.peek(1).value === "(" && !this.functions.has(t.value)) {
+        return this.parseLookup(params);
+      }
       if (this.peek(1).value === "(") {
         return this.parseCall(params);
       }
@@ -821,6 +834,41 @@ class DslParser {
       return this.parseDottedPath();
     }
     this.fail(`Unexpected token '${t.raw || "end of input"}' in expression`, t);
+  }
+
+  /**
+   * `exists('chats', id)` and `get('chats', id).data.memberIds`: read one other document while checking a
+   * rule. The collection is a literal; the id is any expression (a path parameter, a field of the incoming
+   * document, auth.uid).
+   */
+  private parseLookup(params: ReadonlySet<string>): InternalNode {
+    const nameTok = this.next();
+    this.expect("(");
+    const collTok = this.current();
+    if (collTok.type !== "string" || !/^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+)*$/.test(collTok.value)) {
+      this.fail(
+        `${nameTok.value}() takes a collection path in quotes as its first argument, for example ${nameTok.value}('chats', chatId)`,
+        collTok
+      );
+    }
+    this.next();
+    this.expect(",");
+    const id = this.parseExpression(params);
+    this.expect(")");
+    if (nameTok.value === "exists") {
+      return { op: "==", left: { doc: { collection: collTok.value, id, exists: true } }, right: { val: true } };
+    }
+    if (!(this.at(".") && this.peek(1).value === "data")) {
+      this.fail("get(...) must be followed by .data and a field, for example get('chats', id).data.memberIds", this.current());
+    }
+    this.next();
+    this.next();
+    const parts: string[] = [];
+    while (this.at(".") && this.peek(1).type === "ident") {
+      this.next();
+      parts.push(this.next().value);
+    }
+    return { doc: { collection: collTok.value, id, field: parts.join(".") } };
   }
 
   private parseArrayLiteral(params: ReadonlySet<string>): InternalNode {
@@ -980,6 +1028,7 @@ class DslParser {
   resolveCalls(node: InternalNode, stack: string[] = []): InternalNode {
     if (isParam(node)) this.fail(`Unbound function parameter '${node.param}'`, this.current());
     if (isVal(node) || isVar(node) || typeof node === "boolean") return node;
+    if (isDoc(node)) return mapDocId(node, (id) => this.resolveCalls(id, stack));
 
     if (isCall(node)) {
       const resolvedArgs = node.args.map((a) => this.resolveCalls(a, stack));
@@ -1026,6 +1075,7 @@ class DslParser {
       return cloneNode(replacement);
     }
     if (isVal(node) || isVar(node) || typeof node === "boolean") return node;
+    if (isDoc(node)) return mapDocId(node, (id) => this.substitute(id, subst, token));
     if (isCall(node)) {
       return { call: node.call, args: node.args.map((a) => this.substitute(a, subst, token)), token: node.token };
     }
@@ -1100,6 +1150,14 @@ export function compileRulesDsl(source: string): CompileRulesDslResult {
     for (const [op, rawExpr] of Object.entries(parsed.allow)) {
       const resolved = parser.resolveCalls(rawExpr);
       checkComplexity(resolved, parsed.token, source);
+      if (op === "list" && JSON.stringify(resolved, (k, v) => (k === "token" ? undefined : v)).includes('"doc":')) {
+        throw new RulesDslSyntaxError(
+          "get() and exists() cannot be used in a 'list' or 'read' rule, because a query is checked once and not per document. Use them in 'get', 'create', 'update' or 'delete' rules.",
+          parsed.token.line,
+          parsed.token.column,
+          source
+        );
+      }
       // Clone so each operation owns an independent AST subtree.
       allow[op] = asBooleanExpression(cloneNode(resolved));
     }
@@ -1153,6 +1211,12 @@ function operandToDsl(operand: AstOperand): string {
   if (operand && typeof operand === "object") {
     if ("val" in operand) return formatLiteral((operand as ValOperand).val);
     if ("var" in operand) return varToDsl((operand as VarOperand).var);
+    if ("doc" in operand) {
+      const spec = (operand as { doc: { collection: string; id: AstOperand; field?: string; exists?: boolean } }).doc;
+      const idText = operandToDsl(spec.id);
+      if (spec.exists === true) return `exists(${formatLiteral(spec.collection)}, ${idText})`;
+      return `get(${formatLiteral(spec.collection)}, ${idText}).data${spec.field ? `.${spec.field}` : ""}`;
+    }
   }
   return formatLiteral(operand);
 }
@@ -1174,6 +1238,14 @@ function expressionToDsl(expr: AstExpression): string {
   }
   if (node.op === "hasKey" || node.op === "isType") {
     return `${node.op}(${operandToDsl(node.left as AstOperand)}, ${operandToDsl(node.right as AstOperand)})`;
+  }
+  if (
+    node.op === "==" &&
+    node.left && typeof node.left === "object" && "doc" in node.left &&
+    (node.left as { doc: { exists?: boolean } }).doc.exists === true &&
+    node.right && typeof node.right === "object" && (node.right as { val?: unknown }).val === true
+  ) {
+    return operandToDsl(node.left);
   }
   if (node.left !== undefined && node.right !== undefined) {
     return `${operandToDsl(node.left)} ${node.op} ${operandToDsl(node.right)}`;
