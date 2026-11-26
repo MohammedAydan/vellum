@@ -53,6 +53,13 @@ The `auth` frame sends `{ type:"auth", projectId, apiKey, authToken }`; `authTok
 
 After token rotation the SDK re-sends the `auth` frame on the live connection.
 
+## Account enumeration behavior
+
+- `sign-up/email` returns `409 ALREADY_EXISTS` when the email is taken, the same as Firebase's `email-already-in-use`. Sign-up must return a session, so it cannot hide that an account exists.
+- `sign-in/email` takes the same time and returns the same `UNAUTHENTICATED` error for an unknown email and a wrong password.
+- `password/reset` and `email/verify/request` always answer `{ "success": true, "sent": true }`, including when the email is unknown or the project has no SMTP configured. A successful `sendPasswordResetEmail()` therefore does not prove an email was delivered. Configure SMTP for the project and check delivery on your side.
+- Password policy failures return `INVALID_ARGUMENT` with a message that names the unmet rule, such as the minimum length.
+
 ## Rate limits
 
 In-process sliding windows (no Redis): 10 failed logins / 15 min per `(ip,email)`; 5 reset/verify requests / 15 min (keyed by `(ip,email)` or `ip + SHA-256(signed bearer)` when no email); 5 failed MFA attempts / 5 min (also counted in the database, so it holds across serverless instances). A TOTP code works once. Enrolling again while MFA is on is refused; turn it off first with a current code. Social sign-in (Google, GitHub) also asks for the second factor when the user has MFA on. Throttled responses are `429 TOO_MANY_REQUESTS` with `Retry-After`.
