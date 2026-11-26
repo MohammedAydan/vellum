@@ -68,3 +68,12 @@ describe("hardening/transforms — bounded array transforms", () => {
     expect(dupes["tags"]).toEqual([1, 2]);
   });
 });
+
+describe("hardening/transforms — field operations inside a brand-new nested object", () => {
+  it("resolves nested operations on create/replace, not only on merge", () => {
+    const out = applyFieldTransforms({}, { stats: { views: { $op: "inc", by: 2 }, at: { $op: "serverTimestamp" }, deep: { tags: { $op: "arrayUnion", elements: ["a"] } } } }, NOW);
+    expect(out).toEqual({
+      stats: { views: 2, at: { $t: "ts", $v: NOW, $ms: Date.parse(NOW) }, deep: { tags: ["a"] } },
+    });
+  });
+});

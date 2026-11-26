@@ -393,21 +393,14 @@ function applyFieldTransformsInternal(
         default:
           throw new VellumError("INVALID_ARGUMENT", `Unknown field transform '$op': '${String(op)}'`);
       }
-    } else if (
-      isPlainRecord(incomingVal) &&
-      !Object.prototype.hasOwnProperty.call(incomingVal, "$t") &&
-      isPlainRecord(current) &&
-      !Object.prototype.hasOwnProperty.call(current, "$t")
-    ) {
-      // `current` is already part of the root-cloned `result` tree, so we can
-      // merge directly into it without a redundant deep clone per level.
-      result[key] = applyFieldTransformsInternal(
-        current,
-        incomingVal,
-        txTimestampIso,
-        txMs,
-        depth + 1
-      );
+    } else if (isPlainRecord(incomingVal) && !Object.prototype.hasOwnProperty.call(incomingVal, "$t")) {
+      // Merge into the existing nested object when there is one (it is already part of the
+      // root-cloned `result` tree). Otherwise start from an empty object, so a field operation nested
+      // inside a brand-new object (for example `{ stats: { views: increment(1) } }` on create) is
+      // resolved instead of reaching validation as a raw `$op`.
+      const base =
+        isPlainRecord(current) && !Object.prototype.hasOwnProperty.call(current, "$t") ? current : {};
+      result[key] = applyFieldTransformsInternal(base, incomingVal, txTimestampIso, txMs, depth + 1);
     } else {
       result[key] = sanitizeAndCloneValue(incomingVal, depth + 1);
     }
