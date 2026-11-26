@@ -64,7 +64,7 @@ In the SDK, failed requests throw an `Error` with `code`, `status`, `details`, a
 | `INVALID_CURSOR` | 400 | Tampered, malformed, or wrong-shape pagination cursor. |
 | `QUERY_TOO_COMPLEX` | 400 | Too many filters/order fields, or rules AST over depth/node bounds. |
 | `LIMIT_EXCEEDED` | 400 | Query `limit` above 500. |
-| `SUBSCRIPTION_LIMIT_EXCEEDED` | 400 | More than 50 WebSocket subscriptions on one connection. |
+| `SUBSCRIPTION_LIMIT_EXCEEDED` | 400 | More than 25 WebSocket subscriptions on one connection. |
 | `UNAUTHENTICATED` | 401 | Missing, malformed, invalid, expired, or revoked API key / token. |
 | `PERMISSION_DENIED` | 403 | Missing server-key scope, or security rules denied the operation. |
 | `NOT_FOUND` | 404 | Reading or deleting a document that does not exist. |
@@ -115,7 +115,7 @@ These constants come from `@vellum/coreSYSTEM_LIMITS` and are enforced at the en
 | `MAX_QUERY_LIMIT` | 500 | `LIMIT_EXCEEDED` (400) |
 | `MAX_QUERY_RESPONSE_BYTES` | 4,194,304 (4 MiB) | `RESPONSE_TOO_LARGE` (413) |
 | `MAX_QUERY_EXECUTION_MS` | 5,000 ms | `QUERY_DEADLINE_EXCEEDED` (504) |
-| `MAX_WS_SUBSCRIPTIONS_PER_CONN` | 50 | `SUBSCRIPTION_LIMIT_EXCEEDED` (400) |
+| `MAX_WS_SUBSCRIPTIONS_PER_CONN` | 25 | `SUBSCRIPTION_LIMIT_EXCEEDED` (400) |
 | `MAX_WS_OUTBOUND_BUFFER_BYTES` | 1,048,576 (1 MiB) | `SLOW_CONSUMER_DISCONNECT` (429) |
 | `RULES_AST_MAX_DEPTH` | 10 | `QUERY_TOO_COMPLEX` (400) |
 | `RULES_AST_MAX_NODES` | 100 per rule | `QUERY_TOO_COMPLEX` (400) |

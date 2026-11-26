@@ -80,7 +80,7 @@ Cross-realm refresh tokens are rejected: a super-admin refresh token fails on th
 
 ### Client silent refresh
 
-Every first-party client performs a **pre-flight refresh 45 seconds before `exp`** and a **reactive 401 refresh + one transparent replay**, both deduplicated with a single-flight mutex:
+Every first-party client performs a **pre-flight refresh 60 seconds before `exp`** and a **reactive 401 refresh + one transparent replay**, both deduplicated with a single-flight mutex:
 
 | Client | Storage | Refresh endpoint | Single-flight |
 | :--- | :--- | :--- | :--- |
@@ -212,7 +212,7 @@ When the bearer rotates (silent refresh, forced refresh or reactive 401 replay),
 
 ## 8. Rate limiting
 
-Throttles are **in-process sliding windows** (Zero-Redis doctrine: PostgreSQL is the only stateful service). They are keyed only by opaque identifiers — IP/email pairs, `SHA-256` bearer hashes, MFA ticket/user hashes — never logged or returned. A throttled response is `429 TOO_MANY_REQUESTS` with a `Retry-After` header (seconds).
+Throttles are counted in PostgreSQL (Zero-Redis doctrine: PostgreSQL is the only stateful service), so every API instance shares the same counters. They are keyed only by opaque identifiers — IP/email pairs, `SHA-256` bearer hashes, MFA ticket/user hashes — never logged or returned. A throttled response is `429 TOO_MANY_REQUESTS` with a `Retry-After` header (seconds).
 
 | Scope | Budget | Counted requests | Key |
 | :--- | :--- | :--- | :--- |

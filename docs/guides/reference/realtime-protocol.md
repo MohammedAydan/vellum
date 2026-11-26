@@ -103,7 +103,7 @@ The SDKs track the highest `seqId` per subscription and automatically include it
 | :--- | :--- | :--- |
 | Auth frame missing/expired | `UNAUTHENTICATED` | 401 |
 | Key/project mismatch, rules denial | `PERMISSION_DENIED` | 403 |
-| >50 subscriptions on one connection | `SUBSCRIPTION_LIMIT_EXCEEDED` | 400 |
+| >25 subscriptions on one connection | `SUBSCRIPTION_LIMIT_EXCEEDED` | 400 |
 | Outbound buffer >1 MiB | `SLOW_CONSUMER_DISCONNECT` | 429 |
 | Inbound frame >1 MiB | `PAYLOAD_TOO_LARGE` | 413 |
 | Bad frame / unknown opcode | `INVALID_ARGUMENT` | 400 |

@@ -430,7 +430,7 @@ All methods live on `db.auth` and are mirrored directly on `db`:
 - **Profile & tokens**: `getUser`, `updateProfile`, `getIdToken(forceRefresh?)`, `currentUser`, `onAuthStateChanged(cb)`, `signOut({ allSessions? })`
 
 **Hardening guarantees**:
-1. Proactive silent refresh fires **45 seconds** before the EdDSA JWT `exp` claim.
+1. Proactive silent refresh fires **60 seconds** before the EdDSA JWT `exp` claim.
 2. Concurrent `401 Unauthorized` responses coalesce into a **single-flight** `/auth/token/refresh` request and replay once with the fresh token.
 3. A monotonic `sessionEpoch` prevents an in-flight refresh from resurrecting a session after `signOut()` or `dispose()`.
 4. Whenever the bearer token rotates, active WebSocket connections automatically send a fresh `auth` frame (`reauthenticateRealtime`).

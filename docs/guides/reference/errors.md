@@ -43,8 +43,8 @@ In a browser the realtime connection also follows the window `offline` and `onli
 | `BATCH_SIZE_EXCEEDED` | 400 | Batch/transaction has >100 operations | **No** — split the batch |
 | `INVALID_CURSOR` | 400 | Malformed, tampered or expired HMAC cursor | **No** — restart pagination from the beginning |
 | `QUERY_TOO_COMPLEX` | 400 | >10 `where`, >3 `orderBy`, or >30 disjunctive values | **No** — simplify or add an index |
-| `LIMIT_EXCEEDED` | 400 | `limit` >500 (or <1) | **No** |
-| `SUBSCRIPTION_LIMIT_EXCEEDED` | 400 | >50 subscriptions on one WebSocket connection | **No** — unsubscribe or open another connection |
+| `LIMIT_EXCEEDED` | 400 | `limit` >500 (a `limit` below 1 or not a whole number is `INVALID_ARGUMENT`) | **No** |
+| `SUBSCRIPTION_LIMIT_EXCEEDED` | 400 | >25 subscriptions on one WebSocket connection | **No** — unsubscribe or open another connection |
 | `UNAUTHENTICATED` | 401 | Missing/invalid API key, missing/invalid/expired JWT, MFA code wrong, WS auth timeout | **No** — refresh credentials, then retry once |
 | `PERMISSION_DENIED` | 403 | Key/project mismatch, rules denial, cross-tenant access, suspended project/account | **No** — authorization will not change on retry |
 | `NOT_FOUND` | 404 | Document, API key, tenant, feature flag or route missing | **No** |
@@ -87,7 +87,7 @@ Both can appear on the wire with status 500. `INTERNAL_ERROR` is the canonical `
 | Order-by fields | 3 | `QUERY_TOO_COMPLEX` / 400 |
 | Query limit | 500 (default 50) | `LIMIT_EXCEEDED` / 400 |
 | Query response | 4 MiB | `RESPONSE_TOO_LARGE` / 413 |
-| WS subscriptions/connection | 50 | `SUBSCRIPTION_LIMIT_EXCEEDED` / 400 |
+| WS subscriptions/connection | 25 | `SUBSCRIPTION_LIMIT_EXCEEDED` / 400 |
 | WS outbound buffer | 1 MiB | `SLOW_CONSUMER_DISCONNECT` / 429 |
 
 ## Retry policy at a glance

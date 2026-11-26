@@ -133,7 +133,7 @@ for await (const doc of db
 ## End-User Auth (EdDSA) & Lifecycle
 
 - `db.auth` and top-level aliases: `signUpWithEmailAndPassword`, `signInWithEmailAndPassword`, `signInAnonymously`, `signInWithOAuth`, `verifyMfaChallenge`, `enrollTotpMfa`, `confirmTotpMfa`, `sendPasswordResetEmail`, `confirmPasswordReset`, `sendEmailVerification`, `confirmEmailVerification`, `getUser`, `updateProfile`, `getIdToken`, `signOut`, `onAuthStateChanged`, `currentUser`.
-- Proactive refresh 45s before JWT `exp`, single-flight reactive 401 refresh, automatic live WebSocket re-authentication, and `sessionEpoch` guards.
+- Proactive refresh 60s before JWT `exp`, single-flight reactive 401 refresh, automatic live WebSocket re-authentication, and `sessionEpoch` guards.
 - `db.clearCache()` clears the read cache; `db.dispose?.()` closes WebSockets, clears auth timers, and releases listeners.
 
 ## Modular Architecture & Tamper-Proofing
