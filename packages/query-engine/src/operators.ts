@@ -58,6 +58,8 @@ function comparableKind(value: unknown): ComparableKind | null {
   return null;
 }
 
+const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/;
+
 function isPrimitive(value: unknown): value is string | number | boolean | null {
   return value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }
@@ -149,10 +151,22 @@ function evaluateWhereClause(
     case ">=": {
       if (fieldVal === undefined || fieldVal === null || clause.value === null) return false;
       // Enforce SQL type-parity: never match across incompatible types (e.g. string vs number).
+      let bound: unknown = clause.value;
+      // A full ISO-8601 date-time string bound (a serialized JS Date) also compares with tagged
+      // timestamps, matching the SQL compiler.
+      if (
+        typeof bound === "string" &&
+        typeof fieldVal === "object" &&
+        (fieldVal as Record<string, unknown>)["$t"] === "ts" &&
+        ISO_DATETIME_RE.test(bound) &&
+        Number.isFinite(Date.parse(bound))
+      ) {
+        bound = { $t: "ts", $v: new Date(Date.parse(bound)).toISOString(), $ms: Date.parse(bound) };
+      }
       const fieldKind = comparableKind(fieldVal);
-      const boundKind = comparableKind(clause.value);
+      const boundKind = comparableKind(bound);
       if (fieldKind === null || boundKind === null || fieldKind !== boundKind) return false;
-      const cmp = compareWireValues(fieldVal, clause.value, "asc");
+      const cmp = compareWireValues(fieldVal, bound, "asc");
       if (clause.op === "<") return cmp < 0;
       if (clause.op === "<=") return cmp <= 0;
       if (clause.op === ">") return cmp > 0;
