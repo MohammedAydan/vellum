@@ -81,6 +81,15 @@ async function defaultKey(c: Context): Promise<string> {
 }
 
 /**
+ * Optional multiplier for every auth limit, for load and end-to-end tests only. Unset (the default) or
+ * anything that is not a number greater than 1 leaves the limits unchanged. Capped at 1000.
+ */
+export function authRateLimitScale(raw: string | undefined = process.env["AUTH_RATE_LIMIT_SCALE"]): number {
+  const n = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(n) && n > 1 ? Math.min(n, 1000) : 1;
+}
+
+/**
  * Sliding-window limiter for authentication endpoints.
  *
  * Rejects with `TOO_MANY_REQUESTS` once `max` events are inside the window,
@@ -95,7 +104,8 @@ export function authRateLimit(
   options: AuthRateLimitOptions,
   throttle: ThrottleRepository
 ): MiddlewareHandler {
-  const { max, windowMs, scope, countAll = false } = options;
+  const { windowMs, scope, countAll = false } = options;
+  const max = Math.ceil(options.max * authRateLimitScale());
   const retryAfterSeconds = Math.ceil(windowMs / 1000);
 
   return async (c, next) => {
