@@ -582,6 +582,11 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       return;
     }
 
+    // The subscription is already registered, so a write that commits while the initial snapshot is being
+    // read would be fanned out immediately and then overwritten by the older `initial_sync` that follows.
+    // Defer live events until `initial_sync` has been sent, then flush those newer than the snapshot.
+    subRecord.replaying = true;
+    const snapshotVersions = new Map<string, number>();
     try {
       await this.dataStore.withTransaction({ projectId }, async (tx: TxHandle) => {
       if (session.closed || session.subscriptions.get(frame.subId) !== subRecord) return;
@@ -644,6 +649,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       }
 
       if (session.closed || session.subscriptions.get(frame.subId) !== subRecord) return;
+      for (const d of initialDocs) snapshotVersions.set(d.path, d.version);
       const references = includes.length ? await fetchRealtimeReferences(projectId, initialDocs, includes, this.dataStore, tx) : new Map<string, DocumentRecord>();
       const payloads = await Promise.all(initialDocs.map(async (doc) => {
         const payload = this.toDocPayload(doc);
@@ -659,8 +665,47 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       });
       });
     } catch (error) {
+      subRecord.replaying = false;
+      subRecord.pendingLiveEvents = [];
       if (session.subscriptions.get(frame.subId) === subRecord) session.subscriptions.delete(frame.subId);
       throw error;
+    }
+    // Events the snapshot already reflects (same path, version not newer) are skipped; the rest are delivered.
+    await this.flushDeferredLiveEvents(session, subRecord, projectId, ruleset, snapshotVersions);
+  }
+
+  /** Stop deferring live events for a subscription and deliver the buffered ones in ascending seq order. */
+  private async flushDeferredLiveEvents(
+    session: ConnectionSession,
+    subRecord: SubscriptionRecord,
+    projectId: string,
+    ruleset: SecurityRulesetRecord | null,
+    snapshotVersions: Map<string, number>
+  ): Promise<void> {
+    // Drain until nothing new was buffered, so an event arriving mid-flush cannot be reordered or lost.
+    for (;;) {
+      const deferred = subRecord.pendingLiveEvents ?? [];
+      subRecord.pendingLiveEvents = [];
+      if (deferred.length === 0) {
+        subRecord.replaying = false;
+        return;
+      }
+      deferred.sort((a, b) => {
+        const sa = parseSafeSeqBigInt(a.seqId) ?? 0n;
+        const sb = parseSafeSeqBigInt(b.seqId) ?? 0n;
+        return sa < sb ? -1 : sa > sb ? 1 : 0;
+      });
+      for (const ev of deferred) {
+        if (session.closed || session.subscriptions.get(subRecord.subId) !== subRecord) return;
+        const have = snapshotVersions.get(ev.path);
+        if (have !== undefined && ev.opType !== "deleted" && ev.version <= have) continue;
+        const documents = await this.prepareIncludedEvent(projectId, ev, [{ session, subRecord }]);
+        this.deliverEventToSubscription(session, subRecord, ev, {
+          duringReplay: true,
+          ruleset: (await this.rulesetFor(projectId)) ?? ruleset,
+          document: documents.get(subRecord),
+        });
+      }
     }
   }
 
