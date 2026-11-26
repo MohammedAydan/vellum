@@ -268,6 +268,26 @@ export class HttpTransport {
     }
   }
 
+  /** Calls fetch and turns a network failure (offline, DNS, refused) into a typed NETWORK_ERROR. */
+  private async callFetch(url: string, init: RequestInit): Promise<Response> {
+    try {
+      return await this.customFetch(url, init);
+    } catch (err: unknown) {
+      const e = err as { name?: string; code?: unknown } | null | undefined;
+      if (e?.name === "AbortError" || typeof e?.code === "string") throw err;
+      const cause = err instanceof Error ? err.message : String(err);
+      const wrapped = new Error(
+        "@vellumdb/sdk-js: network request failed. The device may be offline or the server unreachable."
+      ) as Error & { code?: string; status?: number; details?: unknown; cause?: unknown };
+      wrapped.name = "VellumError";
+      wrapped.code = "NETWORK_ERROR";
+      wrapped.status = 0;
+      wrapped.details = { reason: cause };
+      wrapped.cause = err;
+      throw wrapped;
+    }
+  }
+
   private async fetchWithTimeout(
     url: string,
     init: RequestInit,
@@ -279,10 +299,10 @@ export class HttpTransport {
 
     if (this.effectiveTimeoutMs <= 0 || typeof AbortController !== "function") {
       if (!callerSignal) {
-        return this.customFetch(url, init);
+        return this.callFetch(url, init);
       }
       try {
-        return await this.customFetch(url, { ...init, signal: callerSignal });
+        return await this.callFetch(url, { ...init, signal: callerSignal });
       } catch (err: unknown) {
         if (callerSignal.aborted) {
           throw createAbortError(callerSignal);
@@ -310,7 +330,7 @@ export class HttpTransport {
     timer.unref?.();
 
     try {
-      return await this.customFetch(url, { ...init, signal: controller.signal });
+      return await this.callFetch(url, { ...init, signal: controller.signal });
     } catch (err: unknown) {
       if (callerAborted || callerSignal?.aborted) {
         throw createAbortError(callerSignal);

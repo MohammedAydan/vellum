@@ -539,6 +539,23 @@ class VellumClient implements VellumClientPort {
         typeName.contains('HandshakeException');
   }
 
+  /// A network failure (offline, DNS, refused) as a typed `NETWORK_ERROR`, or null for anything else.
+  static VellumException? _asNetworkError(Object error) {
+    if (error is VellumException || error is TimeoutException) return null;
+    final typeName = error.runtimeType.toString();
+    final isNetwork = error is http.ClientException ||
+        typeName.contains('SocketException') ||
+        typeName.contains('HandshakeException');
+    if (!isNetwork) return null;
+    return VellumException(
+      code: 'NETWORK_ERROR',
+      message:
+          'Network request failed. The device may be offline or the server unreachable.',
+      statusCode: 0,
+      details: <String, Object?>{'reason': error.toString()},
+    );
+  }
+
   Future<JsonMap> _executeOnce(
     String method,
     String url,
@@ -587,6 +604,8 @@ class VellumClient implements VellumClientPort {
         return await _executeOnce(method, url, headers, body);
       } catch (err) {
         if (attempt >= allowedRetries || !_isRetryableError(err)) {
+          final wrapped = _asNetworkError(err);
+          if (wrapped != null) throw wrapped;
           rethrow;
         }
         Duration? retryAfterDelay;

@@ -196,6 +196,8 @@ interface TransportInternalState {
   lastPongAt: number;
   intentionallyClosed: boolean;
   connectWaiters: Array<{ resolve: () => void; reject: (error: unknown) => void }>;
+  /** Browser online/offline listeners, removed on close. */
+  detachNetworkListeners: (() => void) | null;
 }
 
 /**
@@ -241,7 +243,9 @@ export class RealtimeTransport {
       lastPongAt: 0,
       intentionallyClosed: false,
       connectWaiters: [],
+      detachNetworkListeners: null,
     };
+    this.watchNetwork();
     Object.freeze(this);
   }
 
@@ -346,6 +350,8 @@ export class RealtimeTransport {
   /** Permanently close the transport (no reconnect) and release all timers/listeners/queues. */
   public close(): void {
     this.internal.intentionallyClosed = true;
+    this.internal.detachNetworkListeners?.();
+    this.internal.detachNetworkListeners = null;
     this.clearHeartbeat();
     this.clearReconnectTimer();
     this.clearConnectTimer();
@@ -570,6 +576,44 @@ export class RealtimeTransport {
       this.setState("reconnecting");
       this.scheduleReconnect();
     }
+  }
+
+  /**
+   * Browsers fire `offline` / `online` on the window. A dropped network does not close a WebSocket or
+   * SSE stream right away, so without this the state would stay "authenticated" until the next read fails.
+   */
+  private watchNetwork(): void {
+    const target = globalThis as unknown as {
+      addEventListener?: (type: string, listener: () => void) => void;
+      removeEventListener?: (type: string, listener: () => void) => void;
+    };
+    if (typeof target.addEventListener !== "function") return;
+    const onOffline = (): void => {
+      const st = this.internal.stateValue;
+      if (this.internal.intentionallyClosed || (st !== "authenticated" && st !== "connecting")) return;
+      const socket = this.internal.socket;
+      this.internal.socket = null;
+      this.clearHeartbeat();
+      this.clearConnectTimer();
+      if (socket) {
+        detachSocketListeners(socket);
+        closeSocketQuietly(socket, 1001, "network offline");
+      }
+      this.setState("reconnecting");
+      this.scheduleReconnect();
+    };
+    const onOnline = (): void => {
+      if (this.internal.intentionallyClosed || this.internal.stateValue !== "reconnecting") return;
+      this.clearReconnectTimer();
+      this.internal.lastReconnectDelayMs = RECONNECT_BASE_MS;
+      void this.openSocket();
+    };
+    target.addEventListener("offline", onOffline);
+    target.addEventListener("online", onOnline);
+    this.internal.detachNetworkListeners = () => {
+      target.removeEventListener?.("offline", onOffline);
+      target.removeEventListener?.("online", onOnline);
+    };
   }
 
   private scheduleReconnect(): void {

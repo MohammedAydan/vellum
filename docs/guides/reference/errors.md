@@ -22,6 +22,17 @@ All errors use one envelope. `VellumError.toEnvelope(requestId)` and the HTTP er
 
 `details` is optional (omitted when empty). `requestId` echoes `X-Request-Id` (or `req_unknown`). Source of truth: `packages/core/src/errors.ts` (`ERROR_HTTP_STATUS`, `VellumError`), `packages/api-contract/src/schemas/errors.ts` (`ErrorCodeEnum`), AGENTS.md §4.
 
+## Errors raised by the SDK itself
+
+When the request never reaches the server (device offline, DNS failure, connection refused), the SDKs throw an error with `code: "NETWORK_ERROR"` and `status: 0` instead of the platform's raw error (`TypeError: Failed to fetch` in browsers). `details.reason` carries the original message. Idempotent requests are retried first; the error is thrown when the retries run out. A request that times out keeps `REQUEST_TIMEOUT`. Check for it to show an "offline" state and retry later:
+
+```ts
+try { await db.doc("posts/a").set({ title: "x" }); }
+catch (e) { if ((e as { code?: string }).code === "NETWORK_ERROR") showOfflineBanner(); else throw e; }
+```
+
+In a browser the realtime connection also follows the window `offline` and `online` events: `db.connectionState` becomes `reconnecting` right away when the network drops and reconnects as soon as it returns.
+
 ## Status mapping (authoritative)
 
 | Code | HTTP | Typical trigger | Retry? |
