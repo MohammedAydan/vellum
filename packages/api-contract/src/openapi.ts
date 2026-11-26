@@ -10,7 +10,7 @@ export function generateOpenApiSpec(serverUrl = "https://api.vellum.dev") {
     openapi: "3.1.0",
     info: {
       title: "Document Database SaaS Public HTTP & Realtime API",
-      version: "0.0.6",
+      version: "0.0.7",
       description:
         "Firestore-inspired multi-tenant document database API with Tagged Wire Format, composite indexes, OCC transactions, and WebSocket realtime listeners. " +
         "The tenant is the project: every resource is addressed as `/v1/projects/{projectId}/...`. " +

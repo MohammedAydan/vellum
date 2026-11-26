@@ -190,7 +190,7 @@ export function renderPage({ page, lang, origin, routeOf }) {
     ld.push({ "@context": "https://schema.org", "@graph": [
       org,
       { "@type": "WebSite", "@id": `${origin}/#site`, name: "Vellum", url: origin, inLanguage: ["en", "ar"], publisher: { "@id": `${origin}/#org` } },
-      { "@type": "SoftwareApplication", name: "Vellum", applicationCategory: "DeveloperApplication", operatingSystem: "Web, Node.js, Flutter", softwareVersion: "0.0.6", description: page.desc.en, url: origin, license: "https://opensource.org/licenses/MIT", publisher: { "@id": `${origin}/#org` } },
+      { "@type": "SoftwareApplication", name: "Vellum", applicationCategory: "DeveloperApplication", operatingSystem: "Web, Node.js, Flutter", softwareVersion: "0.0.7", description: page.desc.en, url: origin, license: "https://opensource.org/licenses/MIT", publisher: { "@id": `${origin}/#org` } },
     ] });
     ld.push({ "@context": "https://schema.org", "@type": "FAQPage", inLanguage: lang, mainEntity: FAQ[lang].map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) });
   } else {

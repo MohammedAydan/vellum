@@ -2,8 +2,29 @@
 
 ## Unreleased
 
+## 0.0.7
+
+Fixes found by building a real chat app on 0.0.6: realtime and requests from a browser, batch writes, and missing documents. Upgrade the SDKs together with the API.
+
+### Upgrade notes
+
+- No migrations. API keys that list `allowedOrigins` now also work for same-origin GET requests and for realtime (WebSocket and SSE) from those origins.
+- `batchWriteChunked` (JS) and `writeBatchChunked` (Flutter) now default to 100 operations per request, the server limit. Larger `chunkSize` values are capped at 100.
+- `doc.get()` on a missing document now returns `exists: false` instead of throwing NOT_FOUND. Code that relied on the exception should check `snapshot.exists`.
+- A plain Vercel `rewrites` rule buffers SSE and cannot carry WebSockets. Point the SDK `endpoint` at the API origin for realtime.
+
+### Fixed
+
+- **fix(sdk-js):** in a browser every request failed with "Illegal invocation" unless the app passed `customFetch`, because the transport called `globalThis.fetch` as a method of itself. The transport and the SSE socket now call fetch as a plain function, and the default is looked up at call time.
 - **fix:** an API key with `allowedOrigins` rejected same-origin GET requests, because browsers send no `Origin` header on them. A GET or HEAD with `Sec-Fetch-Site: same-origin` (a header page scripts cannot set) is now checked against the origin of the request's own host. Every other request without an `Origin` header is still refused.
 - **fix(realtime):** realtime now works for a developer's own web app. Before, per-project CORS (origins on an API key) only covered `/v1/projects/...`, so the WebSocket handshake answered 403 and the SSE stream failed its preflight. `POST /v1/realtime/stream` now returns `Access-Control-Allow-Origin` when an active key of the project in the auth frame lists the origin, and the WebSocket accepts such an origin provisionally and closes it (1008) unless the auth frame names a project whose active keys list it. Null, wildcard and malformed origins are still refused at the handshake, other origins are refused at the auth frame, and third-party origins never receive `Access-Control-Allow-Credentials` (this also applies to the existing `/v1/projects/...` responses).
+- **fix(api):** the API no longer rejects ordinary 100-operation batches with "Total object keys exceed 500". The object-key limit now applies per write (500 keys each) and the body total scales with the number of writes (at most 100). The 5 MiB body cap and depth limits are unchanged. The SDK chunk size defaults to 100 in JS and Flutter.
+- **fix(sdk-js, flutter):** `doc.get()` on a document that does not exist (for example right after `delete()`) returns a snapshot with `exists: false` instead of throwing NOT_FOUND. A missing project still throws. In JS, `snapshot.metadata.fromCache` is now `true` when a snapshot comes from the client read cache.
+- **fix(realtime):** a write that committed while a new `onSnapshot` was reading its initial snapshot could be delivered before `initial_sync` and then overwritten by it, so the update was lost. Live events are now held until `initial_sync` is sent, then delivered in order, skipping any the snapshot already contains.
+
+### Docs
+
+- Realtime page: plain Vercel rewrites buffer event streams and cannot carry WebSockets.
 
 ## 0.0.6
 
