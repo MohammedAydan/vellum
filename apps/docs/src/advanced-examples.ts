@@ -118,7 +118,7 @@ export const relationsTs = `// A reference value in your data is stored as a tag
 const author = db.doc("users/u1");
 const post = await db.collection("posts").add({ title: "Hello", author });
 
-// Create a parent and its children in ONE atomic request (max 500 documents).
+// Create a parent and its children in ONE atomic request (max 100 documents).
 const order = await db.collection("orders").addWithRelated(
   { total: 42 },
   { items: { collection: "orderItems", parentField: "order", docs: [{ sku: "a" }, { sku: "b" }] } },
@@ -137,7 +137,7 @@ final order = await db.collection('orders').addWithRelated(
       docs: [{'sku': 'a'}, {'sku': 'b'}],
     ),
   },
-); // all or nothing, at most 500 documents`;
+); // all or nothing, at most 100 documents`;
 
 export const realtimeTs = `// Default "auto": WebSocket first, automatic fallback to HTTP streaming (SSE).
 const db = createClient({ endpoint, projectId, apiKey });

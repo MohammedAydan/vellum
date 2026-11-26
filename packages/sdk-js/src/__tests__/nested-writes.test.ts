@@ -54,11 +54,11 @@ describe("addWithRelated", () => {
     }
   });
 
-  it("rejects more than 500 documents", async () => {
+  it("rejects more than 100 documents", async () => {
     const { db } = setup();
     await expect(
-      db.collection("orders").addWithRelated({}, { items: { collection: "i", docs: Array.from({ length: 500 }, () => ({})) } }),
-    ).rejects.toThrow(/500/);
+      db.collection("orders").addWithRelated({}, { items: { collection: "i", docs: Array.from({ length: 100 }, () => ({})) } }),
+    ).rejects.toThrow(/100/);
   });
 });
 

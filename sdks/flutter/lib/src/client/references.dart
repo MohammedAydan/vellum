@@ -909,9 +909,9 @@ class CollectionReference<T> extends Query<T> {
       'path': parent.path,
       'data': parentData,
     });
-    if (writes.length > 500) {
+    if (writes.length > 100) {
       throw ArgumentError(
-          'addWithRelated supports at most 500 documents per call');
+          'addWithRelated supports at most 100 documents per call (the batch write limit)');
     }
     await client.batchWrite(writes, idempotencyKey: idempotencyKey);
     return parent;
