@@ -1,6 +1,6 @@
 # Flutter / Dart SDK Guide (`vellum_flutter`)
 
-Complete engineering guide for `vellum_flutter` v0.0.5 — grounded directly in `sdks/flutter/lib/vellum_flutter.dart`. The pre-rebrand import `package:vellum_flutter/vellum_flutter.dart` and the `Vellum*` typedefs remain as compatibility aliases; new code should use the `Vellum*` names.
+Complete engineering guide for `vellum_flutter` v0.0.6 — grounded directly in `sdks/flutter/lib/vellum_flutter.dart`. The pre-rebrand import `package:vellum_flutter/vellum_flutter.dart` and the `Vellum*` typedefs remain as compatibility aliases; new code should use the `Vellum*` names.
 
 A single Flutter package (Dart `>=3.4.0 <4.0.0`, Flutter `>=3.22.0`), strictly null-safe. Works in Flutter mobile, web and desktop apps, with encrypted persistent sessions and Google/GitHub sign-in built in. It requires the Flutter SDK.
 
@@ -12,7 +12,7 @@ A single Flutter package (Dart `>=3.4.0 <4.0.0`, Flutter `>=3.22.0`), strictly n
 
 ```yaml
 dependencies:
-  vellum_flutter: ^0.0.5
+  vellum_flutter: ^0.0.6
 ```
 
 ```dart

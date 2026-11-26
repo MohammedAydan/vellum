@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.0.6
+
+Performance and reliability release for busy projects: realtime that holds up on Vercel, fewer control-database reads, and safer big-table queries. Upgrade the SDKs together with the API.
+
+### Upgrade notes
+
+- Build indexes on large tables with `CREATE INDEX CONCURRENTLY` so writes are not blocked.
+- Migration 0015 drops the duplicate index `idx_docs_collection_cover_active`; it takes a very short exclusive lock.
+- Vercel Hobby plan: a function runs at most 300 s and cron runs once a day. The in-process 60 s purge tick stays the main purge path; the cron call to the maintenance endpoint is a daily backstop.
+- Set `DATA_POOL_MAX` (default 50 per instance) to a small number such as 4 when the data database is behind a pooler.
+- The default rate limit is 100 requests per second per API key (429 `RATE_LIMITED`).
+
 - **fix:** concurrent blind writes (`set`, `PUT`) to a document that does not exist yet could report success while losing writes and reusing version numbers, because there was no row to lock. Writers of the same path are now serialised with a per-path advisory lock, so every successful write gets its own version.
 
 - **perf(realtime):** the hub routes each event through a per-project index (document path and collection), so it only visits subscriptions that can match. With 20,000 subscriptions an event costs about 3 ms instead of about 32 ms, and the result is identical to the full scan.
