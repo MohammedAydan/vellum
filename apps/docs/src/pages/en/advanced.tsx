@@ -82,7 +82,7 @@ export default function Page() {
       <Section id="references" title="References and related writes">
         <P>
           Put a document reference directly in your data. To create a parent and its children together, use{" "}
-          <code>addWithRelated</code>: one atomic request, all or nothing, up to 500 documents. See{" "}
+          <code>addWithRelated</code>: one atomic request, all or nothing, up to 100 documents (the batch write limit). See{" "}
           <PageLink slug="relationships">Relationships</PageLink> for reading related documents.
         </P>
         <CodeTabs tabs={[

@@ -123,8 +123,8 @@ export class CollectionReference<T = Record<string, unknown>>
       parentData[field] = refs;
     }
     writes.unshift({ type: "set", path: parent.path, data: parentData });
-    if (writes.length > 500) {
-      throw new Error("@vellumdb/sdk-js: addWithRelated supports at most 500 documents per call");
+    if (writes.length > 100) {
+      throw new Error("@vellumdb/sdk-js: addWithRelated supports at most 100 documents per call (the batch write limit)");
     }
     await this.colCtx.request(
       "POST",

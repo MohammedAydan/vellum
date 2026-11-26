@@ -76,7 +76,7 @@ void main() {
     }
   });
 
-  test('addWithRelated rejects more than 500 documents', () async {
+  test('addWithRelated rejects more than 100 documents', () async {
     expect(
       client
           .collection('orders')
@@ -84,7 +84,7 @@ void main() {
         'items': RelatedWrite(
           collection: 'i',
           docs: List<Map<String, Object?>>.generate(
-              500, (_) => <String, Object?>{}),
+              100, (_) => <String, Object?>{}),
         ),
       }),
       throwsArgumentError,
