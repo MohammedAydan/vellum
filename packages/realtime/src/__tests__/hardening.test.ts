@@ -251,3 +251,63 @@ describe("@vellum/realtime - Security, Reliability & Performance Hardening", () 
     expect(hub.connections.has(handle.connectionId)).toBe(false);
   });
 });
+
+describe("@vellum/realtime - outbox rows that commit late", () => {
+  it("delivers a lower seq that becomes visible after a higher seq was already delivered", async () => {
+    const mk = (n: number): OutboxEvent => ({
+      seqId: String(n), projectId: PROJECT_A, collectionPath: "items", path: `items/i${n}`, documentId: `i${n}`,
+      opType: "updated", version: 1, beforeData: null, afterData: { n }, committedAt: new Date().toISOString(),
+    });
+    // Seq 11 committed first; seq 10 (inserted earlier, committed later) appears only on the next read.
+    const rows: OutboxEvent[] = [mk(9), mk(11)];
+    const delivered: string[] = [];
+    const dataStore = new DataPlaneStore();
+    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0") => rows.filter((r) => BigInt(r.seqId) > BigInt(afterSeqId));
+    const poller = new OutboxPoller({
+      bus: { async publish() {}, async subscribe() { return () => {}; }, async close() {} },
+      dataStore,
+      sink: { async notifyCommittedEvents(_p, evs) { for (const e of evs) delivered.push(e.seqId); } },
+      pollIntervalMs: 60_000,
+    });
+    await poller.start();
+    poller.handleNotification(JSON.stringify({ seqId: 9, projectId: PROJECT_A }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(delivered).toEqual(["9", "11"]);
+    rows.splice(1, 0, mk(10));
+    poller.handleNotification(JSON.stringify({ seqId: 10, projectId: PROJECT_A }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(delivered).toEqual(["9", "11", "10"]);
+    // Re-reading must not duplicate anything.
+    poller.handleNotification(JSON.stringify({ seqId: 11, projectId: PROJECT_A }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(delivered).toEqual(["9", "11", "10"]);
+    await poller.stop();
+  });
+});
+
+describe("@vellum/realtime - poll-only tenant bootstrap", () => {
+  it("does not drop a write made after a client connected but before the first poll", async () => {
+    const connectedAt = Date.now();
+    const old = (n: number): OutboxEvent => ({
+      seqId: String(n), projectId: PROJECT_A, collectionPath: "items", path: `items/i${n}`, documentId: `i${n}`,
+      opType: "updated", version: 1, beforeData: null, afterData: { n },
+      committedAt: new Date(connectedAt - 60_000).toISOString(),
+    });
+    const fresh: OutboxEvent = { ...old(8), committedAt: new Date(connectedAt + 100).toISOString() };
+    const rows = [old(6), old(7), fresh];
+    const delivered: string[] = [];
+    const dataStore = new DataPlaneStore();
+    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0") => rows.filter((r) => BigInt(r.seqId) > BigInt(afterSeqId));
+    const connections = new Map([["c1", { authenticated: true, closed: false, projectId: PROJECT_A, connectedAt }]]);
+    const poller = new OutboxPoller({
+      bus: { async publish() {}, async subscribe() { return () => {}; }, async close() {} },
+      dataStore,
+      sink: { connections, async notifyCommittedEvents(_p, evs) { for (const e of evs) delivered.push(e.seqId); } },
+      pollIntervalMs: 50,
+    });
+    await poller.start();
+    await new Promise((r) => setTimeout(r, 200));
+    await poller.stop();
+    expect(delivered).toEqual(["8"]);
+  });
+});

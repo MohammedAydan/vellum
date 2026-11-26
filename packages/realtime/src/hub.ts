@@ -346,6 +346,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     const connectionId = `conn_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
     const session: ConnectionSession = {
       connectionId,
+      connectedAt: Date.now(),
       authenticated: false,
       projectId: null,
       apiKeyRecord: null,
