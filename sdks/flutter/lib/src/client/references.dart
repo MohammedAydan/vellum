@@ -748,6 +748,14 @@ class Query<T> {
           docs.removeWhere((doc) => doc.path == snap.path);
         } else {
           final index = docs.indexWhere((doc) => doc.path == snap.path);
+          // Out-of-order events from concurrent writes: ignore an update that
+          // is older than the version already held.
+          if (operation == 'update' &&
+              index >= 0 &&
+              snap.version > 0 &&
+              docs[index].version > snap.version) {
+            return;
+          }
           if (index >= 0) {
             docs[index] = snap;
           } else {
