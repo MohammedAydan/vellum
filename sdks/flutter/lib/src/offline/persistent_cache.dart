@@ -22,6 +22,11 @@ import 'encrypted_box.dart';
 /// await cache.load(); // only once the user is known
 /// ```
 ///
+/// The whole set is sealed in one piece on the main isolate, so the write is
+/// debounced (5 seconds by default) and the cache is capped at 2 MB: sealing
+/// costs roughly 100 ms per MB in a debug build. Call [flush] when the app is
+/// paused so nothing is lost.
+///
 /// Cached documents stay readable offline for up to [maxEntryAge] even if the
 /// security rules change on the server in the meantime.
 ///
@@ -32,9 +37,9 @@ class PersistentDocumentCacheStore implements DocumentCacheStore {
     required VellumEncryptedBox box,
     OfflineBlobStore? blobs,
     String namespace = 'vellum',
-    int maxBytes = 5 * 1024 * 1024,
+    int maxBytes = 2 * 1024 * 1024,
     this.maxEntryAge = const Duration(days: 14),
-    Duration saveDelay = const Duration(seconds: 1),
+    Duration saveDelay = const Duration(seconds: 5),
     bool allowWeb = false,
     @visibleForTesting bool? isWeb,
   })  : _box = box,

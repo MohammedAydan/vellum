@@ -4,6 +4,7 @@
 
 ### Fixes
 
+- `vellum_flutter`: the default HTTP transport opened and closed a new `http.Client` for every request, so every operation paid a fresh DNS lookup, TCP and TLS handshake. It now uses one shared keep-alive client (five requests, one connection). The persistent cache seals its whole blob on the main isolate, so it now debounces for 5 seconds (was 1) and is capped at 2 MB by default (was 5 MB).
 - `vellum_flutter` realtime: the SSE stream now has an idle timeout (45s, three server keep-alives); a silent or half-open stream is failed and reopened with resume instead of hanging forever (before, the channel answered heartbeat pings itself, so the dead stream was never noticed). On WebSocket any inbound frame counts as liveness, and a dead socket is detected within about 50s (15s ping, 35s timeout; was about 85s).
 
 ## 0.0.5

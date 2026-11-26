@@ -191,8 +191,13 @@ Future<VellumHttpResponse> _sendHttpRequestWithHeaders(
   return VellumHttpResponse(body: decoded, headers: response.headers);
 }
 
-/// Standard production HTTP transport using a short-lived `package:http`
-/// client. Prefer [httpClientTransport] when the app owns a long-lived client.
+/// One HTTP client for the whole process, so connections are kept alive and
+/// reused. A new client per request (the old behaviour) paid a fresh DNS lookup,
+/// TCP and TLS handshake on every operation, which is the main cost on mobile.
+final http.Client _sharedHttpClient = http.Client();
+
+/// Standard production HTTP transport using one shared, keep-alive `package:http`
+/// client. Prefer [httpClientTransport] when the app wants its own client.
 ///
 /// Returns the decoded body directly (legacy behavior). [VellumClient] uses
 /// [defaultHttpTransportWithHeaders] internally so index-advisor headers are
@@ -203,19 +208,14 @@ Future<Object?> defaultHttpTransport(
   Map<String, String> headers,
   JsonMap? body,
 ) async {
-  final client = http.Client();
-  try {
-    final response =
-        await _sendHttpRequestWithHeaders(client, method, url, headers, body);
-    _handleIndexSuggestionHeaders(
-      response.headers,
-      warn: _globalWarnOnMissingIndexes,
-      callback: _globalOnIndexSuggestion,
-    );
-    return response.body;
-  } finally {
-    client.close();
-  }
+  final response = await _sendHttpRequestWithHeaders(
+      _sharedHttpClient, method, url, headers, body);
+  _handleIndexSuggestionHeaders(
+    response.headers,
+    warn: _globalWarnOnMissingIndexes,
+    callback: _globalOnIndexSuggestion,
+  );
+  return response.body;
 }
 
 /// Header-aware counterpart of [defaultHttpTransport] used by [VellumClient].
@@ -225,13 +225,8 @@ Future<VellumHttpResponse> defaultHttpTransportWithHeaders(
   Map<String, String> headers,
   JsonMap? body,
 ) async {
-  final client = http.Client();
-  try {
-    return await _sendHttpRequestWithHeaders(
-        client, method, url, headers, body);
-  } finally {
-    client.close();
-  }
+  return _sendHttpRequestWithHeaders(
+      _sharedHttpClient, method, url, headers, body);
 }
 
 /// Builds an [HttpTransport] backed by a caller-owned [http.Client].
