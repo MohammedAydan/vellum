@@ -69,7 +69,11 @@ export const ApiKeySchema = z.object({
 export const CreateApiKeyRequestSchema = z.object({
   name: z.string().min(1).max(100),
   keyType: ApiKeyTypeEnum,
-  expiresAt: z.string().max(64).optional(),
+  expiresAt: z
+    .string()
+    .max(64)
+    .refine((v) => Number.isFinite(Date.parse(v)), { message: "expiresAt must be an ISO-8601 date-time" })
+    .optional(),
 });
 
 export const CreateApiKeyResponseSchema = z.object({

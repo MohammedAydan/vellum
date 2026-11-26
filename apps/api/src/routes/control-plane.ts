@@ -289,7 +289,8 @@ export function createControlPlaneRoutes(
       userAgent: meta.userAgent,
     });
 
-    return c.json({ success: true, revoked });
+    const { secretHash: _revokedSecretHash, ...safeRevoked } = revoked;
+    return c.json({ success: true, revoked: safeRevoked });
   });
 
   // 4. Security Rulesets

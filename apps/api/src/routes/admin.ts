@@ -200,9 +200,7 @@ export function createAdminRoutes(
     const requiresSetup = owners.length === 0;
     return safeJson(c, {
       initialized: owners.length > 0,
-      ownerCount: owners.length,
       requiresSetup,
-      totalUsers: allUsers.length,
       // The UI needs to know a secret is required, never the secret itself.
       tokenRequired: requiresSetup && requireSetupToken,
     });
