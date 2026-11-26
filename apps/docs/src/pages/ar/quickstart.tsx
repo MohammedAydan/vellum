@@ -28,6 +28,16 @@ curl -fsS http://localhost:8080/v1/health/ready`} />
         { label: "Flutter / Dart", lang: "dart", code: quickstartDart },
       ]} />
     </Section>
+    <Section id="run-typescript" title="تشغيل مثال TypeScript">
+      <P>احفظ المثال باسم <code>quickstart.ts</code>، واضبط متغيرات البيئة الثلاثة، ثم شغّله مع Node 22 أو أحدث. لا تحتاج إلى إعداد بناء.</P>
+      <Code lang="bash" title="تشغيل quickstart.ts" code={`npm install @vellumdb/sdk-js
+npm install -D tsx typescript
+export VELLUM_ENDPOINT="https://api.example.com"   # origin only, no /v1
+export VELLUM_PROJECT_ID="YOUR_PROJECT_ID"
+export VELLUM_API_KEY="sk_..."                    # server key; use pk_ in browsers
+npx tsx quickstart.ts`} />
+      <P>يحتاج <code>await</code> على المستوى الأعلى إلى وحدة ES. أضف <code>"type": "module"</code> إلى <code>package.json</code>، أو غلّف المثال داخل دالة <code>async</code>.</P>
+    </Section>
     <Section id="operators-at-a-glance" title="4. معاملات الاستعلام الثلاثة عشر">
       <UL items={[
         <>المقارنة: <code>== != &lt; &lt;= &gt; &gt;=</code>.</>,
