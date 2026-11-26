@@ -137,12 +137,22 @@ describe("Rules DSL compiler", () => {
   });
 
   it("expands built-in unchanged([...]) into field-by-field equality in `all`", () => {
+    const field = (f: string) => ({
+      op: "any",
+      conditions: [
+        { op: "==", left: { var: `request.data.${f}` }, right: { var: `resource.data.${f}` } },
+        {
+          op: "all",
+          conditions: [
+            { op: "not", condition: { op: "hasKey", left: { var: "request.data" }, right: { val: f } } },
+            { op: "not", condition: { op: "hasKey", left: { var: "resource.data" }, right: { val: f } } },
+          ],
+        },
+      ],
+    });
     expect(compileExpr("unchanged(['authorId', 'createdAt'])")).toEqual({
       op: "all",
-      conditions: [
-        { op: "==", left: { var: "request.data.authorId" }, right: { var: "resource.data.authorId" } },
-        { op: "==", left: { var: "request.data.createdAt" }, right: { var: "resource.data.createdAt" } },
-      ],
+      conditions: [field("authorId"), field("createdAt")],
     });
     expect(compileExpr("unchanged([])")).toBe(true);
   });
