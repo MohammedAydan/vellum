@@ -154,7 +154,7 @@ interface BatchTxHandle extends StorageTxHandle {
    * doubles) the engine falls back to `Promise.all(tx.getDocument(...))`
    * wrapped in one logical batch operation.
    */
-  batchGetDocuments?(paths: string[], includeDeleted?: boolean): Promise<DocumentRecord[]>;
+  batchGetDocuments?(paths: string[], includeDeleted?: boolean, forUpdate?: boolean): Promise<DocumentRecord[]>;
 }
 
 /**
