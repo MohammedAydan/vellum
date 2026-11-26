@@ -81,8 +81,8 @@ class VellumRealtimeTransport {
     required this.onFrame,
     this.onError,
     RealtimeChannelFactory? channelFactory,
-    this.heartbeatInterval = const Duration(seconds: 25),
-    this.pongTimeout = const Duration(seconds: 60),
+    this.heartbeatInterval = const Duration(seconds: 15),
+    this.pongTimeout = const Duration(seconds: 35),
     this.connectTimeout = const Duration(seconds: 10),
     this.maxOutboundQueueSize = 256,
     int Function(int attempt)? backoffMs,
@@ -189,6 +189,8 @@ class VellumRealtimeTransport {
     _lastPongAt = DateTime.now();
     _subscription = channel.stream.listen(
       (data) {
+        // Any inbound data proves the socket is alive, not only a pong.
+        _lastPongAt = DateTime.now();
         final frame = RealtimeFrames.decode(data);
         if (frame != null) _handleFrame(frame);
       },
