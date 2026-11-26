@@ -9,6 +9,15 @@ class VellumException implements Exception {
   final String? requestId;
   final JsonMap details;
 
+  /// Seconds to wait before retrying a throttled request (429), when the server says.
+  int? get retryAfter {
+    final header = details['retryAfter'];
+    final fromHeader = header is String ? int.tryParse(header.trim()) : null;
+    if (fromHeader != null && fromHeader > 0) return fromHeader;
+    final value = details['retryAfterSeconds'];
+    return value is num && value > 0 ? value.ceil() : null;
+  }
+
   const VellumException({
     required this.code,
     required this.message,
