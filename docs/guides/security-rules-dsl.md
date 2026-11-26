@@ -59,7 +59,7 @@ A bare field in a boolean position is compared with true; there is no JavaScript
 | hasRole(role) | One value | auth.claims.role equals role. It does not inspect claims.roles. |
 | hasAnyRole(['writer', 'reviewer']) | One literal string array | Singular auth.claims.role is in that array. |
 | isEmailVerified() | None | auth.email_verified equals true. Does not itself require a uid. |
-| unchanged(['ownerId', 'createdAt']) | One literal string array | Each listed field in the full new data equals stored data. Dotted field paths work. Empty array returns true. Missing fields do not compare equal. |
+| unchanged(['ownerId', 'createdAt']) | One literal string array | Each listed field in the full new data equals stored data. Dotted field paths work. Empty array returns true. A field missing on both the stored and the new data, or null on both, counts as unchanged. A field present on only one side counts as changed. |
 | onlyChanged(['title']) | One literal string array | Negated equality for each listed field, with a diagnostic. Does NOT forbid other changes. Empty array returns true. Do not use as a write allowlist. |
 | hasKey(value, 'field') | Two values | Own direct key on a non-array object; reserved prototype-related keys are blocked. |
 | isType(value, 'type') | Two values | null, bool/boolean, string, number, array, map, or matching wire tag such as ref, int, ts, bytes, geo. |
@@ -178,3 +178,17 @@ An unknown function becomes false, but !unknownFunction() can therefore become t
 Source length is capped at 131072 JavaScript string code units; the error calls this bytes, but the implementation measures string length. The token cap is 16384; parser nesting is capped at 64. Keep policies short enough that runtime membership checks also stay within the 256-step budget. There is no general field allowlist: onlyChanged is not one, hasKey is not one, and validation in an untrusted client is not one.
 
 The complete examples in these two guides are extracted by tests/integration/rules-guide-examples.test.ts and evaluated with real authorization and the local document engine. Run corepack pnpm exec vitest run tests/integration/rules-guide-examples.test.ts when changing them.
+
+## Membership in an array field
+
+`in` tests whether a value is an element of an array field. Use it for group or member lists:
+
+```text
+match /groups/{groupId} {
+  allow get: if auth.uid in resource.memberIds;
+  allow create: if isSignedIn() && auth.uid in incoming.memberIds;
+  allow update: if auth.uid in resource.memberIds && unchanged(['memberIds']);
+}
+```
+
+`resource.memberIds` is shorthand for `resource.data.memberIds`, and `incoming.memberIds` for the new data. An unauthenticated caller never matches, and a missing field denies. `list` rules are checked as a collection gate, so filter list queries with an `array-contains` condition on the same field.
