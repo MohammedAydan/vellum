@@ -171,6 +171,12 @@ await sub.cancel();`,
           <code>realtimeMode</code> (Flutter). Details are in{" "}
           <PageLink slug="advanced">Advanced configuration</PageLink>.
         </P>
+        <Callout title="Behind a Vercel rewrite or another proxy">
+          A plain Vercel <code>rewrites</code> rule to your API buffers event streams, so SSE frames reach the
+          browser late or in bursts, and a rewrite cannot carry WebSocket upgrades at all. Point the SDK{" "}
+          <code>endpoint</code> straight at the API origin for realtime and list your web app origin on an API key
+          (<code>allowedOrigins</code>), or use a proxy that streams the response body without buffering it.
+        </Callout>
       </Section>
 
       <Section id="opt-in-includes" title="Opt-in relation includes">
