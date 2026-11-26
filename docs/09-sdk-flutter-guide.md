@@ -382,3 +382,19 @@ Do not add Console fields to fix a wrong project URL.
 
 Use `pk_` keys only with suitable security rules and end-user authentication.
 Never bundle an `sk_` key into browser or mobile code.
+
+## Offline writes: finding out when one is refused
+
+Writes queued by `VellumOutbox` while the device is offline are replayed later. If the server refuses a replayed write (for example `PERMISSION_DENIED`), the entry is dropped and `onDropped` is called with the entry, a reason (`rejected`, `conflict`, `expired`, `otherUser` or `failed`) and the error. Use it to roll back what you showed optimistically and to tell the user:
+
+```dart
+final outbox = VellumOutbox(
+  client: client,
+  box: box,
+  onDropped: (entry, reason, error) {
+    // Remove the local copy for entry.path and show a message.
+  },
+);
+```
+
+A write made while online throws the error to the caller instead, so the same rollback belongs in your `catch`.

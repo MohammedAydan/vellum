@@ -152,6 +152,8 @@ export function ProvidersPanel({ projectId }: { projectId: string }) {
         </CardContent>
       </Card>
 
+      <SmtpCard config={config} saving={saving} onPatch={patchConfig} t={t} />
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">{t("authStudio.providers.oauthTitle")}</CardTitle>
@@ -477,6 +479,96 @@ function RedirectUrisCard({
         <div className="flex justify-end">
           <Button size="sm" className="h-8 text-xs" disabled={saving} onClick={() => void save()}>
             {t("authStudio.providers.save")}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SmtpCard({
+  config,
+  saving,
+  onPatch,
+  t,
+}: {
+  config: AuthConfigView | undefined;
+  saving: boolean;
+  onPatch: (patch: UnknownRecord, successMessage: string) => Promise<void>;
+  t: (key: string) => string;
+}) {
+  const current = config?.customSmtp ?? null;
+  const [host, setHost] = React.useState("");
+  const [port, setPort] = React.useState("587");
+  const [user, setUser] = React.useState("");
+  const [pass, setPass] = React.useState("");
+  const [from, setFrom] = React.useState("");
+
+  React.useEffect(() => {
+    setHost(current?.host ?? "");
+    setPort(String(current?.port ?? 587));
+    setUser(current?.user ?? "");
+    setFrom(current?.from ?? "");
+    setPass("");
+  }, [current?.host, current?.port, current?.user, current?.from]);
+
+  const save = () => {
+    const smtp: UnknownRecord = { host: host.trim(), port: Number(port) || 587 };
+    if (user.trim()) smtp["user"] = user.trim();
+    if (from.trim()) smtp["from"] = from.trim();
+    if (pass) smtp["pass"] = pass;
+    void onPatch({ customSmtp: smtp }, t("authStudio.smtp.saveToast"));
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">{t("authStudio.smtp.title")}</CardTitle>
+        <CardDescription className="text-xs">{t("authStudio.smtp.description")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label className="text-xs">{t("authStudio.smtp.host")}</Label>
+            <Input value={host} onChange={(e) => setHost(e.target.value)} placeholder="smtp.example.com" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t("authStudio.smtp.port")}</Label>
+            <Input value={port} onChange={(e) => setPort(e.target.value)} inputMode="numeric" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t("authStudio.smtp.user")}</Label>
+            <Input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="off" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t("authStudio.smtp.password")}</Label>
+            <Input
+              type="password"
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              autoComplete="new-password"
+              placeholder={current?.hasPassword ? t("authStudio.smtp.passwordKept") : ""}
+            />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <Label className="text-xs">{t("authStudio.smtp.from")}</Label>
+            <Input value={from} onChange={(e) => setFrom(e.target.value)} placeholder="no-reply@example.com" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          {current ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              disabled={saving}
+              onClick={() => void onPatch({ customSmtp: null }, t("authStudio.smtp.removeToast"))}
+            >
+              {t("authStudio.smtp.remove")}
+            </Button>
+          ) : null}
+          <Button size="sm" className="h-8 text-xs" disabled={saving || !host.trim()} onClick={save}>
+            {t("authStudio.smtp.save")}
           </Button>
         </div>
       </CardContent>

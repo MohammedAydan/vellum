@@ -18,6 +18,7 @@ const ruleset: SecurityRulesetRecord = {
   rulesAst: compileRulesDsl(`rules_version = '2';
 match /posts/{postId} {
   allow get: if resource.data.visibility == 'public';
+  allow list: if true;
   allow write: if false;
 }`).ast as unknown as Record<string, unknown>,
 };
@@ -120,5 +121,21 @@ describe("realtime: resource-based get rules", () => {
     } as never)).catch(() => undefined);
     expect(JSON.stringify(frames)).not.toContain('"private"');
     expect(JSON.stringify(frames)).not.toContain("posts/priv");
+  });
+
+  it("tells a live query a document left its result when the subscriber can no longer read it", async () => {
+    const { hub, session, frames } = await connect();
+    await session.handleClientFrame({
+      type: "subscribe",
+      subId: "q2",
+      query: { collectionPath: "posts" },
+    } as never);
+    const sync = frames.find((f) => f.type === "initial_sync") as Extract<ServerFrame, { type: "initial_sync" }>;
+    expect(sync.documents.map((d) => d.path)).toContain("posts/pub");
+    await hub.notifyCommittedEvents(TENANT.projectId, [event("pub", "5", "private")]);
+    const removal = frames.find((f) => f.type === "mutation") as Extract<ServerFrame, { type: "mutation" }> | undefined;
+    expect(removal).toMatchObject({ subId: "q2", operation: "delete" });
+    expect(removal?.document.path).toBe("posts/pub");
+    expect(JSON.stringify(removal)).not.toContain('"private"');
   });
 });

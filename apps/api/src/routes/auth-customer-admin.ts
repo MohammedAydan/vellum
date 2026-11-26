@@ -27,6 +27,7 @@ import { assertProjectAccess, extractBearerToken } from "../middleware/session.j
 import { getApiKeyHeader, resolveIsAdminServer } from "../middleware/tenant-auth.js";
 import {
   applyAuthConfigPatch,
+  assertCustomSmtpAllowed,
   ensureAuthConfig,
   optionalJsonBody,
   parseOrThrow,
@@ -273,6 +274,7 @@ export function createAuthCustomerAdminRoutes(platform: VellumPlatformContext): 
     const tenant = await resolveAuthTenant(c, platform);
     await authorize(c, tenant, true);
     const body = parseOrThrow(AuthConfigPatchSchema, await c.req.json());
+    await assertCustomSmtpAllowed(body);
     const existing = await ensureAuthConfig(platform, tenant.projectId);
     const updated = await platform.controlStore.upsertAuthConfig(
       applyAuthConfigPatch(existing, body)

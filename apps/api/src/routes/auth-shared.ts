@@ -9,7 +9,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Context } from "hono";
 import { VellumError } from "@vellum/core";
-import { generateEd25519KeyPair } from "@vellum/auth";
+import { assertPublicSmtpHost, decryptSecret, encryptSecret, generateEd25519KeyPair } from "@vellum/auth";
 import { mergeOAuthProviders } from "../auth/oauth/config.js";
 import { verifyApiKeyAsync, type ApiKeyRecord } from "@vellum/authorization";
 import type {
@@ -124,7 +124,16 @@ export type AuthConfigPatchInput = Partial<
     UpsertAuthConfigInput,
     "projectId" | "jwtKeyId" | "jwtPublicKeyPem" | "jwtPrivateKeyEncrypted"
   >
->;
+> & {
+  /** Plain mail server settings; stored encrypted. `null` removes them. */
+  customSmtp?: {
+    host: string;
+    port?: number | undefined;
+    user?: string | undefined;
+    pass?: string | undefined;
+    from?: string | undefined;
+  } | null | undefined;
+};
 
 /**
  * Merge a validated partial patch into a full upsert input while preserving the
@@ -158,7 +167,37 @@ export function applyAuthConfigPatch(
   if (patch.refreshTokenTtlDays !== undefined) input.refreshTokenTtlDays = patch.refreshTokenTtlDays;
   if (patch.oauthProviders !== undefined) input.oauthProviders = mergeOAuthProviders(base.oauthProviders, patch.oauthProviders, masterKey());
   if (patch.customSmtpConfigEncrypted !== undefined) input.customSmtpConfigEncrypted = patch.customSmtpConfigEncrypted;
+  if (patch.customSmtp !== undefined) {
+    input.customSmtpConfigEncrypted =
+      patch.customSmtp === null ? null : encryptCustomSmtp(base.customSmtpConfigEncrypted, patch.customSmtp);
+  }
   return input;
+}
+
+type CustomSmtpPatch = NonNullable<AuthConfigPatchInput["customSmtp"]>;
+
+/** Encrypt the project's mail server settings. A missing password keeps the stored one. */
+function encryptCustomSmtp(existingEncrypted: string | null, next: CustomSmtpPatch): string {
+  let storedPass: string | undefined;
+  if (existingEncrypted) {
+    try {
+      const prev = JSON.parse(decryptSecret(existingEncrypted, masterKey())) as Record<string, unknown>;
+      if (typeof prev["pass"] === "string") storedPass = prev["pass"];
+    } catch {
+      storedPass = undefined;
+    }
+  }
+  const pass = next.pass !== undefined ? next.pass : storedPass;
+  const config: Record<string, unknown> = { host: next.host, port: next.port ?? 587 };
+  if (next.user !== undefined && next.user !== "") config["user"] = next.user;
+  if (pass !== undefined && pass !== "") config["pass"] = pass;
+  if (next.from !== undefined) config["from"] = next.from;
+  return encryptSecret(JSON.stringify(config), masterKey());
+}
+
+/** Refuse a mail host that points at an internal address before it is stored. */
+export async function assertCustomSmtpAllowed(patch: AuthConfigPatchInput): Promise<void> {
+  if (patch.customSmtp) await assertPublicSmtpHost(patch.customSmtp.host);
 }
 
 export function sha256(value: string): string {
@@ -282,6 +321,24 @@ function publicOAuthProviders(providers: Record<string, unknown>): {
   return { providers: safe, hasClientSecret };
 }
 
+/** Mail server settings without the password. */
+function publicCustomSmtp(encrypted: string | null): Record<string, unknown> | null {
+  if (!encrypted) return null;
+  try {
+    const p = JSON.parse(decryptSecret(encrypted, masterKey())) as Record<string, unknown>;
+    if (typeof p["host"] !== "string") return null;
+    return {
+      host: p["host"],
+      port: typeof p["port"] === "number" ? p["port"] : 587,
+      user: typeof p["user"] === "string" ? p["user"] : null,
+      from: typeof p["from"] === "string" ? p["from"] : null,
+      hasPassword: typeof p["pass"] === "string" && p["pass"] !== "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Never return signing private keys, OAuth secrets or encrypted SMTP credentials. */
 export function publicAuthConfig(config: ProjectAuthConfig): Record<string, unknown> {
   const oauth = publicOAuthProviders(config.oauthProviders);
@@ -309,6 +366,7 @@ export function publicAuthConfig(config: ProjectAuthConfig): Record<string, unkn
     oauthProviders: oauth.providers,
     hasClientSecret: oauth.hasClientSecret,
     hasCustomSmtpConfig: config.customSmtpConfigEncrypted !== null,
+    customSmtp: publicCustomSmtp(config.customSmtpConfigEncrypted),
     createdAt: config.createdAt,
     updatedAt: config.updatedAt,
   };

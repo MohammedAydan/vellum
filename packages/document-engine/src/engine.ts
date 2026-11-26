@@ -18,6 +18,10 @@ import {
 } from "@vellum/core";
 import {
   authorizeOperation,
+  collectRuleLookups,
+  rulesetUsesLookups,
+  type AuthorizeOperationParams,
+  type AuthorizationResult,
   hasRowLevelGetRule,
   type ApiKeyRecord,
   type SecurityRulesetRecord,
@@ -444,15 +448,17 @@ export class DocumentEngine implements DocumentEnginePort {
    * collection-level `list` allow never hands out rows whose own `get` rule would deny the caller.
    * Server keys and system callers pass; only a rule denial hides the row.
    */
-  private canReadRow(
+  private async canReadRow(
+    tx: StorageTxHandle,
     apiKey: ApiKeyRecord | null,
     ruleset: SecurityRulesetRecord | null,
     authCtx: AuthContext,
     bypassRules: boolean,
-    row: DocumentRecord
-  ): boolean {
+    row: DocumentRecord,
+    lookupCache?: Map<string, Record<string, unknown> | null>
+  ): Promise<boolean> {
     try {
-      authorizeOperation({
+      await this.authorizeTx(tx, {
         apiKeyRecord: apiKey,
         rulesetRecord: ruleset,
         operation: "get",
@@ -460,7 +466,7 @@ export class DocumentEngine implements DocumentEnginePort {
         authContext: authCtx,
         resourceData: row.data,
         bypassRules,
-      });
+      }, lookupCache);
       return true;
     } catch (error) {
       if (error instanceof VellumError && error.code === "PERMISSION_DENIED") {
@@ -469,6 +475,44 @@ export class DocumentEngine implements DocumentEnginePort {
       }
       throw error;
     }
+  }
+
+  /**
+   * `authorizeOperation` for checks that run inside a transaction. When the ruleset reads other documents
+   * (`get()` / `exists()`), the documents the matching rules ask for are read first (at most
+   * `MAX_RULE_LOOKUPS` per check, through the transaction so they see the same data). Rulesets without
+   * lookups take the plain synchronous path with no extra reads.
+   */
+  private async authorizeTx(
+    tx: StorageTxHandle,
+    params: AuthorizeOperationParams,
+    cache?: Map<string, Record<string, unknown> | null>
+  ): Promise<AuthorizationResult> {
+    if (params.bypassRules === true || !rulesetUsesLookups(params.rulesetRecord)) {
+      return authorizeOperation(params);
+    }
+    const paths = collectRuleLookups({
+      rulesetRecord: params.rulesetRecord,
+      operation: params.operation,
+      path: params.path,
+      authContext: params.authContext,
+      resourceData: params.resourceData,
+      requestData: params.requestData,
+      requestTimeMs: params.requestTimeMs,
+    });
+    const lookups = new Map<string, Record<string, unknown> | null>();
+    for (const path of paths) {
+      const cached = cache?.get(path);
+      if (cached !== undefined) {
+        lookups.set(path, cached);
+        continue;
+      }
+      const doc = await tx.getDocument(path, false);
+      const data = doc ? (doc.data as Record<string, unknown>) : null;
+      lookups.set(path, data);
+      if (cache && cache.size < 200) cache.set(path, data);
+    }
+    return authorizeOperation({ ...params, lookups });
   }
 
   private resolveBypassRules(ctx: EngineContext): boolean {
@@ -786,7 +830,7 @@ export class DocumentEngine implements DocumentEnginePort {
         this.telemetry.counter("db.round_trips", 1);
         this.telemetry.histogram("db.round_trips", 1);
 
-        authorizeOperation({
+        await this.authorizeTx(tx, {
           apiKeyRecord: apiKey,
           rulesetRecord: ruleset,
           operation: "get",
@@ -1293,7 +1337,7 @@ export class DocumentEngine implements DocumentEnginePort {
               });
             }
 
-            authorizeOperation({
+            await this.authorizeTx(tx, {
               apiKeyRecord: apiKey,
               rulesetRecord: ruleset,
               operation: "delete",
@@ -1388,7 +1432,7 @@ export class DocumentEngine implements DocumentEnginePort {
             }
           }
 
-          authorizeOperation({
+          await this.authorizeTx(tx, {
             apiKeyRecord: apiKey,
             rulesetRecord: ruleset,
             operation: opKind,
@@ -1704,6 +1748,7 @@ export class DocumentEngine implements DocumentEnginePort {
     return this.dataStore.withTransaction(
       { projectId: ctx.projectId },
       async (tx) => {
+        const lookupCache = new Map<string, Record<string, unknown> | null>();
         const availableIndexes: CompositeIndexMetadata[] = ((await tx.listIndexes?.()) ?? []).filter(
           isQueryableCompositeIndex
         );
@@ -1777,7 +1822,7 @@ export class DocumentEngine implements DocumentEnginePort {
           let stoppedAt = -1;
           for (let i = 0; i < rows.length; i += 1) {
             const row = rows[i] as DocumentRecord;
-            if (!this.canReadRow(apiKey, ruleset, authCtx, queryBypass, row)) continue;
+            if (!(await this.canReadRow(tx, apiKey, ruleset, authCtx, queryBypass, row, lookupCache))) continue;
             pageDocs.push(row);
             if (pageDocs.length >= normalizedQuery.limit) {
               stoppedAt = i;
@@ -2095,7 +2140,7 @@ export class DocumentEngine implements DocumentEnginePort {
         // Per-document authorization uses the matched document's own data so a
         // rule like `resource.data.owner == auth.uid` is enforced on delete.
         for (const doc of matched) {
-          authorizeOperation({
+          await this.authorizeTx(tx, {
             apiKeyRecord: apiKey,
             rulesetRecord: ruleset,
             operation: "delete",
@@ -2350,7 +2395,7 @@ export class DocumentEngine implements DocumentEnginePort {
           const row = rowsByPath.get(path);
           if (!row) continue;
           try {
-            authorizeOperation({
+            await this.authorizeTx(tx, {
               apiKeyRecord: apiKey,
               rulesetRecord: ruleset,
               operation: "get",
@@ -2499,7 +2544,7 @@ export class DocumentEngine implements DocumentEnginePort {
           );
         }
 
-        authorizeOperation({
+        await this.authorizeTx(tx, {
           apiKeyRecord: apiKey,
           rulesetRecord: ruleset,
           operation: "create",
@@ -2778,6 +2823,7 @@ export class DocumentEngine implements DocumentEnginePort {
     let nextCursor: string | null = null;
 
     await this.dataStore.withTransaction(tenant, async (tx) => {
+      const lookupCache = new Map<string, Record<string, unknown> | null>();
       const pageLoader = (tx as BatchTxHandle).listDocumentsInCollectionPage;
 
       const loadPage = async (after: string | null, limit: number): Promise<DocumentRecord[]> => {
@@ -2810,7 +2856,7 @@ export class DocumentEngine implements DocumentEnginePort {
 
         const kept = rows.slice(0, take);
         for (const row of kept) {
-          if (!this.canReadRow(apiKey, ruleset, authCtx, exportBypass, row)) {
+          if (!(await this.canReadRow(tx, apiKey, ruleset, authCtx, exportBypass, row, lookupCache))) {
             afterDocumentId = row.documentId;
             if (Number.isFinite(remaining)) remaining -= 1;
             continue;
