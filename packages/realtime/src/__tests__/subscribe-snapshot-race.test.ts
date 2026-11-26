@@ -75,7 +75,7 @@ describe("realtime: write racing the initial snapshot", () => {
         return fn(tx);
       });
     await session.handleClientFrame({ type: "subscribe", subId: "d", path: "posts/p1" } as never);
-    return frames;
+    return Object.assign(frames, { hub });
   }
 
   it("delivers the racing update after initial_sync, never before it", async () => {
@@ -91,5 +91,10 @@ describe("realtime: write racing the initial snapshot", () => {
     const frames = await run(2);
     expect(frames.some((f) => f.type === "mutation")).toBe(false);
   });
-});
 
+  it("drops a later duplicate of an event the snapshot already contained", async () => {
+    const frames = await run(2);
+    await frames.hub.notifyCommittedEvents(TENANT.projectId, [ev("5", 2, 2)]);
+    expect(frames.some((f) => f.type === "mutation")).toBe(false);
+  });
+});
