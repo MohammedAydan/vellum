@@ -317,7 +317,7 @@ class VellumOutbox {
     int? ifVersion,
   }) =>
       enqueue('PATCH', '/documents/${encodeVellumPath(ref.path)}', body: <String, Object?>{
-        'data': replaceVellumDocumentReferences(patch),
+        'data': replaceVellumDocumentReferences(expandVellumUpdatePaths(patch)),
         if (ifVersion != null) 'ifVersion': ifVersion,
       });
 

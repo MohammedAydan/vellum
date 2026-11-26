@@ -26,7 +26,7 @@ import { createFallbackSocketFactory } from "../realtime/fallback-socket.js";
 import { defaultWebSocketFactory } from "../realtime/realtime-transport.js";
 import type { RealtimeFrame, RealtimeTransportState, WebSocketFactory } from "../realtime/realtime-transport.js";
 import { CollectionReference, type CollectionReferenceContext } from "../references/collection-ref.js";
-import { DocumentReference } from "../references/document-ref.js";
+import { DocumentReference, expandUpdatePaths } from "../references/document-ref.js";
 import { applyConverterToSnapshot, parseWireDocument, type WireDocument } from "../references/snapshots.js";
 import type {
   ActionTokenResult,
@@ -772,7 +772,12 @@ export class VellumClient implements VellumClientInterface {
     writes: Array<BatchWriteOperation | Record<string, unknown>>,
     options: RequestOptions = {}
   ): Promise<unknown> {
-    const res = await this.transport.request("POST", "/batchWrite", { writes }, {}, true, options.signal);
+    const expanded = writes.map((op) =>
+      isRecord(op) && op["type"] === "update" && isRecord(op["data"])
+        ? { ...op, data: expandUpdatePaths(op["data"] as Record<string, unknown>) }
+        : op
+    );
+    const res = await this.transport.request("POST", "/batchWrite", { writes: expanded }, {}, true, options.signal);
     for (const op of writes) {
       if (isRecord(op) && typeof op["path"] === "string" && op["path"].length > 0) {
         this.invalidateDocCache(op["path"]);
@@ -898,7 +903,7 @@ export class VellumClient implements VellumClientInterface {
           stagedWrites.push({
             type: "update",
             path,
-            data,
+            data: expandUpdatePaths(data),
           });
         },
         delete(docRef: string | { path: string }) {
