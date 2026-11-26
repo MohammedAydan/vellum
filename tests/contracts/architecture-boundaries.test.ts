@@ -105,6 +105,7 @@ describe("Architecture & Contract Boundaries (v5)", () => {
       "apps/dashboard/src/lib/api.ts",
       "apps/admin/src/lib/api.ts",
       "packages/sdk-js/src/core/http-transport.ts",
+      "packages/sdk-js/src/realtime/sse-socket.ts",
     ]);
     const files = [
       ...walkFiles(path.join(ROOT, "apps/dashboard/src"), [".ts", ".tsx"], EXCLUDE_DIRS),
