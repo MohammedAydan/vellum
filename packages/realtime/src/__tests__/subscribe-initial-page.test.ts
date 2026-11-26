@@ -22,7 +22,7 @@ match /posts/{postId} {
 }`).ast as unknown as Record<string, unknown>,
 };
 
-function makeControlStore() {
+function makeControlStore(rs: SecurityRulesetRecord = ruleset) {
   const keyPrefix = PK.slice(0, 16);
   const record: ApiKeyRecord = {
     id: "key_pk",
@@ -43,7 +43,7 @@ function makeControlStore() {
     apiKeysByPrefix: new Map([[keyPrefix, record]]),
     getProject: (projectId: string) => ({ project: { id: projectId, name: "t" } }),
     getAuthConfig: () => null,
-    getActiveRuleset: () => ruleset,
+    getActiveRuleset: () => rs,
     incrementUsage() {},
   };
 }
@@ -67,5 +67,36 @@ describe("realtime: query subscribe initial page", () => {
     } as never);
     const sync = frames.find((f) => f.type === "initial_sync") as Extract<ServerFrame, { type: "initial_sync" }>;
     expect(sync.documents.map((d) => (d as { documentId: string }).documentId)).toEqual(["p39", "p38", "p37"]);
+  });
+
+  it("fills the page when most rows are denied by their own get rule", async () => {
+    const denyMost: SecurityRulesetRecord = {
+      ...ruleset,
+      rulesAst: compileRulesDsl(`rules_version = '2';
+match /posts/{postId} {
+  allow list: if true;
+  allow get: if resource.data.visible == true;
+  allow write: if false;
+}`).ast as unknown as Record<string, unknown>,
+    };
+    const dataStore = new DataPlaneStore();
+    const mk = (n: number) => ({
+      projectId: TENANT.projectId, path: `posts/p${String(n).padStart(3, "0")}`, collectionPath: "posts",
+      collectionGroup: "posts", documentId: `p${String(n).padStart(3, "0")}`, pathDepth: 2, data: { n, visible: n % 10 === 0 }, sizeBytes: 10,
+      version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), deletedAt: null,
+    });
+    for (let i = 0; i < 400; i += 1) await dataStore.putDocument(TENANT, mk(i));
+    const hub = new RealtimeGatewayHub({ controlStore: makeControlStore(denyMost), dataStore });
+    const frames: ServerFrame[] = [];
+    const session = hub.createConnectionSession((f) => frames.push(f));
+    await session.handleClientFrame({ type: "auth", projectId: TENANT.projectId, apiKey: PK });
+    await session.handleClientFrame({
+      type: "subscribe", subId: "q", query: { collectionPath: "posts", orderBy: [{ field: "n", direction: "desc" }], limit: 30 },
+    } as never);
+    const sync = frames.find((f) => f.type === "initial_sync") as Extract<ServerFrame, { type: "initial_sync" }>;
+    const ids = sync.documents.map((d) => (d as { documentId: string }).documentId);
+    expect(ids.length).toBe(30);
+    expect(ids[0]).toBe("p390");
+    expect(ids[29]).toBe("p100");
   });
 });
