@@ -300,6 +300,8 @@ function sqlComparisonOp(op: QueryOperator): string {
   }
 }
 
+const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/;
+
 function compileRangeClause(clause: WhereClause, params: unknown[]): string {
   if (clause.value === null) {
     throw new VellumError("INVALID_ARGUMENT", "Range filters cannot use null as a bound");
@@ -330,6 +332,9 @@ function compileRangeClause(clause: WhereClause, params: unknown[]): string {
   }
 
   const access = fieldAccess(clause.field, params);
+  // Tagged bounds address the field through their own path parameters. Leaving the one added by
+  // fieldAccess unused makes PostgreSQL fail with "could not determine data type of parameter".
+  if (kind === "int" || kind === "ts") params.pop();
 
   if (kind === "number") {
     const bound = addParam(params, clause.value);
@@ -338,7 +343,17 @@ function compileRangeClause(clause: WhereClause, params: unknown[]): string {
 
   if (kind === "string") {
     const bound = addParam(params, clause.value);
-    return `(jsonb_typeof(${access.json}) = 'string' AND ${access.text} COLLATE "C" ${op} ${bound}::text)`;
+    const stringClause = `(jsonb_typeof(${access.json}) = 'string' AND ${access.text} COLLATE "C" ${op} ${bound}::text)`;
+    // A full ISO-8601 date-time bound (what a JS Date serializes to) also compares against fields
+    // that hold a tagged timestamp, such as serverTimestamp(), so range queries on them match.
+    const clauseValue = clause.value as string;
+    if (ISO_DATETIME_RE.test(clauseValue) && Number.isFinite(Date.parse(clauseValue)) && access.dataPath) {
+      const typePath = addParam(params, [...access.dataPath, "$t"]);
+      const msPath = addParam(params, [...access.dataPath, "$ms"]);
+      const msBound = addParam(params, Date.parse(clauseValue));
+      return `(${stringClause} OR ((d.data #>> ${typePath}::text[]) = 'ts' AND (d.data #>> ${msPath}::text[])::bigint ${op} ${msBound}::bigint))`;
+    }
+    return stringClause;
   }
 
   // Tagged int64 / timestamp live inside a JSONB object; guard the $t discriminator

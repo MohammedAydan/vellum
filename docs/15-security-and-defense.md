@@ -79,7 +79,7 @@ Public `pk_` keys evaluate declarative Security Rulesets (authored as JSON AST o
 ### 5.1 Spoof-Resistant Client IP Extraction (`extractClientIp` in `apps/api/src/middleware/security.ts`)
 - `node-server.ts` **strips** any client-supplied `x-vellum-remote-addr` header and injects the real TCP `req.socket.remoteAddress`.
 - `TRUST_PROXY_HOPS` (integer `0..10`, default `1`):
-  - When `TRUST_PROXY_HOPS > 0`: uses `cf-connecting-ip` if present, otherwise selects the **rightmost untrusted hop** from `X-Forwarded-For` (`hops[hops.length - trustedProxyHops]`)—never the client-spoofable leftmost entry—falling back to `x-real-ip` and then `x-vellum-remote-addr`.
+  - When `TRUST_PROXY_HOPS > 0`: on Vercel uses `x-vercel-forwarded-for`; uses `cf-connecting-ip` only when `TRUST_CLOUDFLARE_IP=true` (the deployment is only reachable through Cloudflare); otherwise selects the **rightmost untrusted hop** from `X-Forwarded-For` (`hops[hops.length - trustedProxyHops]`)—never the client-spoofable leftmost entry—falling back to `x-real-ip` and then `x-vellum-remote-addr`.
   - When `TRUST_PROXY_HOPS = 0` (direct internet exposure): ignores all forwarded headers and uses `x-vellum-remote-addr` exclusively.
 - Normalizes IPv4-mapped IPv6 addresses (`::ffff:203.0.113.9` → `203.0.113.9`) and rejects malformed/control-character candidates.
 

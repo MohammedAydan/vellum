@@ -95,6 +95,11 @@ export function createControlPlaneRoutes(
 
     const { name, slug, planTier } = parsed.data;
     const session = getSession(c);
+    // Paid plans are not self-serve until online billing is enabled: only a platform admin can
+    // create an organization on one. Otherwise any customer could grant themselves "enterprise".
+    if (planTier !== "free" && session !== undefined && session.realm !== "super_admin") {
+      throw new VellumError("PERMISSION_DENIED", "Paid plans are assigned by a platform admin. Create the organization on the free plan.");
+    }
     const org = await controlStore.createOrganization({
       slug,
       name,
@@ -284,7 +289,8 @@ export function createControlPlaneRoutes(
       userAgent: meta.userAgent,
     });
 
-    return c.json({ success: true, revoked });
+    const { secretHash: _revokedSecretHash, ...safeRevoked } = revoked;
+    return c.json({ success: true, revoked: safeRevoked });
   });
 
   // 4. Security Rulesets

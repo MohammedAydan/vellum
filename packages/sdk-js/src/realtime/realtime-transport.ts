@@ -585,7 +585,7 @@ export class RealtimeTransport {
       this.internal.reconnectTimer = null;
       if (!this.internal.intentionallyClosed) void this.openSocket();
     }, delay);
-    this.internal.reconnectTimer.unref?.();
+    // Not unref'd: a client with live subscriptions that is waiting to reconnect must not let the process exit.
   }
 
   private clearReconnectTimer(): void {

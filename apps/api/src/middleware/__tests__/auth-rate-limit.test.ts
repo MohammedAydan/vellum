@@ -274,3 +274,31 @@ describe("@vellum/api - auth rate limiting & secret serialization", () => {
     expect(((clean["list"] as Array<Record<string, unknown>>)[0])?.["secretEncrypted"]).toBeUndefined();
   });
 });
+
+describe("auth throttle keys survive an earlier body-reading middleware", () => {
+  it("keeps distinct emails in distinct buckets when the body was already read upstream", async () => {
+    const throttle = new MemoryThrottleRepository();
+    const app = new Hono();
+    app.onError(errorHandler);
+    // Mirrors the API's security middleware, which reads the body before the throttles run.
+    app.use("*", async (c, next) => {
+      await c.req.text();
+      await next();
+    });
+    app.use("/login", authRateLimit({ max: 3, windowMs: 15 * 60 * 1000, scope: "test-upstream-body" }, throttle));
+    app.post("/login", async (c) => {
+      const body = (await c.req.json()) as { password?: string };
+      return body.password === "correct-horse" ? c.json({ ok: true }) : c.json({ ok: false }, 401);
+    });
+    const post = (email: string, password: string): Promise<Response> =>
+      Promise.resolve(app.request("http://localhost/login", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...TEST_IP_HEADERS },
+        body: JSON.stringify({ email, password }),
+      }));
+    for (let i = 0; i < 3; i++) expect((await post("ghost@example.test", "nope")).status).toBe(401);
+    expect((await post("ghost@example.test", "nope")).status).toBe(429);
+    // A different account from the same IP is not locked out.
+    expect((await post("real@example.test", "correct-horse")).status).toBe(200);
+  });
+});

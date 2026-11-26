@@ -57,10 +57,10 @@ describe("SQL compiler operator matrix", () => {
     expect(str.sql).toContain(`COLLATE "C" <=`);
 
     const int64 = compile([{ field: "counter", op: ">=", value: { $t: "int", $v: "9007199254740993" } }] as never);
-    expect(int64.sql).toContain(`= 'int' AND (d.data #>> $5::text[])::numeric >= $6::numeric`);
+    expect(int64.sql).toContain(`= 'int' AND (d.data #>> $4::text[])::numeric >= $5::numeric`);
 
     const ts = compile([{ field: "created", op: "<", value: { $t: "ts", $v: "2026-01-01T00:00:00.000Z", $ms: 1767225600000 } }] as never);
-    expect(ts.sql).toContain(`= 'ts' AND (d.data #>> $5::text[])::bigint < $6::bigint`);
+    expect(ts.sql).toContain(`= 'ts' AND (d.data #>> $4::text[])::bigint < $5::bigint`);
   });
 
   it("rejects range bounds that cannot be cast safely", () => {

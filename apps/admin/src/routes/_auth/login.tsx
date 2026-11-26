@@ -29,9 +29,7 @@ export const Route = createRoute({
 
 interface SetupStatusResponse {
   initialized: boolean;
-  ownerCount: number;
   requiresSetup: boolean;
-  totalUsers: number;
   tokenRequired: boolean;
 }
 

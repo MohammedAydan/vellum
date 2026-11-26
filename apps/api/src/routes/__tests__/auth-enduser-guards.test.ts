@@ -154,3 +154,27 @@ describe("end-user auth guards", () => {
     expect(body.error.details?.guardCode).toBe("WRONG_AUTH_TIER");
   });
 });
+
+describe("collection registry reads", () => {
+  it("are refused for a publishable key and allowed for a server key", async () => {
+    const f = await fixture();
+    const get = (path: string, key: string) =>
+      f.platform.fetch(new Request(`http://localhost/v1/projects/${f.project.id}${path}`, { headers: { "x-vellum-api-key": key } }));
+    for (const path of ["/collections", "/collections/things"]) {
+      const denied = await get(path, f.apiKey);
+      expect(denied.status).toBe(403);
+      expect(await errorCode(denied)).toBe("PERMISSION_DENIED");
+    }
+    expect((await get("/collections", f.serverKey)).status).toBe(200);
+  });
+});
+
+describe("sign-in lockout scope", () => {
+  it("one account's failures do not lock out a different account from the same IP", async () => {
+    const f = await fixture();
+    expect((await f.signUp("real@example.com")).status).toBe(201);
+    for (let i = 0; i < 11; i += 1) await f.signIn("ghost@example.com", "wrong-password");
+    expect((await f.signIn("ghost@example.com", "wrong-password")).status).toBe(429);
+    expect((await f.signIn("real@example.com")).status).toBe(200);
+  });
+});
