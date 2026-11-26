@@ -27,7 +27,7 @@ import {
   type AuthContext,
   type SecurityRulesetRecord,
 } from "@vellum/authorization";
-import { validateAndNormalizeQuery, documentMatchesQuery, extractDocFieldValue } from "@vellum/query-engine";
+import { validateAndNormalizeQuery, documentMatchesQuery, extractDocFieldValue, compileQueryToParameterizedSql } from "@vellum/query-engine";
 import type { StorageAdapter, OutboxEvent, DocumentRecord, TxHandle } from "@vellum/storage";
 import type {
   ConnectionSession,
@@ -68,6 +68,9 @@ function pruneOldestHalf(set: Set<string>, maxSize: number): void {
     toDelete -= 1;
   }
 }
+
+/** Upper bound of rows one subscribe window may read before it falls back to the exact full scan. */
+const REALTIME_SUBSCRIBE_MAX_FETCH = 5_000;
 
 export class RealtimeGatewayHub implements RealtimeGatewayPort {
   public readonly controlStore: ControlStoreForRealtime;
@@ -508,24 +511,48 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           initialDocs.push(doc);
         }
       } else if (normalizedQuery) {
-        const activeDocs = (await tx.listActiveDocumentsInCollection?.(normalizedQuery.collectionPath)) ?? [];
-        const docs = activeDocs
-          .filter((d: DocumentRecord) => {
-            if (!documentMatchesQuery(d, normalizedQuery)) return false;
-            try {
-              authorizeOperation({ apiKeyRecord, rulesetRecord: ruleset,
-                operation: "get", path: d.path, authContext, resourceData: d.data });
-              return true;
-            } catch { return false; }
-          })
-          .sort((a, b) => {
-            for (const order of normalizedQuery.orderBy) {
-              const compared = compareWireValues(extractDocFieldValue(a, order.field), extractDocFieldValue(b, order.field), order.dir);
-              if (compared !== 0) return compared;
-            }
-            return 0;
-          })
-          .slice(0, normalizedQuery.limit);
+        // Let the database filter, order and cap the initial page instead of reading the whole
+        // collection (O(collection size) per subscribe). Rows denied by their own `get` rule are
+        // dropped after the fetch, so when a window comes back short we widen it (x4 each round,
+        // at most REALTIME_SUBSCRIBE_MAX_FETCH rows). If the window is still short and the database
+        // had more rows, we fall back to the exact full scan, so the result never differs from it.
+        const accept = (d: DocumentRecord): boolean => {
+          if (!documentMatchesQuery(d, normalizedQuery)) return false;
+          try {
+            authorizeOperation({ apiKeyRecord, rulesetRecord: ruleset,
+              operation: "get", path: d.path, authContext, resourceData: d.data });
+            return true;
+          } catch { return false; }
+        };
+        const order = (a: DocumentRecord, b: DocumentRecord): number => {
+          for (const o of normalizedQuery.orderBy) {
+            const compared = compareWireValues(extractDocFieldValue(a, o.field), extractDocFieldValue(b, o.field), o.dir);
+            if (compared !== 0) return compared;
+          }
+          return 0;
+        };
+        const want = normalizedQuery.limit;
+        let docs: DocumentRecord[] | null = null;
+        if (tx.queryDocuments) {
+          let fetchLimit = Math.max(want * 4, want);
+          for (;;) {
+            fetchLimit = Math.min(fetchLimit, REALTIME_SUBSCRIBE_MAX_FETCH);
+            const compiled = compileQueryToParameterizedSql({
+              projectId,
+              normalizedQuery: { ...normalizedQuery, limit: fetchLimit, select: null, startAfter: null, startAt: null } as typeof normalizedQuery,
+              matchedCompositeIndex: null,
+            });
+            const rows = ((await tx.queryDocuments(compiled)) as DocumentRecord[]).slice(0, fetchLimit);
+            const accepted = rows.filter(accept).sort(order);
+            if (accepted.length >= want || rows.length < fetchLimit) { docs = accepted.slice(0, want); break; }
+            if (fetchLimit >= REALTIME_SUBSCRIBE_MAX_FETCH) break;
+            fetchLimit *= 4;
+          }
+        }
+        if (docs === null) {
+          const all = (await tx.listActiveDocumentsInCollection?.(normalizedQuery.collectionPath)) ?? [];
+          docs = all.filter(accept).sort(order).slice(0, want);
+        }
         for (const doc of docs) {
           subRecord.matchedPaths.add(doc.path);
           initialDocs.push(doc);
