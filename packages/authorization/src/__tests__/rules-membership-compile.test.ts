@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { compileRulesDsl } from "../index.js";
 
 const compile = (cond: string) =>
-  (compileRulesDsl(`rules_version = '2';\nmatch /g/{id} {\n allow create: if ${cond};\n}`).ast as any).rules[0].allow.create;
+  X;
 
 describe("membership syntax in the rules DSL", () => {
   it("compiles `auth.uid in resource.memberIds` and `incoming.memberIds`", () => {
