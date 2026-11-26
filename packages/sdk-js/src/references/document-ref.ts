@@ -241,7 +241,8 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
     if (this.ctx.readCache && options.bypassCache !== true) {
       const cached = this.ctx.readCache.get(cacheKey);
       if (cached !== undefined) {
-        return buildDocumentSnapshot(cached, this.converter);
+        const hit = buildDocumentSnapshot<T>(cached, this.converter);
+        return Object.freeze({ ...hit, metadata: Object.freeze({ fromCache: true }) });
       }
     }
 
@@ -264,8 +265,12 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
     const fetchPromise = this.ctx
       .request<WireDocument>("GET", relativePath, undefined, {}, true, options.signal)
       .catch((err: unknown): WireDocument | null => {
-        const status = (err as { status?: number } | null | undefined)?.status;
-        if (this.autoId && status === 404) return null;
+        const e = err as { status?: number; code?: string; message?: string } | null | undefined;
+        // A missing document is a normal result (exists=false), like Firestore. A missing project
+        // is a real error and still throws.
+        if (e?.status === 404 && (this.autoId || (e.code === "NOT_FOUND" && !/^Project\b/i.test(e.message ?? "")))) {
+          return null;
+        }
         throw err;
       })
       .then((doc) => {

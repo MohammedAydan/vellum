@@ -78,8 +78,9 @@ describe("collection.doc() with optional id", () => {
     expect((await ref.get()).data()).toEqual({ a: 1 });
   });
 
-  it("explicit ids still surface 404 as an error", async () => {
+  it("explicit ids resolve a missing document as exists=false", async () => {
     const ref = makeDb(new Map(), []).collection("posts").doc("missing");
-    await expect(ref.get()).rejects.toBeDefined();
+    const snap = await ref.get();
+    expect(snap.exists).toBe(false);
   });
 });

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- `doc.get()` on a document that does not exist (for example right after `delete()`) now returns a snapshot with `exists: false` instead of throwing NOT_FOUND. A missing project still throws.
+- `snapshot.metadata.fromCache` is now `true` when a snapshot is served from the client read cache.
+
 ## 0.0.6
 
 Performance and reliability release for busy projects: realtime that holds up on Vercel, fewer control-database reads, and safer big-table queries. Upgrade the SDKs together with the API.
