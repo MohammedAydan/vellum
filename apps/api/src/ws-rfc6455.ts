@@ -61,6 +61,13 @@ export interface RealtimeWebSocketServerOptions {
    * 0 or undefined disables it.
    */
   maxLifetimeMs?: number;
+  /**
+   * Origins that are not in the deployment-wide allowlist may still connect when an active API key of
+   * the project named in the auth frame lists them. The handshake cannot know the project, so such a
+   * socket is accepted provisionally and closed (1008) unless its auth frame passes this check.
+   * Leave unset to keep the strict handshake-time allowlist only.
+   */
+  isProjectOriginAllowed?: (projectId: string, origin: string) => Promise<boolean>;
   /** Called when a socket exceeds the rolling per-socket message-rate ceiling. */
   onPolicyViolation?: (ip: string, reason: string) => void;
 }
@@ -147,10 +154,18 @@ export function attachRealtimeWebSocketServer(
 
     const originHeader = req.headers.origin;
     const origin = Array.isArray(originHeader) ? originHeader[0] : originHeader;
+    // A browser origin outside the global allowlist is held "pending" until the auth frame names a
+    // project whose active keys list it (see isProjectOriginAllowed). No origin is trusted before that.
+    let pendingOrigin: string | null = null;
     if (!isOriginAllowed(origin, allowedOrigins)) {
-      socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
-      socket.destroy();
-      return;
+      const strict = origin === undefined ? null : normalizeStrictOrigin(origin);
+      if (options.isProjectOriginAllowed && strict) {
+        pendingOrigin = strict;
+      } else {
+        socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+        socket.destroy();
+        return;
+      }
     }
 
     const secKey = req.headers["sec-websocket-key"];
@@ -342,6 +357,17 @@ export function attachRealtimeWebSocketServer(
 
     const handleFrame = async (frame: unknown): Promise<void> => {
       try {
+        if (pendingOrigin !== null) {
+          const projectForOrigin = isAuthFrame(frame) ? extractTenantId(frame) : null;
+          const allowedForProject =
+            projectForOrigin !== null && (await options.isProjectOriginAllowed!(projectForOrigin, pendingOrigin).catch(() => false));
+          if (!allowedForProject) {
+            sendError("PERMISSION_DENIED", "Origin is not allowed for this project");
+            closeWith(1008, "Origin not allowed");
+            return;
+          }
+          pendingOrigin = null;
+        }
         if (isAuthFrame(frame)) {
           const tenantId = extractTenantId(frame);
           if (tenantId && !claimTenantSlot(tenantId)) {

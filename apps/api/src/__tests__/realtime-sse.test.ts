@@ -113,4 +113,35 @@ describe("realtime over SSE", () => {
       encodeSseFrame({ type: "resume_complete", subId: "s", seqId: "9", count: 1, truncated: false })
     ).toContain("id: 9\n");
   });
+
+  describe("browser access from a third-party origin", () => {
+    it("adds Access-Control-Allow-Origin only when an active key of the project lists the origin", async () => {
+      const f = await fixture();
+      const p = platforms[platforms.length - 1]!;
+      (p.controlStore as unknown as { listActiveApiKeyOrigins: (id: string) => Promise<string[]> }).listActiveApiKeyOrigins = async (id) =>
+        id === f.projectId ? ["https://shop.example"] : [];
+      const post = (origin: string, projectId = f.projectId) => {
+        const ac = new AbortController();
+        const res = Promise.resolve(p.fetch(
+          new Request("http://localhost/v1/realtime/stream", {
+            method: "POST",
+            headers: { "content-type": "application/json", origin },
+            body: JSON.stringify({ frames: [{ type: "auth", projectId, apiKey: f.rawKey }] }),
+            signal: ac.signal,
+          })
+        ));
+        return res.then((r: Response) => {
+          ac.abort();
+          return r;
+        });
+      };
+      const ok = await post("https://shop.example");
+      expect(ok.headers.get("access-control-allow-origin")).toBe("https://shop.example");
+      expect(ok.headers.get("access-control-allow-credentials")).toBeNull();
+      const other = await post("https://evil.example");
+      expect(other.headers.get("access-control-allow-origin")).toBeNull();
+      const wrongProject = await post("https://shop.example", "00000000-0000-4000-8000-000000000000");
+      expect(wrongProject.headers.get("access-control-allow-origin")).toBeNull();
+    });
+  });
 });
