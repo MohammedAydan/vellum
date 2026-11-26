@@ -311,3 +311,32 @@ describe("@vellum/realtime - poll-only tenant bootstrap", () => {
     expect(delivered).toEqual(["8"]);
   });
 });
+
+describe("@vellum/realtime - stuck drain", () => {
+  it("replaces a drain that never finishes so the tenant is not silenced", async () => {
+    const delivered: string[] = [];
+    let calls = 0;
+    const ev: OutboxEvent = {
+      seqId: "5", projectId: PROJECT_A, collectionPath: "items", path: "items/a", documentId: "a",
+      opType: "updated", version: 2, beforeData: null, afterData: { n: 1 }, committedAt: new Date().toISOString(),
+    };
+    const dataStore = new DataPlaneStore();
+    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0") => {
+      calls += 1;
+      if (calls === 1) return await new Promise<OutboxEvent[]>(() => {}); // a query on a dead connection
+      return BigInt(ev.seqId) > BigInt(afterSeqId) ? [ev] : [];
+    };
+    const connections = new Map([["c1", { authenticated: true, closed: false, projectId: PROJECT_A, connectedAt: Date.now() - 1_000 }]]);
+    const poller = new OutboxPoller({
+      bus: { async publish() {}, async subscribe() { return () => {}; }, async close() {} },
+      dataStore,
+      sink: { connections, async notifyCommittedEvents(_p, evs) { for (const e of evs) delivered.push(e.seqId); } },
+      pollIntervalMs: 50,
+      drainStuckMs: 100,
+    });
+    await poller.start();
+    await new Promise((r) => setTimeout(r, 600));
+    await poller.stop();
+    expect(delivered).toEqual(["5"]);
+  });
+});

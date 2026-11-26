@@ -19,6 +19,7 @@
 
 import type { OutboxEvent, StorageAdapter, TenantContext } from "@vellum/storage";
 import { PG_OUTBOX_CHANNEL, type PgNotifyBus } from "./pg-notify-pubsub.js";
+import { rtDiagEnabled, rtLog } from "./diag.js";
 import type { OutboxPollerPort, RealtimeEventSink } from "./contracts/realtime-port.js";
 
 /** Minimal sink contract; `RealtimeGatewayHub` satisfies it structurally. */
@@ -71,10 +72,15 @@ export interface OutboxPollerOptions {
   batchSize?: number | undefined;
   /** Plain-polling interval in ms. Defaults to 1000. */
   pollIntervalMs?: number | undefined;
+  /** A drain running longer than this is replaced. Defaults to 8000. */
+  drainStuckMs?: number | undefined;
   retryBaseMs?: number | undefined;
   retryMaxMs?: number | undefined;
   onError?: ((error: Error) => void) | undefined;
 }
+
+/** A drain running longer than this is treated as stuck (for example on a connection that died) and replaced. */
+const DRAIN_STUCK_MS = 8_000;
 
 /** Margin for clock differences between the API instance and the database when bootstrapping a tenant. */
 const CONNECT_SKEW_MARGIN_MS = 2_000;
@@ -98,6 +104,10 @@ interface TenantState extends TenantContext {
   delivered: Map<bigint, number>;
   initialized: boolean;
   inFlight: boolean;
+  /** Start time and generation of the running drain, so a drain stuck on a dead connection can be replaced. */
+  drainStartedAt: number;
+  drainGen: number;
+  currentTask: Promise<void> | null;
   /** Set when a NOTIFY arrives while drain() is already in flight so we re-drain immediately. */
   pendingRescan: boolean;
   attempts: number;
@@ -120,6 +130,7 @@ export class OutboxPoller implements OutboxPollerPort {
   private readonly channel: string;
   private readonly batchSize: number;
   private readonly pollIntervalMs: number;
+  private readonly drainStuckMs: number;
   private readonly lastIdlePollAt = new Map<string, number>();
   private readonly retryBaseMs: number;
   private readonly retryMaxMs: number;
@@ -152,6 +163,7 @@ export class OutboxPoller implements OutboxPollerPort {
     const rawRetryMax = Number.isFinite(options.retryMaxMs) ? options.retryMaxMs! : 10_000;
     this.batchSize = Math.max(1, Math.min(5_000, Math.trunc(rawBatch)));
     this.pollIntervalMs = Math.max(50, Math.trunc(rawPoll));
+    this.drainStuckMs = Number.isFinite(options.drainStuckMs) ? Math.max(50, options.drainStuckMs!) : DRAIN_STUCK_MS;
     this.retryBaseMs = Math.max(1, Math.trunc(rawRetryBase));
     this.retryMaxMs = Math.max(this.retryBaseMs, Math.trunc(rawRetryMax));
     this.onError = options.onError;
@@ -305,6 +317,9 @@ export class OutboxPoller implements OutboxPollerPort {
         delivered: new Map(),
         initialized: false,
         inFlight: false,
+        drainStartedAt: 0,
+        drainGen: 0,
+        currentTask: null,
         pendingRescan: false,
         attempts: 0,
         retryTimer: null,
@@ -376,17 +391,28 @@ export class OutboxPoller implements OutboxPollerPort {
   }
 
   private drain(entry: TenantState): void {
-    if (!this.started || this.closed || entry.inFlight) return;
+    if (!this.started || this.closed) return;
+    if (entry.inFlight) {
+      const age = Date.now() - entry.drainStartedAt;
+      if (age < this.drainStuckMs) return;
+      // A drain that never finishes would silence this tenant on this instance for good.
+      if (entry.currentTask) this.inFlightTasks.delete(entry.currentTask);
+      rtLog("drain_stuck_replaced", { project: entry.projectId, ageMs: age, watermark: String(entry.watermark) });
+    }
     entry.inFlight = true;
     entry.pendingRescan = false;
+    entry.drainStartedAt = Date.now();
+    const gen = ++entry.drainGen;
+    const startedAt = entry.drainStartedAt;
 
     const task = (async () => {
       await this.initializeEntry(entry);
       // Page through everything after the watermark. `cursor` pages; `watermark` only advances past
       // rows that have been delivered for longer than the late-commit grace period.
       let cursor = entry.watermark;
-      while (!this.closed) {
+      while (!this.closed && entry.drainGen === gen) {
         const rows = await this.dataStore.queryOutboxSince(entry, cursor.toString());
+        if (entry.drainGen !== gen) return;
         if (rows.length === 0) break;
         const fresh: OutboxEvent[] = [];
         let pageMax = cursor;
@@ -402,6 +428,7 @@ export class OutboxPoller implements OutboxPollerPort {
           if (seq > entry.watermark && !entry.delivered.has(seq)) fresh.push(ev);
         }
         if (fresh.length > 0) {
+          if (rtDiagEnabled(entry.projectId)) rtLog("poll_deliver", { project: entry.projectId, seqs: fresh.map((e) => e.seqId), versions: fresh.map((e) => e.version) });
           await this.sink.notifyCommittedEvents(entry.projectId, fresh);
           const now = Date.now();
           for (const ev of fresh) entry.delivered.set(BigInt(ev.seqId), now);
@@ -417,13 +444,19 @@ export class OutboxPoller implements OutboxPollerPort {
     })();
 
     this.inFlightTasks.add(task);
+    entry.currentTask = task;
     void task
       .catch((err: unknown) => {
+        if (entry.drainGen !== gen) return;
         this.stats.errors += 1;
+        rtLog("drain_error", { project: entry.projectId, reason: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200) });
         this.reportError(err);
         this.scheduleRetry(entry);
       })
       .finally(() => {
+        const took = Date.now() - startedAt;
+        if (took > 3_000) rtLog("drain_slow", { project: entry.projectId, ms: took });
+        if (entry.drainGen !== gen) { this.inFlightTasks.delete(task); return; }
         entry.inFlight = false;
         this.inFlightTasks.delete(task);
         if (entry.pendingRescan && this.started && !this.closed) {
