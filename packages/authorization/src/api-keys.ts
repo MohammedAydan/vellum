@@ -120,7 +120,12 @@ export async function verifyApiKeyAsync(
   pepper: string = getDefaultPepper()
 ): Promise<ApiKeyRecord> {
   if (typeof fullKey !== "string" || fullKey.length < 20 || fullKey.length > MAX_API_KEY_LENGTH) {
-    throw new VellumError("UNAUTHENTICATED", "Missing or malformed X-Project-Key header");
+    throw new VellumError(
+      "UNAUTHENTICATED",
+      typeof fullKey !== "string" || fullKey.length === 0
+        ? "Missing X-Project-Key header. Send your project key (pk_... or sk_...) in the X-Project-Key header."
+        : "Invalid project key. Check that you copied the whole key (pk_... or sk_...) for this project."
+    );
   }
   const keyRecord = await store.findApiKeyByPrefix(fullKey.slice(0, 16));
   if (!keyRecord || keyRecord.revokedAt) {
@@ -159,7 +164,12 @@ export function verifyApiKey(
   pepper: string = getDefaultPepper()
 ): ApiKeyRecord {
   if (typeof fullKey !== "string" || fullKey.length < 20 || fullKey.length > MAX_API_KEY_LENGTH) {
-    throw new VellumError("UNAUTHENTICATED", "Missing or malformed X-Project-Key header");
+    throw new VellumError(
+      "UNAUTHENTICATED",
+      typeof fullKey !== "string" || fullKey.length === 0
+        ? "Missing X-Project-Key header. Send your project key (pk_... or sk_...) in the X-Project-Key header."
+        : "Invalid project key. Check that you copied the whole key (pk_... or sk_...) for this project."
+    );
   }
 
   const keyPrefix = fullKey.slice(0, 16);

@@ -45,3 +45,13 @@ describe("verifyApiKeyAsync (database read on every call)", () => {
     expect(touch).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("project key error messages", () => {
+  const store = { findApiKeyByPrefix: async () => null };
+  it("says the header is missing when no key is sent", async () => {
+    await expect(verifyApiKeyAsync(undefined, store)).rejects.toThrow(/Missing X-Project-Key/);
+  });
+  it("says the key is invalid when it is present but malformed", async () => {
+    await expect(verifyApiKeyAsync("pk_short", store)).rejects.toThrow(/Invalid project key/);
+  });
+});
