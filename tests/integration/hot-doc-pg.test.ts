@@ -59,4 +59,19 @@ describe.skipIf(!enabled)("contended blind writes on PostgreSQL", () => {
     expect((a as { data: { n: number } }).data.n).toBe(60);
     expect((b as { data: { n: number } }).data.n).toBe(60);
   }, 60000);
+
+  it("60 concurrent blind sets of a document that does not exist yet leave an exact version history", async () => {
+    let next = 0;
+    const versions: number[] = [];
+    await Promise.all(Array.from({ length: 20 }, async () => {
+      while (next < 60) {
+        const n = next++;
+        const r = await engine.setDocument({ ...T, path: "hot/fresh", data: { n } });
+        versions.push(Number((r as { version: number }).version));
+      }
+    }));
+    expect(new Set(versions).size).toBe(60);
+    const doc = await engine.getDocument({ ...T, path: "hot/fresh" });
+    expect(Number((doc as { version: number }).version)).toBe(60);
+  }, 60000);
 });

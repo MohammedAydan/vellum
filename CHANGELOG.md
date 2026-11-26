@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **fix:** concurrent blind writes (`set`, `PUT`) to a document that does not exist yet could report success while losing writes and reusing version numbers, because there was no row to lock. Writers of the same path are now serialised with a per-path advisory lock, so every successful write gets its own version.
+
 - **perf(realtime):** the hub routes each event through a per-project index (document path and collection), so it only visits subscriptions that can match. With 20,000 subscriptions an event costs about 3 ms instead of about 32 ms, and the result is identical to the full scan.
 
 - **perf(realtime):** the per-event API key recheck keeps an active key for 3 s (`REALTIME_KEY_RECHECK_TTL_MS`, `0` disables), so an event stream no longer queries the control database for every event. A revoked key is dropped from live sessions within that window.
