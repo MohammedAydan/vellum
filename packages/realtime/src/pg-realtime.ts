@@ -14,6 +14,7 @@ import {
   type PgNotifyBus,
   type PgNotifyBusOptions,
 } from "./pg-notify-pubsub.js";
+import { rtLog } from "./diag.js";
 import { OutboxPoller, type OutboxPollerOptions } from "./outbox-poller.js";
 
 export interface PgRealtimeInfrastructureOptions {
@@ -52,7 +53,18 @@ export function createPgRealtimeInfrastructure(
   };
   if (options.onError) busOptions.onError = options.onError;
 
-  const bus = createPgNotifyBus(busOptions);
+  // A template value left in the environment (for example CHANGE_ME_HOST) is not a database. Skip
+  // LISTEN, which only wakes the poller early, and rely on outbox polling instead of failing noisily.
+  const listenIsPlaceholder = /change[_-]?me|<[^>]*host[^>]*>|your[_-]?host/i.test(options.connectionString);
+  const noopBus: PgNotifyBus = {
+    async publish() {},
+    async subscribe() {
+      return () => {};
+    },
+    async close() {},
+  };
+  if (listenIsPlaceholder) rtLog("poller_listen_skipped", { reason: "LISTEN connection string is a placeholder; polling only" });
+  const bus = listenIsPlaceholder ? noopBus : createPgNotifyBus(busOptions);
   const pollerOptions: OutboxPollerOptions = {
     bus,
     dataStore: options.dataStore,
