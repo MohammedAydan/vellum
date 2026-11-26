@@ -125,7 +125,8 @@ export interface TxHandle {
    * rows are visible when true. Requested path order is preserved and duplicates
    * are fetched once. Callers passing only `paths` keep the live-only behavior.
    */
-  batchGetDocuments?(paths: string[], includeDeleted?: boolean): Promise<DocumentRecord[]>;
+  /** `forUpdate` takes row locks in path order, so writers to the same document queue instead of racing. */
+  batchGetDocuments?(paths: string[], includeDeleted?: boolean, forUpdate?: boolean): Promise<DocumentRecord[]>;
   /**
    * Compare-and-swap write. `expectedVersion === null` performs an insert-only
    * create (`ON CONFLICT DO NOTHING`); `expectedVersion >= 1` performs a
