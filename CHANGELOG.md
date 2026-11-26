@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- `vellum_flutter` realtime: the SSE stream now has an idle timeout (45s, three server keep-alives); a silent or half-open stream is failed and reopened with resume instead of hanging forever (before, the channel answered heartbeat pings itself, so the dead stream was never noticed). On WebSocket any inbound frame counts as liveness, and a dead socket is detected within about 50s (15s ping, 35s timeout; was about 85s).
+
 ## 0.0.5
 
 Transaction rollback, conditional batch writes, an offline cache for Flutter, a stricter Content Security Policy and a billing race fix. Every package and SDK stays on one shared version. Upgrade the SDKs together with the API. **Breaking:** `customClaims` is removed from the end-user sign-up and profile calls in both SDKs (see Breaking below).
