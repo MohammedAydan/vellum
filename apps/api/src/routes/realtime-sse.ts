@@ -19,6 +19,8 @@ import { Hono } from "hono";
 import { VellumError } from "@vellum/core";
 import type { ServerFrame } from "@vellum/api-contract";
 import type { RealtimeGatewayHub } from "@vellum/realtime";
+import { PROJECT_CORS_EXPOSE_HEADERS, createProjectOriginChecker, type ProjectCorsStore } from "../middleware/project-cors.js";
+import { normalizeStrictOrigin } from "../middleware/security.js";
 
 export const SSE_MAX_FRAMES_PER_REQUEST = 64;
 /**
@@ -41,7 +43,7 @@ export function encodeSseFrame(frame: ServerFrame): string {
 }
 
 export function createRealtimeSseRoutes(
-  platform: { realtimeHub: RealtimeGatewayHub },
+  platform: { realtimeHub: RealtimeGatewayHub; controlStore?: ProjectCorsStore },
   options: RealtimeSseOptions = {}
 ): Hono {
   const routes = new Hono();
@@ -50,6 +52,8 @@ export function createRealtimeSseRoutes(
     options.maxLifetimeMs ??
     (Number.isFinite(envLifetime) && envLifetime >= 5_000 ? envLifetime : SSE_DEFAULT_MAX_LIFETIME_MS);
   const keepAliveMs = options.keepAliveMs ?? SSE_DEFAULT_KEEPALIVE_MS;
+
+  const projectOriginAllowed = platform.controlStore ? createProjectOriginChecker(platform.controlStore) : null;
 
   routes.post("/realtime/stream", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { frames?: unknown } | null;
@@ -63,6 +67,19 @@ export function createRealtimeSseRoutes(
     const first = frames[0] as { type?: unknown } | null;
     if (!first || first.type !== "auth") {
       throw new VellumError("UNAUTHENTICATED", "The first frame must be an 'auth' frame");
+    }
+
+    // Cross-origin browser read access: only when an active key of the project in the auth frame lists the
+    // origin. Globally allowed origins are handled by the deployment-wide CORS middleware.
+    const corsHeaders: Record<string, string> = {};
+    const requestOrigin = c.req.header("origin");
+    const frameProjectId = (first as { projectId?: unknown }).projectId;
+    if (requestOrigin && projectOriginAllowed && typeof frameProjectId === "string" && normalizeStrictOrigin(requestOrigin)) {
+      if (await projectOriginAllowed(frameProjectId, requestOrigin)) {
+        corsHeaders["Access-Control-Allow-Origin"] = requestOrigin;
+        corsHeaders["Vary"] = "Origin";
+        corsHeaders["Access-Control-Expose-Headers"] = PROJECT_CORS_EXPOSE_HEADERS;
+      }
     }
 
     const encoder = new TextEncoder();
@@ -139,6 +156,7 @@ export function createRealtimeSseRoutes(
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
         "X-Accel-Buffering": "no",
+        ...corsHeaders,
       },
     });
   });

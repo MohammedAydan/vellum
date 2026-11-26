@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **fix(realtime):** realtime now works for a developer's own web app. Before, per-project CORS (origins on an API key) only covered `/v1/projects/...`, so the WebSocket handshake answered 403 and the SSE stream failed its preflight. `POST /v1/realtime/stream` now returns `Access-Control-Allow-Origin` when an active key of the project in the auth frame lists the origin, and the WebSocket accepts such an origin provisionally and closes it (1008) unless the auth frame names a project whose active keys list it. Null, wildcard and malformed origins are still refused at the handshake, other origins are refused at the auth frame, and third-party origins never receive `Access-Control-Allow-Credentials` (this also applies to the existing `/v1/projects/...` responses).
+
 ## 0.0.6
 
 Performance and reliability release for busy projects: realtime that holds up on Vercel, fewer control-database reads, and safer big-table queries. Upgrade the SDKs together with the API.
