@@ -406,6 +406,15 @@ export function createFortressRoutes(platform: VellumPlatformContext): Hono {
     const current =
       (await billing.getSubscription(orgId)) ?? (await billing.ensureSubscription(orgId));
     const patch: SubscriptionPatchRecord = {};
+    if (parsed.planId !== undefined && parsed.planId !== current.planId) {
+      // Customers can only move to a plan that costs nothing. Paid plans are assigned by a platform
+      // admin until online billing (payment collection) is enabled.
+      const targetPlan = await billing.getPlan(parsed.planId);
+      if (!targetPlan) throw new VellumError("INVALID_ARGUMENT", `Unknown plan '${parsed.planId}'`);
+      if (targetPlan.monthlyBasePriceCents > 0) {
+        throw new VellumError("PERMISSION_DENIED", "Paid plans are assigned by a platform admin. Contact support to change your plan.");
+      }
+    }
     if (parsed.planId !== undefined) patch.planId = parsed.planId;
     if (parsed.monthlySpendCapCents !== undefined) {
       patch.monthlySpendCapCents = parsed.monthlySpendCapCents;
