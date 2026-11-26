@@ -228,6 +228,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
   public platformAuthSettings: PlatformAuthGlobalSettings = {
     id: 1,
     globalSignupsEnabled: true,
+    consoleSignupAutoVerifyEmail: true,
     defaultMaxUsersPerFreeProject: 10000,
     defaultMaxUsersPerProProject: 250000,
     platformSmtpHost: null,
@@ -367,6 +368,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
       );
       const globalSettings = await client.query(
         `SELECT id, global_signups_enabled AS "globalSignupsEnabled",
+                console_signup_auto_verify_email AS "consoleSignupAutoVerifyEmail",
                 default_max_users_per_free_project AS "defaultMaxUsersPerFreeProject",
                 default_max_users_per_pro_project AS "defaultMaxUsersPerProProject",
                 platform_smtp_host AS "platformSmtpHost",
@@ -1911,9 +1913,11 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
            platform_smtp_user = COALESCE($6, platform_smtp_user),
            platform_smtp_pass_encrypted = COALESCE($7, platform_smtp_pass_encrypted),
            platform_smtp_from_email = COALESCE($8, platform_smtp_from_email),
+           console_signup_auto_verify_email = COALESCE($9, console_signup_auto_verify_email),
            updated_at = now()
          WHERE id = 1
          RETURNING id, global_signups_enabled AS "globalSignupsEnabled",
+           console_signup_auto_verify_email AS "consoleSignupAutoVerifyEmail",
            default_max_users_per_free_project AS "defaultMaxUsersPerFreeProject",
            default_max_users_per_pro_project AS "defaultMaxUsersPerProProject",
            platform_smtp_host AS "platformSmtpHost", platform_smtp_port AS "platformSmtpPort",
@@ -1929,6 +1933,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
           input.platformSmtpUser ?? null,
           input.platformSmtpPassEncrypted ?? null,
           input.platformSmtpFromEmail ?? null,
+          input.consoleSignupAutoVerifyEmail ?? null,
         ]
       );
       const row = rows[0] as Record<string, unknown> | undefined;

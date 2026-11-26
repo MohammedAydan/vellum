@@ -342,6 +342,8 @@ export interface UpsertAuthConfigInput {
 export interface PlatformAuthGlobalSettings {
   id: number;
   globalSignupsEnabled: boolean;
+  /** When true (default), console sign-up marks the email verified without sending mail. */
+  consoleSignupAutoVerifyEmail: boolean;
   defaultMaxUsersPerFreeProject: number;
   defaultMaxUsersPerProProject: number;
   platformSmtpHost: string | null;

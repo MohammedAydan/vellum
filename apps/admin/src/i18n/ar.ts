@@ -717,6 +717,8 @@ export const ar: AdminDictionary = {
   "adminAuth.settings.description": "بوابة التسجيل العامة وتخصيصات الحصص الافتراضية وخدمة SMTP للمنصة",
   "adminAuth.settings.killSwitch": "التسجيل العام مُفعّل",
   "adminAuth.settings.killSwitchDesc": "مفتاح رئيسي لتسجيل المستخدمين النهائيين عبر جميع المشاريع",
+  "adminAuth.settings.autoVerify": "توثيق بريد تسجيل لوحة التحكم تلقائياً",
+  "adminAuth.settings.autoVerifyDesc": "مفعّل (افتراضي): الحسابات الجديدة تُعتبر موثّقة بدون إرسال بريد، فلا حاجة لـ SMTP. أوقفه بعد إعداد SMTP.",
   "adminAuth.settings.sectionDefaults": "تخصيصات الحصص الافتراضية",
   "adminAuth.settings.defaultFreeQuota": "الحد الافتراضي للمستخدمين - الخطة المجانية",
   "adminAuth.settings.defaultProQuota": "الحد الافتراضي للمستخدمين - خطة Pro",

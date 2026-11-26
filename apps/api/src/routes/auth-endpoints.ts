@@ -472,7 +472,7 @@ export function createCustomerAuthRoutes(
       name,
       email,
       platformRole: "customer",
-      emailVerified: true,
+      emailVerified: controlStore.getPlatformAuthSettings().consoleSignupAutoVerifyEmail,
     });
 
     // Save Password Hash (async scrypt)

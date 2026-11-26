@@ -307,6 +307,7 @@ export type NewControlPlaneRefreshSessionRow = typeof controlPlaneRefreshSession
 export const platformAuthGlobalSettings = pgTable("platform_auth_global_settings", {
   id: integer("id").primaryKey().default(1),
   globalSignupsEnabled: boolean("global_signups_enabled").notNull().default(true),
+  consoleSignupAutoVerifyEmail: boolean("console_signup_auto_verify_email").notNull().default(true),
   defaultMaxUsersPerFreeProject: integer("default_max_users_per_free_project").notNull().default(10000),
   defaultMaxUsersPerProProject: integer("default_max_users_per_pro_project").notNull().default(250000),
   platformSmtpHost: text("platform_smtp_host"),
