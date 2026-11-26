@@ -161,9 +161,9 @@ pnpm add @vellumdb/sdk-js</code></pre>
 <h2 id="الكتابة-المجمّعة-المقسّمة-batchwritechunked-والمعاملات-runtransaction">الكتابة المجمّعة المقسّمة (<code class="inline-code">batchWriteChunked</code>) والمعاملات (<code class="inline-code">runTransaction</code>)<a class="anchor" href="#الكتابة-المجمّعة-المقسّمة-batchwritechunked-والمعاملات-runtransaction" aria-label="Link to section">#</a></h2>
 <div class="code-block">
   <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">نسخ</button></div>
-  <pre><code class="hl-code"><span class="hl-comment">// تقسيم تلقائي إلى دفعات آمنة (500 عملية افتراضيًا) مع تزامن محدود (4 افتراضيًا)</span>
+  <pre><code class="hl-code"><span class="hl-comment">// تقسيم تلقائي إلى دفعات آمنة (100 عملية افتراضيًا، وهو الحد الأقصى) مع تزامن محدود (4 افتراضيًا)</span>
 <span class="hl-keyword">const</span> summary = <span class="hl-keyword">await</span> db<span class="hl-property">.batchWriteChunked</span>(operations, {
-  chunkSize: <span class="hl-number">500</span>,
+  chunkSize: <span class="hl-number">100</span>,
   concurrency: <span class="hl-number">4</span>,
   signal: ac<span class="hl-property">.signal</span>,
   onProgress: ({ completedOperations, totalOperations }) =&gt; {

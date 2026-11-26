@@ -201,6 +201,14 @@ final results = await batch.commitChunked(
           <code>idempotencyKeyPrefix</code> when retrying bulk imports. See{" "}
           <PageLink slug="errors-and-limits">Quotas &amp; Limits</PageLink> for exact bounds.
         </Callout>
+
+        <Callout tone="info" title="BATCH_SIZE_EXCEEDED">
+          <code>batchWrite</code>, <code>batch().commit()</code>, transaction commits and{" "}
+          <code>getDocuments</code> accept at most 100 items. More fails with HTTP 400 and code{" "}
+          <code>BATCH_SIZE_EXCEEDED</code>; the error details carry <code>count</code> and{" "}
+          <code>maxOperations</code>. It is not retryable: split the batch, or use{" "}
+          <code>batchWriteChunked()</code> with <code>chunkSize: 100</code>.
+        </Callout>
       </Section>
     </Doc>
   );

@@ -108,4 +108,4 @@ Each document's composite index entries count toward storage. Keep index definit
 
 - [Query](./query.md) — which query shapes require a composite index.
 - [Pagination](./pagination.md) — how indexed keyset cursors carry the signed sort key.
-- [Production checklist](./production-checklist.md) — index health in readiness probes and admin UI.
+- [Production checklist](./production-checklist.md) — index health in readiness probes.

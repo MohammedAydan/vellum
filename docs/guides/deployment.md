@@ -33,7 +33,6 @@ Alternative host instructions are consolidated under `docs/deployment/`:
 
 - `cloudflare.md`: Pages/Workers adapter notes.
 - `railway.md`: API-only Railway configuration.
-- `dashboard.md`: static web frontend architecture, not a separate primary host choice.
 - `docs/06-deployment-and-operations.md`: self-hosted Docker Compose, Caddy, probes and container operations.
 - `docs/11-deployment-and-hosting.md`: runtime adapters and hosting architecture, including Render.
 

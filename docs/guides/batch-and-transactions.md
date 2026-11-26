@@ -11,7 +11,7 @@ Choose the right write primitive for your consistency and throughput requirement
 
 | Primitive | Atomicity | Max Ops per Request | Use Case |
 | --- | --- | --- | --- |
-| `batchWrite` / `batch().commit()` | All-or-nothing single SQL transaction | 500 writes | Atomic multi-document writes without read dependencies. |
+| `batchWrite` / `batch().commit()` | All-or-nothing single SQL transaction | 100 writes | Atomic multi-document writes without read dependencies. |
 | `batchWriteChunked` / `commitChunked` | Atomic per chunk (not across chunks) | Unlimited (auto-chunked) | High-throughput imports, migrations, and catalog syncs. |
 | `runTransaction` | Serializable OCC read-modify-write | Bounded interactive set | Balances, inventory reservations, uniqueness invariants. |
 
@@ -24,7 +24,7 @@ Choose the right write primitive for your consistency and throughput requirement
 ```ts
 import { fieldOp } from "@vellumdb/sdk-js";
 
-// 1. Single atomic batch (<= 500 operations)
+// 1. Single atomic batch (<= 100 operations)
 await db.batchWrite([
   { type: "set", path: "products/sku_1", data: { priceCents: 1999 }, merge: true },
   { type: "update", path: "products/sku_2", data: { stock: fieldOp.increment(-1) } },
@@ -34,7 +34,7 @@ await db.batchWrite([
 // 2. Auto-chunked bulk writes with bounded concurrency, progress, and AbortSignal
 const ac = new AbortController();
 const result = await db.batchWriteChunked(thousandsOfWrites, {
-  chunkSize: 500,    // default 500 ops per HTTP batchWrite
+  chunkSize: 100,    // default and maximum: 100 ops per HTTP batchWrite
   concurrency: 4,    // default 4 concurrent in-flight chunks
   signal: ac.signal,
   onProgress: ({ completedChunks, totalChunks, completedOperations, totalOperations }) => {
@@ -58,22 +58,41 @@ for (final item in catalogItems) {
   );
 }
 
-// Single atomic batch (<= 500 ops)
+// Single atomic batch (<= 100 ops)
 await batch.commit(idempotencyKey: 'catalog-atomic-1');
 
 // Auto-chunked sequential submission with deterministic per-chunk idempotency keys
 // Sends "catalog-sync-0", "catalog-sync-1", ...
 final chunkResponses = await batch.commitChunked(
-  chunkSize: 500,
+  chunkSize: 100,
   idempotencyKeyPrefix: 'catalog-sync',
 );
 
 // 2. Direct list helper
 await client.writeBatchChunked(
   rawWriteMaps,
-  chunkSize: 500,
+  chunkSize: 100,
   idempotencyKeyPrefix: 'bulk-import',
 );
+```
+
+---
+
+### Handling `BATCH_SIZE_EXCEEDED`
+
+`batchWrite`, `batch().commit()`, transaction commits and `getDocuments` accept at most `MAX_BATCH_OPERATIONS` (100) items. Sending more fails with HTTP 400 and code `BATCH_SIZE_EXCEEDED`. The error details carry `count` (what you sent) and `maxOperations` (the limit). The error is not retryable: split the batch.
+
+```ts
+try {
+  await db.batchWrite(writes); // writes.length > 100 throws
+} catch (error) {
+  if ((error as { code?: string }).code === "BATCH_SIZE_EXCEEDED") {
+    // Use the chunked helper instead. Each chunk of up to 100 is atomic on its own.
+    await db.batchWriteChunked(writes, { chunkSize: 100 });
+  } else {
+    throw error;
+  }
+}
 ```
 
 ---

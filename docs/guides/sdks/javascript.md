@@ -115,8 +115,8 @@ for await (const doc of db
 
 ## Batch Writes, Chunking & Transactions
 
-- `db.batchWrite(writes, options?: RequestOptions)` — single atomic batch (max 500 writes).
-- `db.batchWriteChunked(operations, { chunkSize = 500, concurrency = 4, onProgress?, signal? })` — auto-chunks large arrays with bounded concurrency and progress reporting (`BatchWriteChunkedResult`).
+- `db.batchWrite(writes, options?: RequestOptions)` — single atomic batch (max 100 writes; more throws `BATCH_SIZE_EXCEEDED`, HTTP 400).
+- `db.batchWriteChunked(operations, { chunkSize = 100 (max 100), concurrency = 4, onProgress?, signal? })` — auto-chunks large arrays with bounded concurrency and progress reporting (`BatchWriteChunkedResult`).
 - `db.runTransaction(async (tx) => ..., { maxAttempts = 5, signal? })` — OCC transaction (`tx.get`, `tx.create`, `tx.set`, `tx.update`, `tx.delete`) with jittered retry on `ABORTED_CONFLICT`.
 
 ---

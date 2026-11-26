@@ -139,15 +139,15 @@ final grouped = await query.aggregate(
 ## الكتابة المجمّعة المقسّمة والمعاملات (OCC)
 
 ```dart
-// باني الدفعات مع التقسيم التلقائي (500 عملية لكل دفعة افتراضيًا)
+// باني الدفعات مع التقسيم التلقائي (100 عملية لكل دفعة افتراضيًا، وهو الحد الأقصى)
 final batch = client.batch();
 for (final item in items) {
   batch.set(client.collection('catalog').doc(item.id), item.toJson(), merge: true);
 }
-await batch.commitChunked(chunkSize: 500, idempotencyKeyPrefix: 'catalog-sync');
+await batch.commitChunked(chunkSize: 100, idempotencyKeyPrefix: 'catalog-sync');
 
 // أو مباشرة عبر القائمة
-await client.writeBatchChunked(writes, chunkSize: 500, idempotencyKeyPrefix: 'bulk');
+await client.writeBatchChunked(writes, chunkSize: 100, idempotencyKeyPrefix: 'bulk');
 
 // معاملة OCC مع إعادة المحاولة التلقائية عند ABORTED_CONFLICT
 await client.runTransaction<void>((tx) async {

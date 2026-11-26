@@ -33,7 +33,7 @@
 <div class="code-block">
   <div class="cb-head"><span class="cb-lang">YAML</span><button class="cb-copy" type="button">نسخ</button></div>
   <pre><code class="hl-code">dependencies:
-  vellum_flutter: ^<span class="hl-number">0.0</span>.<span class="hl-number">5</span></code></pre>
+  vellum_flutter: ^<span class="hl-number">0.0</span>.<span class="hl-number">7</span></code></pre>
 </div>
 <div class="code-block">
   <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">نسخ</button></div>
@@ -141,15 +141,15 @@
 <h2 id="الكتابة-المجمّعة-المقسّمة-والمعاملات-occ">الكتابة المجمّعة المقسّمة والمعاملات (OCC)<a class="anchor" href="#الكتابة-المجمّعة-المقسّمة-والمعاملات-occ" aria-label="Link to section">#</a></h2>
 <div class="code-block">
   <div class="cb-head"><span class="cb-lang">DART</span><button class="cb-copy" type="button">نسخ</button></div>
-  <pre><code class="hl-code"><span class="hl-comment">// باني الدفعات مع التقسيم التلقائي (500 عملية لكل دفعة افتراضيًا)</span>
+  <pre><code class="hl-code"><span class="hl-comment">// باني الدفعات مع التقسيم التلقائي (100 عملية لكل دفعة افتراضيًا، وهو الحد الأقصى)</span>
 <span class="hl-keyword">final</span> batch = client<span class="hl-property">.batch</span>();
 <span class="hl-keyword">for</span> (<span class="hl-keyword">final</span> item <span class="hl-keyword">in</span> items) {
   batch<span class="hl-property">.set</span>(client<span class="hl-property">.collection</span>(<span class="hl-string">'catalog'</span>)<span class="hl-property">.doc</span>(item<span class="hl-property">.id</span>), item<span class="hl-property">.toJson</span>(), merge: <span class="hl-keyword">true</span>);
 }
-<span class="hl-keyword">await</span> batch<span class="hl-property">.commitChunked</span>(chunkSize: <span class="hl-number">500</span>, idempotencyKeyPrefix: <span class="hl-string">'catalog-sync'</span>);
+<span class="hl-keyword">await</span> batch<span class="hl-property">.commitChunked</span>(chunkSize: <span class="hl-number">100</span>, idempotencyKeyPrefix: <span class="hl-string">'catalog-sync'</span>);
 
 <span class="hl-comment">// أو مباشرة عبر القائمة</span>
-<span class="hl-keyword">await</span> client<span class="hl-property">.writeBatchChunked</span>(writes, chunkSize: <span class="hl-number">500</span>, idempotencyKeyPrefix: <span class="hl-string">'bulk'</span>);
+<span class="hl-keyword">await</span> client<span class="hl-property">.writeBatchChunked</span>(writes, chunkSize: <span class="hl-number">100</span>, idempotencyKeyPrefix: <span class="hl-string">'bulk'</span>);
 
 <span class="hl-comment">// معاملة OCC مع إعادة المحاولة التلقائية عند ABORTED_CONFLICT</span>
 <span class="hl-keyword">await</span> client<span class="hl-property">.runTransaction</span>&lt;<span class="hl-keyword">void</span>&gt;((tx) <span class="hl-keyword">async</span> {

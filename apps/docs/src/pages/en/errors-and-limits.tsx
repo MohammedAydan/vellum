@@ -30,7 +30,7 @@ export default function Page() {
             [<code>MAX_PATH_SEGMENT_BYTES</code>, "1,500 UTF-8 bytes per segment", <code>INVALID_DOCUMENT_PATH</code>],
             [<code>MAX_OBJECT_NESTING_DEPTH</code>, "20 levels inside document JSONB data", <code>INVALID_ARGUMENT</code>],
             [<code>MAX_FIELD_NAME_LENGTH</code>, "256 characters per field key", <code>INVALID_ARGUMENT</code>],
-            [<code>MAX_BATCH_OPERATIONS</code>, "100 operations per atomic batchWrite / transaction", <code>LIMIT_EXCEEDED</code>],
+            [<code>MAX_BATCH_OPERATIONS</code>, "100 operations per atomic batchWrite / transaction", <code>BATCH_SIZE_EXCEEDED</code>],
             [<code>MAX_BATCH_PAYLOAD_BYTES</code>, "5,242,880 bytes (5 MiB) — enforced on chunked streams too", <code>PAYLOAD_TOO_LARGE</code>],
             [<code>MAX_TRANSACTION_DURATION_MS</code>, "15,000 ms interactive OCC window", <code>TRANSACTION_EXPIRED</code>],
           ]}

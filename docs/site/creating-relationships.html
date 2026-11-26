@@ -28,7 +28,7 @@
     <article class="article"><h1 id="create-relationships-between-documents">Create relationships between documents<a class="anchor" href="#create-relationships-between-documents" aria-label="Link to section">#</a></h1>
 <p>A relationship is a normal document field containing a reference to another document in the same project. You do not need a separate relationship-creation endpoint. Use a single reference for one target, or an array of references for several targets.</p>
 <h2 id="javascript-and-typescript">JavaScript and TypeScript<a class="anchor" href="#javascript-and-typescript" aria-label="Link to section">#</a></h2>
-<p>This example works with published <code class="inline-code">@vellumdb/sdk-js</code> 0.0.1. <code class="inline-code">db</code> is an initialized project client with permission to write these documents.</p>
+<p>This example works with <code class="inline-code">@vellumdb/sdk-js</code>. <code class="inline-code">db</code> is an initialized project client with permission to write these documents.</p>
 <div class="code-block">
   <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
   <pre><code class="hl-code"><span class="hl-keyword">const</span> ref = (path: string) =&gt; ({ $t: <span class="hl-string">&quot;ref&quot;</span> <span class="hl-keyword">as</span> <span class="hl-keyword">const</span>, $v: path });
@@ -65,7 +65,7 @@ console<span class="hl-property">.log</span>(post<span class="hl-property">.incl
   cursor = page<span class="hl-property">.nextCursor</span> ?? <span class="hl-keyword">undefined</span>;
 } <span class="hl-keyword">while</span> (cursor !== <span class="hl-keyword">undefined</span>);</code></pre>
 </div>
-<p>The source tree also exports a validated <code class="inline-code">reference(path)</code> helper. After installing a release containing that helper, replace the local <code class="inline-code">ref</code> function with <code class="inline-code">import { reference as ref } from &quot;@vellumdb/sdk-js&quot;</code>. Do not import it from published 0.0.1, which does not export it.</p>
+<p>The source tree also exports a validated <code class="inline-code">reference(path)</code> helper. After installing a release containing that helper, replace the local <code class="inline-code">ref</code> function with <code class="inline-code">import { reference as ref } from &quot;@vellumdb/sdk-js&quot;</code>. Older releases (0.0.1) do not export it.</p>
 <h2 id="flutter-and-dart">Flutter and Dart<a class="anchor" href="#flutter-and-dart" aria-label="Link to section">#</a></h2>
 <p><code class="inline-code">client</code> is an initialized project client. <code class="inline-code">VellumWire.reference</code> is available in published <code class="inline-code">vellum_flutter</code> 0.0.1.</p>
 <div class="code-block">
