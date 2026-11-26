@@ -79,6 +79,9 @@ export interface OutboxPollerOptions {
   onError?: ((error: Error) => void) | undefined;
 }
 
+/** How often a failed LISTEN subscription is retried. */
+const LISTEN_RETRY_MS = 15_000;
+
 /** A drain running longer than this is treated as stuck (for example on a connection that died) and replaced. */
 const DRAIN_STUCK_MS = 8_000;
 
@@ -140,6 +143,7 @@ export class OutboxPoller implements OutboxPollerPort {
 
   private unsubscribe: (() => void) | null = null;
   private pollTimer: NodeJS.Timeout | null = null;
+  private listenRetryTimer: NodeJS.Timeout | null = null;
   private started = false;
   private closed = false;
 
@@ -172,20 +176,46 @@ export class OutboxPoller implements OutboxPollerPort {
   public async start(): Promise<void> {
     if (this.started || this.closed) return;
     this.started = true;
-    const unsub = await this.bus.subscribe(this.channel, (payload: string) => {
-      this.handleNotification(payload);
-    });
-    // Guard against stop() being called while subscribe() was awaiting.
-    if (this.closed || !this.started) {
-      unsub();
-      return;
-    }
-    this.unsubscribe = unsub;
+    // LISTEN is only a wake-up. When it cannot connect (a pooled or blocked database endpoint, a cold
+    // serverless instance), polling must still run, otherwise this instance never sees rows that other
+    // instances wrote. The subscription is retried in the background.
+    await this.trySubscribe();
+    if (this.closed || !this.started) return;
     this.pollTimer = setInterval(() => {
       this.pollAll();
     }, this.pollIntervalMs);
     this.pollTimer.unref();
     this.pollAll();
+  }
+
+  private async trySubscribe(): Promise<void> {
+    if (this.unsubscribe || this.closed) return;
+    try {
+      const unsub = await this.bus.subscribe(this.channel, (payload: string) => {
+        this.handleNotification(payload);
+      });
+      // Guard against stop() being called while subscribe() was awaiting.
+      if (this.closed || !this.started) {
+        unsub();
+        return;
+      }
+      this.unsubscribe = unsub;
+      if (this.listenRetryTimer) {
+        clearInterval(this.listenRetryTimer);
+        this.listenRetryTimer = null;
+      }
+      rtLog("poller_listen", { listening: true });
+    } catch (err) {
+      this.stats.errors += 1;
+      this.reportError(err);
+      rtLog("poller_listen", { listening: false, reason: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200) });
+      if (!this.listenRetryTimer && !this.closed) {
+        this.listenRetryTimer = setInterval(() => {
+          void this.trySubscribe();
+        }, LISTEN_RETRY_MS);
+        this.listenRetryTimer.unref();
+      }
+    }
   }
 
   public async stop(): Promise<void> {
@@ -199,6 +229,10 @@ export class OutboxPoller implements OutboxPollerPort {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+    if (this.listenRetryTimer) {
+      clearInterval(this.listenRetryTimer);
+      this.listenRetryTimer = null;
     }
     for (const tenant of this.tenants.values()) {
       tenant.pendingRescan = false;

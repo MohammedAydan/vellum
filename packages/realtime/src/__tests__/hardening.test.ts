@@ -340,3 +340,29 @@ describe("@vellum/realtime - stuck drain", () => {
     expect(delivered).toEqual(["5"]);
   });
 });
+
+describe("@vellum/realtime - LISTEN unavailable", () => {
+  it("still polls the outbox when the LISTEN subscription fails", async () => {
+    const ev: OutboxEvent = {
+      seqId: "7", projectId: PROJECT_A, collectionPath: "items", path: "items/a", documentId: "a",
+      opType: "updated", version: 3, beforeData: null, afterData: { n: 2 }, committedAt: new Date().toISOString(),
+    };
+    const delivered: string[] = [];
+    const dataStore = new DataPlaneStore();
+    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0") => (BigInt(ev.seqId) > BigInt(afterSeqId) ? [ev] : []);
+    const connections = new Map([["c1", { authenticated: true, closed: false, projectId: PROJECT_A, connectedAt: Date.now() - 1_000 }]]);
+    const errors: string[] = [];
+    const poller = new OutboxPoller({
+      bus: { async publish() {}, async subscribe() { throw new Error("listen down"); }, async close() {} },
+      dataStore,
+      sink: { connections, async notifyCommittedEvents(_p, evs) { for (const e of evs) delivered.push(e.seqId); } },
+      pollIntervalMs: 50,
+      onError: (e) => errors.push(e.message),
+    });
+    await poller.start();
+    await new Promise((r) => setTimeout(r, 300));
+    await poller.stop();
+    expect(errors).toContain("listen down");
+    expect(delivered).toEqual(["7"]);
+  });
+});
