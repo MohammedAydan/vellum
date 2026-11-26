@@ -19,7 +19,7 @@
 
 import type { OutboxEvent, StorageAdapter, TenantContext } from "@vellum/storage";
 import { PG_OUTBOX_CHANNEL, type PgNotifyBus } from "./pg-notify-pubsub.js";
-import { rtDiagEnabled, rtLog } from "./diag.js";
+import { rtLog } from "./diag.js";
 import type { OutboxPollerPort, RealtimeEventSink } from "./contracts/realtime-port.js";
 
 /** Minimal sink contract; `RealtimeGatewayHub` satisfies it structurally. */
@@ -462,7 +462,6 @@ export class OutboxPoller implements OutboxPollerPort {
           if (seq > entry.watermark && !entry.delivered.has(seq)) fresh.push(ev);
         }
         if (fresh.length > 0) {
-          if (rtDiagEnabled(entry.projectId)) rtLog("poll_deliver", { project: entry.projectId, seqs: fresh.map((e) => e.seqId), versions: fresh.map((e) => e.version) });
           await this.sink.notifyCommittedEvents(entry.projectId, fresh);
           const now = Date.now();
           for (const ev of fresh) entry.delivered.set(BigInt(ev.seqId), now);
