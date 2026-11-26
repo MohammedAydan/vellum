@@ -310,7 +310,13 @@ export function compileAggregateSql(
   const selectParts: string[] = [];
   const groupByParts: string[] = [];
   for (const field of request.groupBy ?? []) {
-    const expr = aggregateTextExpr(field, params, fieldCache);
+    // Group on the JSON value for document fields so numbers and booleans keep their type in the
+    // result (text grouping turned 1 into "1" and true into "true"). A missing field and a JSON null
+    // both come back as null, like the in-memory path.
+    const expr =
+      field === "documentId" || field === "__name__" || field === "createdAt" || field === "updatedAt"
+        ? aggregateTextExpr(field, params, fieldCache)
+        : `NULLIF((d.data #> ${addParam(params, field.split("."))}::text[]), 'null'::jsonb)`;
     selectParts.push(`${expr} AS ${quoteAlias(field)}`);
     groupByParts.push(expr);
   }

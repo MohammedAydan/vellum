@@ -64,6 +64,17 @@ describe("@vellum/storage - Aggregate SQL compilation", () => {
     expect(sql).not.toContain("paid");
   });
 
+  it("groups document fields on their JSON value so numbers and booleans keep their type", () => {
+    const { sql } = compileAggregateSql(TENANT, {
+      collectionPath: "orders",
+      groupBy: ["level", "documentId"],
+      metrics: { count: { op: "count" } },
+    });
+    expect(sql).toContain("NULLIF((d.data #> ");
+    expect(sql).toContain("'null'::jsonb");
+    expect(sql).toContain("d.document_id::text AS \"documentId\"");
+  });
+
   it("compiles 'or' groups as parenthesized OR predicates", () => {
     const { sql } = compileAggregateSql(TENANT, {
       collectionPath: "orders",
