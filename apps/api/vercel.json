@@ -46,6 +46,9 @@
       "destination": "/api/server?path=/v1/health/ready"
     }
   ],
+  "crons": [
+    { "path": "/v1/internal/maintenance", "schedule": "17 3 * * *" }
+  ],
   "functions": {
     "api/server/index.js": {
       "maxDuration": 300
