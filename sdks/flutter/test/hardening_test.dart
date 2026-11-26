@@ -678,6 +678,50 @@ void main() {
       expect(transport.outboundQueueLength, equals(0));
     });
 
+    test('any inbound frame counts as liveness, a silent socket does not', () async {
+      final channels = <_FakeWebSocketChannel>[];
+      final errors = <Object>[];
+      final transport = VellumRealtimeTransport(
+        url: Uri.parse('wss://api.example.test/v1/realtime'),
+        auth: () async => <String, dynamic>{'type': 'auth', 'projectId': 'p'},
+        onFrame: (_) {},
+        onError: errors.add,
+        channelFactory: (uri) {
+          final ch = _FakeWebSocketChannel();
+          channels.add(ch);
+          return ch;
+        },
+        heartbeatInterval: const Duration(milliseconds: 15),
+        pongTimeout: const Duration(milliseconds: 40),
+        backoffMs: (_) => 10,
+      );
+      final connectFuture = transport.connect();
+      await Future<void>.delayed(Duration.zero);
+      channels.first.pushFrame(<String, dynamic>{'type': 'auth_ack'});
+      await connectFuture;
+      // Data frames (no pongs) every 10 ms for 120 ms: no reconnect.
+      for (var i = 0; i < 12; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        channels.first.pushFrame(<String, dynamic>{'type': 'mutation', 'subId': 'x'});
+      }
+      expect(channels, hasLength(1));
+      expect(errors, isEmpty);
+      // Then silence: detected and reconnected.
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(errors.whereType<TimeoutException>(), isNotEmpty);
+      expect(channels.length, greaterThanOrEqualTo(2));
+      transport.close();
+    });
+
+    test('default heartbeat detects a dead socket within about 50 seconds', () {
+      final t = VellumRealtimeTransport(
+        url: Uri.parse('wss://api.example.test/v1/realtime'),
+        auth: () async => <String, dynamic>{},
+        onFrame: (_) {},
+      );
+      expect(t.heartbeatInterval + t.pongTimeout, lessThanOrEqualTo(const Duration(seconds: 50)));
+    });
+
     test('heartbeat detects dead socket on pong timeout and triggers reconnect', () async {
       final channels = <_FakeWebSocketChannel>[];
       final errors = <Object>[];

@@ -3,6 +3,9 @@
 ## Unreleased
 
 - **Behavior change:** queries that no index can serve (a range filter, `!=`, `not-in`, text filters, `search`, or an order on a field other than `documentId`, `createdAt` and `updatedAt`) are now refused with `FAILED_PRECONDITION` and a `suggestedIndex` when the collection has more than 50,000 live documents. Create the composite index named in the error, or raise or disable the limit with `VELLUM_UNINDEXED_QUERY_MAX_DOCS` (`0` disables). Smaller collections are unaffected. Before, such queries read the whole collection and failed at the 5 second statement timeout on large ones.
+### Fixes
+
+- `vellum_flutter` realtime: the SSE stream now has an idle timeout (45s, three server keep-alives); a silent or half-open stream is failed and reopened with resume instead of hanging forever (before, the channel answered heartbeat pings itself, so the dead stream was never noticed). On WebSocket any inbound frame counts as liveness, and a dead socket is detected within about 50s (15s ping, 35s timeout; was about 85s).
 
 ## 0.0.5
 
