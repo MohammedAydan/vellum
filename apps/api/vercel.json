@@ -45,5 +45,10 @@
       "source": "/ready",
       "destination": "/api/server?path=/v1/health/ready"
     }
-  ]
+  ],
+  "functions": {
+    "api/server/index.js": {
+      "maxDuration": 300
+    }
+  }
 }
