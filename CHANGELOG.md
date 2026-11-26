@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **fix(sdk-js):** in a browser every request failed with "Illegal invocation" unless the app passed `customFetch`, because the transport called `globalThis.fetch` as a method of itself. The transport and the SSE socket now call fetch as a plain function, and the default is looked up at call time.
+- **fix(realtime):** realtime now works for a developer's own web app. Before, per-project CORS (origins on an API key) only covered `/v1/projects/...`, so the WebSocket handshake answered 403 and the SSE stream failed its preflight. `POST /v1/realtime/stream` now returns `Access-Control-Allow-Origin` when an active key of the project in the auth frame lists the origin, and the WebSocket accepts such an origin provisionally and closes it (1008) unless the auth frame names a project whose active keys list it. Null, wildcard and malformed origins are still refused at the handshake, other origins are refused at the auth frame, and third-party origins never receive `Access-Control-Allow-Credentials` (this also applies to the existing `/v1/projects/...` responses).
 
 ## 0.0.6
 
