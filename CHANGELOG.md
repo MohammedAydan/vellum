@@ -22,6 +22,15 @@ Fixes found by building a real chat app on 0.0.6: realtime and requests from a b
 - **fix(sdk-js, flutter):** `doc.get()` on a document that does not exist (for example right after `delete()`) returns a snapshot with `exists: false` instead of throwing NOT_FOUND. A missing project still throws. In JS, `snapshot.metadata.fromCache` is now `true` when a snapshot comes from the client read cache.
 - **fix(realtime):** a write that committed while a new `onSnapshot` was reading its initial snapshot could be delivered before `initial_sync` and then overwritten by it, so the update was lost. Live events are now held until `initial_sync` is sent, then delivered in order, skipping any the snapshot already contains.
 
+- **fix(rules):** `unchanged([...])` treats a field that is missing on both the stored and the new document as unchanged (null on both already was). The `in` operator no longer lets an unauthenticated caller match a null entry in the list. The syntax `auth.uid in resource.memberIds` and `incoming.memberIds` was already supported and is now documented and tested.
+- **feat(sdk):** throttled (429) errors expose `retryAfter` in seconds: `err.retryAfter` in JavaScript and `VellumException.retryAfter` in Dart.
+- **feat(api):** optional `AUTH_RATE_LIMIT_SCALE` multiplies the auth rate limits for load and end-to-end tests. Off by default; never set it in production.
+- **hardening:** the batch key budget only applies to `batchWrite`, `documents:batchWrite` and `transactions:commit` (fields `writes`, `operations`, `mutations`), per write, and the rest of the body is checked against the original cap. The realtime initial-snapshot flush always releases its gate.
+
+### Known limitations
+
+- Realtime handshakes and SSE responses reveal whether an origin is listed on any key of a project (an origin-listing oracle). It exposes only allowed origins, which are public by nature in a browser app.
+
 ### Docs
 
 - Realtime page: plain Vercel rewrites buffer event streams and cannot carry WebSockets.
