@@ -121,6 +121,28 @@ describe("@vellum/realtime - Security, Reliability & Performance Hardening", () 
     expect(poller.getWatermark(PROJECT_A)).toBe(5n);
   });
 
+  it("polls a tenant with no connected client far less often than one with a client", async () => {
+    let calls = 0;
+    const fakeBus: PgNotifyBus = { async publish() {}, async subscribe() { return () => {}; }, async close() {} };
+    const dataStore = new DataPlaneStore();
+    dataStore.queryOutboxSince = async () => {
+      calls += 1;
+      return [];
+    };
+    const poller = new OutboxPoller({
+      bus: fakeBus,
+      dataStore,
+      sink: { async notifyCommittedEvents() {} },
+      pollIntervalMs: 50,
+    });
+    await poller.start();
+    poller.handleNotification(JSON.stringify({ seqId: 1, projectId: PROJECT_A }));
+    await new Promise((r) => setTimeout(r, 400));
+    await poller.stop();
+    // ~8 ticks at 50ms. Without the idle cadence this was one query per tick.
+    expect(calls).toBeLessThanOrEqual(3);
+  });
+
   it("clears old subscriptions on re-authentication to prevent cross-tenant hijack", async () => {
     const dataStore = new DataPlaneStore();
     const controlStore = makeMockControlStore();

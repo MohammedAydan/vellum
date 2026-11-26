@@ -76,6 +76,9 @@ export interface OutboxPollerOptions {
   onError?: ((error: Error) => void) | undefined;
 }
 
+/** Safety-net poll cadence for tenants that have no connected realtime client. */
+const IDLE_TENANT_POLL_MS = 30_000;
+
 interface TenantState extends TenantContext {
   key: string;
   watermark: bigint;
@@ -103,6 +106,7 @@ export class OutboxPoller implements OutboxPollerPort {
   private readonly channel: string;
   private readonly batchSize: number;
   private readonly pollIntervalMs: number;
+  private readonly lastIdlePollAt = new Map<string, number>();
   private readonly retryBaseMs: number;
   private readonly retryMaxMs: number;
   private readonly onError: ((error: Error) => void) | undefined;
@@ -226,9 +230,24 @@ export class OutboxPoller implements OutboxPollerPort {
   private pollAll(): void {
     if (!this.started || this.closed) return;
     this.stats.polls += 1;
+    const now = Date.now();
+    const live = new Set<string>();
+    const sessions = this.sink.connections;
+    if (sessions) {
+      for (const session of sessions.values()) {
+        if (session.authenticated && !session.closed && session.projectId) live.add(this.keyFor(session.projectId));
+      }
+    }
     for (const ctx of this.discoverTenants()) {
+      const key = this.keyFor(ctx.projectId);
+      // A tenant with no connected client is only a safety net for a missed NOTIFY. Polling it
+      // every second costs a full transaction (BEGIN, set_config, SELECT, COMMIT) per tenant per
+      // instance and keeps the database busy for nothing, so it gets a slow cadence.
+      if (!live.has(key) && now - (this.lastIdlePollAt.get(key) ?? 0) < IDLE_TENANT_POLL_MS) continue;
+      if (!live.has(key)) this.lastIdlePollAt.set(key, now);
       void this.drain(this.registerTenant(ctx));
     }
+    if (this.lastIdlePollAt.size > MAX_TRACKED_TENANTS * 2) this.lastIdlePollAt.clear();
   }
 
   private keyFor(projectId: string): string {

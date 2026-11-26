@@ -25,6 +25,11 @@ export interface SseSocketOptions {
   fetchFn?: FetchLike | null;
   /** Delay that batches several subscribe/unsubscribe frames into one stream request. */
   restartDebounceMs?: number;
+  /**
+   * Abort the stream when no bytes (including the server's 15s keep-alive comments) arrive for
+   * this long. A stalled or half-open stream otherwise looks connected forever. Default 45s.
+   */
+  stallTimeoutMs?: number;
 }
 
 /** Converts a realtime WebSocket or HTTP URL into the SSE stream URL (no `:0`, no `#`). */
@@ -53,6 +58,7 @@ export class SseSocket implements WebSocketLike {
 
   private readonly url: string;
   private readonly fetchFn: FetchLike | null;
+  private readonly stallTimeoutMs: number;
   private readonly debounceMs: number;
   private authFrame: Frame | null = null;
   private readonly subs = new Map<string, Frame>();
@@ -67,6 +73,7 @@ export class SseSocket implements WebSocketLike {
     this.url = toRealtimeSseUrl(url);
     this.fetchFn = options.fetchFn ?? null;
     this.debounceMs = options.restartDebounceMs ?? 5;
+    this.stallTimeoutMs = options.stallTimeoutMs ?? 45_000;
     // A macrotask, so a caller that awaits the factory still attaches handlers before `open`.
     setTimeout(() => {
       if (this.readyState !== CONNECTING) return;
@@ -202,12 +209,38 @@ export class SseSocket implements WebSocketLike {
         return;
       }
       this.streamOpen = true;
-      const reader = response.body.getReader();
+      let lastBytesAt = Date.now();
+      const watchdog = setInterval(() => {
+        if (Date.now() - lastBytesAt > this.stallTimeoutMs) {
+          clearInterval(watchdog);
+          this.fail(generation, 1006, "stream stalled");
+        }
+      }, Math.max(5, Math.min(10_000, Math.floor(this.stallTimeoutMs / 3))));
+      (watchdog as { unref?: () => void }).unref?.();
+      try {
+        await this.readStream(response.body.getReader(), generation, () => { lastBytesAt = Date.now(); });
+      } finally {
+        clearInterval(watchdog);
+      }
+    } catch (error: unknown) {
+      if (generation !== this.generation) return;
+      this.onerror?.(error);
+      this.fail(generation, 1006, error instanceof Error ? error.message : "stream error");
+    }
+  }
+
+  private async readStream(
+    reader: { read(): Promise<{ done: boolean; value?: Uint8Array }>; cancel(): Promise<void> },
+    generation: number,
+    onBytes: () => void
+  ): Promise<void> {
+    try {
       const decoder = new TextDecoder();
       let buffer = "";
       let renew = false;
       for (;;) {
         const { done, value } = await reader.read();
+        onBytes();
         if (generation !== this.generation) {
           void reader.cancel().catch(() => undefined);
           return;
@@ -231,10 +264,8 @@ export class SseSocket implements WebSocketLike {
       } else {
         this.fail(generation, 1006, "stream ended");
       }
-    } catch (error: unknown) {
-      if (generation !== this.generation) return;
-      this.onerror?.(error);
-      this.fail(generation, 1006, error instanceof Error ? error.message : "stream error");
+    } finally {
+      // nothing to release here; the caller owns the watchdog
     }
   }
 

@@ -63,9 +63,6 @@ export const documents = pgTable(
     expiresAtIdx: index("idx_docs_expires_at")
       .on(table.projectId, table.expiresAt)
       .where(sql`${table.expiresAt} IS NOT NULL AND ${table.deletedAt} IS NULL`),
-    colCoverActiveIdx: index("idx_docs_collection_cover_active")
-      .on(table.projectId, table.collectionPath, table.updatedAt, table.documentId)
-      .where(sql`${table.deletedAt} IS NULL`),
   })
 );
 
