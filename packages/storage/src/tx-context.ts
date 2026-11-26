@@ -425,6 +425,10 @@ export const SQL_QUERY_OUTBOX = `SELECT seq_id::text AS "seqId", project_id AS "
   ORDER BY seq_id ASC
   LIMIT 500`;
 
+export const SQL_QUERY_OUTBOX_MAX = `SELECT COALESCE(MAX(seq_id), 0)::text AS "seqId"
+   FROM realtime_outbox
+  WHERE project_id = $1::uuid`;
+
 export const SQL_CREATE_INDEX = `INSERT INTO document_indexes (
    id, project_id, collection_path, fields, definition_hash, status
  ) VALUES ($1::uuid, $2::uuid, $3, $4::jsonb, $5, 'building')
@@ -1049,6 +1053,13 @@ export function createSqlTransactionHandle(
         [projectId, afterSeqId]
       );
       return rows;
+    },
+
+    async queryOutboxMaxSeq(): Promise<string> {
+      assertOpen();
+      const { rows } = await client.query(SQL_QUERY_OUTBOX_MAX, [projectId]);
+      const seqId = (rows[0] as { seqId?: string } | undefined)?.seqId;
+      return typeof seqId === "string" ? seqId : "0";
     },
 
     async queryDocuments(compiled: CompiledQuery): Promise<QueriedDocument[]> {

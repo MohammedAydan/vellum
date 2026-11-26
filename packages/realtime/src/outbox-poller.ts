@@ -261,6 +261,8 @@ export class OutboxPoller implements OutboxPollerPort {
     const note = parseOutboxNotification(payload);
     if (!note) return;
     this.stats.notifications += 1;
+    // Only projects with a live client on this instance need a drain; others would cost a transaction per write per instance.
+    if (!this.hasLiveSession(note.projectId)) return;
     const observed = BigInt(note.seqId);
     const entry = this.registerTenant(note, observed);
     if (entry.initialized && observed > entry.watermark + 1n) {
@@ -330,6 +332,13 @@ export class OutboxPoller implements OutboxPollerPort {
       void this.drain(this.registerTenant(ctx));
     }
     if (this.lastIdlePollAt.size > MAX_TRACKED_TENANTS * 2) this.lastIdlePollAt.clear();
+  }
+
+  private hasLiveSession(projectId: string): boolean {
+    const sessions = this.sink.connections;
+    if (!sessions) return true;
+    for (const s of sessions.values()) if (s.authenticated && !s.closed && s.projectId === projectId) return true;
+    return false;
   }
 
   private keyFor(projectId: string): string {

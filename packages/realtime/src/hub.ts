@@ -544,9 +544,14 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     if (isOutboxSeqReadable(this.dataStore)) {
       currentWatermark = this.dataStore.outboxSeq.toString();
     } else {
-      const recent = await this.dataStore.queryOutboxSince({ projectId });
-      const last = recent[recent.length - 1];
-      if (last) currentWatermark = last.seqId;
+      if (typeof this.dataStore.queryOutboxMaxSeq === "function") {
+        currentWatermark = await this.dataStore.queryOutboxMaxSeq({ projectId });
+      } else {
+        // Adapters without a max query: the first page is ascending, so this is only a lower bound.
+        const recent = await this.dataStore.queryOutboxSince({ projectId });
+        const last = recent[recent.length - 1];
+        if (last) currentWatermark = last.seqId;
+      }
     }
 
     let normalizedQuery = null;
@@ -858,40 +863,12 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       const incomingSeq = parseSafeSeqBigInt(ev.seqId);
       if (incomingSeq === null) continue;
 
+      // seq_id is a global bigserial shared by every project, so a per-project gap is normal and is not
+      // a missed event. The poller already reads each project's rows in ascending order and fills late
+      // commits, so no extra catch-up query is needed here (it also replayed old history on a cold instance).
+      await this.fanOutSingleEvent(projectId, ev);
       const prevSeq = this.watermarks.get(key) ?? 0n;
-
-      if (incomingSeq > prevSeq + 1n) {
-        const catchup = await this.dataStore.queryOutboxSince(
-          { projectId },
-          prevSeq.toString()
-        );
-        let foundIncoming = false;
-        for (const missed of catchup) {
-          if (!missed || missed.projectId !== projectId) continue;
-          const missedSeq = parseSafeSeqBigInt(missed.seqId);
-          if (missedSeq === null) continue;
-          await this.fanOutSingleEvent(projectId, missed);
-          const curWm = this.watermarks.get(key) ?? 0n;
-          if (missedSeq > curWm) {
-            this.watermarks.set(key, missedSeq);
-          }
-          if (missed.seqId === ev.seqId) {
-            foundIncoming = true;
-          }
-        }
-        if (!foundIncoming) {
-          await this.fanOutSingleEvent(projectId, ev);
-          const curWm = this.watermarks.get(key) ?? 0n;
-          if (incomingSeq > curWm) {
-            this.watermarks.set(key, incomingSeq);
-          }
-        }
-      } else {
-        await this.fanOutSingleEvent(projectId, ev);
-        if (incomingSeq > prevSeq) {
-          this.watermarks.set(key, incomingSeq);
-        }
-      }
+      if (incomingSeq > prevSeq) this.watermarks.set(key, incomingSeq);
     }
   }
 

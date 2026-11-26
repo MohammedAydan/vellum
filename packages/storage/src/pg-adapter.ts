@@ -258,6 +258,10 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
     );
   }
 
+  public async queryOutboxMaxSeq(ctx: TenantContext): Promise<string> {
+    return this.withTransaction(ctx, async (tx) => (await tx.queryOutboxMaxSeq?.()) ?? "0");
+  }
+
   public async runIndexBuilderWorker(
     options: IndexBuilderOptions = {}
   ): Promise<{ builtCount: number; pendingCount: number }> {
