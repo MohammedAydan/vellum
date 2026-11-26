@@ -838,6 +838,29 @@ void main() {
       client.dispose();
     });
 
+    test('chunked writes default to the server limit of 100 and never exceed it', () async {
+      final sizes = <int>[];
+      final client = VellumClient(
+        endpoint: 'http://localhost:8080',
+        projectId: 'p',
+        apiKey: 'pk_test',
+        httpTransport: (method, url, headers, body) async {
+          sizes.add((body?['writes'] as List<dynamic>).length);
+          return <String, dynamic>{};
+        },
+      );
+      final writes = <Map<String, Object?>>[
+        for (var i = 0; i < 250; i++)
+          <String, Object?>{'type': 'set', 'path': 'items/i$i', 'data': <String, Object?>{'i': i}},
+      ];
+      await client.writeBatchChunked(writes);
+      expect(sizes, equals(<int>[100, 100, 50]));
+      sizes.clear();
+      await client.writeBatchChunked(writes, chunkSize: 500);
+      expect(sizes, equals(<int>[100, 100, 50]));
+      client.dispose();
+    });
+
     test('single-flight GET coalescing dedupes concurrent identical GETs', () async {
       var networkCalls = 0;
       final gate = Completer<Map<String, dynamic>>();

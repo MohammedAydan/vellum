@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.7
+
+Lockstep release with the platform. Works with the 0.0.6 API, and the 0.0.7 API is recommended.
+
+- `writeBatchChunked` and `commitChunked` default to 100 operations per request (the server limit) and cap larger `chunkSize` values at 100.
+- `get()` on a document that does not exist returns a snapshot with `exists == false` instead of throwing NOT_FOUND. A missing project still throws.
+
+Full platform notes are in the root CHANGELOG.
+
 ## 0.0.6
 
 Lockstep release with the platform. Works with the 0.0.5 API, and the 0.0.6 API is recommended.
