@@ -76,13 +76,15 @@ void main() {
         throwsA(isA<SocketException>()));
   });
 
-  test('a real 404 is never masked by stored data', () async {
+  test('a deleted document is never masked by stored data (exists == false)', () async {
     final s = _Server();
     final ref = s.client().collection('posts').doc('a');
     await ref.get();
     await flush();
     s.docs.clear();
-    expect(ref.get(), throwsA(isA<VellumException>()));
+    final snap = await ref.get();
+    expect(snap.exists, isFalse);
+    expect(snap.fromCache, isFalse);
   });
 
   test('cacheFirst skips the network when fresh; networkOnly always hits it',
