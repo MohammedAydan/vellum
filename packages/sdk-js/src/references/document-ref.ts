@@ -63,6 +63,58 @@ export function replaceDocumentReferences(value: unknown, depth = 0): unknown {
   return changed ? out : value;
 }
 
+const FORBIDDEN_PATH_PARTS = new Set(["__proto__", "constructor", "prototype"]);
+
+/**
+ * `update()` treats a top-level key with dots as a path into a nested object: `{ "profile.name": "Ada" }`
+ * changes only `profile.name`. Without this the server would store a literal key named "profile.name"
+ * next to the nested object. Other values pass through untouched; the input is never mutated.
+ */
+export function expandUpdatePaths(data: Record<string, unknown>): Record<string, unknown> {
+  if (data === null || typeof data !== "object" || !Object.keys(data).some((k) => k.includes("."))) return data;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!key.includes(".")) {
+      const existing = out[key];
+      out[key] = isPlainRecord(existing) && isPlainRecord(value) ? mergeNested(existing, value) : value;
+      continue;
+    }
+    const parts = key.split(".");
+    if (parts.some((p) => p.length === 0 || FORBIDDEN_PATH_PARTS.has(p))) {
+      throw new TypeError(`Invalid field path '${key.slice(0, 64)}' in update()`);
+    }
+    let cursor = out;
+    for (let i = 0; i < parts.length - 1; i += 1) {
+      const part = parts[i]!;
+      const next = cursor[part];
+      if (isPlainRecord(next)) {
+        cursor = next;
+      } else {
+        const created: Record<string, unknown> = {};
+        cursor[part] = created;
+        cursor = created;
+      }
+    }
+    cursor[parts[parts.length - 1]!] = value;
+  }
+  return out;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function mergeNested(a: Record<string, unknown>, b: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...a };
+  for (const [k, v] of Object.entries(b)) {
+    const cur = out[k];
+    out[k] = isPlainRecord(cur) && isPlainRecord(v) ? mergeNested(cur, v) : v;
+  }
+  return out;
+}
+
 function idempotencyHeaders(options: { idempotencyKey?: string | undefined }): Record<string, string> {
   return options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {};
 }
@@ -368,7 +420,7 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
       "PATCH",
       `/documents/${this.encodedPath()}`,
       {
-        data: replaceDocumentReferences(data),
+        data: replaceDocumentReferences(expandUpdatePaths(data)),
         ifVersion: options.ifVersion ?? null,
       },
       idempotencyHeaders(options),

@@ -38,6 +38,7 @@ function publicPlatformSettings(settings: ReturnType<VellumPlatformContext["cont
   return {
     id: settings.id,
     globalSignupsEnabled: settings.globalSignupsEnabled,
+    consoleSignupAutoVerifyEmail: settings.consoleSignupAutoVerifyEmail,
     defaultMaxUsersPerFreeProject: settings.defaultMaxUsersPerFreeProject,
     defaultMaxUsersPerProProject: settings.defaultMaxUsersPerProProject,
     platformSmtpHost: settings.platformSmtpHost,
@@ -201,6 +202,9 @@ export function createAuthSuperAdminRoutes(platform: VellumPlatformContext): Hon
     const body = parseOrThrow(SuperAdminSettingsPatchSchema, await c.req.json());
     const input: UpdatePlatformAuthSettingsInput = {};
     if (body.globalSignupsEnabled !== undefined) input.globalSignupsEnabled = body.globalSignupsEnabled;
+    if (body.consoleSignupAutoVerifyEmail !== undefined) {
+      input.consoleSignupAutoVerifyEmail = body.consoleSignupAutoVerifyEmail;
+    }
     if (body.defaultMaxUsersPerFreeProject !== undefined) {
       input.defaultMaxUsersPerFreeProject = body.defaultMaxUsersPerFreeProject;
     }

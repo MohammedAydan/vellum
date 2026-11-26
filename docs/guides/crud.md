@@ -114,6 +114,12 @@ Native JSON primitives (`null`, `boolean`, `string`, finite `number`, `array`) a
 - Object/array nesting is capped at 20 levels (`MAX_NESTING_EXCEEDED`).
 - Field names are capped at 256 characters and cannot contain control characters (`INVALID_FIELD_NAME`).
 - A serialized document may not exceed 1 MiB (`DOCUMENT_TOO_LARGE`).
+- `__proto__`, `constructor` and `prototype` are reserved and rejected as field names at any depth (`Forbidden key`). They guard against prototype pollution, so rename the field (for example `ctor`).
+- A `.` in a key you pass to `set` or `add` is part of the name. Such a field is stored literally and cannot be reached by queries or `orderBy`. Prefer names without dots.
+- `update()` is different: a dotted key such as `"profile.city"` is a path into a nested object, and only that leaf changes. Other nested keys stay as they are.
+- Updating with a nested object (`update({ profile: { city: "Cairo" } })`) merges into the existing `profile` object. It does not replace it. To replace a whole document, use `set` without `merge`.
+- Cursors returned by queries are opaque and are not signed. They are not bound to the query that produced them, so use a cursor only with the same query.
+- Signed-in end users can write any metadata fields on their own user record unless your rules forbid it. Do not store privileged flags there. Keep them in a separate collection that your rules protect.
 
 :::tip
 References (`$t: "ref"`) must be valid canonical paths in the same project. They are plain path strings on the wire — VELLUM does not fetch the target document for you.

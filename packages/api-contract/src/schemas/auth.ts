@@ -274,6 +274,7 @@ export type AuthConfigPatch = z.infer<typeof AuthConfigPatchSchema>;
 export const SuperAdminSettingsPatchSchema = z
   .object({
     globalSignupsEnabled: z.boolean().optional(),
+    consoleSignupAutoVerifyEmail: z.boolean().optional(),
     defaultMaxUsersPerFreeProject: z.number().int().min(1).max(10_000_000).optional(),
     defaultMaxUsersPerProProject: z.number().int().min(1).max(10_000_000).optional(),
     platformSmtpHost: z.string().min(1).max(255).nullable().optional(),

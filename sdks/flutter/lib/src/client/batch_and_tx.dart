@@ -53,7 +53,7 @@ class VellumWriteBatch {
     _writes.add(<String, Object?>{
       'type': 'update',
       'path': validateVellumPath(ref.path, requireEvenSegments: true),
-      'data': patch,
+      'data': expandVellumUpdatePaths(patch),
       if (ifVersion != null) 'ifVersion': ifVersion,
       if (exists != null) 'exists': exists,
     });
@@ -151,7 +151,7 @@ class TransactionContext {
     stagedWrites.add({
       'type': 'update',
       'path': ref.path,
-      'data': patch,
+      'data': expandVellumUpdatePaths(patch),
     });
   }
 

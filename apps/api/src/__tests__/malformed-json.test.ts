@@ -29,4 +29,25 @@ describe("malformed transport JSON", () => {
     app.get("/internal", () => { throw new SyntaxError("internal bug"); });
     expect((await app.request("/internal")).status).toBe(500);
   });
+  it("console sign-up rejects a password shorter than 8 characters", async () => {
+    const platform = createVellumPlatform();
+    const result = await platform.fetch(new Request("http://localhost/v1/auth/sign-up/email", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Test User", email: "short@example.com", password: "abc123" }),
+    }));
+    expect(result.status).toBe(400);
+    expect(await result.json()).toMatchObject({ error: { message: expect.stringContaining("at least 8") } });
+  });
+  it("console sign-up verifies the email by default and not when the setting is off", async () => {
+    const platform = createVellumPlatform();
+    const signUp = (email: string) => platform.fetch(new Request("http://localhost/v1/auth/sign-up/email", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Test User", email, password: "long-enough-1" }),
+    }));
+    expect((await signUp("on@example.com")).status).toBeLessThan(300);
+    expect((await platform.controlStore.findUserByEmail("on@example.com"))?.emailVerified).toBe(true);
+    await platform.controlStore.updatePlatformAuthSettings({ consoleSignupAutoVerifyEmail: false });
+    expect((await signUp("off@example.com")).status).toBeLessThan(300);
+    expect((await platform.controlStore.findUserByEmail("off@example.com"))?.emailVerified).toBe(false);
+  });
 });

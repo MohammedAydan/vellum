@@ -38,6 +38,7 @@ Bootstrap, operator login and API-key verification read only `control_db`; they 
 - Header: `{ alg: "EdDSA", typ: "vellum+enduser+jwt", kid: <jwtKeyId> }`.
 - Payload: `iss` (the canonical issuer string above), `sub` (user id), `aud` (`projectId`) (`projectId`), `email`, `email_verified`, `is_anonymous`, `claims` (custom claims), `iat`, `exp`, `auth_time`, and `jti` (random UUID).
 - Verification **requires** `alg === "EdDSA"`, `typ === "vellum+enduser+jwt"`, `payload.aud === projectId`, ` === projectId` and `payload.iss === expected.issuer`. A signature-valid but expired token yields `VellumError("TOKEN_EXPIRED", …, { retryableWithRefresh: true })`, which `errorHandler` hoists into the error envelope as `retryableWithRefresh: true`.
+- `iss` is a fixed logical identifier (`https://api.vellum.dev/v1/projects/<projectId>/auth`), not a URL your deployment serves or that clients should fetch. It stays the same on every host so tokens keep verifying when you move or rename a deployment. Fetch keys from the JWKS endpoint below, on your own API host.
 - Public JWKS: `GET /v1/projects/:projectId/auth/.well-known/jwks.json` (RFC 8037 OKP / Ed25519; no API key required).
 - The per-project key pair is generated on first use (`generateEd25519KeyPair()`), the public PEM is stored in plain text and the private key is encrypted at rest. `POST .../auth/rotate-signing-key` rotates it under the super-admin realm.
 
@@ -60,6 +61,7 @@ Opaque 32-byte base64url strings; **only SHA-256 hashes are stored**. Session ro
 
 1. `refreshTokenHash === hash` → normal rotation: previous hash is stored, a new hash is written, `rotated_at` is refreshed, a fresh access + refresh pair is returned.
 2. `previousRefreshTokenHash === hash` **and** `Date.now() - Date.parse(rotatedAt) <= 15_000` → benign concurrent tab. **No revocation**; a brand-new session is created for the same user and a fresh token pair is returned. Five truly simultaneous refreshes all succeed and return five distinct refresh tokens (verified by both SDK testbeds).
+   This means that presenting a just-rotated refresh token again within 15 s returns `200` with a new session instead of an error. That is intended (concurrent tabs, retries after a lost response). Reuse after the window is rejected.
 3. `previousRefreshTokenHash === hash` **after** the 15 s window → replay. `revokeAllUserSessions(ctx, userId, "refresh_token_replay_detected")` runs and the request fails with `UNAUTHENTICATED`. This is a theft signal, not a retryable error.
 
 For the control-plane realms the same logic is implemented in `apps/api/src/routes/auth-endpoints.ts`, and the refresh token is also carried in an HttpOnly cookie `vellum_refresh_token` (`SameSite=Lax`, `Secure` in production). Login/sign-up for both realms issue both tokens, set the cookie and return the same JSON shape as refresh:
@@ -222,6 +224,8 @@ Throttles are **in-process sliding windows** (Zero-Redis doctrine: PostgreSQL is
 | Routes | `.../auth/mfa/challenge`, `.../auth/mfa/verify` | | |
 
 The authenticated fallback key for email-less verification requests hashes the **signed** bearer token, so distinct end-user sessions get distinct buckets while rotating an unverified `sub`/`email` claim cannot bypass the throttle. Raw tokens are never stored, logged or returned. Without this fix, successive independent runs collapsed into one `email-verify-request:<ip>|` bucket and were throttled before this fix.
+
+**Lockout and abuse.** The sign-in failure budget is counted per email (and per IP and email pair). Anyone who knows an account's email can send failed attempts and lock that account's sign-in for up to 15 minutes. This is the accepted trade-off against password guessing. Show users the `Retry-After` value when you receive a `429`.
 
 > In this build `/v1/console/auth/login` is served by the Better Auth wildcard and is not separately registered with the login throttle middleware above; the console **refresh** endpoint is guarded by the realm session service instead.
 

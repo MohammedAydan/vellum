@@ -235,7 +235,7 @@ class DocumentReference<T> {
       'PATCH',
       '/documents/$encodedPath',
       body: {
-        'data': replaceVellumDocumentReferences(data),
+        'data': replaceVellumDocumentReferences(expandVellumUpdatePaths(data)),
         if (ifVersion != null) 'ifVersion': ifVersion,
       },
       idempotencyKey: idempotencyKey,
@@ -750,10 +750,12 @@ class Query<T> {
           final index = docs.indexWhere((doc) => doc.path == snap.path);
           // Out-of-order events from concurrent writes: ignore an update that
           // is older than the version already held.
-          if (operation == 'update' &&
+          // The same version again is a duplicate (an SSE reconnect or an
+          // overlapping catch-up) and is not delivered twice.
+          if ((operation == 'update' || operation == 'create') &&
               index >= 0 &&
               snap.version > 0 &&
-              docs[index].version > snap.version) {
+              docs[index].version >= snap.version) {
             return;
           }
           if (index >= 0) {
@@ -943,4 +945,51 @@ Object? replaceVellumDocumentReferences(Object? value, [int depth = 0]) {
     };
   }
   return value;
+}
+
+/// `update()` treats a top-level key with dots as a path into a nested map:
+/// `{'profile.name': 'Ada'}` changes only `profile.name`. Without this the server
+/// would store a literal key named "profile.name" next to the nested map.
+JsonMap expandVellumUpdatePaths(JsonMap data) {
+  if (!data.keys.any((k) => k.contains('.'))) return data;
+  const forbidden = <String>{'__proto__', 'constructor', 'prototype'};
+  Map<String, Object?> merge(Map<String, Object?> a, Map<String, Object?> b) {
+    final out = <String, Object?>{...a};
+    b.forEach((k, v) {
+      final cur = out[k];
+      out[k] = cur is Map<String, Object?> && v is Map<String, Object?>
+          ? merge(cur, v)
+          : v;
+    });
+    return out;
+  }
+
+  final out = <String, Object?>{};
+  data.forEach((key, value) {
+    if (!key.contains('.')) {
+      final existing = out[key];
+      out[key] =
+          existing is Map<String, Object?> && value is Map<String, Object?>
+              ? merge(existing, value)
+              : value;
+      return;
+    }
+    final parts = key.split('.');
+    if (parts.any((p) => p.isEmpty || forbidden.contains(p))) {
+      throw ArgumentError.value(key, 'key', 'Invalid field path in update()');
+    }
+    var cursor = out;
+    for (var i = 0; i < parts.length - 1; i++) {
+      final next = cursor[parts[i]];
+      if (next is Map<String, Object?>) {
+        cursor = next;
+      } else {
+        final created = <String, Object?>{};
+        cursor[parts[i]] = created;
+        cursor = created;
+      }
+    }
+    cursor[parts.last] = value;
+  });
+  return out;
 }

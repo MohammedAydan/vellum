@@ -128,6 +128,7 @@ export class ControlPlaneStore implements ControlPlaneRepository {
   platformAuthSettings: PlatformAuthGlobalSettings = {
     id: 1,
     globalSignupsEnabled: true,
+    consoleSignupAutoVerifyEmail: true,
     defaultMaxUsersPerFreeProject: 10000,
     defaultMaxUsersPerProProject: 250000,
     platformSmtpHost: null,

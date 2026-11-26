@@ -123,6 +123,7 @@ interface ProjectsPayload {
 interface PlatformSettings {
   id: number;
   globalSignupsEnabled: boolean;
+  consoleSignupAutoVerifyEmail: boolean;
   defaultMaxUsersPerFreeProject: number;
   defaultMaxUsersPerProProject: number;
   platformSmtpHost: string | null;
@@ -715,6 +716,7 @@ function PlatformSettingsCard({
     if (!draft) return;
     const patch: UnknownRecord = {
       globalSignupsEnabled: draft.globalSignupsEnabled,
+      consoleSignupAutoVerifyEmail: draft.consoleSignupAutoVerifyEmail,
       defaultMaxUsersPerFreeProject: draft.defaultMaxUsersPerFreeProject,
       defaultMaxUsersPerProProject: draft.defaultMaxUsersPerProProject,
       platformSmtpHost: draft.platformSmtpHost?.trim() || null,
@@ -778,6 +780,17 @@ function PlatformSettingsCard({
               <Switch
                 checked={draft.globalSignupsEnabled}
                 onCheckedChange={(value) => setDraft({ ...draft, globalSignupsEnabled: value })}
+              />
+            </label>
+
+            <label className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 p-3">
+              <div>
+                <p className="text-xs font-medium text-foreground">{t("adminAuth.settings.autoVerify")}</p>
+                <p className="text-[11px] text-muted-foreground">{t("adminAuth.settings.autoVerifyDesc")}</p>
+              </div>
+              <Switch
+                checked={draft.consoleSignupAutoVerifyEmail}
+                onCheckedChange={(value) => setDraft({ ...draft, consoleSignupAutoVerifyEmail: value })}
               />
             </label>
 

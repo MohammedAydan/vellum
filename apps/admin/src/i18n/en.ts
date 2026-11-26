@@ -718,6 +718,8 @@ export const en = {
   "adminAuth.settings.description": "Global signup gate, default quota allocations and platform SMTP delivery",
   "adminAuth.settings.killSwitch": "Global signups enabled",
   "adminAuth.settings.killSwitchDesc": "Master switch for end-user registration across every project",
+  "adminAuth.settings.autoVerify": "Auto-verify console sign-up emails",
+  "adminAuth.settings.autoVerifyDesc": "On (default): new console accounts count as verified without sending mail, so no SMTP is needed. Turn off once SMTP is configured.",
   "adminAuth.settings.sectionDefaults": "Default Quota Allocations",
   "adminAuth.settings.defaultFreeQuota": "Free plan default max users",
   "adminAuth.settings.defaultProQuota": "Pro plan default max users",

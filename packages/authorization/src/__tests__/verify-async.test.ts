@@ -45,3 +45,25 @@ describe("verifyApiKeyAsync (database read on every call)", () => {
     expect(touch).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("project key error messages", () => {
+  const store = { findApiKeyByPrefix: async () => null };
+  it("says the header is missing when no key is sent", async () => {
+    await expect(verifyApiKeyAsync(undefined, store)).rejects.toThrow(/Missing X-Project-Key/);
+  });
+  it("says the key is invalid when it is present but malformed", async () => {
+    await expect(verifyApiKeyAsync("pk_short", store)).rejects.toThrow(/Invalid project key/);
+  });
+});
+
+describe("denied collection-level checks", () => {
+  it("does not expose the internal placeholder document id", async () => {
+    const { authorizeOperation } = await import("../index.js");
+    const run = () => authorizeOperation({
+      apiKeyRecord: record().rec, rulesetRecord: null, operation: "list",
+      path: "things/__collection_check__", collectionLevel: true, authContext: null,
+    } as never);
+    expect(run).toThrow(/denied/);
+    expect(run).not.toThrow(/__collection_check__/);
+  });
+});

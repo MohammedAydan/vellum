@@ -96,6 +96,7 @@ export function mapPlatformAuthSettings(row: Record<string, unknown>): PlatformA
   return {
     id: Number(row["id"]),
     globalSignupsEnabled: Boolean(row["globalSignupsEnabled"]),
+    consoleSignupAutoVerifyEmail: row["consoleSignupAutoVerifyEmail"] === undefined ? true : Boolean(row["consoleSignupAutoVerifyEmail"]),
     defaultMaxUsersPerFreeProject: Number(row["defaultMaxUsersPerFreeProject"]),
     defaultMaxUsersPerProProject: Number(row["defaultMaxUsersPerProProject"]),
     platformSmtpHost: typeof row["platformSmtpHost"] === "string" ? row["platformSmtpHost"] : null,

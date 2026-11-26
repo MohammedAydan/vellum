@@ -457,8 +457,8 @@ export function createCustomerAuthRoutes(
     if (!name || name.length < 2) {
       throw new VellumError("INVALID_ARGUMENT", "Name must be at least 2 characters");
     }
-    if (!password || password.length < 6) {
-      throw new VellumError("INVALID_ARGUMENT", "Password must be at least 6 characters");
+    if (!password || password.length < 8) {
+      throw new VellumError("INVALID_ARGUMENT", "Password must be at least 8 characters");
     }
 
     // Check if user already exists
@@ -472,7 +472,7 @@ export function createCustomerAuthRoutes(
       name,
       email,
       platformRole: "customer",
-      emailVerified: true,
+      emailVerified: controlStore.getPlatformAuthSettings().consoleSignupAutoVerifyEmail,
     });
 
     // Save Password Hash (async scrypt)
