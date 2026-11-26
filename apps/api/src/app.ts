@@ -550,11 +550,11 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
   }
 
   /** Collection lifecycle mutations are server-key-only on the public plane. */
-  function requireServerKey(apiKeyRecord: { keyType: string }): void {
+  function requireServerKey(apiKeyRecord: { keyType: string }, what = "Collection mutations"): void {
     if (apiKeyRecord.keyType !== "server") {
       throw new VellumError(
         "PERMISSION_DENIED",
-        "Collection mutations require a server API key (sk_)"
+        `${what} require a server API key (sk_)`
       );
     }
   }
@@ -880,10 +880,14 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
 
   // 6.45 Collections lifecycle (API-key auth). Registered before the
   // `/documents/*` wildcard so literal `:name/clear|import|export` segments
-  // always resolve here. Reads accept pk_/sk_ keys; mutations require sk_.
+  // always resolve here. Reads and mutations require an sk_ key.
   app.get("/v1/projects/:projectId/collections", async (c) => {
     const projectId = c.req.param("projectId");
     const { apiKeyRecord, authContext } = await authenticateRequest(c, projectId);
+    // The registry exposes every collection name with document counts, storage size and schema
+    // settings, and rules cannot scope it. A publishable key ships inside client apps, so only a
+    // server key may read it. Clients read documents through rules-checked document routes.
+    requireServerKey(apiKeyRecord, "Listing and reading collection metadata");
     const url = new URL(c.req.url);
     const query = parseCollectionRequest(
       ListCollectionsQuerySchema,
@@ -895,8 +899,6 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
       "collection list query"
     );
 
-    // Both key types see the same registry view. There is no collection-level
-    // rules concept available here, so no key-type-specific filtering is added.
     return c.json(
       await platform.documentEngine.listCollections(
         { projectId, apiKeyRecord, authContext },
@@ -952,6 +954,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     const projectId = c.req.param("projectId");
     const name = c.req.param("name");
     const { apiKeyRecord, authContext } = await authenticateRequest(c, projectId);
+    requireServerKey(apiKeyRecord, "Listing and reading collection metadata");
     const collection = await platform.documentEngine.getCollection(
       { projectId, apiKeyRecord, authContext },
       name
