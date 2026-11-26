@@ -1,19 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { RealtimeGatewayHub } from "../hub.js";
-import {
-  assertValidNotifyChannel,
-  assertValidNotifyPayload,
-  createPgNotifyBus,
-  quoteNotifyChannel,
-} from "../pg-notify-pubsub.js";
 import { type OutboxEvent } from "@vellum/storage";
 import { DataPlaneStore } from "@vellum/storage/adapters";
-import {
-  decryptPrivateKey,
-  generateEd25519KeyPair,
-  signEndUserAccessToken,
-} from "@vellum/auth";
-import { hashApiKey, signEndUserJwt, type ApiKeyRecord } from "@vellum/authorization";
+import { hashApiKey, type ApiKeyRecord } from "@vellum/authorization";
 import type { ServerFrame } from "@vellum/api-contract";
 
 const TENANT = {
