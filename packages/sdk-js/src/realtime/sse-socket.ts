@@ -219,8 +219,6 @@ export class SseSocket implements WebSocketLike {
       (watchdog as { unref?: () => void }).unref?.();
       try {
         await this.readStream(response.body.getReader(), generation, () => { lastBytesAt = Date.now(); });
-      } catch (error: unknown) {
-        throw error;
       } finally {
         clearInterval(watchdog);
       }
