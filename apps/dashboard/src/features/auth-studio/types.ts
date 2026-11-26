@@ -67,6 +67,7 @@ export interface AuthConfigView {
   jwtPublicKeyPem: string;
   oauthProviders: UnknownRecord;
   hasCustomSmtpConfig: boolean;
+  customSmtp?: { host: string; port: number; user: string | null; from: string | null; hasPassword: boolean } | null;
   createdAt: string;
   updatedAt: string;
 }

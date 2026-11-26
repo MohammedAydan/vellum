@@ -17,6 +17,7 @@ import { mapWithConcurrency } from "../middleware/security.js";
 import { getApiKeyHeader } from "../middleware/tenant-auth.js";
 import {
   applyAuthConfigPatch,
+  assertCustomSmtpAllowed,
   ensureAuthConfig,
   masterKey,
   parseOrThrow,
@@ -159,6 +160,7 @@ export function createAuthSuperAdminRoutes(platform: VellumPlatformContext): Hon
     if (getApiKeyHeader(c)) await requireProjectApiKey(c, platform, tenant, { serverOnly: true });
     const existing = await ensureAuthConfig(platform, tenant.projectId);
     const body = parseOrThrow(AuthConfigPatchSchema, await c.req.json());
+    await assertCustomSmtpAllowed(body);
     const updated = await platform.controlStore.upsertAuthConfig(
       applyAuthConfigPatch(existing, body)
     );

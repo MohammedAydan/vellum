@@ -261,6 +261,18 @@ export const AuthConfigPatchSchema = z
     refreshTokenTtlDays: z.number().int().min(1).max(365).optional(),
     oauthProviders: ClaimsRecordSchema.optional(),
     customSmtpConfigEncrypted: z.string().max(16_384).nullable().optional(),
+    /** This project's own mail server for verification and reset emails. `null` removes it. */
+    customSmtp: z
+      .object({
+        host: z.string().trim().min(1).max(255),
+        port: z.number().int().min(1).max(65_535).optional(),
+        user: z.string().max(255).optional(),
+        /** Omit to keep the stored password. */
+        pass: z.string().max(1024).optional(),
+        from: EmailSchema.optional(),
+      })
+      .nullable()
+      .optional(),
   })
   .refine((body) => Object.keys(body).length > 0, {
     message: "At least one auth configuration field must be provided",
