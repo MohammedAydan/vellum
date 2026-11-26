@@ -35,6 +35,8 @@ export type RealtimeServerFrame = ServerFrame;
 
 export interface ConnectionSession {
   connectionId: string;
+  /** Epoch ms when the connection was opened. */
+  connectedAt?: number;
   authenticated: boolean;
   projectId: string | null;
   apiKeyRecord: ApiKeyRecord | null;

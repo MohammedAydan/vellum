@@ -18,6 +18,8 @@ export interface RealtimePubSubPort {
 export interface RealtimeSessionDescriptor {
   readonly authenticated: boolean;
   readonly closed: boolean;
+  /** Epoch ms when the connection opened, when known. */
+  readonly connectedAt?: number | undefined;
   readonly projectId: string | null;
 }
 

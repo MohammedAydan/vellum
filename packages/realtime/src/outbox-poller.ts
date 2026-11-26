@@ -76,12 +76,26 @@ export interface OutboxPollerOptions {
   onError?: ((error: Error) => void) | undefined;
 }
 
+/** Margin for clock differences between the API instance and the database when bootstrapping a tenant. */
+const CONNECT_SKEW_MARGIN_MS = 2_000;
+
+/** How long a delivered row stays in the re-read window so a transaction that committed late is not skipped. */
+const LATE_COMMIT_GRACE_MS = 3_000;
+
 /** Safety-net poll cadence for tenants that have no connected realtime client. */
 const IDLE_TENANT_POLL_MS = 30_000;
 
 interface TenantState extends TenantContext {
   key: string;
   watermark: bigint;
+  /**
+   * Sequence numbers above `watermark` that were already delivered, with the delivery time. A row's
+   * seq is assigned at INSERT, but it becomes visible at COMMIT, so a row with a lower seq can commit
+   * after a higher one was already read. Those rows are still fetched (the query starts at
+   * `watermark`) and delivered once; `watermark` only moves past rows delivered at least
+   * `LATE_COMMIT_GRACE_MS` ago.
+   */
+  delivered: Map<bigint, number>;
   initialized: boolean;
   inFlight: boolean;
   /** Set when a NOTIFY arrives while drain() is already in flight so we re-drain immediately. */
@@ -186,7 +200,11 @@ export class OutboxPoller implements OutboxPollerPort {
 
   /** Current committed watermark for a tenant, or null when never observed. */
   public getWatermark(projectId: string): bigint | null {
-    return this.tenants.get(this.keyFor(projectId))?.watermark ?? null;
+    const entry = this.tenants.get(this.keyFor(projectId));
+    if (!entry) return null;
+    let high = entry.watermark;
+    for (const seq of entry.delivered.keys()) if (seq > high) high = seq;
+    return high;
   }
 
   /** Feed a raw NOTIFY payload into the poller (also used by tests). */
@@ -284,6 +302,7 @@ export class OutboxPoller implements OutboxPollerPort {
         key,
         projectId: ctx.projectId,
         watermark: 0n,
+        delivered: new Map(),
         initialized: false,
         inFlight: false,
         pendingRescan: false,
@@ -301,30 +320,57 @@ export class OutboxPoller implements OutboxPollerPort {
     return entry;
   }
 
-  /** Poll-only tenant bootstrap: skip pre-existing history, start at HEAD. */
+  /** Earliest open-time of a live session on this tenant, or null when unknown or none. */
+  private earliestLiveConnectedAt(projectId: string): number | null {
+    let min: number | null = null;
+    const sessions = this.sink.connections;
+    if (!sessions) return null;
+    for (const session of sessions.values()) {
+      if (!session.authenticated || session.closed || session.projectId !== projectId) continue;
+      if (typeof session.connectedAt !== "number") continue;
+      if (min === null || session.connectedAt < min) min = session.connectedAt;
+    }
+    return min;
+  }
+
+  /**
+   * Poll-only tenant bootstrap: skip history, but not what happened since a client connected.
+   * Starting at the current head would drop a write made between a client subscribing and the
+   * first poll (up to one poll interval), so the watermark starts at the newest row committed
+   * before the earliest live connection (minus a clock-skew margin) when one is known.
+   */
   private async initializeEntry(entry: TenantState): Promise<void> {
     if (entry.initialized) return;
+    const connectedAt = this.earliestLiveConnectedAt(entry.projectId);
+    const cutoff = connectedAt === null ? null : connectedAt - CONNECT_SKEW_MARGIN_MS;
     let after = "0";
     let last: bigint = 0n;
+    let beforeCutoff: bigint = 0n;
+    let reachedEnd = false;
     for (let i = 0; i < 10; i += 1) {
       if (this.closed) return;
       const rows = await this.dataStore.queryOutboxSince(entry, after);
-      if (rows.length === 0) break;
+      if (rows.length === 0) { reachedEnd = true; break; }
       const tail = rows[rows.length - 1];
       if (!tail) break;
       for (const row of rows) {
         try {
           const seq = BigInt(row.seqId);
           if (seq > last) last = seq;
+          if (cutoff !== null) {
+            const at = Date.parse(row.committedAt);
+            if (Number.isFinite(at) && at < cutoff && seq > beforeCutoff) beforeCutoff = seq;
+          }
         } catch {
           /* ignore malformed seq */
         }
       }
-      if (rows.length < this.batchSize) break;
+      if (rows.length < this.batchSize) { reachedEnd = true; break; }
       after = tail.seqId;
     }
     if (!entry.initialized) {
-      entry.watermark = last;
+      // A history longer than the scan cap cannot be compared by time; keep the head-based start.
+      entry.watermark = cutoff === null || !reachedEnd ? last : beforeCutoff;
       entry.initialized = true;
     }
   }
@@ -336,14 +382,14 @@ export class OutboxPoller implements OutboxPollerPort {
 
     const task = (async () => {
       await this.initializeEntry(entry);
+      // Page through everything after the watermark. `cursor` pages; `watermark` only advances past
+      // rows that have been delivered for longer than the late-commit grace period.
+      let cursor = entry.watermark;
       while (!this.closed) {
-        const rows = await this.dataStore.queryOutboxSince(entry, entry.watermark.toString());
-        if (rows.length === 0) {
-          entry.attempts = 0;
-          return;
-        }
+        const rows = await this.dataStore.queryOutboxSince(entry, cursor.toString());
+        if (rows.length === 0) break;
         const fresh: OutboxEvent[] = [];
-        let maxFreshSeq = entry.watermark;
+        let pageMax = cursor;
         for (const ev of rows) {
           if (ev.projectId !== entry.projectId) continue;
           let seq: bigint;
@@ -352,35 +398,22 @@ export class OutboxPoller implements OutboxPollerPort {
           } catch {
             continue;
           }
-          if (seq > entry.watermark) {
-            fresh.push(ev);
-            if (seq > maxFreshSeq) maxFreshSeq = seq;
-          }
+          if (seq > pageMax) pageMax = seq;
+          if (seq > entry.watermark && !entry.delivered.has(seq)) fresh.push(ev);
         }
-        if (fresh.length === 0) {
-          // All fetched rows were already seen; advance past them to guarantee progress.
-          let max = entry.watermark;
-          for (const ev of rows) {
-            try {
-              const seq = BigInt(ev.seqId);
-              if (seq > max) max = seq;
-            } catch {
-              /* ignore malformed seq */
-            }
-          }
-          entry.watermark = max;
-          entry.attempts = 0;
-          return;
-        }
-        await this.sink.notifyCommittedEvents(entry.projectId, fresh);
-        if (maxFreshSeq > entry.watermark) {
-          entry.watermark = maxFreshSeq;
+        if (fresh.length > 0) {
+          await this.sink.notifyCommittedEvents(entry.projectId, fresh);
+          const now = Date.now();
+          for (const ev of fresh) entry.delivered.set(BigInt(ev.seqId), now);
+          this.stats.batchesDelivered += 1;
+          this.stats.eventsDelivered += fresh.length;
         }
         entry.attempts = 0;
-        this.stats.batchesDelivered += 1;
-        this.stats.eventsDelivered += fresh.length;
-        if (fresh.length < this.batchSize) return;
+        if (pageMax <= cursor) break;
+        cursor = pageMax;
+        if (rows.length < this.batchSize) break;
       }
+      this.advanceWatermark(entry);
     })();
 
     this.inFlightTasks.add(task);
@@ -398,6 +431,20 @@ export class OutboxPoller implements OutboxPollerPort {
           this.drain(entry);
         }
       });
+  }
+
+  /** Move the watermark past rows delivered more than the grace period ago, and forget them. */
+  private advanceWatermark(entry: TenantState): void {
+    const cutoff = Date.now() - LATE_COMMIT_GRACE_MS;
+    let next = entry.watermark;
+    for (const [seq, at] of entry.delivered) {
+      if (at <= cutoff && seq > next) next = seq;
+    }
+    if (next === entry.watermark) return;
+    entry.watermark = next;
+    for (const seq of entry.delivered.keys()) {
+      if (seq <= next) entry.delivered.delete(seq);
+    }
   }
 
   private scheduleRetry(entry: TenantState): void {
