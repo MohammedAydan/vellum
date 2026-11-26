@@ -3,8 +3,8 @@ import { compileRulesDsl, evaluateAstNode } from "../index.js";
 
 function rule(cond: string) {
   const r = compileRulesDsl(`rules_version = '2';\nmatch /g/{id} {\n allow update: if ${cond};\n}`);
-  const allow = (r.ast as unknown as { rules: Array<{ allow: Record<string, never> }> }).rules[0]!.allow;
-  return allow.update ?? allow.write;
+  const allow = (r.ast as unknown as { rules: Array<{ allow: Record<string, unknown> }> }).rules[0]!.allow;
+  return (allow["update"] ?? allow["write"]) as never;
 }
 type C = { auth?: { uid: string | null }; request?: { data: Record<string, unknown> }; resource?: { data: Record<string, unknown> } };
 const run = (cond: string, c: C) =>
