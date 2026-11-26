@@ -728,15 +728,15 @@ export function createSqlTransactionHandle(
      * to `getDocument(path, false, false)`. `includeDeleted = true` uses a
      * separate statement with no tombstone/TTL filter (admin/GC view).
      */
-    async batchGetDocuments(paths: string[], includeDeleted = false): Promise<DocumentRecord[]> {
+    async batchGetDocuments(paths: string[], includeDeleted = false, forUpdate = false): Promise<DocumentRecord[]> {
       assertOpen();
       const uniquePaths = Array.from(new Set(paths));
       if (uniquePaths.length === 0) return [];
       const { rows } = await runPrepared<DocumentRecord>(
         client,
         prepared,
-        includeDeleted ? "vellum_batch_get_documents_all" : "vellum_batch_get_documents",
-        includeDeleted ? SQL_BATCH_GET_DOCUMENTS_ALL : SQL_BATCH_GET_DOCUMENTS,
+        (includeDeleted ? "vellum_batch_get_documents_all" : "vellum_batch_get_documents") + (forUpdate ? "_lock" : ""),
+        (includeDeleted ? SQL_BATCH_GET_DOCUMENTS_ALL : SQL_BATCH_GET_DOCUMENTS) + (forUpdate ? " FOR UPDATE" : ""),
         [projectId, uniquePaths]
       );
       const byPath = new Map(rows.map((row) => [row.path, row]));

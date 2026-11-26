@@ -982,7 +982,7 @@ export class DocumentEngine implements DocumentEnginePort {
     return this.telemetry.span("engine.batchWrite", async () => {
       for (let attempt = 1; ; attempt += 1) {
         try {
-          return await this.batchWriteImpl(ctx);
+          return await this.batchWriteImpl(ctx, blind);
         } catch (error) {
           const conflict = error instanceof VellumError && error.code === "ABORTED_CONFLICT";
           if (!conflict || attempt >= maxAttempts) throw error;
@@ -994,7 +994,8 @@ export class DocumentEngine implements DocumentEnginePort {
   }
 
   private async batchWriteImpl(
-    ctx: EngineContext & { writes: BatchMutation[] }
+    ctx: EngineContext & { writes: BatchMutation[] },
+    lockRows = false
   ): Promise<BatchWriteResult> {
     const writes = ctx.writes;
     if (!Array.isArray(writes) || writes.length === 0) {
@@ -1106,7 +1107,9 @@ export class DocumentEngine implements DocumentEnginePort {
         if (uniquePaths.length > 0) {
           let fetched: DocumentRecord[];
           if (typeof tx.batchGetDocuments === "function") {
-            fetched = await tx.batchGetDocuments(uniquePaths, true);
+            // Blind writes lock the rows they touch (path order) so concurrent writers to one
+            // document queue in the database instead of racing and retrying the whole batch.
+            fetched = await tx.batchGetDocuments(uniquePaths, true, lockRows);
           } else {
             fetched = (
               await Promise.all(uniquePaths.map((p) => tx.getDocument(p, true, true)))
