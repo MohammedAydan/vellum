@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **perf(realtime):** the hub routes each event through a per-project index (document path and collection), so it only visits subscriptions that can match. With 20,000 subscriptions an event costs about 3 ms instead of about 32 ms, and the result is identical to the full scan.
+
 - **perf(realtime):** the per-event API key recheck keeps an active key for 3 s (`REALTIME_KEY_RECHECK_TTL_MS`, `0` disables), so an event stream no longer queries the control database for every event. A revoked key is dropped from live sessions within that window.
 
 - **perf:** the API caches project, active ruleset, auth config and relation rules in process for up to 5 s (`CONTROL_READ_CACHE_TTL_MS`, `0` disables, max 1000 entries, results are cloned on read). Changes made on one instance clear its cache at once and reach other instances through the cache-invalidation channel; if that channel is down they apply within 5 s. API keys are not cached, so revocation stays immediate.

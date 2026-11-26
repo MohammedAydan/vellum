@@ -72,6 +72,56 @@ function pruneOldestHalf(set: Set<string>, maxSize: number): void {
 /** Upper bound of rows one subscribe window may read before it falls back to the exact full scan. */
 const REALTIME_SUBSCRIBE_MAX_FETCH = 5_000;
 
+/**
+ * Subscription map that keeps the hub's per-project routing index in step with every set/delete/clear,
+ * so an event only visits subscriptions that can match its path or collection.
+ */
+class IndexedSubscriptionMap extends Map<string, SubscriptionRecord> {
+  private readonly routeKeys = new Map<SubscriptionRecord, string>();
+  constructor(
+    private readonly index: Map<string, Map<SubscriptionRecord, ConnectionSession>>,
+    private readonly version: { n: number },
+    private readonly owner: () => ConnectionSession,
+    private readonly projectOf: () => string | null
+  ) {
+    super();
+  }
+  private unindex(record: SubscriptionRecord): void {
+    const key = this.routeKeys.get(record);
+    if (key === undefined) return;
+    this.routeKeys.delete(record);
+    const bucket = this.index.get(key);
+    if (!bucket) return;
+    bucket.delete(record);
+    if (bucket.size === 0) this.index.delete(key);
+  }
+  override set(subId: string, record: SubscriptionRecord): this {
+    const prev = super.get(subId);
+    if (prev) this.unindex(prev);
+    super.set(subId, record);
+    this.version.n += 1;
+    const projectId = this.projectOf();
+    const route = record.path ? `d:${record.path}` : record.normalizedQuery ? `c:${record.normalizedQuery.collectionPath}` : null;
+    if (projectId && route) {
+      const key = `${projectId}\u0000${route}`;
+      let bucket = this.index.get(key);
+      if (!bucket) this.index.set(key, (bucket = new Map()));
+      bucket.set(record, this.owner());
+      this.routeKeys.set(record, key);
+    }
+    return this;
+  }
+  override delete(subId: string): boolean {
+    const prev = super.get(subId);
+    if (prev) this.unindex(prev);
+    return super.delete(subId);
+  }
+  override clear(): void {
+    for (const record of [...super.values()]) this.unindex(record);
+    super.clear();
+  }
+}
+
 export class RealtimeGatewayHub implements RealtimeGatewayPort {
   public readonly controlStore: ControlStoreForRealtime;
   public readonly dataStore: StorageAdapter;
@@ -83,6 +133,10 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
   /** O(1) tenant lookup index for multi-tenant fan-out without scanning unrelated sessions. */
   private readonly deliveryTails = new Map<string, Promise<void>>();
   private readonly connectionsByProject = new Map<string, Set<ConnectionSession>>();
+  /** `${projectId}\0d:${path}` or `${projectId}\0c:${collectionPath}` -> subscriptions that can match that event. */
+  private readonly subscriptionIndex = new Map<string, Map<SubscriptionRecord, ConnectionSession>>();
+  /** Bumped on every index change so an in-flight fan-out can notice a subscription added while it awaited. */
+  private readonly subscriptionIndexVersion = { n: 0 };
 
   constructor(options: RealtimeHubOptions) {
     this.apiKeyPepper = options.apiKeyPepper;
@@ -296,7 +350,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       projectId: null,
       apiKeyRecord: null,
       authContext: { uid: null, claims: {} },
-      subscriptions: new Map(),
+      subscriptions: new IndexedSubscriptionMap(this.subscriptionIndex, this.subscriptionIndexVersion, () => session, () => session.projectId),
       outboundBufferedBytes: 0,
       closed: false,
       sendFrame: (frame: ServerFrame) => {
@@ -752,11 +806,23 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     const tenantSessions = this.connectionsByProject.get(projectId);
     if (!tenantSessions || tenantSessions.size === 0) return;
 
-    const recipients = [...tenantSessions].flatMap((session) => [...session.subscriptions.values()].map((subRecord) => ({ session, subRecord })));
+    const collectCandidates = (): Map<SubscriptionRecord, ConnectionSession> => {
+      const out = new Map<SubscriptionRecord, ConnectionSession>();
+      for (const route of [`d:${ev.path}`, `c:${ev.collectionPath}`]) {
+        const bucket = this.subscriptionIndex.get(`${projectId}\u0000${route}`);
+        if (bucket) for (const [record, owner] of bucket) out.set(record, owner);
+      }
+      return out;
+    };
+    // Only subscriptions that can match this event (same document path, or a query on the same collection).
+    const recipients = [...collectCandidates()].map(([subRecord, session]) => ({ session, subRecord }));
     const documents = await this.prepareIncludedEvent(projectId, ev, recipients);
     const nowMs = Date.now();
     const ruleset = await this.rulesetFor(projectId);
     const keyMemo = new Map<string, Promise<ApiKeyRecord | null | undefined>>();
+    // Re-read after the awaits above: a subscription added meanwhile must still see this event.
+    let candidates = collectCandidates();
+    let candidatesVersion = this.subscriptionIndexVersion.n;
 
     for (const session of [...tenantSessions]) {
       if (!session.authenticated || session.closed || session.projectId !== projectId) {
@@ -772,8 +838,13 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
         this.closeSession(session);
         continue;
       }
+      if (candidatesVersion !== this.subscriptionIndexVersion.n) {
+        candidates = collectCandidates();
+        candidatesVersion = this.subscriptionIndexVersion.n;
+      }
       for (const subRecord of [...session.subscriptions.values()]) {
         if (session.closed) break;
+        if (!candidates.has(subRecord)) continue;
         this.deliverEventToSubscription(session, subRecord, ev, { ruleset, document: documents.get(subRecord) });
       }
     }
