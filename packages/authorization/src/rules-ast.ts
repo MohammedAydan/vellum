@@ -596,12 +596,14 @@ export function authorizeOperation({
     });
   }
 
+  // Collection-level checks use an internal placeholder document id; never show it to callers.
+  const shownPath = path.replace(/\/__collection_check__$/, "");
   const rulesAst = rulesetRecord?.rulesAst as SecurityRulesetAst | undefined;
   if (!rulesAst || !Array.isArray(rulesAst.rules)) {
     throw new VellumError(
       "PERMISSION_DENIED",
-      `Security rules denied '${operation}' on path '${path}' (no active ruleset configured).`,
-      { path, operation }
+      `Security rules denied '${operation}' on path '${shownPath}' (no active ruleset configured).`,
+      { path: shownPath, operation }
     );
   }
 
@@ -641,8 +643,8 @@ export function authorizeOperation({
     }
   }
 
-  throw new VellumError("PERMISSION_DENIED", `Security rules denied '${operation}' on path '${path}'.`, {
-    path,
+  throw new VellumError("PERMISSION_DENIED", `Security rules denied '${operation}' on path '${shownPath}'.`, {
+    path: shownPath,
     operation,
   });
 }
