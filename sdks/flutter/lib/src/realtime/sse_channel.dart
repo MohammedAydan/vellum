@@ -77,6 +77,12 @@ class SseWebSocketChannel extends StreamChannelMixin<Object?>
   final Uri url;
   final http.Client Function() _clientFactory;
   final Duration _debounce;
+
+  /// A stream that delivers nothing, not even the server's 15 second
+  /// `: keep-alive` comment, for this long is treated as dead and reopened
+  /// (with resume). Without this a half-open connection hangs forever.
+  final Duration idleTimeout;
+  Timer? _idleTimer;
   final StreamController<Object?> _incoming = StreamController<Object?>();
   late final _SseSink _sink = _SseSink(this);
   final Completer<void> _ready = Completer<void>()..complete();
@@ -97,6 +103,7 @@ class SseWebSocketChannel extends StreamChannelMixin<Object?>
     this.url, {
     http.Client Function()? clientFactory,
     Duration debounce = const Duration(milliseconds: 5),
+    this.idleTimeout = const Duration(seconds: 45),
   })  : _clientFactory = clientFactory ?? http.Client.new,
         _debounce = debounce;
 
@@ -188,8 +195,22 @@ class SseWebSocketChannel extends StreamChannelMixin<Object?>
     return frames;
   }
 
+  /// (Re)starts the liveness timer. Called on open and on every received byte,
+  /// so keep-alive comments count as proof the stream is alive.
+  void _armIdle(int generation) {
+    _idleTimer?.cancel();
+    _idleTimer = Timer(idleTimeout, () {
+      if (generation != _generation || _closed) return;
+      if (!_incoming.isClosed) {
+        _incoming.addError(TimeoutException('Realtime stream idle', idleTimeout));
+      }
+      _fail(generation, 1006, 'stream idle');
+    });
+  }
+
   void _fail(int generation, int code, String reason) {
     if (generation != _generation || _closed) return;
+    _idleTimer?.cancel();
     _generation++;
     _streamOpen = false;
     _client?.close();
@@ -207,6 +228,7 @@ class SseWebSocketChannel extends StreamChannelMixin<Object?>
     final client = _clientFactory();
     _client = client;
     _streamOpen = false;
+    _armIdle(generation);
     try {
       final request = http.Request('POST', url)
         ..headers['content-type'] = 'application/json'
@@ -244,6 +266,7 @@ class SseWebSocketChannel extends StreamChannelMixin<Object?>
       var renew = false;
       await for (final chunk in response.stream.transform(utf8.decoder)) {
         if (generation != _generation) return;
+        _armIdle(generation);
         buffer += chunk.replaceAll('\r\n', '\n');
         var idx = buffer.indexOf('\n\n');
         while (idx >= 0) {
@@ -254,6 +277,7 @@ class SseWebSocketChannel extends StreamChannelMixin<Object?>
         }
       }
       if (generation != _generation) return;
+      _idleTimer?.cancel();
       _streamOpen = false;
       if (renew) {
         // Bounded server stream lifetime reached: continue with resume.
@@ -316,6 +340,7 @@ class SseWebSocketChannel extends StreamChannelMixin<Object?>
     _closeReason = reason;
     _generation++;
     _restartTimer?.cancel();
+    _idleTimer?.cancel();
     _client?.close();
     _client = null;
     if (!_incoming.isClosed) _incoming.close();

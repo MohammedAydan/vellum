@@ -26,9 +26,19 @@ import {
 } from "../ws-rfc6455.js";
 
 import { stripVercelFunctionPrefix } from "./vercel-path.js";
+import { handleMaintenanceRequest, startPurgeTick } from "./vercel-maintenance.js";
 
 const platform = await createVellumPlatformFromEnv();
-const requestListener = getRequestListener((request) => platform.fetch(request));
+const requestListener = getRequestListener(async (request) =>
+  (await handleMaintenanceRequest(request, platform.dataStore)) ?? platform.fetch(request)
+);
+
+// Retention (outbox, tombstones, TTL) has no cron on this host: tick while the instance is alive.
+if (process.env["VELLUM_DISABLE_PURGE_TICK"] !== "1") {
+  startPurgeTick(platform.dataStore, (err) => {
+    platform.logger.warn("Purge tick failed", { reason: err instanceof Error ? err.message.slice(0, 256) : String(err) });
+  });
+}
 
 const server = http.createServer((req, res) => {
   req.url = stripVercelFunctionPrefix(req.url);
