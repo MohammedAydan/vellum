@@ -257,12 +257,9 @@ export class HttpTransport {
       // Only server-generated advisor fields are printed — never headers in
       // bulk, request bodies, API keys or bearer tokens.
       console.warn(
-        [
-          `[VELLUM Index Advisor] Slow/unindexed query detected on "${collectionPath}".`,
-          `Reason: ${reason}`,
-          `Create this index in 1 click: ${url}`,
-        ].join("\n")
+        `[Vellum] Missing index on "${collectionPath}" (${reason.replace(/\s+/g, " ").slice(0, 160)}) Create it: ${url}`
       );
+
     } catch {
       // Index suggestions are advisory; they must never break a request.
     }
@@ -392,7 +389,15 @@ export class HttpTransport {
       headers,
     };
     if (body !== undefined) {
-      reqInit.body = JSON.stringify(body);
+      reqInit.body = JSON.stringify(body, (key, value: unknown) => {
+        if (typeof value === "number" && !Number.isFinite(value)) {
+          throw Object.assign(
+            new Error(`Invalid value for "${key || "(root)"}": ${String(value)} is not a finite number and cannot be stored`),
+            { code: "INVALID_ARGUMENT", status: 400 }
+          );
+        }
+        return value;
+      });
     }
 
     const url = `${this.baseUrl}${relativePath}`;

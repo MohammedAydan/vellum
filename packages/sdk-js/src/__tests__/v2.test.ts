@@ -386,17 +386,17 @@ describe("@vellumdb/sdk-js V2 - Index suggestion logger", () => {
     await db.doc("users/d2").get();
     expect(warn).toHaveBeenCalledTimes(1);
     const message = String(warn.mock.calls[0]?.[0]);
-    expect(message).toContain('[VELLUM Index Advisor] Slow/unindexed query detected on "orders".');
-    expect(message).toContain("Reason: Composite index needed for equality filter on [status] + sort on [createdAt DESC].");
-    expect(message).toContain(`Create this index in 1 click: ${suggestionUrl(fingerprint)}`);
+    expect(message).toContain('[Vellum] Missing index on "orders"');
+    expect(message).toContain("Composite index needed for equality filter on [status] + sort on [createdAt DESC].");
+    expect(message).toContain(`Create it: ${suggestionUrl(fingerprint)}`);
   });
 
-  it("prints a multi-line warning", async () => {
+  it("prints a single-line warning", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const { db } = makeClient(() => ({ body: okDoc, headers: suggestionHeaders("fp-once-3a-lines") }));
     await db.doc("users/d1").get();
     const message = String(warn.mock.calls[0]?.[0]);
-    expect(message.split("\n")).toHaveLength(3);
+    expect(message.split("\n")).toHaveLength(1);
   });
 
   it("never warns or grows the dedupe set when warnOnMissingIndexes is false", async () => {
@@ -498,5 +498,13 @@ describe("document referencedBy", () => {
     const abort = new AbortController(); abort.abort();
     await expect(db.doc("users/u1").referencedBy({ signal: abort.signal })).rejects.toMatchObject({ name: "AbortError" });
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("@vellumdb/sdk-js - non-finite numbers", () => {
+  it("rejects NaN and Infinity before sending", async () => {
+    const { db } = makeClient(() => ({ body: okDoc }));
+    await expect(db.doc("users/d1").set({ score: Number.NaN })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(db.doc("users/d1").set({ n: { x: Infinity } })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   });
 });
