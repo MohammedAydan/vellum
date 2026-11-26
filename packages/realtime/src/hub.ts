@@ -26,6 +26,9 @@ import {
   type ApiKeyRecord,
   type AuthContext,
   type SecurityRulesetRecord,
+  collectRuleLookups,
+  rulesetUsesLookups,
+  type RuleLookups,
 } from "@vellum/authorization";
 import { validateAndNormalizeQuery, documentMatchesQuery, extractDocFieldValue, compileQueryToParameterizedSql } from "@vellum/query-engine";
 import type { StorageAdapter, OutboxEvent, DocumentRecord, TxHandle } from "@vellum/storage";
@@ -594,8 +597,17 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       const initialDocs: DocumentRecord[] = [];
       if (targetPath) {
         const doc = await tx.getDocument(targetPath, false);
+        let snapshotLookups: RuleLookups | undefined;
+        if (rulesetUsesLookups(ruleset)) {
+          const found = new Map<string, Record<string, unknown> | null>();
+          for (const p of collectRuleLookups({ rulesetRecord: ruleset, operation: "get", path: targetPath, authContext, resourceData: doc?.data ?? null })) {
+            const ref = await tx.getDocument(p, false);
+            found.set(p, ref ? (ref.data as Record<string, unknown>) : null);
+          }
+          snapshotLookups = found;
+        }
         authorizeOperation({ apiKeyRecord, rulesetRecord: ruleset,
-          operation: "get", path: targetPath, authContext, resourceData: doc?.data ?? null });
+          operation: "get", path: targetPath, authContext, resourceData: doc?.data ?? null, lookups: snapshotLookups });
         if (doc) {
           subRecord.matchedPaths.add(doc.path);
           initialDocs.push(doc);
@@ -606,11 +618,24 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
         // dropped after the fetch, so when a window comes back short we widen it (x4 each round,
         // at most REALTIME_SUBSCRIBE_MAX_FETCH rows). If the window is still short and the database
         // had more rows, we fall back to the exact full scan, so the result never differs from it.
+        // Rules that read other documents: the documents candidate rows ask for are read up front.
+        const rowLookups = new Map<string, Record<string, unknown> | null>();
+        const prefetchRows = async (candidates: DocumentRecord[]): Promise<void> => {
+          if (!rulesetUsesLookups(ruleset)) return;
+          for (const d of candidates) {
+            if (!documentMatchesQuery(d, normalizedQuery)) continue;
+            for (const p of collectRuleLookups({ rulesetRecord: ruleset, operation: "get", path: d.path, authContext, resourceData: d.data })) {
+              if (rowLookups.has(p) || rowLookups.size >= 200) continue;
+              const ref = await tx.getDocument(p, false);
+              rowLookups.set(p, ref ? (ref.data as Record<string, unknown>) : null);
+            }
+          }
+        };
         const accept = (d: DocumentRecord): boolean => {
           if (!documentMatchesQuery(d, normalizedQuery)) return false;
           try {
             authorizeOperation({ apiKeyRecord, rulesetRecord: ruleset,
-              operation: "get", path: d.path, authContext, resourceData: d.data });
+              operation: "get", path: d.path, authContext, resourceData: d.data, lookups: rowLookups });
             return true;
           } catch { return false; }
         };
@@ -633,6 +658,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
               matchedCompositeIndex: null,
             });
             const rows = ((await tx.queryDocuments(compiled)) as DocumentRecord[]).slice(0, fetchLimit);
+            await prefetchRows(rows);
             const accepted = rows.filter(accept).sort(order);
             if (accepted.length >= want || rows.length < fetchLimit) { docs = accepted.slice(0, want); break; }
             if (fetchLimit >= REALTIME_SUBSCRIBE_MAX_FETCH) break;
@@ -641,6 +667,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
         }
         if (docs === null) {
           const all = (await tx.listActiveDocumentsInCollection?.(normalizedQuery.collectionPath)) ?? [];
+          await prefetchRows(all);
           docs = all.filter(accept).sort(order).slice(0, want);
         }
         for (const doc of docs) {
@@ -704,9 +731,11 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
             continue;
           }
           const documents = await this.prepareIncludedEvent(projectId, ev, [{ session, subRecord }]);
+          const liveRuleset = (await this.rulesetFor(projectId)) ?? ruleset;
           this.deliverEventToSubscription(session, subRecord, ev, {
             duringReplay: true,
-            ruleset: (await this.rulesetFor(projectId)) ?? ruleset,
+            ruleset: liveRuleset,
+            lookups: await this.lookupsFor(projectId, liveRuleset, session, ev, new Map()),
             document: documents.get(subRecord),
           });
         }
@@ -760,7 +789,13 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
             break;
           }
           const documents = await this.prepareIncludedEvent(projectId, ev, [{ session, subRecord }]);
-          this.deliverEventToSubscription(session, subRecord, ev, { duringReplay: true, ruleset: (await this.rulesetFor(projectId)) ?? ruleset, document: documents.get(subRecord) });
+          const replayRuleset = (await this.rulesetFor(projectId)) ?? ruleset;
+          this.deliverEventToSubscription(session, subRecord, ev, {
+            duringReplay: true,
+            ruleset: replayRuleset,
+            lookups: await this.lookupsFor(projectId, replayRuleset, session, ev, new Map()),
+            document: documents.get(subRecord),
+          });
           lastSeq = seq;
           delivered += 1;
         }
@@ -799,7 +834,12 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     for (const ev of deferred) {
       if (session.closed || session.subscriptions.get(subRecord.subId) !== subRecord) break;
       const documents = await this.prepareIncludedEvent(projectId, ev, [{ session, subRecord }]);
-      this.deliverEventToSubscription(session, subRecord, ev, { ruleset: (await this.rulesetFor(projectId)) ?? ruleset, document: documents.get(subRecord) });
+      const flushRuleset = (await this.rulesetFor(projectId)) ?? ruleset;
+      this.deliverEventToSubscription(session, subRecord, ev, {
+        ruleset: flushRuleset,
+        lookups: await this.lookupsFor(projectId, flushRuleset, session, ev, new Map()),
+        document: documents.get(subRecord),
+      });
     }
   }
 
@@ -877,6 +917,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     let candidates = collectCandidates();
     let candidatesVersion = this.subscriptionIndexVersion.n;
 
+    const lookupCache = new Map<string, Record<string, unknown> | null>();
     for (const session of [...tenantSessions]) {
       if (!session.authenticated || session.closed || session.projectId !== projectId) {
         continue;
@@ -898,7 +939,11 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       for (const subRecord of [...session.subscriptions.values()]) {
         if (session.closed) break;
         if (!candidates.has(subRecord)) continue;
-        this.deliverEventToSubscription(session, subRecord, ev, { ruleset, document: documents.get(subRecord) });
+        this.deliverEventToSubscription(session, subRecord, ev, {
+          ruleset,
+          lookups: await this.lookupsFor(projectId, ruleset, session, ev, lookupCache),
+          document: documents.get(subRecord),
+        });
       }
     }
   }
@@ -941,11 +986,49 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     return result;
   }
 
+  /**
+   * Documents that `get()` / `exists()` in the rules ask for on this event, read once per delivery round
+   * through `cache`. Rulesets without lookups skip this entirely.
+   */
+  private async lookupsFor(
+    projectId: string,
+    ruleset: SecurityRulesetRecord | null,
+    session: ConnectionSession,
+    ev: OutboxEvent,
+    cache: Map<string, Record<string, unknown> | null>
+  ): Promise<RuleLookups | undefined> {
+    if (!rulesetUsesLookups(ruleset)) return undefined;
+    const paths = new Set<string>();
+    for (const resource of [ev.afterData ?? null, ev.beforeData ?? null]) {
+      for (const p of collectRuleLookups({
+        rulesetRecord: ruleset,
+        operation: "get",
+        path: ev.path,
+        authContext: session.authContext,
+        resourceData: (resource as Record<string, unknown> | null) ?? null,
+      })) {
+        paths.add(p);
+      }
+    }
+    const out = new Map<string, Record<string, unknown> | null>();
+    for (const path of paths) {
+      let data = cache.get(path);
+      if (data === undefined) {
+        const doc = await this.dataStore.getDocument({ projectId }, path);
+        data = doc ? (doc.data as Record<string, unknown>) : null;
+        cache.set(path, data);
+      }
+      out.set(path, data);
+    }
+    return out;
+  }
+
   private isAuthorizedForLiveEvent(
     session: ConnectionSession,
     ev: OutboxEvent,
     ruleset: SecurityRulesetRecord | null,
-    resource: Record<string, unknown> | null = ev.afterData ?? ev.beforeData ?? null
+    resource: Record<string, unknown> | null = ev.afterData ?? ev.beforeData ?? null,
+    lookups?: RuleLookups
   ): boolean {
     if (!session.apiKeyRecord) return false;
     try {
@@ -956,6 +1039,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
         path: ev.path,
         authContext: session.authContext,
         resourceData: resource,
+        lookups,
       });
       return true;
     } catch {
@@ -978,7 +1062,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     session: ConnectionSession,
     subRecord: SubscriptionRecord,
     ev: OutboxEvent,
-    options?: { duringReplay?: boolean | undefined; ruleset?: SecurityRulesetRecord | null | undefined; document?: ReturnType<RealtimeGatewayHub["toDocPayload"]> | undefined }
+    options?: { duringReplay?: boolean | undefined; ruleset?: SecurityRulesetRecord | null | undefined; lookups?: RuleLookups | undefined; document?: ReturnType<RealtimeGatewayHub["toDocPayload"]> | undefined }
   ): void {
     if (session.closed || session.subscriptions.get(subRecord.subId) !== subRecord) return;
 
@@ -1007,7 +1091,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
 
     // Re-check active security ruleset if present so ruleset revocations apply immediately.
     const activeRuleset = options?.ruleset ?? this.controlStore.getActiveRuleset(session.projectId!) ?? null;
-    if (!this.isAuthorizedForLiveEvent(session, ev, activeRuleset)) {
+    if (!this.isAuthorizedForLiveEvent(session, ev, activeRuleset, undefined, options?.lookups)) {
       // The new state is no longer readable by this subscriber (for example they were removed from
       // the document's member list). If the document was in their live result and they could read the
       // previous state, tell them it left the result instead of leaving a stale row on screen.
@@ -1016,7 +1100,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
         ev.collectionPath === subRecord.normalizedQuery.collectionPath &&
         subRecord.matchedPaths.has(ev.path) &&
         ev.beforeData &&
-        this.isAuthorizedForLiveEvent(session, ev, activeRuleset, ev.beforeData as Record<string, unknown>)
+        this.isAuthorizedForLiveEvent(session, ev, activeRuleset, ev.beforeData as Record<string, unknown>, options?.lookups)
       ) {
         subRecord.seenSeqIds.add(ev.seqId);
         subRecord.matchedPaths.delete(ev.path);

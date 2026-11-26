@@ -115,6 +115,27 @@ This assumes the verified token contains a trusted profilePath claim, such as pr
 
 unchanged checks the full post-write value, so a patch that omits author can pass while replacing the document without author fails. Use explicit required-field/type checks on create; unchanged alone is not a create validator.
 
+## Reading another document: get() and exists()
+
+A rule can look at one other document. This is how you say "only members of this chat can post in it" without copying the member list into every message.
+
+```text
+match /chats/{chatId}/messages/{messageId} {
+  allow get, list: if true;
+  allow create: if exists('chats', path.chatId)
+    && auth.uid in get('chats', path.chatId).data.memberIds;
+}
+```
+
+- `exists('collection', id)` is true when the document exists. `get('collection', id).data.field` reads a field from it.
+- The collection is a quoted literal. The id is any expression, such as `path.chatId` or `incoming.chatId`. Use a plain collection name; for a nested document, build the id from the full path.
+- A rule can read at most 10 documents. The reads happen inside the same transaction as the write, so a check and the write it guards see the same data.
+- Reads are free of side effects: a lookup never changes anything and never counts as a write.
+- If the document is missing, the id is not a valid string, or the field is absent, the rule denies. It denies even inside `not`, so a missing document can never open access by accident.
+- `get()` and `exists()` work in `get`, `create`, `update` and `delete` rules. They are rejected in `list` and `read` rules when you save the ruleset, with a message that says so. Rows a query returns are still checked one by one with your `get` rule, lookups included.
+- Live subscriptions apply the same rules. When a member is removed from the chat's member list, their live query gets a removal for documents they can no longer read.
+- Roll the ruleset out after the new API version is live. An older API instance does not know these functions and rejects the ruleset.
+
 ## Reusable functions
 
 ```text
