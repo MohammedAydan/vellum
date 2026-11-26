@@ -55,6 +55,12 @@ export interface RealtimeWebSocketServerOptions {
   maxGlobalConnections?: number;
   maxConnectionsPerTenant?: number;
   maxFrameBytes?: number;
+  /**
+   * Close each connection with 1001 after this many ms (plus up to 10% jitter) so serverless hosts with a
+   * function duration limit never cut a live socket. Clients reconnect and resume from their watermark.
+   * 0 or undefined disables it.
+   */
+  maxLifetimeMs?: number;
   /** Called when a socket exceeds the rolling per-socket message-rate ceiling. */
   onPolicyViolation?: (ip: string, reason: string) => void;
 }
@@ -116,6 +122,7 @@ export function attachRealtimeWebSocketServer(
   const maxGlobalConnections = options.maxGlobalConnections ?? DEFAULT_MAX_GLOBAL_CONNECTIONS;
   const maxConnectionsPerTenant = options.maxConnectionsPerTenant ?? DEFAULT_MAX_CONNECTIONS_PER_TENANT;
   const maxFrameBytes = options.maxFrameBytes ?? MAX_WS_FRAME_BYTES;
+  const maxLifetimeMs = options.maxLifetimeMs ?? 0;
 
   const activeSockets = new Set<Socket>();
   const connections = new Map<Socket, { cleanup: () => void; closeGracefully: () => void }>();
@@ -252,6 +259,7 @@ export function attachRealtimeWebSocketServer(
       closed = true;
       clearTimeout(authTimer);
       clearInterval(heartbeatTimer);
+      if (lifetimeTimer) clearTimeout(lifetimeTimer);
       activeSockets.delete(socket);
       connections.delete(socket);
       const remainingIp = connectionsByIp.get(clientIp) ?? 0;
@@ -316,6 +324,11 @@ export function attachRealtimeWebSocketServer(
       }
     }, heartbeatIntervalMs);
     heartbeatTimer.unref();
+    const lifetimeTimer =
+      maxLifetimeMs > 0
+        ? setTimeout(() => closeWith(1001, "Reconnect"), maxLifetimeMs + Math.floor(Math.random() * maxLifetimeMs * 0.1))
+        : null;
+    lifetimeTimer?.unref();
 
     connections.set(socket, {
       cleanup,

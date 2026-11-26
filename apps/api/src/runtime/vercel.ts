@@ -53,6 +53,8 @@ server.on("upgrade", (req) => {
 
 attachRealtimeWebSocketServer(server, platform.realtimeHub, {
   allowedOrigins: parseAllowedOrigins(getConfig().CORS_ALLOWED_ORIGINS),
+  // Vercel cuts a function at its max duration (300 s on Hobby). Close first, the SDK reconnects and resumes.
+  maxLifetimeMs: Number(process.env["REALTIME_WS_MAX_LIFETIME_MS"] ?? 265_000),
 });
 
 /** Vercel Function entry point: an http.Server with REST + WebSocket attached. */
