@@ -25,6 +25,8 @@ describe.skipIf(!enabled)("rulesets, auth config, projects and users are read fr
     await raw.query("INSERT INTO organizations(id,slug,name,billing_email) VALUES($1,$2,'Cfg PG','cfg@example.invalid')", [orgId, `cfg-${orgId}`]);
     await raw.query("INSERT INTO projects(id,organization_id,slug,name) VALUES($1,$2,'cfg-pg','Cfg PG')", [projectId, orgId]);
     await raw.query("INSERT INTO users(id,email,name) VALUES($1,$2,'Cfg User')", [userId, `cfg-${userId}@example.invalid`]);
+    // This suite proves the uncached read path; the short-TTL cache has its own suite (control-read-cache-pg).
+    process.env["CONTROL_READ_CACHE_TTL_MS"] = "0";
     a = new PgControlPlaneStore({ connectionString: controlUrl });
     b = new PgControlPlaneStore({ connectionString: controlUrl });
   }, 30000);

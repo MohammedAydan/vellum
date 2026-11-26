@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **perf:** the API caches project, active ruleset, auth config and relation rules in process for up to 5 s (`CONTROL_READ_CACHE_TTL_MS`, `0` disables, max 1000 entries, results are cloned on read). Changes made on one instance clear its cache at once and reach other instances through the cache-invalidation channel; if that channel is down they apply within 5 s. API keys are not cached, so revocation stays immediate.
+- **fix(realtime):** on Vercel a WebSocket is closed with 1001 "Reconnect" after about 265 s (`REALTIME_WS_MAX_LIFETIME_MS`, `0` disables) instead of being cut at the 300 s function limit; the SDK reconnects and resumes from its watermark.
+
 - **Behavior change:** queries that no index can serve (a range filter, `!=`, `not-in`, text filters, `search`, or an order on a field other than `documentId`, `createdAt` and `updatedAt`) are now refused with `FAILED_PRECONDITION` and a `suggestedIndex` when the collection has more than 50,000 live documents. Create the composite index named in the error, or raise or disable the limit with `VELLUM_UNINDEXED_QUERY_MAX_DOCS` (`0` disables). Smaller collections are unaffected. Before, such queries read the whole collection and failed at the 5 second statement timeout on large ones.
 ### Fixes
 
