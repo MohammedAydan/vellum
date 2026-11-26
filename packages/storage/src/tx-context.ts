@@ -1079,6 +1079,19 @@ export function createSqlTransactionHandle(
       });
     },
 
+    async countLiveDocumentsUpTo(collectionPath: string, cap: number): Promise<number> {
+      assertOpen();
+      const bounded = Math.max(1, Math.min(Math.floor(cap), 10_000_000));
+      const { rows } = await client.query(
+        `SELECT count(*)::int AS n FROM (
+           SELECT 1 FROM documents
+            WHERE project_id = $1::uuid AND collection_path = $2 AND deleted_at IS NULL
+            LIMIT $3) s`,
+        [projectId, collectionPath, bounded]
+      );
+      return Number((rows[0] as { n?: number } | undefined)?.n ?? 0);
+    },
+
     async listActiveDocumentsInCollection(collectionPath: string): Promise<DocumentRecord[]> {
       assertOpen();
       const { rows } = await runPrepared<DocumentRecord>(

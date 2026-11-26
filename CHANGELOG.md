@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Behavior change:** queries that no index can serve (a range filter, `!=`, `not-in`, text filters, `search`, or an order on a field other than `documentId`, `createdAt` and `updatedAt`) are now refused with `FAILED_PRECONDITION` and a `suggestedIndex` when the collection has more than 50,000 live documents. Create the composite index named in the error, or raise or disable the limit with `VELLUM_UNINDEXED_QUERY_MAX_DOCS` (`0` disables). Smaller collections are unaffected. Before, such queries read the whole collection and failed at the 5 second statement timeout on large ones.
 ### Fixes
 
 - `vellum_flutter`: the default HTTP transport opened and closed a new `http.Client` for every request, so every operation paid a fresh DNS lookup, TCP and TLS handshake. It now uses one shared keep-alive client (five requests, one connection). The persistent cache seals its whole blob on the main isolate, so it now debounces for 5 seconds (was 1) and is capped at 2 MB by default (was 5 MB).

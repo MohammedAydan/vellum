@@ -1139,3 +1139,54 @@ export function selectCompositeIndexForQuery(
 
   return { matchedIndex: bestMatch, requiresCompositeIndex };
 }
+
+/** Collection size above which a query that no index can serve is refused (env override below). */
+export const DEFAULT_UNINDEXED_QUERY_MAX_DOCS = 50_000;
+
+/** Reads VELLUM_UNINDEXED_QUERY_MAX_DOCS. 0 disables the guard; unset or invalid uses the default. */
+export function resolveUnindexedQueryMaxDocs(env: Record<string, string | undefined> = process.env): number {
+  const raw = env["VELLUM_UNINDEXED_QUERY_MAX_DOCS"];
+  if (raw === undefined || raw.trim() === "") return DEFAULT_UNINDEXED_QUERY_MAX_DOCS;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : DEFAULT_UNINDEXED_QUERY_MAX_DOCS;
+}
+
+const GIN_SERVED_OPS = new Set(["==", "in", "array-contains", "array-contains-any"]);
+
+/**
+ * True when no index can serve the query, so the database has to read the collection:
+ * a range, "!=", "not-in" or text filter, a full-text `search`, or an order on a field that
+ * is not documentId/createdAt/updatedAt. Equality, "in" and array-contains are served by the
+ * GIN index, and system-field orders by btrees.
+ */
+export function isScanRiskQuery(q: NormalizedQuery): boolean {
+  if (q.search) return true;
+  const groups = [q.where, ...(q.or ?? [])];
+  for (const group of groups) {
+    for (const clause of group ?? []) {
+      if (isIdSystemField(clause.field)) continue;
+      if (isTimestampSystemFieldName(clause.field) && q.orderBy[0]?.field === clause.field) continue;
+      if (!GIN_SERVED_OPS.has(clause.op)) return true;
+    }
+  }
+  return q.orderBy.some((o) => !isIdSystemField(o.field) && !isTimestampSystemFieldName(o.field));
+}
+
+function isTimestampSystemFieldName(field: string): boolean {
+  return field === "createdAt" || field === "updatedAt";
+}
+
+/** The composite index that would serve this query: equality fields, then the order or range field. */
+export function suggestCompositeIndex(q: NormalizedQuery): Array<{ path: string; dir: "asc" | "desc" }> {
+  const fields: Array<{ path: string; dir: "asc" | "desc" }> = [];
+  const seen = new Set<string>();
+  const add = (path: string, dir: "asc" | "desc") => {
+    if (isIdSystemField(path) || seen.has(path)) return;
+    seen.add(path);
+    fields.push({ path, dir });
+  };
+  for (const w of q.where) if (w.op === "==") add(w.field, "asc");
+  for (const o of q.orderBy) add(o.field, o.dir);
+  for (const w of q.where) if (!GIN_SERVED_OPS.has(w.op)) add(w.field, "asc");
+  return fields;
+}

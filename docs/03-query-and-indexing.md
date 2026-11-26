@@ -26,6 +26,7 @@ Queries target a single `collectionPath` within a `projectId` namespace and supp
 | `MAX_TEXT_FILTER_LENGTH` | `1,024` chars | `packages/query-engine/src/compiler.ts` | `400 QUERY_TOO_COMPLEX` (`contains_ci`, `starts_with_ci`, `text_search`) |
 | `MAX_CURSOR_TOKEN_BYTES` | `16,384` bytes | `packages/query-engine/src/cursor.ts` | `400 INVALID_CURSOR` (enforced before base64url decode) |
 | `UNINDEXED_SCAN_CAP` | `1,000` rows | `packages/query-engine/src/compiler.ts` | Safety ceiling for unindexed fallback scans (never silently truncates) |
+| `VELLUM_UNINDEXED_QUERY_MAX_DOCS` | `50,000` documents (env; `0` disables) | `packages/query-engine/src/compiler.ts` | A query no index can serve (range, `!=`, `not-in`, text filters, `search`, or an order on a non-system field) is refused with `FAILED_PRECONDITION` and a `suggestedIndex` when its collection has more live documents than this. Below the limit it runs as before. `UNINDEXED_SCAN_CAP` only limits returned rows; it never limited how many rows the database read. |
 | `SYSTEM_LIMITS.MAX_QUERY_EXECUTION_MS` | `5,000` ms | `packages/core/src/limits.ts` | Transaction-local `statement_timeout` |
 
 All field paths reject prototype-pollution segments (`__proto__`, `constructor`, `prototype`), empty segments, and invalid field names. Every live query automatically injects `d.deleted_at IS NULL AND (d.expires_at IS NULL OR d.expires_at > now())` so soft-deleted and TTL-expired rows are never returned.
