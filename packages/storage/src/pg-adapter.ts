@@ -94,7 +94,7 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
       const poolMax =
         options?.maxConnections !== undefined
           ? clampPositiveInt(options.maxConnections, DATA_POOL_MAX, 1, DATA_POOL_MAX)
-          : DATA_POOL_MAX;
+          : clampPositiveInt(process.env["DATA_POOL_MAX"], DATA_POOL_MAX, 1, DATA_POOL_MAX);
       // V2 pool tuning: idle sockets are reaped after 30s so a burst of
       // tenant traffic cannot leave hundreds of dormant server connections;
       // a connect that cannot be established within 30s fails fast rather than

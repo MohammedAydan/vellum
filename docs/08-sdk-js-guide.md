@@ -427,7 +427,7 @@ All methods live on `db.auth` and are mirrored directly on `db`:
 - **Session creation**: `signUpWithEmailAndPassword`, `signInWithEmailAndPassword` (returns `AuthState | MfaRequiredResult`), `signInAnonymously`, `signInWithOAuth`
 - **MFA**: `enrollTotpMfa`, `confirmTotpMfa`, `verifyMfaChallenge`
 - **Account recovery & verification**: `sendPasswordResetEmail`, `confirmPasswordReset`, `sendEmailVerification`, `confirmEmailVerification`
-- **Profile & tokens**: `getUser`, `updateProfile`, `getIdToken(forceRefresh?)`, `currentUser`, `onAuthStateChanged(cb)`, `signOut({ allSessions? })`
+- **Profile & tokens**: `getUser`, `updateProfile`, `getIdToken(forceRefresh?)`, `currentUser`, `onAuthStateChanged(cb)` (fires once immediately with the current user or `null`), `signOut({ allSessions? })`
 
 **Hardening guarantees**:
 1. Proactive silent refresh fires **60 seconds** before the EdDSA JWT `exp` claim.

@@ -300,6 +300,8 @@ stopState();
 
 ## End-User Authentication (EdDSA JWT)
 
+`onAuthStateChanged` calls your listener once right away with the current user (`null` when signed out), then on every sign-in, token refresh, profile update and sign-out. The first call comes on a microtask, after `onAuthStateChanged` returns.
+
 ```ts
 const stopAuth = db.onAuthStateChanged((user) => {
   console.log(user ? `Signed in as ${user.id}` : "Signed out");

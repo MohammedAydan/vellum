@@ -72,6 +72,8 @@ export interface OutboxPollerOptions {
   batchSize?: number | undefined;
   /** Plain-polling interval in ms. Defaults to 1000. */
   pollIntervalMs?: number | undefined;
+  /** Safety-net poll for tenants with no connected client, in ms. Defaults to 0 (never): idle tenants cost no database work. */
+  idleTenantPollMs?: number | undefined;
   /** A drain running longer than this is replaced. Defaults to 8000. */
   drainStuckMs?: number | undefined;
   retryBaseMs?: number | undefined;
@@ -90,9 +92,6 @@ const CONNECT_SKEW_MARGIN_MS = 2_000;
 
 /** How long a delivered row stays in the re-read window so a transaction that committed late is not skipped. */
 const LATE_COMMIT_GRACE_MS = 3_000;
-
-/** Safety-net poll cadence for tenants that have no connected realtime client. */
-const IDLE_TENANT_POLL_MS = 30_000;
 
 interface TenantState extends TenantContext {
   key: string;
@@ -134,6 +133,8 @@ export class OutboxPoller implements OutboxPollerPort {
   private readonly batchSize: number;
   private readonly pollIntervalMs: number;
   private readonly drainStuckMs: number;
+  private readonly idleTenantPollMs: number;
+  private readonly skippedIdle = new Set<string>();
   private readonly lastIdlePollAt = new Map<string, number>();
   private readonly retryBaseMs: number;
   private readonly retryMaxMs: number;
@@ -167,6 +168,7 @@ export class OutboxPoller implements OutboxPollerPort {
     const rawRetryMax = Number.isFinite(options.retryMaxMs) ? options.retryMaxMs! : 10_000;
     this.batchSize = Math.max(1, Math.min(5_000, Math.trunc(rawBatch)));
     this.pollIntervalMs = Math.max(50, Math.trunc(rawPoll));
+    this.idleTenantPollMs = Number.isFinite(options.idleTenantPollMs) ? Math.max(0, options.idleTenantPollMs!) : 0;
     this.drainStuckMs = Number.isFinite(options.drainStuckMs) ? Math.max(50, options.drainStuckMs!) : DRAIN_STUCK_MS;
     this.retryBaseMs = Math.max(1, Math.trunc(rawRetryBase));
     this.retryMaxMs = Math.max(this.retryBaseMs, Math.trunc(rawRetryMax));
@@ -307,7 +309,23 @@ export class OutboxPoller implements OutboxPollerPort {
       // A tenant with no connected client is only a safety net for a missed NOTIFY. Polling it
       // every second costs a full transaction (BEGIN, set_config, SELECT, COMMIT) per tenant per
       // instance and keeps the database busy for nothing, so it gets a slow cadence.
-      if (!live.has(key) && now - (this.lastIdlePollAt.get(key) ?? 0) < IDLE_TENANT_POLL_MS) continue;
+      // With nobody connected to this tenant on this instance there is nothing to deliver, and a client that
+      // connects later starts from the database's current position. Skipping those tenants means an instance
+      // with no realtime clients never touches the database from here, so an idle database can suspend.
+      if (live.has(key) && this.skippedIdle.delete(key)) {
+        // The tenant had no client for a while, so its watermark is stale. Start it again from the database's
+        // current position instead of replaying everything written in the meantime to the new client.
+        const stale = this.tenants.get(key);
+        if (stale && !stale.inFlight) {
+          if (stale.retryTimer) clearTimeout(stale.retryTimer);
+          this.tenants.delete(key);
+        }
+      }
+      if (!live.has(key) && this.idleTenantPollMs <= 0) {
+        this.skippedIdle.add(key);
+        continue;
+      }
+      if (!live.has(key) && now - (this.lastIdlePollAt.get(key) ?? 0) < this.idleTenantPollMs) continue;
       if (!live.has(key)) this.lastIdlePollAt.set(key, now);
       void this.drain(this.registerTenant(ctx));
     }

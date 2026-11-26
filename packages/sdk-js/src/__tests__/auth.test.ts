@@ -159,7 +159,7 @@ describe("@vellumdb/sdk-js - end-user auth", () => {
     await db.signUpWithEmailAndPassword({ email: "alice@example.com", password: "password123" });
     await db.signOut();
 
-    expect(states).toEqual([{ id: "usr_1" }, null]);
+    expect(states).toEqual([null, { id: "usr_1" }, null]);
     expect(await db.getIdToken()).toBeNull();
     unsubscribe();
   });
