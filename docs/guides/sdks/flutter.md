@@ -127,7 +127,7 @@ await client.runTransaction<void>((tx) async {
 ## EdDSA Auth, Security Hardening & Lifecycle
 
 - `client.auth` (`VellumAuth`): `restore()`, `authStateChanges`, `currentUser`, `sessionEpoch`, `signUpWithEmailAndPassword`, `signInWithEmailAndPassword` (sealed `VellumSession` | `VellumMfaRequired`), `signInAnonymously`, `signInWithOAuth`, `verifyMfaChallenge`, `enrollTotpMfa`, `confirmTotpMfa`, `sendPasswordResetEmail`, `confirmPasswordReset`, `sendEmailVerification`, `confirmEmailVerification`, `getUser`, `updateProfile`, `getIdToken`, `signOut`.
-- Single-flight proactive (45s) and reactive 401 refresh (`refreshOnUnauthorized`) guarded by `sessionEpoch`.
+- Single-flight proactive (60s) and reactive 401 refresh (`refreshOnUnauthorized`) guarded by `sessionEpoch`.
 - Secret-redacted `toString()` on all sensitive models/exceptions and strict path-traversal validation (`validateVellumSegment`, `validateVellumPath`).
 - Call `client.dispose()` (or `client.close()`) on shutdown.
 

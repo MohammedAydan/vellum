@@ -277,7 +277,7 @@ export class HttpTransport {
       if (e?.name === "AbortError" || typeof e?.code === "string") throw err;
       const cause = err instanceof Error ? err.message : String(err);
       const wrapped = new Error(
-        "@vellumdb/sdk-js: network request failed. The device may be offline or the server unreachable."
+        "@vellumdb/sdk-js: network request failed. The device may be offline, the server unreachable, or (in a browser) this origin is not in the project allowedOrigins."
       ) as Error & { code?: string; status?: number; details?: unknown; cause?: unknown };
       wrapped.name = "VellumError";
       wrapped.code = "NETWORK_ERROR";

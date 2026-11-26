@@ -104,7 +104,7 @@ wss://<host>/v1/realtime
 | :--- | :--- | :--- |
 | إطار مصادقة مفقود/منتهي | `UNAUTHENTICATED` | 401 |
 | عدم تطابق المفتاح/المشروع/البيئة، أو رفض القواعد | `PERMISSION_DENIED` | 403 |
-| >50 اشتراكًا على اتصال واحد | `SUBSCRIPTION_LIMIT_EXCEEDED` | 400 |
+| >25 اشتراكًا على اتصال واحد | `SUBSCRIPTION_LIMIT_EXCEEDED` | 400 |
 | مخزن الإخراج >1 MiB | `SLOW_CONSUMER_DISCONNECT` | 429 |
 | إطار داخلي >1 MiB | `PAYLOAD_TOO_LARGE` | 413 |
 | إطار مشوّه / opcode غير معروف | `INVALID_ARGUMENT` | 400 |

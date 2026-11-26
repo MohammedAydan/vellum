@@ -665,11 +665,14 @@ function validateWhereClauses(clauses: WhereClause[], label: string): number {
         );
       }
     } else if (clause.op === "in" || clause.op === "not-in" || clause.op === "array-contains-any") {
-      if (
-        !Array.isArray(clause.value) ||
-        clause.value.length === 0 ||
-        clause.value.length > SYSTEM_LIMITS.MAX_DISJUNCTIVE_VALUES
-      ) {
+      if (!Array.isArray(clause.value) || clause.value.length === 0) {
+        throw new VellumError(
+          "INVALID_ARGUMENT",
+          `Operator '${clause.op}' on field '${clause.field}' needs a non-empty array (an empty list matches nothing)`,
+          { op: clause.op, field: clause.field, count: Array.isArray(clause.value) ? 0 : undefined }
+        );
+      }
+      if (clause.value.length > SYSTEM_LIMITS.MAX_DISJUNCTIVE_VALUES) {
         throw new VellumError(
           "QUERY_TOO_COMPLEX",
           `Operator '${clause.op}' requires a non-empty array of at most ${SYSTEM_LIMITS.MAX_DISJUNCTIVE_VALUES} values`,
@@ -773,7 +776,14 @@ export function validateAndNormalizeQuery(rawQuery: Record<string, unknown>): No
   }
 
   const limit = rawQuery["limit"] === undefined ? SYSTEM_LIMITS.DEFAULT_QUERY_LIMIT : Number(rawQuery["limit"]);
-  if (!Number.isInteger(limit) || limit < 1 || limit > SYSTEM_LIMITS.MAX_QUERY_LIMIT) {
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new VellumError(
+      "INVALID_ARGUMENT",
+      `Query limit (${rawQuery["limit"]}) must be an integer between 1 and ${SYSTEM_LIMITS.MAX_QUERY_LIMIT}`,
+      { limit: rawQuery["limit"], maxLimit: SYSTEM_LIMITS.MAX_QUERY_LIMIT }
+    );
+  }
+  if (limit > SYSTEM_LIMITS.MAX_QUERY_LIMIT) {
     throw new VellumError(
       "LIMIT_EXCEEDED",
       `Query limit (${rawQuery["limit"]}) must be an integer between 1 and ${SYSTEM_LIMITS.MAX_QUERY_LIMIT}`,

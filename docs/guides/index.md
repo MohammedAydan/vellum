@@ -56,7 +56,7 @@ The original 2.0 design named Redis as a mandatory realtime broker. That require
 - Each mutation writes a `realtime_outbox` row in the *same* database transaction as the document change.
 - An `AFTER INSERT` trigger emits a small `NOTIFY` containing only the sequence id and tenant ids — never document data.
 - A single dedicated PostgreSQL client reserved for `LISTEN` wakes a gap-detecting outbox poller, which fetches full rows through the tenant-scoped adapter and fans them out over WebSockets.
-- Verified-key caches, session revocation, and rate-limit windows are in-process TTL structures; cross-instance invalidation uses `NOTIFY vellum_cache_invalidate`.
+- Verified-key caches and session revocation are in-process TTL structures with cross-instance invalidation through `NOTIFY vellum_cache_invalidate`. Authentication throttles (sign-in, sign-up, MFA) are counted in PostgreSQL and shared by every instance.
 
 See [Realtime](./realtime.md) and the [Production checklist](./production-checklist.md) for the operational details.
 

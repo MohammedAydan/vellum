@@ -326,7 +326,7 @@ query's own `.include(...)` specs are reused. Wire semantics:
 
 - **Persistent Storage**: Sessions are stored encrypted by default (Keychain, Keystore, libsecret, Windows credential store, encrypted web storage) and fall back to memory if the store is unavailable. Pass your own `AuthTokenStorage` to `VellumClient(authStorage: ...)` to change it, and call `await client.auth.restore()` on startup.
 - **Race-Safe `sessionEpoch`**: A monotonic `sessionEpoch` counter increments on sign-in, `restore()`, `signOut()`, and `dispose()`. Any in-flight refresh whose epoch no longer matches is discarded so sign-out can never be resurrected by a slow network response.
-- **Single-Flight Proactive & Reactive 401 Refresh**: Proactive refresh runs 45s before JWT `exp`. Concurrent `401` responses coalesce through `refreshOnUnauthorized(failedToken)` into a single `/auth/token/refresh` call and replay once.
+- **Single-Flight Proactive & Reactive 401 Refresh**: Proactive refresh runs 60s before JWT `exp`. Concurrent `401` responses coalesce through `refreshOnUnauthorized(failedToken)` into a single `/auth/token/refresh` call and replay once.
 - **Sealed Sign-In Result**: `signInWithEmailAndPassword` returns `VellumAuthResult` (`VellumSession` or `VellumMfaRequired`) for exhaustive pattern matching in Dart 3.
 
 ```dart

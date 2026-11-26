@@ -2,7 +2,7 @@
 
 Official TypeScript & JavaScript SDK for **VELLUM** — a PostgreSQL-backed, multi-tenant document database with strong consistency, cursor pagination, real-time WebSocket sync, and end-user EdDSA authentication.
 
-Built for **Node.js 18+**, modern **browsers**, and **edge runtimes** with zero runtime dependencies outside `ws` (lazy-loaded only in Node.js).
+Built for **Node.js 18+**, modern **browsers**, and **edge runtimes** with a single runtime dependency, `ws` (loaded only in Node.js).
 
 ---
 
@@ -15,7 +15,7 @@ Built for **Node.js 18+**, modern **browsers**, and **edge runtimes** with zero 
 - **Auto-Chunked Bulk Writes & OCC Transactions**: `batchWriteChunked()` with bounded concurrency, progress callbacks, and `AbortSignal`, alongside `runTransaction()` with automatic `ABORTED_CONFLICT` retry.
 - **Production Read Caching & Coalescing**: Opt-in `BoundedReadCache` (LRU + TTL, auto-invalidated on writes and realtime mutations) and `dedupeReads` single-flight GET coalescing with defensive cloning.
 - **Resilient HTTP & Realtime Transport**: Per-request `AbortSignal`, configurable `timeoutMs`, `Retry-After` + full-jitter backoff for idempotent requests, multiplexed RFC 6455 WebSocket with `resumeSeqId`, decorrelated jitter reconnect, heartbeat, and observable `connectionState` / `onConnectionStateChange()`.
-- **EdDSA End-User Auth**: Email/password, anonymous, OAuth, TOTP MFA, proactive 45s refresh, single-flight reactive 401 refresh, pluggable `AuthStorage`, and clean `dispose()`.
+- **EdDSA End-User Auth**: Email/password, anonymous, OAuth, TOTP MFA, proactive 60s refresh, single-flight reactive 401 refresh, pluggable `AuthStorage`, and clean `dispose()`.
 
 ---
 
@@ -310,7 +310,7 @@ if ("mfaRequired" in signInRes) {
   await db.verifyMfaChallenge(signInRes.mfaTicket, "123456", "totp");
 }
 
-// Proactive 45s refresh + single-flight reactive 401 refresh are automatic.
+// Proactive 60s refresh + single-flight reactive 401 refresh are automatic.
 // Live WebSocket connections re-authenticate automatically on token rotation.
 await db.signOut();
 stopAuth();

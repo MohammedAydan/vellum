@@ -279,6 +279,16 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
   app.use("/v1/console/*", securityHeaders());
   app.use("/v1/projects/:projectId/auth/*", securityHeaders());
 
+  // A project id is always a UUID. Reject anything else up front with a clear 400 instead of a
+  // misleading "Project not found" (or an unrelated 404) from a later lookup.
+  app.use("/v1/projects/:projectId/*", async (c, next) => {
+    const id = c.req.param("projectId");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      throw new VellumError("INVALID_ARGUMENT", "projectId must be a project UUID (copy it from your project settings)", { field: "projectId" });
+    }
+    return next();
+  });
+
   // 1.0a Authentication throttles (contract §10). These MUST be registered
   // before the route mounts below, otherwise Hono will not run them.
   const LOGIN_LIMIT = { max: 10, windowMs: 15 * 60 * 1000 } as const;

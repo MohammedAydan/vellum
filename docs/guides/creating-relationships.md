@@ -4,7 +4,7 @@ A relationship is a normal document field containing a reference to another docu
 
 ## JavaScript and TypeScript
 
-This example works with published `@vellumdb/sdk-js` 0.0.1. `db` is an initialized project client with permission to write these documents.
+This example works with `@vellumdb/sdk-js`. `db` is an initialized project client with permission to write these documents.
 
 ```ts
 const ref = (path: string) => ({ $t: "ref" as const, $v: path });
@@ -42,7 +42,7 @@ do {
 } while (cursor !== undefined);
 ```
 
-The source tree also exports a validated `reference(path)` helper. After installing a release containing that helper, replace the local `ref` function with `import { reference as ref } from "@vellumdb/sdk-js"`. Do not import it from published 0.0.1, which does not export it.
+The source tree also exports a validated `reference(path)` helper. After installing a release containing that helper, replace the local `ref` function with `import { reference as ref } from "@vellumdb/sdk-js"`. Older releases (0.0.1) do not export it.
 
 ## Flutter and Dart
 

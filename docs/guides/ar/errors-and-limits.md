@@ -64,7 +64,7 @@ try {
 | `INVALID_CURSOR` | 400 | مؤشر ترقيم صفحي مُتلاعب به أو مشوّه أو من شكل خاطئ. |
 | `QUERY_TOO_COMPLEX` | 400 | عدد كبير جدًا من المرشحات/حقول الترتيب، أو تجاوز شجرة القواعد لحدود العمق/العقد. |
 | `LIMIT_EXCEEDED` | 400 | `limit` في الاستعلام أكبر من 500. |
-| `SUBSCRIPTION_LIMIT_EXCEEDED` | 400 | أكثر من 50 اشتراكًا WebSocket على اتصال واحد. |
+| `SUBSCRIPTION_LIMIT_EXCEEDED` | 400 | أكثر من 25 اشتراكًا WebSocket على اتصال واحد. |
 | `UNAUTHENTICATED` | 401 | مفتاح API أو رمز مفقود أو مشوّه أو غير صالح أو منتهي أو مُلغى. |
 | `PERMISSION_DENIED` | 403 | نطاق مفتاح خادم مفقود، أو قواعد الأمان رفضت العملية. |
 | `NOT_FOUND` | 404 | قراءة أو حذف مستند غير موجود. |
@@ -115,7 +115,7 @@ if (e.code === "RATE_LIMITED") {
 | `MAX_QUERY_LIMIT` | 500 | `LIMIT_EXCEEDED` (400) |
 | `MAX_QUERY_RESPONSE_BYTES` | 4,194,304 (4 MiB) | `RESPONSE_TOO_LARGE` (413) |
 | `MAX_QUERY_EXECUTION_MS` | 5,000 ms | `QUERY_DEADLINE_EXCEEDED` (504) |
-| `MAX_WS_SUBSCRIPTIONS_PER_CONN` | 50 | `SUBSCRIPTION_LIMIT_EXCEEDED` (400) |
+| `MAX_WS_SUBSCRIPTIONS_PER_CONN` | 25 | `SUBSCRIPTION_LIMIT_EXCEEDED` (400) |
 | `MAX_WS_OUTBOUND_BUFFER_BYTES` | 1,048,576 (1 MiB) | `SLOW_CONSUMER_DISCONNECT` (429) |
 | `RULES_AST_MAX_DEPTH` | 10 | `QUERY_TOO_COMPLEX` (400) |
 | `RULES_AST_MAX_NODES` | 100 لكل قاعدة | `QUERY_TOO_COMPLEX` (400) |
