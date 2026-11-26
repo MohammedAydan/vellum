@@ -86,8 +86,12 @@ export function extractClientIp(
   const directAddr = normalizeIpCandidate(c.req.header("x-vellum-remote-addr"));
 
   if (trustedProxyHops > 0) {
-    const cfIp = normalizeIpCandidate(c.req.header("cf-connecting-ip"));
-    if (cfIp) return cfIp;
+    // Any client can send cf-connecting-ip. It is only trustworthy when every request really passes
+    // through Cloudflare, so it is ignored unless TRUST_CLOUDFLARE_IP=true, and never on Vercel.
+    if (process.env["TRUST_CLOUDFLARE_IP"] === "true" && !process.env["VERCEL"]) {
+      const cfIp = normalizeIpCandidate(c.req.header("cf-connecting-ip"));
+      if (cfIp) return cfIp;
+    }
 
     // On Vercel the platform sets this header itself and overwrites any client-supplied value, so it is
     // the real client address even when `x-forwarded-for` carries extra hops (for example a rewrite from

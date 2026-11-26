@@ -169,6 +169,28 @@ describe("@vellum/api - production security, reliability & scale hardening", () 
       }
     });
 
+    it("ignores a client-supplied cf-connecting-ip unless Cloudflare is explicitly trusted", async () => {
+      const app = new Hono();
+      app.get("/ip", (c) => c.json({ ip: extractClientIp(c) }));
+      const headers = { "cf-connecting-ip": "10.9.9.9", "x-forwarded-for": "198.51.100.42", "x-vercel-forwarded-for": "203.0.113.7" };
+      const ipOf = async (): Promise<string> => ((await (await app.fetch(new Request("http://localhost/ip", { headers }))).json()) as { ip: string }).ip;
+      process.env["TRUST_PROXY_HOPS"] = "1";
+      delete process.env["TRUST_CLOUDFLARE_IP"];
+      delete process.env["VERCEL"];
+      expect(await ipOf()).toBe("198.51.100.42");
+      process.env["VERCEL"] = "1";
+      try {
+        expect(await ipOf()).toBe("203.0.113.7");
+        process.env["TRUST_CLOUDFLARE_IP"] = "true";
+        expect(await ipOf()).toBe("203.0.113.7");
+        delete process.env["VERCEL"];
+        expect(await ipOf()).toBe("10.9.9.9");
+      } finally {
+        delete process.env["VERCEL"];
+        delete process.env["TRUST_CLOUDFLARE_IP"];
+      }
+    });
+
     it("prevents X-Forwarded-For leftmost spoofing and respects TRUST_PROXY_HOPS", async () => {
       const app = new Hono();
       app.get("/ip", (c) => c.json({ ip: extractClientIp(c) }));

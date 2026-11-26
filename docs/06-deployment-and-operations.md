@@ -81,6 +81,7 @@ When `NODE_ENV=production`, the server **refuses to start** if:
 | `BETTER_AUTH_SECRET`, `JWT_SECRET`, `API_KEY_PEPPER`, `CURSOR_HMAC_SECRET`, `MASTER_ENCRYPTION_KEY` | Yes (unique, >=16 chars) | Core cryptographic keys (HKDF audit/billing chain keys derive from `MASTER_ENCRYPTION_KEY`). |
 | `CORS_ALLOWED_ORIGINS` | Yes | Comma-separated exact origins (`https://example.com`). Wildcards (`*`) and `null` are rejected. |
 | `TRUST_PROXY_HOPS` | Optional (default `1`) | Number of trusted reverse-proxy hops for spoof-resistant IP extraction (`0` if exposed directly). |
+| `TRUST_CLOUDFLARE_IP` | Optional (default unset) | Set to `true` only when every request passes through Cloudflare. Then `cf-connecting-ip` is trusted. Ignored on Vercel. |
 
 ---
 
