@@ -89,6 +89,21 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     this.controlStore = options.controlStore;
     this.dataStore = options.dataStore;
     this.jwtSecret = options.jwtSecret ?? "vellum_jwt_secret_v1";
+    const ttl = Number(process.env["REALTIME_KEY_RECHECK_TTL_MS"] ?? 3000);
+    this.keyRecheckTtlMs = Number.isFinite(ttl) && ttl >= 0 ? ttl : 3000;
+  }
+
+  /**
+   * Active-key results for the per-event credential recheck, kept for a few seconds so an event stream does
+   * not hit the control database once per event per key. Only an active key is cached, so a revoked key
+   * is dropped from sessions within REALTIME_KEY_RECHECK_TTL_MS (default 3 s, 0 disables).
+   */
+  private readonly keyRecheckCache = new Map<string, { record: ApiKeyRecord; expiresAt: number }>();
+  private readonly keyRecheckTtlMs: number;
+
+  /** Drops cached key rechecks (call after a key is revoked or edited in this process). */
+  public invalidateKeyRecheckCache(): void {
+    this.keyRecheckCache.clear();
   }
 
   private indexSessionForProject(session: ConnectionSession, projectId: string): void {
@@ -132,7 +147,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       // a fan-out to N sessions sharing a key costs one query, not N).
       let pending = keyMemo?.get(apiKey0.keyPrefix);
       if (!pending) {
-        pending = this.lookupKeyByPrefix(apiKey0.keyPrefix);
+        pending = this.lookupKeyForRecheck(apiKey0.keyPrefix);
         keyMemo?.set(apiKey0.keyPrefix, pending);
       }
       const current = await pending;
@@ -144,6 +159,21 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       }
     }
     return this.checkLocalCredentialExpiry(session, nowMs);
+  }
+
+  private async lookupKeyForRecheck(prefix: string): Promise<ApiKeyRecord | null | undefined> {
+    if (this.keyRecheckTtlMs === 0) return this.lookupKeyByPrefix(prefix);
+    const hit = this.keyRecheckCache.get(prefix);
+    const now = Date.now();
+    if (hit && hit.expiresAt > now && !hit.record.revokedAt) return hit.record;
+    const record = await this.lookupKeyByPrefix(prefix);
+    if (record) {
+      if (this.keyRecheckCache.size >= 1000) this.keyRecheckCache.clear();
+      this.keyRecheckCache.set(prefix, { record, expiresAt: now + this.keyRecheckTtlMs });
+    } else {
+      this.keyRecheckCache.delete(prefix);
+    }
+    return record;
   }
 
   /** Reads the key from PostgreSQL when the store can; `undefined` = store cannot look up. */
