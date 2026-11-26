@@ -237,6 +237,10 @@ export class NeonStorageAdapter extends AuthMethodDelegates implements StorageAd
     );
   }
 
+  public async queryOutboxMaxSeq(ctx: TenantContext): Promise<string> {
+    return this.withTransaction(ctx, async (tx) => (await tx.queryOutboxMaxSeq?.()) ?? "0");
+  }
+
   public async runIndexBuilderWorker(
     options: IndexBuilderOptions = {}
   ): Promise<{ builtCount: number; pendingCount: number }> {

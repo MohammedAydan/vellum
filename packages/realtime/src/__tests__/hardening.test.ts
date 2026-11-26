@@ -366,3 +366,51 @@ describe("@vellum/realtime - LISTEN unavailable", () => {
     expect(delivered).toEqual(["7"]);
   });
 });
+
+describe("@vellum/realtime - cold instance does not replay history", () => {
+  it("delivers only the committed event, not older outbox rows, when a project's seq has a gap", async () => {
+    const mk = (n: number): OutboxEvent => ({
+      seqId: String(n), projectId: PROJECT_A, collectionPath: "items", path: `items/i${n}`, documentId: `i${n}`,
+      opType: "updated", version: 1, beforeData: null, afterData: { n }, committedAt: new Date().toISOString(),
+    });
+    const dataStore = new DataPlaneStore();
+    let catchupQueries = 0;
+    // History that already exists in the database (global bigserial: other projects use the gaps in between).
+    dataStore.queryOutboxSince = async () => {
+      catchupQueries += 1;
+      return [mk(3), mk(7), mk(9)];
+    };
+    const hub = new RealtimeGatewayHub({ controlStore: makeMockControlStore(), dataStore });
+    const frames: ServerFrame[] = [];
+    const handle = hub.createConnectionSession((f) => frames.push(f));
+    await handle.handleClientFrame({ type: "auth", projectId: PROJECT_A, apiKey: KEY_A });
+    await handle.handleClientFrame({ type: "subscribe", subId: "s1", query: { collectionPath: "items" } });
+    catchupQueries = 0;
+    frames.length = 0;
+    await hub.notifyCommittedEvents(PROJECT_A, [mk(50)]);
+    const delivered = frames.filter((f) => f.type === "mutation").map((f) => (f as { seqId?: unknown }).seqId);
+    expect(delivered.map(Number)).toEqual([50]);
+    expect(catchupQueries).toBe(0);
+  });
+});
+
+describe("@vellum/realtime - subscribe watermark", () => {
+  it("uses the project's newest outbox seq, not the end of the oldest 500 rows", async () => {
+    const dataStore = new DataPlaneStore();
+    const old = (n: number): OutboxEvent => ({
+      seqId: String(n), projectId: PROJECT_A, collectionPath: "items", path: `items/i${n}`, documentId: `i${n}`,
+      opType: "updated", version: 1, beforeData: null, afterData: { n }, committedAt: new Date().toISOString(),
+    });
+    dataStore.queryOutboxSince = async () => Array.from({ length: 500 }, (_, i) => old(i + 1));
+    (dataStore as unknown as { queryOutboxMaxSeq: () => Promise<string> }).queryOutboxMaxSeq = async () => "9000";
+    // A PostgreSQL-backed store has no in-process counter; hide the memory store's.
+    Object.defineProperty(dataStore, "outboxSeq", { value: undefined });
+    const hub = new RealtimeGatewayHub({ controlStore: makeMockControlStore(), dataStore });
+    const frames: ServerFrame[] = [];
+    const handle = hub.createConnectionSession((f) => frames.push(f));
+    await handle.handleClientFrame({ type: "auth", projectId: PROJECT_A, apiKey: KEY_A });
+    await handle.handleClientFrame({ type: "subscribe", subId: "s1", path: "items/i1" });
+    const sync = frames.find((f) => f.type === "initial_sync") as { seqId?: unknown } | undefined;
+    expect(Number(sync?.seqId)).toBe(9000);
+  });
+});

@@ -156,6 +156,8 @@ export interface TxHandle {
    */
   queryDocuments(compiled: CompiledQuery): Promise<QueriedDocument[]>;
   queryOutboxSince?(afterSeqId?: string): Promise<OutboxEvent[]>;
+  /** Highest outbox seq_id of this project ("0" when none). */
+  queryOutboxMaxSeq?(): Promise<string>;
   listActiveDocumentsInCollection?(collectionPath: string): Promise<DocumentRecord[]>;
   /** Live documents in a collection, counted up to `cap` (index-only, stops reading at the cap). */
   countLiveDocumentsUpTo?(collectionPath: string, cap: number): Promise<number>;
@@ -286,6 +288,8 @@ export interface StorageAdapter extends AuthOperations {
   listCompositeIndexes(ctx: TenantContext): Promise<CompositeIndexRecord[]>;
   deleteCompositeIndex(ctx: TenantContext, indexId: string): Promise<boolean>;
   queryOutboxSince(ctx: TenantContext, afterSeqId?: string): Promise<OutboxEvent[]>;
+  /** Highest outbox seq_id of the tenant's project ("0" when none). Optional: adapters without a durable outbox omit it. */
+  queryOutboxMaxSeq?(ctx: TenantContext): Promise<string>;
   /**
    * Builds `building` composite indexes. Resumable and time-boxable so it can
    * run inside a serverless request (`deadlineMs`) and be retried until done.
