@@ -2,7 +2,7 @@
  * @vellumdb/sdk-js - Auto-Chunked Bulk Writes
  *
  * Splits arbitrarily large write arrays into server-safe `batchWrite` chunks
- * (default 500 ops/batch) with bounded concurrency (default 4) and full
+ * (default and maximum 100 ops/batch, the server limit) with bounded concurrency (default 4) and full
  * `AbortSignal` cancellation support.
  */
 
@@ -13,7 +13,9 @@ import type {
   RequestOptions,
 } from "../types.js";
 
-const DEFAULT_BATCH_CHUNK_SIZE = 500;
+/** The server accepts at most 100 operations per batch. */
+const MAX_BATCH_CHUNK_SIZE = 100;
+const DEFAULT_BATCH_CHUNK_SIZE = MAX_BATCH_CHUNK_SIZE;
 const DEFAULT_BATCH_CONCURRENCY = 4;
 
 /** Split an array into contiguous slices of at most `chunkSize` elements. */
@@ -54,7 +56,7 @@ export async function batchWriteChunked(
 
   const chunkSize =
     typeof options.chunkSize === "number" && Number.isFinite(options.chunkSize) && options.chunkSize >= 1
-      ? Math.floor(options.chunkSize)
+      ? Math.min(Math.floor(options.chunkSize), MAX_BATCH_CHUNK_SIZE)
       : DEFAULT_BATCH_CHUNK_SIZE;
   const concurrency =
     typeof options.concurrency === "number" && Number.isFinite(options.concurrency) && options.concurrency >= 1

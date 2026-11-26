@@ -191,7 +191,7 @@ describe("@vellumdb/sdk-js enterprise - auto-chunked bulk writes", () => {
       customFetch: mockFetch,
     });
 
-    const ops = Array.from({ length: 1_250 }, (_, idx) => ({
+    const ops = Array.from({ length: 125 }, (_, idx) => ({
       type: "set",
       path: `records/r_${idx}`,
       data: { idx },
@@ -200,22 +200,38 @@ describe("@vellumdb/sdk-js enterprise - auto-chunked bulk writes", () => {
 
     const progressEvents: number[] = [];
     const result = await db.batchWriteChunked(ops, {
-      chunkSize: 500,
+      chunkSize: 50,
       concurrency: 2,
       onProgress: (p) => progressEvents.push(p.completedOperations),
     });
 
-    expect(result.totalOperations).toBe(1_250);
+    expect(result.totalOperations).toBe(125);
     expect(result.totalChunks).toBe(3);
-    expect(chunkSizes).toEqual([500, 500, 250]);
+    expect(chunkSizes).toEqual([50, 50, 25]);
     expect(peakInFlight).toBeLessThanOrEqual(2);
     expect(result.results).toEqual([
-      { committed: 500, firstIdx: 0 },
-      { committed: 500, firstIdx: 500 },
-      { committed: 250, firstIdx: 1000 },
+      { committed: 50, firstIdx: 0 },
+      { committed: 50, firstIdx: 50 },
+      { committed: 25, firstIdx: 100 },
     ]);
     expect(progressEvents).toHaveLength(3);
-    expect(progressEvents[progressEvents.length - 1]).toBe(1_250);
+    expect(progressEvents[progressEvents.length - 1]).toBe(125);
+  });
+
+  it("defaults to the server limit of 100 operations and never exceeds it", async () => {
+    const sizes: number[] = [];
+    const executor = {
+      batchWrite: async (writes: unknown[]) => {
+        sizes.push(writes.length);
+        return {};
+      },
+    };
+    const ops = Array.from({ length: 250 }, (_, idx) => ({ type: "set", path: `r/${idx}`, data: { idx } }));
+    await batchWriteChunked(executor, ops);
+    expect(sizes).toEqual([100, 100, 50]);
+    sizes.length = 0;
+    await batchWriteChunked(executor, ops, { chunkSize: 500 });
+    expect(sizes).toEqual([100, 100, 50]);
   });
 
   it("supports standalone batchWriteChunked helper and AbortSignal cancellation", async () => {

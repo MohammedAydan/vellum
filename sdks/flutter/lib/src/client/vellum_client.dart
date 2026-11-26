@@ -910,12 +910,12 @@ class VellumClient implements VellumClientPort {
         idempotencyKey: idempotencyKey,
       );
 
-  /// Splits a large list of writes into bounded chunks (default 500 per batch)
+  /// Splits a large list of writes into bounded chunks (default and maximum 100 per batch, the server limit)
   /// and submits each chunk sequentially via [batchWrite].
   @override
   Future<List<JsonMap>> writeBatchChunked(
     List<JsonMap> writes, {
-    int chunkSize = 500,
+    int chunkSize = 100,
     String? idempotencyKeyPrefix,
   }) async {
     if (chunkSize <= 0) {
@@ -926,6 +926,8 @@ class VellumClient implements VellumClientPort {
       );
     }
     if (writes.isEmpty) return const <JsonMap>[];
+    // The server accepts at most 100 operations per batch.
+    chunkSize = min(chunkSize, 100);
     final results = <JsonMap>[];
     var chunkIndex = 0;
     for (var i = 0; i < writes.length; i += chunkSize) {
