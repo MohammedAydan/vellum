@@ -256,6 +256,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
   });
 
   constructor(options: PgControlPlaneStoreOptions = {}) {
+    this.wrapMutatorsToInvalidate();
     this.logger = options.logger;
     if (options.pool) {
       this.pool = options.pool;
@@ -581,6 +582,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
       // stale (including a ruleset deactivated by another instance).
       this.activeRulesetCache.clear();
       this.authConfigCache.clear();
+      this.invalidateReadCache();
     } catch (err: unknown) {
       try {
         await client.query("ROLLBACK");
@@ -634,12 +636,76 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
     }
   }
 
+
+  // ------------------------------------------------- short-TTL async read cache
+  // Per-request hot-path reads (project, ruleset, auth config, relation rules, api key) are served from a
+  // small in-process cache for a few seconds. Local mutations clear it at once; other instances see a change
+  // after at most the TTL (CONTROL_READ_CACHE_TTL_MS, default 5000, 0 disables). Errors and null results are
+  // never cached, so a new key or a suspended project is never "remembered" as missing.
+  private readonly readCache = new Map<string, { value: unknown; expiresAt: number }>();
+  private readonly readInflight = new Map<string, Promise<unknown>>();
+  private readonly readCacheTtlMs = (() => {
+    const raw = Number(process.env["CONTROL_READ_CACHE_TTL_MS"] ?? 5000);
+    return Number.isFinite(raw) && raw >= 0 ? raw : 5000;
+  })();
+  private readCacheGeneration = 0;
+
+  public invalidateReadCache(): void {
+    this.readCacheGeneration += 1;
+    this.readCache.clear();
+    this.readInflight.clear();
+  }
+
+  private async readCached<T>(key: string, load: () => Promise<T>): Promise<T> {
+    if (this.readCacheTtlMs === 0) return load();
+    const hit = this.readCache.get(key);
+    if (hit !== undefined && hit.expiresAt > Date.now()) return hit.value as T;
+    const pending = this.readInflight.get(key);
+    if (pending !== undefined) return pending as Promise<T>;
+    const generation = this.readCacheGeneration;
+    const p = load()
+      .then((value) => {
+        if (value !== null && generation === this.readCacheGeneration) {
+          if (this.readCache.size >= 5000) this.readCache.clear();
+          this.readCache.set(key, { value, expiresAt: Date.now() + this.readCacheTtlMs });
+        }
+        return value;
+      })
+      .finally(() => {
+        if (this.readInflight.get(key) === p) this.readInflight.delete(key);
+      });
+    this.readInflight.set(key, p);
+    return p;
+  }
+
+  private wrapMutatorsToInvalidate(): void {
+    const self = this as unknown as Record<string, unknown>;
+    for (const name of [
+      "registerApiKey", "revokeApiKey", "publishSecurityRuleset", "replaceRelationRules", "upsertAuthConfig", "createProject",
+    ]) {
+      const original = self[name] as ((...a: unknown[]) => unknown) | undefined;
+      if (typeof original !== "function") continue;
+      self[name] = async (...a: unknown[]) => {
+        this.invalidateReadCache();
+        try {
+          return await original.apply(this, a);
+        } finally {
+          this.invalidateReadCache();
+        }
+      };
+    }
+  }
+
   // ------------------------------------------------------------- sync reads
 
   private static readonly UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   /** Authoritative project read from PostgreSQL (no mirror, no cache). */
-  public async getProjectAsync(projectId: string): Promise<ProjectResult> {
+  public getProjectAsync(projectId: string): Promise<ProjectResult> {
+    return this.readCached("getProjectAsync:" + projectId, () => this.getProjectAsyncUncached(projectId));
+  }
+
+  private async getProjectAsyncUncached(projectId: string): Promise<ProjectResult> {
     if (!PgControlPlaneStore.UUID_RE.test(projectId)) {
       throw new VellumError("NOT_FOUND", `Project '${projectId}' not found`);
     }
@@ -660,7 +726,11 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
   }
 
   /** Authoritative active-ruleset read (unique partial index idx_active_ruleset_per_project). */
-  public async getActiveRulesetAsync(projectId: string): Promise<SecurityRulesetRecord | null> {
+  public getActiveRulesetAsync(projectId: string): Promise<SecurityRulesetRecord | null> {
+    return this.readCached("getActiveRulesetAsync:" + projectId, () => this.getActiveRulesetAsyncUncached(projectId));
+  }
+
+  private async getActiveRulesetAsyncUncached(projectId: string): Promise<SecurityRulesetRecord | null> {
     if (!PgControlPlaneStore.UUID_RE.test(projectId)) return null;
     const { rows } = await this.pool.query(
       `SELECT id, project_id AS "projectId", version, rules_ast AS "rulesAst",
@@ -672,7 +742,11 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
     return row ? { ...row, rulesAst: asObject(row.rulesAst), createdAt: iso(row.createdAt) } : null;
   }
 
-  public async getAuthConfigAsync(projectId: string): Promise<ProjectAuthConfig | null> {
+  public getAuthConfigAsync(projectId: string): Promise<ProjectAuthConfig | null> {
+    return this.readCached("getAuthConfigAsync:" + projectId, () => this.getAuthConfigAsyncUncached(projectId));
+  }
+
+  private async getAuthConfigAsyncUncached(projectId: string): Promise<ProjectAuthConfig | null> {
     if (!PgControlPlaneStore.UUID_RE.test(projectId)) return null;
     const { rows } = await this.pool.query(
       `SELECT ${AUTH_CONFIG_COLUMNS} FROM project_auth_configs WHERE project_id = $1::uuid`,
@@ -681,7 +755,11 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
     return rows[0] ? mapAuthConfigRow(rows[0] as Record<string, unknown>) : null;
   }
 
-  public async getRelationRulesVersionAsync(projectId: string): Promise<number> {
+  public getRelationRulesVersionAsync(projectId: string): Promise<number> {
+    return this.readCached("getRelationRulesVersionAsync:" + projectId, () => this.getRelationRulesVersionAsyncUncached(projectId));
+  }
+
+  private async getRelationRulesVersionAsyncUncached(projectId: string): Promise<number> {
     if (!PgControlPlaneStore.UUID_RE.test(projectId)) return 0;
     const { rows } = await this.pool.query(
       `SELECT version FROM project_relation_rules_meta WHERE project_id = $1::uuid`,
@@ -690,7 +768,11 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
     return rows[0] ? Number((rows[0] as { version: number }).version) : 0;
   }
 
-  public async getRelationRulesAsync(projectId: string): Promise<ProjectRelationRuleRecord[]> {
+  public getRelationRulesAsync(projectId: string): Promise<ProjectRelationRuleRecord[]> {
+    return this.readCached("getRelationRulesAsync:" + projectId, () => this.getRelationRulesAsyncUncached(projectId));
+  }
+
+  private async getRelationRulesAsyncUncached(projectId: string): Promise<ProjectRelationRuleRecord[]> {
     if (!PgControlPlaneStore.UUID_RE.test(projectId)) return [];
     const { rows } = await this.pool.query(
       `SELECT id, project_id AS "projectId", collection, field,
