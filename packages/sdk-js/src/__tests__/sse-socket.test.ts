@@ -132,7 +132,7 @@ describe("SseSocket stall detection", () => {
     const fetchFn = async () => sseResponse([": stream-open\n\n"], true);
     const socket = new SseSocket("https://api.example.com/v1/realtime", { fetchFn: fetchFn as never, stallTimeoutMs: 60, restartDebounceMs: 0 });
     const closed = new Promise<{ code: number; reason: string }>((resolve) => {
-      socket.onclose = (e: { code: number; reason: string }) => resolve(e);
+      socket.onclose = (e: { code?: number; reason?: unknown }) => resolve({ code: Number(e.code), reason: String(e.reason) });
     });
     await new Promise((r) => setTimeout(r, 5));
     socket.send(JSON.stringify({ type: "auth", projectId: "p", apiKey: "k" }));
