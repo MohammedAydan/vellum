@@ -89,6 +89,14 @@ export function extractClientIp(
     const cfIp = normalizeIpCandidate(c.req.header("cf-connecting-ip"));
     if (cfIp) return cfIp;
 
+    // On Vercel the platform sets this header itself and overwrites any client-supplied value, so it is
+    // the real client address even when `x-forwarded-for` carries extra hops (for example a rewrite from
+    // another deployment). Without it, every user behind such a hop would share one rate-limit bucket.
+    if (process.env["VERCEL"] !== undefined && process.env["VERCEL"] !== "") {
+      const vercelIp = normalizeIpCandidate(c.req.header("x-vercel-forwarded-for")?.split(",")[0]);
+      if (vercelIp) return vercelIp;
+    }
+
     const forwarded = c.req.header("x-forwarded-for");
     if (typeof forwarded === "string" && forwarded.length > 0) {
       const hops = forwarded

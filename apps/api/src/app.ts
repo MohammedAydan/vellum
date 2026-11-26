@@ -217,6 +217,14 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     "*",
     createProjectCors(platform.controlStore, (origin) => globalCorsValidator(origin) !== undefined)
   );
+  // The global CORS layer adds Allow-Credentials to every response. Without a matching Allow-Origin it means
+  // nothing to a browser, but it should not be sent: drop it when no origin was granted.
+  app.use("*", async (c, next) => {
+    await next();
+    if (c.res.headers.has("access-control-allow-credentials") && !c.res.headers.has("access-control-allow-origin")) {
+      c.res.headers.delete("access-control-allow-credentials");
+    }
+  });
   app.use(
     "*",
     cors({
