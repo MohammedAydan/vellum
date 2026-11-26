@@ -732,6 +732,19 @@ export function createSqlTransactionHandle(
       assertOpen();
       const uniquePaths = Array.from(new Set(paths));
       if (uniquePaths.length === 0) return [];
+      if (forUpdate) {
+        // FOR UPDATE cannot lock a row that does not exist yet, so concurrent blind creates of one path
+        // would all read "absent" and race to write version 1. A per-path advisory lock, taken in sorted
+        // order, serialises them (and cannot deadlock against another batch that sorts the same way).
+        await runPrepared(
+          client,
+          prepared,
+          "vellum_batch_path_locks",
+          `SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':' || s.p, 0))
+             FROM (SELECT p FROM unnest($2::text[]) AS p ORDER BY p) s`,
+          [projectId, uniquePaths]
+        );
+      }
       const { rows } = await runPrepared<DocumentRecord>(
         client,
         prepared,
