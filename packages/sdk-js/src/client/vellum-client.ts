@@ -539,8 +539,13 @@ export class VellumClient implements VellumClientInterface {
       }
       const operation = frame["operation"];
       const changeType = operation === "create" ? "added" : operation === "delete" ? "removed" : "modified";
-      const snap = parseWireDocument(frame["document"]);
-      if (!snap) return;
+      const parsed = parseWireDocument(frame["document"]);
+      if (!parsed) return;
+      // A deleted document reports exists=false and data() === null, like a missing document.
+      const snap: DocumentSnapshot<Record<string, unknown>> =
+        changeType === "removed"
+          ? Object.freeze({ ...parsed, exists: false, data: () => null as unknown as Record<string, unknown> })
+          : parsed;
       // Events from concurrent writes can arrive out of order. An update that carries an older
       // version than the document already held must not overwrite it.
       // A replay of the same version (an SSE reconnect or an overlapping catch-up) is a duplicate and

@@ -349,8 +349,18 @@ class DocumentReference<T> {
           }
         }
       } else if (type == 'mutation') {
-        final snap = snapshotFromWire<T>(frame['document'], fromJson);
-        if (snap != null && !controller.isClosed) controller.add(snap);
+        final wire = snapshotFromWire<T>(frame['document'], fromJson);
+        if (wire != null && !controller.isClosed) {
+          // A deleted document reports exists == false and data() == null.
+          controller.add(frame['operation'] == 'delete'
+              ? DocumentSnapshot<T>(
+                  id: wire.id,
+                  path: wire.path,
+                  version: wire.version,
+                  data: null,
+                )
+              : wire);
+        }
       } else if (type == 'error') {
         final err = frame['error'] is Map
             ? (frame['error'] as Map).cast<String, Object?>()
