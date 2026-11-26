@@ -128,7 +128,14 @@ class DocumentReference<T> {
     try {
       res = await client.request('GET', '/documents/$encodedPath$suffix');
     } on VellumException catch (error) {
-      if (autoId && error.statusCode == 404) {
+      // A missing document is a normal result (exists == false), like the JS SDK.
+      // A missing project is a real error and still throws.
+      final missingDoc = error.statusCode == 404 &&
+          (autoId ||
+              (error.code == 'NOT_FOUND' &&
+                  !RegExp(r'^Project\b', caseSensitive: false)
+                      .hasMatch(error.message)));
+      if (missingDoc) {
         return DocumentSnapshot<T>(id: id, path: path, version: 0, data: null);
       }
       rethrow;
