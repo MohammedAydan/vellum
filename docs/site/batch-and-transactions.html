@@ -27,7 +27,7 @@
     <div class="breadcrumb">Core concepts <span>/</span> <strong>Batch Writes &amp; Transactions</strong></div>
     <article class="article"><h1 id="batch-writes-transactions">Batch Writes &amp; Transactions<a class="anchor" href="#batch-writes-transactions" aria-label="Link to section">#</a></h1>
 <p>Choose the right write primitive for your consistency and throughput requirements:</p>
-<div class="table-wrap"><table><thead><tr><th>Primitive</th><th>Atomicity</th><th>Max Ops per Request</th><th>Use Case</th></tr></thead><tbody><tr><td><code class="inline-code">batchWrite</code> / <code class="inline-code">batch().commit()</code></td><td>All-or-nothing single SQL transaction</td><td>500 writes</td><td>Atomic multi-document writes without read dependencies.</td></tr><tr><td><code class="inline-code">batchWriteChunked</code> / <code class="inline-code">commitChunked</code></td><td>Atomic per chunk (not across chunks)</td><td>Unlimited (auto-chunked)</td><td>High-throughput imports, migrations, and catalog syncs.</td></tr><tr><td><code class="inline-code">runTransaction</code></td><td>Serializable OCC read-modify-write</td><td>Bounded interactive set</td><td>Balances, inventory reservations, uniqueness invariants.</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Primitive</th><th>Atomicity</th><th>Max Ops per Request</th><th>Use Case</th></tr></thead><tbody><tr><td><code class="inline-code">batchWrite</code> / <code class="inline-code">batch().commit()</code></td><td>All-or-nothing single SQL transaction</td><td>100 writes</td><td>Atomic multi-document writes without read dependencies.</td></tr><tr><td><code class="inline-code">batchWriteChunked</code> / <code class="inline-code">commitChunked</code></td><td>Atomic per chunk (not across chunks)</td><td>Unlimited (auto-chunked)</td><td>High-throughput imports, migrations, and catalog syncs.</td></tr><tr><td><code class="inline-code">runTransaction</code></td><td>Serializable OCC read-modify-write</td><td>Bounded interactive set</td><td>Balances, inventory reservations, uniqueness invariants.</td></tr></tbody></table></div>
 <hr>
 <h2 id="atomic-batch-writes-auto-chunked-bulk-writes">Atomic Batch Writes &amp; Auto-Chunked Bulk Writes<a class="anchor" href="#atomic-batch-writes-auto-chunked-bulk-writes" aria-label="Link to section">#</a></h2>
 <h3 id="typescript-vellumdb-sdk-js">TypeScript (<code class="inline-code">@vellumdb/sdk-js</code>)<a class="anchor" href="#typescript-vellumdb-sdk-js" aria-label="Link to section">#</a></h3>
@@ -35,7 +35,7 @@
   <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
   <pre><code class="hl-code"><span class="hl-keyword">import</span> { fieldOp } <span class="hl-keyword">from</span> <span class="hl-string">&quot;@vellumdb/sdk-js&quot;</span>;
 
-<span class="hl-comment">// 1. Single atomic batch (&lt;= 500 operations)</span>
+<span class="hl-comment">// 1. Single atomic batch (&lt;= 100 operations)</span>
 <span class="hl-keyword">await</span> db<span class="hl-property">.batchWrite</span>([
   { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;set&quot;</span>, path: <span class="hl-string">&quot;products/sku_1&quot;</span>, data: { priceCents: <span class="hl-number">1999</span> }, merge: <span class="hl-keyword">true</span> },
   { <span class="hl-keyword">type</span>: <span class="hl-string">&quot;update&quot;</span>, path: <span class="hl-string">&quot;products/sku_2&quot;</span>, data: { stock: fieldOp<span class="hl-property">.increment</span>(-<span class="hl-number">1</span>) } },
@@ -45,7 +45,7 @@
 <span class="hl-comment">// 2. Auto-chunked bulk writes with bounded concurrency, progress, and AbortSignal</span>
 <span class="hl-keyword">const</span> ac = <span class="hl-keyword">new</span> <span class="hl-fn">AbortController</span>();
 <span class="hl-keyword">const</span> result = <span class="hl-keyword">await</span> db<span class="hl-property">.batchWriteChunked</span>(thousandsOfWrites, {
-  chunkSize: <span class="hl-number">500</span>,    <span class="hl-comment">// default 500 ops per HTTP batchWrite</span>
+  chunkSize: <span class="hl-number">100</span>,    <span class="hl-comment">// default and maximum: 100 ops per HTTP batchWrite</span>
   concurrency: <span class="hl-number">4</span>,    <span class="hl-comment">// default 4 concurrent in-flight chunks</span>
   signal: ac<span class="hl-property">.signal</span>,
   onProgress: ({ completedChunks, totalChunks, completedOperations, totalOperations }) =&gt; {
@@ -68,22 +68,38 @@ console<span class="hl-property">.log</span>(<span class="hl-string">`Committed 
   );
 }
 
-<span class="hl-comment">// Single atomic batch (&lt;= 500 ops)</span>
+<span class="hl-comment">// Single atomic batch (&lt;= 100 ops)</span>
 <span class="hl-keyword">await</span> batch<span class="hl-property">.commit</span>(idempotencyKey: <span class="hl-string">'catalog-atomic-1'</span>);
 
 <span class="hl-comment">// Auto-chunked sequential submission with deterministic per-chunk idempotency keys</span>
 <span class="hl-comment">// Sends &quot;catalog-sync-0&quot;, &quot;catalog-sync-1&quot;, ...</span>
 <span class="hl-keyword">final</span> chunkResponses = <span class="hl-keyword">await</span> batch<span class="hl-property">.commitChunked</span>(
-  chunkSize: <span class="hl-number">500</span>,
+  chunkSize: <span class="hl-number">100</span>,
   idempotencyKeyPrefix: <span class="hl-string">'catalog-sync'</span>,
 );
 
 <span class="hl-comment">// 2. Direct list helper</span>
 <span class="hl-keyword">await</span> client<span class="hl-property">.writeBatchChunked</span>(
   rawWriteMaps,
-  chunkSize: <span class="hl-number">500</span>,
+  chunkSize: <span class="hl-number">100</span>,
   idempotencyKeyPrefix: <span class="hl-string">'bulk-import'</span>,
 );</code></pre>
+</div>
+<hr>
+<h3 id="handling-batch-size-exceeded">Handling <code class="inline-code">BATCH_SIZE_EXCEEDED</code><a class="anchor" href="#handling-batch-size-exceeded" aria-label="Link to section">#</a></h3>
+<p><code class="inline-code">batchWrite</code>, <code class="inline-code">batch().commit()</code>, transaction commits and <code class="inline-code">getDocuments</code> accept at most <code class="inline-code">MAX_BATCH_OPERATIONS</code> (100) items. Sending more fails with HTTP 400 and code <code class="inline-code">BATCH_SIZE_EXCEEDED</code>. The error details carry <code class="inline-code">count</code> (what you sent) and <code class="inline-code">maxOperations</code> (the limit). The error is not retryable: split the batch.</p>
+<div class="code-block">
+  <div class="cb-head"><span class="cb-lang">TS</span><button class="cb-copy" type="button">Copy</button></div>
+  <pre><code class="hl-code"><span class="hl-keyword">try</span> {
+  <span class="hl-keyword">await</span> db<span class="hl-property">.batchWrite</span>(writes); <span class="hl-comment">// writes.length &gt; 100 throws</span>
+} <span class="hl-keyword">catch</span> (error) {
+  <span class="hl-keyword">if</span> ((error <span class="hl-keyword">as</span> { code?: string })<span class="hl-property">.code</span> === <span class="hl-string">&quot;BATCH_SIZE_EXCEEDED&quot;</span>) {
+    <span class="hl-comment">// Use the chunked helper instead. Each chunk of up to 100 is atomic on its own.</span>
+    <span class="hl-keyword">await</span> db<span class="hl-property">.batchWriteChunked</span>(writes, { chunkSize: <span class="hl-number">100</span> });
+  } <span class="hl-keyword">else</span> {
+    <span class="hl-keyword">throw</span> error;
+  }
+}</code></pre>
 </div>
 <hr>
 <h2 id="interactive-occ-transactions-runtransaction">Interactive OCC Transactions (<code class="inline-code">runTransaction</code>)<a class="anchor" href="#interactive-occ-transactions-runtransaction" aria-label="Link to section">#</a></h2>
@@ -132,7 +148,7 @@ console<span class="hl-property">.log</span>(<span class="hl-string">`Committed 
 <blockquote><p><strong>Keep transaction callbacks pure</strong>: Because <code class="inline-code">updateFunction</code> may re-run on <code class="inline-code">ABORTED_CONFLICT</code>, avoid side effects (sending emails, charging cards, mutating external state) inside the callback until <code class="inline-code">runTransaction</code> resolves.</p></blockquote></article>
     <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
   </main>
-  <aside class="toc"><div class="toc-title">On this page</div><a href="#atomic-batch-writes-auto-chunked-bulk-writes" class="toc-link toc-l2">Atomic Batch Writes &amp; Auto-Chunked Bulk Writes</a><a href="#typescript-vellumdb-sdk-js" class="toc-link toc-l3">TypeScript (`@vellumdb/sdk-js`)</a><a href="#flutter-dart-vellum-flutter" class="toc-link toc-l3">Flutter / Dart (`vellum_flutter`)</a><a href="#interactive-occ-transactions-runtransaction" class="toc-link toc-l2">Interactive OCC Transactions (`runTransaction`)</a><a href="#typescript-vellumdb-sdk-js" class="toc-link toc-l3">TypeScript (`@vellumdb/sdk-js`)</a><a href="#flutter-dart-vellum-flutter" class="toc-link toc-l3">Flutter / Dart (`vellum_flutter`)</a></aside>
+  <aside class="toc"><div class="toc-title">On this page</div><a href="#atomic-batch-writes-auto-chunked-bulk-writes" class="toc-link toc-l2">Atomic Batch Writes &amp; Auto-Chunked Bulk Writes</a><a href="#typescript-vellumdb-sdk-js" class="toc-link toc-l3">TypeScript (`@vellumdb/sdk-js`)</a><a href="#flutter-dart-vellum-flutter" class="toc-link toc-l3">Flutter / Dart (`vellum_flutter`)</a><a href="#handling-batch-size-exceeded" class="toc-link toc-l3">Handling `BATCH_SIZE_EXCEEDED`</a><a href="#interactive-occ-transactions-runtransaction" class="toc-link toc-l2">Interactive OCC Transactions (`runTransaction`)</a><a href="#typescript-vellumdb-sdk-js" class="toc-link toc-l3">TypeScript (`@vellumdb/sdk-js`)</a><a href="#flutter-dart-vellum-flutter" class="toc-link toc-l3">Flutter / Dart (`vellum_flutter`)</a></aside>
 </div>
 <div class="search-overlay" id="searchOverlay" hidden>
   <div class="search-box"><input id="searchInput" type="search" placeholder="Search guides, APIs, examples…" autocomplete="off"><button id="searchClose" type="button">esc</button></div>

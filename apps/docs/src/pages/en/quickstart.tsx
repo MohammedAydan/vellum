@@ -127,6 +127,27 @@ curl -fsS http://localhost:8080/v1/health/ready`}
         />
       </Section>
 
+      <Section id="run-typescript" title="Run the TypeScript example">
+        <P>
+          Save the example as <code>quickstart.ts</code>, set the three environment variables, and
+          run it with Node 22+. No build configuration is needed.
+        </P>
+        <Code
+          lang="bash"
+          title="Run quickstart.ts"
+          code={`npm install @vellumdb/sdk-js
+npm install -D tsx typescript
+export VELLUM_ENDPOINT="https://api.example.com"   # origin only, no /v1
+export VELLUM_PROJECT_ID="YOUR_PROJECT_ID"
+export VELLUM_API_KEY="sk_..."                    # server key; use pk_ in browsers
+npx tsx quickstart.ts`}
+        />
+        <P>
+          Top-level <code>await</code> needs an ES module. Add <code>"type": "module"</code> to
+          your <code>package.json</code>, or wrap the example in an <code>async</code> function.
+        </P>
+      </Section>
+
       <Section id="operators-at-a-glance" title="4. All 13 query operators at a glance">
         <P>
           Both SDKs and the REST <code>POST /query</code> endpoint support the exact same 13

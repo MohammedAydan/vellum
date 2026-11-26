@@ -1,6 +1,6 @@
 # VELLUM — PostgreSQL-Native Multi-Tenant Document Database Platform
 
-> **Status: public beta, version `0.0.1`.** The project and every SDK share one version. APIs may still change before a stable release. See [CHANGELOG.md](./CHANGELOG.md).
+> **Status: public beta.** The current version is in [CHANGELOG.md](./CHANGELOG.md). The project and every SDK share one version. APIs may still change before a stable release.
 >
 > Deployment entry point: [two-project Vercel runbook and optional adapters](./docs/deployment/README.md).
 

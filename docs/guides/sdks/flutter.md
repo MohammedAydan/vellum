@@ -94,16 +94,16 @@ final grouped = await q.aggregate(
 ## Auto-Chunked Bulk Writes & OCC Transactions
 
 ```dart
-// Auto-chunked fluent batch (default 500 ops/chunk)
+// Auto-chunked fluent batch (default 100 ops/chunk, the server maximum)
 final batch = client.batch()
   ..set(client.doc('items/1'), {'price': 10}, merge: true)
   ..update(client.doc('items/2'), {'stock': FieldValue.increment(-1)})
   ..delete(client.doc('items/3'));
 
-await batch.commitChunked(chunkSize: 500, idempotencyKeyPrefix: 'sync-batch');
+await batch.commitChunked(chunkSize: 100, idempotencyKeyPrefix: 'sync-batch');
 
 // Or direct chunked list API
-await client.writeBatchChunked(writes, chunkSize: 500, idempotencyKeyPrefix: 'import');
+await client.writeBatchChunked(writes, chunkSize: 100, idempotencyKeyPrefix: 'import');
 
 // Interactive OCC transaction with automatic ABORTED_CONFLICT retry
 await client.runTransaction<void>((tx) async {

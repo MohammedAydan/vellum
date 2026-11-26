@@ -92,7 +92,7 @@
 <div class="code-block">
   <div class="cb-head"><span class="cb-lang">YAML</span><button class="cb-copy" type="button">Copy</button></div>
   <pre><code class="hl-code">dependencies:
-  vellum_flutter: ^<span class="hl-number">0.0</span>.<span class="hl-number">5</span></code></pre>
+  vellum_flutter: ^<span class="hl-number">0.0</span>.<span class="hl-number">7</span></code></pre>
 </div>
 <h3 id="2-initialize-write-read-update-clean-up">2. Initialize, Write, Read, Update &amp; Clean Up<a class="anchor" href="#2-initialize-write-read-update-clean-up" aria-label="Link to section">#</a></h3>
 <div class="code-block">
@@ -144,7 +144,7 @@
 <h2 id="next-steps">Next Steps<a class="anchor" href="#next-steps" aria-label="Link to section">#</a></h2>
 <ul><li><a href="query.html">Querying, Relations &amp; Aggregations</a></li><li><a href="pagination.html">Cursor Pagination &amp; Streaming</a></li><li><a href="realtime.html">Realtime Subscriptions</a></li><li><a href="batch-and-transactions.html">Batch Writes &amp; Transactions</a></li><li><a href="production-checklist.html">Production Checklist</a></li></ul>
 <h2 id="endpoint-and-account-scope">Endpoint and account scope<a class="anchor" href="#endpoint-and-account-scope" aria-label="Link to section">#</a></h2>
-<p>Pass the API origin as <code class="inline-code">endpoint</code> (for example <code class="inline-code">https://api.example.com</code>), without <code class="inline-code">/v1</code>, <code class="inline-code">/auth</code>, or a project suffix. The SDK adds the project route. Dart's optional <code class="inline-code">baseUrl</code> is a full REST-prefix override, such as <code class="inline-code">https://api.example.com/v1/projects/PROJECT_ID</code>; it is not interchangeable with <code class="inline-code">endpoint</code>. Do not pass both. Project <code class="inline-code">db.auth</code> signup accepts <code class="inline-code">displayName</code>; Console signup creates a different account and requires <code class="inline-code">name</code>. Do not add Console fields to fix a wrong project URL.</p>
+<p>Pass the API origin as <code class="inline-code">endpoint</code> (for example <code class="inline-code">https://api.example.com</code>), without <code class="inline-code">/v1</code>, <code class="inline-code">/auth</code>, or a project suffix. The SDK adds the project route. Dart's optional <code class="inline-code">baseUrl</code> is a full REST-prefix override, such as <code class="inline-code">https://api.example.com/v1/projects/PROJECT_ID</code>; it is not interchangeable with <code class="inline-code">endpoint</code>. Do not pass both. Project <code class="inline-code">db.auth</code> signup accepts <code class="inline-code">displayName</code>. If signup fails with a 400 about a missing <code class="inline-code">name</code>, the URL is wrong: check that <code class="inline-code">endpoint</code> is the bare API origin.</p>
 <p>Use <code class="inline-code">pk_</code> keys only with suitable security rules and end-user authentication. Never bundle an <code class="inline-code">sk_</code> key into browser or mobile code.</p></article>
     <footer class="article-foot"><span>VELLUM v1 · official shadcn/ui default design</span><span>Generated from docs/guides — do not edit HTML directly.</span></footer>
   </main>

@@ -168,9 +168,9 @@ const byRegion = await db.collection("orders").aggregate({
 ## الكتابة المجمّعة المقسّمة (`batchWriteChunked`) والمعاملات (`runTransaction`)
 
 ```ts
-// تقسيم تلقائي إلى دفعات آمنة (500 عملية افتراضيًا) مع تزامن محدود (4 افتراضيًا)
+// تقسيم تلقائي إلى دفعات آمنة (100 عملية افتراضيًا، وهو الحد الأقصى) مع تزامن محدود (4 افتراضيًا)
 const summary = await db.batchWriteChunked(operations, {
-  chunkSize: 500,
+  chunkSize: 100,
   concurrency: 4,
   signal: ac.signal,
   onProgress: ({ completedOperations, totalOperations }) => {
