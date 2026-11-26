@@ -88,7 +88,7 @@ export const C = {
     menu: "Menu",
     copy: "Copy", copied: "Copied",
     hero: {
-      badge: "Public beta · 0.0.5",
+      badge: "Public beta · 0.0.6",
       h1a: "The document database",
       h1b: "that lives in PostgreSQL",
       lead: "Collections, typed documents, queries, relations, realtime and end-user sign-in. One database to run. No Redis, no broker, no extra moving parts.",
@@ -124,7 +124,7 @@ export const C = {
       chips: ["composite indexes", "index advisor", "optimistic concurrency", "batch writes", "transactions", "cursor pagination", "text search", "field operations"],
     },
     sdks: {
-      h1: "SDKs for JavaScript and Flutter", lead: "One package per platform. Both are at version 0.0.5 and share the platform version.",
+      h1: "SDKs for JavaScript and Flutter", lead: "One package per platform. Both are at version 0.0.6 and share the platform version.",
       rows: [
         ["JavaScript and TypeScript", "Works in browsers and Node.js. Includes auto-generated ids, automatic token refresh, caching, document references and Google, GitHub and Apple sign-in.", "npm install @vellumdb/sdk-js", "ts"],
         ["Flutter", "A single Flutter package with secure token storage and system-browser sign-in built in, so you add no native setup. Third-party sign-in libraries stay optional.", "flutter pub add vellum_flutter", "dart"],
@@ -153,7 +153,7 @@ export const C = {
     menu: "القائمة",
     copy: "نسخ", copied: "تم النسخ",
     hero: {
-      badge: "نسخة تجريبية عامة · 0.0.5",
+      badge: "نسخة تجريبية عامة · 0.0.6",
       h1a: "قاعدة بيانات المستندات",
       h1b: "التي تعيش داخل PostgreSQL",
       lead: "مجموعات ومستندات منمّطة واستعلامات وعلاقات ووقت فعلي وتسجيل دخول للمستخدمين. قاعدة بيانات واحدة تشغّلها. بلا Redis ولا وسيط رسائل ولا أجزاء إضافية.",
@@ -189,7 +189,7 @@ export const C = {
       chips: ["فهارس مركبة", "مستشار الفهارس", "تزامن تفاؤلي", "كتابة دفعية", "معاملات", "ترقيم بالمؤشر", "بحث نصي", "عمليات على الحقول"],
     },
     sdks: {
-      h1: "حزم JavaScript وFlutter", lead: "حزمة واحدة لكل منصة. كلتاهما بالإصدار 0.0.5 وتشتركان في إصدار المنصة.",
+      h1: "حزم JavaScript وFlutter", lead: "حزمة واحدة لكل منصة. كلتاهما بالإصدار 0.0.6 وتشتركان في إصدار المنصة.",
       rows: [
         ["JavaScript وTypeScript", "تعمل في المتصفح وNode.js. تشمل معرّفات تلقائية وتجديدًا تلقائيًا للرموز وتخزينًا مؤقتًا ومراجع للمستندات وتسجيل دخول عبر Google وGitHub وApple.", "npm install @vellumdb/sdk-js", "ts"],
         ["Flutter", "حزمة Flutter واحدة تتضمن تخزينًا آمنًا للرموز وتسجيل دخول عبر متصفح النظام، فلا تضيف إعداد native. مكتبات تسجيل الدخول الخارجية تبقى اختيارية.", "flutter pub add vellum_flutter", "dart"],

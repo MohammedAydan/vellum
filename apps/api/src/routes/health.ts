@@ -32,7 +32,7 @@ import { defaultReadinessProbe, type ReadinessProbePort } from "../composition/r
 
 export const healthRoutes = new Hono();
 
-const SERVICE_VERSION = "0.0.5";
+const SERVICE_VERSION = "0.0.6";
 const PROCESS_STARTED_AT = Date.now();
 const PROBE_TIMEOUT_MS = 3_000;
 const PROBE_CACHE_TTL_MS = 3_000;

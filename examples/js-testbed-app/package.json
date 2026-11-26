@@ -1,6 +1,6 @@
 {
   "name": "@vellum/js-testbed-app",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "type": "module",
   "description": "Standalone live testbed that exercises @vellumdb/sdk-js against a real Document Database API",

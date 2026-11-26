@@ -185,7 +185,7 @@ packages:
       path: "../../examples/flutter_testbed_app"
       relative: true
     source: path
-    version: "0.0.5"
+    version: "0.0.6"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
@@ -546,7 +546,7 @@ packages:
       path: "../../sdks/flutter"
       relative: true
     source: path
-    version: "0.0.5"
+    version: "0.0.6"
   vm_service:
     dependency: transitive
     description:
