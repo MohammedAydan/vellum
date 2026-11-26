@@ -26,6 +26,7 @@ import {
 } from "../ws-rfc6455.js";
 
 import { stripVercelFunctionPrefix } from "./vercel-path.js";
+import { createProjectOriginChecker } from "../middleware/project-cors.js";
 import { handleMaintenanceRequest, startPurgeTick } from "./vercel-maintenance.js";
 
 const platform = await createVellumPlatformFromEnv();
@@ -53,6 +54,7 @@ server.on("upgrade", (req) => {
 
 attachRealtimeWebSocketServer(server, platform.realtimeHub, {
   allowedOrigins: parseAllowedOrigins(getConfig().CORS_ALLOWED_ORIGINS),
+  isProjectOriginAllowed: createProjectOriginChecker(platform.controlStore),
   // Vercel cuts a function at its max duration (300 s on Hobby). Close first, the SDK reconnects and resumes.
   maxLifetimeMs: Number(process.env["REALTIME_WS_MAX_LIFETIME_MS"] ?? 265_000),
 });

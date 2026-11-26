@@ -3,6 +3,7 @@
  * Used by `docker/Dockerfile.api` and local development.
  */
 
+import { createProjectOriginChecker } from "./middleware/project-cors.js";
 import { adminRuntimeTelemetry } from "./admin-runtime-telemetry.js";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
@@ -167,6 +168,8 @@ export function startNodeApiServer({
     // supported (browsers always send one, so CSRF is still blocked).
     const wsManager = attachRealtimeWebSocketServer(server, activePlatform.realtimeHub, {
       allowedOrigins: parseAllowedOrigins(getConfig().CORS_ALLOWED_ORIGINS),
+      // A developer's own site: allowed per project through the origins on its API keys.
+      isProjectOriginAllowed: createProjectOriginChecker(activePlatform.controlStore),
     });
 
     // Guard maintenance workers against overlapping async ticks & unhandled rejections.

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **fix:** an API key with `allowedOrigins` rejected same-origin GET requests, because browsers send no `Origin` header on them. A GET or HEAD with `Sec-Fetch-Site: same-origin` (a header page scripts cannot set) is now checked against the origin of the request's own host. Every other request without an `Origin` header is still refused.
+- **fix(realtime):** realtime now works for a developer's own web app. Before, per-project CORS (origins on an API key) only covered `/v1/projects/...`, so the WebSocket handshake answered 403 and the SSE stream failed its preflight. `POST /v1/realtime/stream` now returns `Access-Control-Allow-Origin` when an active key of the project in the auth frame lists the origin, and the WebSocket accepts such an origin provisionally and closes it (1008) unless the auth frame names a project whose active keys list it. Null, wildcard and malformed origins are still refused at the handshake, other origins are refused at the auth frame, and third-party origins never receive `Access-Control-Allow-Credentials` (this also applies to the existing `/v1/projects/...` responses).
 
 ## 0.0.6
 

@@ -38,6 +38,23 @@ const ALLOW_HEADERS = [
 const ALLOW_METHODS = "GET,POST,PUT,PATCH,DELETE,OPTIONS";
 const EXPOSE_HEADERS = "X-Request-Id,X-Refreshed-Session-Token,X-Vellum-Index-Suggestion,X-Vellum-Index-Url";
 
+/**
+ * Checks one origin against the active API keys of one project, reading the database on every call.
+ * Shared by the REST middleware, the SSE stream route and the WebSocket auth step so all three apply
+ * the same rule.
+ */
+export function createProjectOriginChecker(store: ProjectCorsStore): (projectId: string, origin: string) => Promise<boolean> {
+  return async (projectId, origin) => {
+    const normalized = normalizeStrictOrigin(origin);
+    if (!normalized || !projectId) return false;
+    const origins = await store.listActiveApiKeyOrigins(projectId);
+    return origins.some((raw) => normalizeStrictOrigin(raw) === normalized);
+  };
+}
+
+export const REALTIME_STREAM_PATH = "/v1/realtime/stream";
+export const PROJECT_CORS_EXPOSE_HEADERS = EXPOSE_HEADERS;
+
 export function createProjectCors(
   store: ProjectCorsStore,
   isGloballyAllowed: (origin: string) => boolean
@@ -55,6 +72,32 @@ export function createProjectCors(
   return async (c, next) => {
     const origin = c.req.header("origin");
     if (!origin) return next();
+    // The SSE stream carries its project id in the POST body, which a preflight cannot see. Answer the
+    // preflight for any well-formed origin (no credentials, nothing is readable from it); the actual
+    // response only gets Access-Control-Allow-Origin in routes/realtime-sse.ts, after the project's keys
+    // list the origin, so the browser still blocks every other origin from reading the stream.
+    if (c.req.path === REALTIME_STREAM_PATH && c.req.method === "OPTIONS") {
+      const strict = normalizeStrictOrigin(origin);
+      if (strict && !isGloballyAllowed(origin)) {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "access-control-allow-origin": origin,
+            vary: "Origin",
+            "access-control-allow-methods": "POST,OPTIONS",
+            "access-control-allow-headers": ALLOW_HEADERS,
+            "access-control-max-age": "600",
+          },
+        });
+      }
+      return next();
+    }
+    if (c.req.path === REALTIME_STREAM_PATH && !isGloballyAllowed(origin) && normalizeStrictOrigin(origin)) {
+      await next();
+      // The deployment-wide CORS layer adds Allow-Credentials for every origin; third-party sites never get it.
+      c.res.headers.delete("access-control-allow-credentials");
+      return undefined;
+    }
     const match = PROJECT_PATH.exec(c.req.path);
     if (!match) return next();
     const [, projectId, rest] = match;
@@ -79,6 +122,8 @@ export function createProjectCors(
       });
     }
     await next();
+    // The deployment-wide CORS layer adds Allow-Credentials for every origin; third-party sites never get it.
+    c.res.headers.delete("access-control-allow-credentials");
     for (const [k, v] of Object.entries(headers)) {
       if (k === "vary") c.res.headers.append("vary", v);
       else c.res.headers.set(k, v);
