@@ -67,6 +67,16 @@ describe.skipIf(!enabled)("control-plane hot-path reads are cached for a few sec
     expect(((await b.getActiveRulesetAsync(projectId))?.rulesAst as { v: number }).v).toBe(2);
   });
 
+  it("callers cannot corrupt the cache by mutating a result, and invalidateReadCache applies a change at once", async () => {
+    const first = (await a.getActiveRulesetAsync(projectId))!;
+    (first.rulesAst as { v: number }).v = 999;
+    expect(((await a.getActiveRulesetAsync(projectId))?.rulesAst as { v: number }).v).toBe(2);
+    await raw.query("UPDATE security_rulesets SET rules_ast = '{\"v\":3}'::jsonb WHERE project_id=$1 AND is_active", [projectId]);
+    expect(((await a.getActiveRulesetAsync(projectId))?.rulesAst as { v: number }).v).toBe(2);
+    a.invalidateReadCache();
+    expect(((await a.getActiveRulesetAsync(projectId))?.rulesAst as { v: number }).v).toBe(3);
+  });
+
   it("a project suspended behind the cache is refused once the TTL passes, and errors are never cached", async () => {
     await b.getProjectAsync(projectId);
     await raw.query("UPDATE projects SET status='suspended' WHERE id=$1", [projectId]);

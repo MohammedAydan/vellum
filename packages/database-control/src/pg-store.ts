@@ -659,18 +659,23 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
   private async readCached<T>(key: string, load: () => Promise<T>): Promise<T> {
     if (this.readCacheTtlMs === 0) return load();
     const hit = this.readCache.get(key);
-    if (hit !== undefined && hit.expiresAt > Date.now()) return hit.value as T;
+    if (hit !== undefined && hit.expiresAt > Date.now()) return structuredClone(hit.value) as T;
     const pending = this.readInflight.get(key);
-    if (pending !== undefined) return pending as Promise<T>;
+    if (pending !== undefined) return (pending as Promise<T>).then((v) => (v === null ? v : (structuredClone(v) as T)));
     const generation = this.readCacheGeneration;
     const p = load()
       .then((value) => {
         if (value !== null && generation === this.readCacheGeneration) {
-          if (this.readCache.size >= 5000) this.readCache.clear();
+          while (this.readCache.size >= 1000) {
+            const oldest = this.readCache.keys().next().value;
+            if (oldest === undefined) break;
+            this.readCache.delete(oldest);
+          }
           this.readCache.set(key, { value, expiresAt: Date.now() + this.readCacheTtlMs });
         }
         return value;
       })
+      .then((value) => (value === null ? value : (structuredClone(value) as T)))
       .finally(() => {
         if (this.readInflight.get(key) === p) this.readInflight.delete(key);
       });
