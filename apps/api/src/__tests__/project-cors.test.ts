@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import { createProjectCors, type ProjectCorsStore } from "../middleware/project-cors.js";
+import { createProjectCors, createProjectOriginChecker, type ProjectCorsStore } from "../middleware/project-cors.js";
 
 type Key = { projectId: string; allowedOrigins?: string[] | undefined; revokedAt: string | null; expiresAt: string | null };
 
@@ -98,5 +98,35 @@ describe("per-project CORS", () => {
     expect(reads).toBe(0);
     await app.fetch(req("/v1/projects/p1/collections/a", "https://shop.example"));
     expect(reads).toBe(1);
+  });
+});
+
+describe("realtime stream and shared origin checker", () => {
+  it("answers the SSE stream preflight for a well-formed origin, without credentials", async () => {
+    const { app } = setup([]);
+    app.all("/v1/realtime/stream", (c) => c.json({ ok: true }));
+    const res = await app.fetch(req("/v1/realtime/stream", "https://shop.example", "OPTIONS"));
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-origin")).toBe("https://shop.example");
+    expect(res.headers.get("access-control-allow-credentials")).toBeNull();
+    expect(res.headers.get("access-control-allow-methods")).toBe("POST,OPTIONS");
+  });
+  it("does not answer the stream preflight for null or wildcard origins", async () => {
+    const { app } = setup([]);
+    app.all("/v1/realtime/stream", (c) => c.json({ ok: true }));
+    for (const o of ["null", "*"]) {
+      const res = await app.fetch(req("/v1/realtime/stream", o, "OPTIONS"));
+      expect(res.headers.get("access-control-allow-origin")).toBeNull();
+    }
+  });
+  it("the checker applies the same key rules (active, same project, exact origin)", async () => {
+    const { store } = setup([key(), key({ projectId: "p3", revokedAt: "2026-01-01T00:00:00Z" })]);
+    const allowed = createProjectOriginChecker(store);
+    expect(await allowed("p1", "https://shop.example")).toBe(true);
+    expect(await allowed("p1", "https://shop.example/")).toBe(true);
+    expect(await allowed("p1", "https://evil.example")).toBe(false);
+    expect(await allowed("p2", "https://shop.example")).toBe(false);
+    expect(await allowed("p3", "https://shop.example")).toBe(false);
+    expect(await allowed("p1", "null")).toBe(false);
   });
 });
