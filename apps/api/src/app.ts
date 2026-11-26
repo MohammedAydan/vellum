@@ -300,7 +300,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
   const emailOnlyKey = (prefix: string) => async (c: Context): Promise<string> => {
     let email = "";
     try {
-      const body = (await c.req.raw.clone().json()) as { email?: unknown } | null;
+      const body = (await c.req.json()) as { email?: unknown } | null;
       if (typeof body?.email === "string") email = body.email.trim().toLowerCase();
     } catch {
       // No JSON body.
@@ -324,7 +324,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
   const endUserKey = async (c: Context): Promise<string> => {
     let email = "";
     try {
-      const body = (await c.req.raw.clone().json()) as { email?: unknown } | null;
+      const body = (await c.req.json()) as { email?: unknown } | null;
       if (typeof body?.email === "string") email = body.email.trim().toLowerCase();
     } catch {
       // No JSON body.
@@ -388,7 +388,7 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     let ticket = "";
     let userId = "";
     try {
-      const body = (await c.req.raw.clone().json()) as
+      const body = (await c.req.json()) as
         | { mfaTicket?: unknown; userId?: unknown }
         | null;
       if (typeof body?.mfaTicket === "string") ticket = body.mfaTicket;
