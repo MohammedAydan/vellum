@@ -467,12 +467,20 @@ export class HttpTransport {
         status?: number | undefined;
         details?: unknown;
         requestId?: string | undefined;
+        retryAfter?: number | undefined;
       };
       err.code = payload?.error?.code ?? "UNKNOWN_ERROR";
       err.status = res.status;
       err.details = payload?.error?.details ?? {};
       if (payload?.error?.requestId) {
         err.requestId = payload.error.requestId;
+      }
+      // Seconds to wait before retrying a throttled request (429), from Retry-After or the error details.
+      const headerMs = parseRetryAfterMs(getResponseHeader(res, "retry-after"), Number.MAX_SAFE_INTEGER);
+      const detailSeconds = (err.details as { retryAfterSeconds?: unknown } | undefined)?.retryAfterSeconds;
+      if (headerMs !== null) err.retryAfter = Math.ceil(headerMs / 1000);
+      else if (typeof detailSeconds === "number" && Number.isFinite(detailSeconds) && detailSeconds > 0) {
+        err.retryAfter = Math.ceil(detailSeconds);
       }
       throw err;
     }
