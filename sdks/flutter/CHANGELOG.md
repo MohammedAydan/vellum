@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.6
+
+Lockstep release with the platform. Works with the 0.0.5 API, and the 0.0.6 API is recommended.
+
+- The default HTTP transport reuses one `http.Client` instead of opening a new one per request.
+- Realtime over SSE has an idle timeout (45 s, three server keep-alives); a silent stream reconnects and resumes.
+- A server close with 1001 "Reconnect" on WebSocket reconnects and resumes from the watermark.
+
+Full platform notes are in the root CHANGELOG.
+
 ## 0.0.5
 
 Lockstep release with the platform. Requires the 0.0.5 API for batch preconditions and transaction rollback.
