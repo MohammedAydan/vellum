@@ -414,6 +414,8 @@ function evaluateAstNodeInternal(
       const l = resolveOperand(expr.left, context);
       const r = resolveOperand(expr.right, context);
       if (!Array.isArray(r) || r.length > MAX_IN_OPERAND_ELEMENTS) return false;
+      // An unauthenticated identity (null) never matches a null entry in the list.
+      if (l === null && isAuthIdentityOperand(expr.left)) return false;
       for (let i = 0; i < r.length; i += 1) {
         budget.steps += 1;
         if (budget.steps > MAX_EVAL_STEPS) return false;

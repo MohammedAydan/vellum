@@ -147,3 +147,9 @@ Always include `X-Request-Id` (or `error.requestId`) in bug reports. Logs are re
 - [Query](./query.md) — query-specific errors and index suggestions.
 - [Batch & transactions](./batch-and-transactions.md) — conflict and timeout behavior.
 - [Production checklist](./production-checklist.md) — rate limiting, redaction, and health probes.
+
+## Throttled auth requests (429)
+
+Sign-in and sign-up endpoints limit attempts per IP, for example 30 end-user sign-ups per IP per 15 minutes. A throttled request fails with `TOO_MANY_REQUESTS` and a `Retry-After` header. In the SDKs the error carries `retryAfter` (seconds): `err.retryAfter` in JavaScript and `VellumException.retryAfter` in Dart. Wait that long before retrying.
+
+For load tests and end-to-end test runs on a server you control, set `AUTH_RATE_LIMIT_SCALE` to a number above 1 (for example `20`) to multiply every auth limit. It is off by default and capped at 1000. Never set it on a production deployment: it weakens brute-force protection.

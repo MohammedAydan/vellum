@@ -683,29 +683,36 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     snapshotVersions: Map<string, number>
   ): Promise<void> {
     // Drain until nothing new was buffered, so an event arriving mid-flush cannot be reordered or lost.
-    for (;;) {
-      const deferred = subRecord.pendingLiveEvents ?? [];
-      subRecord.pendingLiveEvents = [];
-      if (deferred.length === 0) {
-        subRecord.replaying = false;
-        return;
-      }
-      deferred.sort((a, b) => {
-        const sa = parseSafeSeqBigInt(a.seqId) ?? 0n;
-        const sb = parseSafeSeqBigInt(b.seqId) ?? 0n;
-        return sa < sb ? -1 : sa > sb ? 1 : 0;
-      });
-      for (const ev of deferred) {
-        if (session.closed || session.subscriptions.get(subRecord.subId) !== subRecord) return;
-        const have = snapshotVersions.get(ev.path);
-        if (have !== undefined && ev.opType !== "deleted" && ev.version <= have) continue;
-        const documents = await this.prepareIncludedEvent(projectId, ev, [{ session, subRecord }]);
-        this.deliverEventToSubscription(session, subRecord, ev, {
-          duringReplay: true,
-          ruleset: (await this.rulesetFor(projectId)) ?? ruleset,
-          document: documents.get(subRecord),
+    // The deferral gate is always released, also when the flush stops early or throws.
+    try {
+      for (;;) {
+        const deferred = subRecord.pendingLiveEvents ?? [];
+        subRecord.pendingLiveEvents = [];
+        if (deferred.length === 0) return;
+        deferred.sort((a, b) => {
+          const sa = parseSafeSeqBigInt(a.seqId) ?? 0n;
+          const sb = parseSafeSeqBigInt(b.seqId) ?? 0n;
+          return sa < sb ? -1 : sa > sb ? 1 : 0;
         });
+        for (const ev of deferred) {
+          if (session.closed || session.subscriptions.get(subRecord.subId) !== subRecord) return;
+          const have = snapshotVersions.get(ev.path);
+          if (have !== undefined && ev.opType !== "deleted" && ev.version <= have) {
+            // Already reflected in the snapshot: remember it so a later duplicate (NOTIFY plus poll) is dropped too.
+            subRecord.seenSeqIds.add(ev.seqId);
+            continue;
+          }
+          const documents = await this.prepareIncludedEvent(projectId, ev, [{ session, subRecord }]);
+          this.deliverEventToSubscription(session, subRecord, ev, {
+            duringReplay: true,
+            ruleset: (await this.rulesetFor(projectId)) ?? ruleset,
+            document: documents.get(subRecord),
+          });
+        }
       }
+    } finally {
+      subRecord.replaying = false;
+      subRecord.pendingLiveEvents = [];
     }
   }
 

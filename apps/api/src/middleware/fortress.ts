@@ -19,7 +19,6 @@ import {
   assertQueryCost,
   assertSafeJsonPayload,
   deriveChainKey,
-  PAYLOAD_LIMITS,
   securityHeaders,
   verifyCsrfOrigin,
 } from "@vellum/security";
@@ -77,6 +76,28 @@ function makeMeteringLogger(
  * function is intentionally synchronous: store refreshes are scheduled as a
  * detached task whose failures are swallowed.
  */
+const BATCH_PATH = /\/(?:documents:batchWrite|batchWrite|transactions:commit)$/;
+
+/** Payload guard with a per-write key budget on batch and transaction-commit routes. */
+function checkJsonPayloadForRoute(path: string, body: unknown): GuardOutcome {
+  if (BATCH_PATH.test(path) && body !== null && typeof body === "object" && !Array.isArray(body)) {
+    const record = body as Record<string, unknown>;
+    for (const field of ["writes", "operations", "mutations"] as const) {
+      const items = record[field];
+      if (Array.isArray(items) && items.length > 1 && items.length <= SYSTEM_LIMITS.MAX_BATCH_OPERATIONS) {
+        const envelope = assertSafeJsonPayload({ ...record, [field]: [] });
+        if (!envelope.ok) return envelope;
+        for (const item of items) {
+          const outcome = assertSafeJsonPayload(item);
+          if (!outcome.ok) return outcome;
+        }
+        return { ok: true };
+      }
+    }
+  }
+  return assertSafeJsonPayload(body);
+}
+
 export function createFortressServices(options: FortressServiceOptions): FortressServices {
   const masterKey =
     options.masterKey ?? process.env["MASTER_ENCRYPTION_KEY"] ?? "vellum-fortress-master-v1";
@@ -382,21 +403,11 @@ export function attachFortressMiddleware(
         });
       }
 
-      // The key budget is per document. A batch or transaction body carries up to MAX_BATCH_OPERATIONS
-      // documents, so its budget grows with the number of writes (bytes and depth stay bounded as before).
-      const writes = (body as { writes?: unknown } | null)?.writes;
-      let outcome = assertSafeJsonPayload(body);
-      if (!outcome.ok && Array.isArray(writes) && writes.length > 1 && /object keys/i.test(JSON.stringify(outcome))) {
-        // Batch body: enforce the key cap per write, with a total budget scaled by the number of writes.
-        const perWrite = writes.map((w) => assertSafeJsonPayload(w));
-        const bad = perWrite.find((o) => !o.ok);
-        outcome =
-          bad ??
-          assertSafeJsonPayload(body, {
-            ...PAYLOAD_LIMITS,
-            maxObjectKeys: PAYLOAD_LIMITS.maxObjectKeys * Math.min(writes.length, SYSTEM_LIMITS.MAX_BATCH_OPERATIONS),
-          });
-      }
+      // Batch and transaction-commit bodies carry up to MAX_BATCH_OPERATIONS documents. The 500-key cap
+      // applies to each write and to the rest of the body (the envelope) separately, so a full batch of
+      // ordinary documents passes while a single oversized document or envelope still fails. Only these
+      // routes get this treatment; every other route is checked as one body.
+      const outcome = checkJsonPayloadForRoute(c.req.path, body);
 
       if (!outcome.ok) {
         const failed = outcome as Extract<GuardOutcome, { ok: false }>;
