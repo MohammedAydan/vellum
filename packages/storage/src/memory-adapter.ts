@@ -636,6 +636,19 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
         });
       },
 
+      countLiveDocumentsUpTo: async (collectionPath: string, cap: number): Promise<number> => {
+        let n = 0;
+        const prefix = this.tenantPrefix(ctx);
+        for (const [key, row] of this.documents.entries()) {
+          if (!key.startsWith(prefix) || row.projectId !== ctx.projectId) continue;
+          if (row.collectionPath === collectionPath && isLiveDocument(row)) {
+            n += 1;
+            if (n >= cap) break;
+          }
+        }
+        return n;
+      },
+
       listActiveDocumentsInCollection: async (collectionPath: string): Promise<DocumentRecord[]> => {
         const results: DocumentRecord[] = [];
         const prefix = this.tenantPrefix(ctx);

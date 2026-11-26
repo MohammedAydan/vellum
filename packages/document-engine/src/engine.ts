@@ -31,6 +31,9 @@ import {
   decodeAndVerifyQueryCursor,
   selectCompositeIndexForQuery,
   compileQueryToParameterizedSql,
+  isScanRiskQuery,
+  resolveUnindexedQueryMaxDocs,
+  suggestCompositeIndex,
   compileDeleteSelectQuery,
   type QuerySpec,
   type CompositeIndexMetadata,
@@ -1720,6 +1723,30 @@ export class DocumentEngine implements DocumentEnginePort {
               },
             }
           );
+        }
+
+        // The "unindexed scan cap" only ever limited returned rows. Enforce it on the collection
+        // instead: a query no index can serve reads the whole collection, so refuse it above N live
+        // documents and say which composite index fixes it.
+        if (!matchedIndex && isScanRiskQuery(normalizedQuery)) {
+          const maxDocs = resolveUnindexedQueryMaxDocs();
+          if (maxDocs > 0 && tx.countLiveDocumentsUpTo) {
+            const live = await tx.countLiveDocumentsUpTo(normalizedQuery.collectionPath, maxDocs + 1);
+            if (live > maxDocs) {
+              throw new VellumError(
+                "FAILED_PRECONDITION",
+                `Query on '${normalizedQuery.collectionPath}' cannot use an index and the collection has more than ${maxDocs} documents. Create a composite index for this filter and sort shape.`,
+                {
+                  collectionPath: normalizedQuery.collectionPath,
+                  maxUnindexedDocs: maxDocs,
+                  suggestedIndex: {
+                    collectionPath: normalizedQuery.collectionPath,
+                    fields: suggestCompositeIndex(normalizedQuery),
+                  },
+                }
+              );
+            }
+          }
         }
 
         const compiledPlan = compileQueryToParameterizedSql({

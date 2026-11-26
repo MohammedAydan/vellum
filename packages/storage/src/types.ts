@@ -156,6 +156,8 @@ export interface TxHandle {
   queryDocuments(compiled: CompiledQuery): Promise<QueriedDocument[]>;
   queryOutboxSince?(afterSeqId?: string): Promise<OutboxEvent[]>;
   listActiveDocumentsInCollection?(collectionPath: string): Promise<DocumentRecord[]>;
+  /** Live documents in a collection, counted up to `cap` (index-only, stops reading at the cap). */
+  countLiveDocumentsUpTo?(collectionPath: string, cap: number): Promise<number>;
   listDocumentsViaCompositeIndex?(indexId: string): Promise<DocumentRecord[]>;
   listIndexes?(): Promise<CompositeIndexRecord[]>;
   deleteIndex?(indexId: string): Promise<boolean>;
