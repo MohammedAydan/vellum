@@ -12,6 +12,7 @@ import { createVellumPlatformFromEnv } from "../../dist/index.js";
 import { getConfig } from "../../dist/config.js";
 import { attachRealtimeWebSocketServer, parseAllowedOrigins } from "../../dist/ws-rfc6455.js";
 import { pipeWebResponse } from "../../dist/runtime/node-stream.js";
+import { handleMaintenanceRequest, startPurgeTick } from "../../dist/runtime/vercel-maintenance.js";
 
 const platform = await createVellumPlatformFromEnv();
 
@@ -55,7 +56,9 @@ async function handler(req, res) {
 
   let response;
   try {
-    response = await platform.fetch(new Request(new URL(target, "http://localhost"), init));
+    const request = new Request(new URL(target, "http://localhost"), init);
+    // Scheduled maintenance (Vercel cron, bearer CRON_SECRET) is answered before the platform router.
+    response = (await handleMaintenanceRequest(request, platform.dataStore)) ?? (await platform.fetch(request));
   } catch (err) {
     response = new Response(
       JSON.stringify({ error: "INTERNAL_ERROR", reason: err instanceof Error ? err.message : String(err) }),
@@ -73,6 +76,13 @@ async function handler(req, res) {
 
   // Stream the body (do not buffer it): realtime over SSE depends on it.
   await pipeWebResponse(response, res, extra);
+}
+
+// Retention (outbox, tombstones, TTL): tick while the instance is alive; the daily cron is a backstop.
+if (process.env["VELLUM_DISABLE_PURGE_TICK"] !== "1") {
+  startPurgeTick(platform.dataStore, (err) => {
+    platform.logger.warn("Purge tick failed", { reason: err instanceof Error ? err.message.slice(0, 256) : String(err) });
+  });
 }
 
 // Vercel Functions serve WebSockets when the default export is an http.Server
@@ -96,6 +106,8 @@ server.on("upgrade", (req) => {
 
 attachRealtimeWebSocketServer(server, platform.realtimeHub, {
   allowedOrigins: parseAllowedOrigins(getConfig().CORS_ALLOWED_ORIGINS),
+  // Vercel cuts a function at its max duration (300 s on Hobby). Close first, the SDK reconnects and resumes.
+  maxLifetimeMs: Number(process.env["REALTIME_WS_MAX_LIFETIME_MS"] ?? 265_000),
 });
 
 export default server;
