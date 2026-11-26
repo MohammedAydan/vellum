@@ -93,7 +93,8 @@ export function sleepWithSignal(ms: number, signal?: AbortSignal): Promise<void>
       signal?.removeEventListener("abort", onAbort);
       resolve();
     }, ms);
-    timer.unref?.();
+    // Not unref'd: a caller awaiting this sleep (a retry, a transaction backoff) must keep a Node
+    // script alive, or the process exits silently in the middle of the retry.
     signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
