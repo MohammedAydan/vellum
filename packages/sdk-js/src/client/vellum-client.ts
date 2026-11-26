@@ -541,6 +541,12 @@ export class VellumClient implements VellumClientInterface {
       const changeType = operation === "create" ? "added" : operation === "delete" ? "removed" : "modified";
       const snap = parseWireDocument(frame["document"]);
       if (!snap) return;
+      // Events from concurrent writes can arrive out of order. An update that carries an older
+      // version than the document already held must not overwrite it.
+      if (operation === "update") {
+        const held = sub.docs.get(snap.path);
+        if (held && snap.version > 0 && held.version > snap.version) return;
+      }
       // Keep the optional bounded read cache consistent with incoming realtime writes.
       this.invalidateDocCache(snap.path);
       if (changeType === "removed") {
