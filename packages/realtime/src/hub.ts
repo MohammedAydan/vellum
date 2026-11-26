@@ -27,7 +27,7 @@ import {
   type AuthContext,
   type SecurityRulesetRecord,
 } from "@vellum/authorization";
-import { validateAndNormalizeQuery, documentMatchesQuery, extractDocFieldValue } from "@vellum/query-engine";
+import { validateAndNormalizeQuery, documentMatchesQuery, extractDocFieldValue, compileQueryToParameterizedSql } from "@vellum/query-engine";
 import type { StorageAdapter, OutboxEvent, DocumentRecord, TxHandle } from "@vellum/storage";
 import type {
   ConnectionSession,
@@ -508,7 +508,18 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           initialDocs.push(doc);
         }
       } else if (normalizedQuery) {
-        const activeDocs = (await tx.listActiveDocumentsInCollection?.(normalizedQuery.collectionPath)) ?? [];
+        // Let the database filter, order and cap the initial page. Reading the whole collection
+        // and slicing in JS made every subscribe cost O(collection size). We fetch a bounded
+        // multiple of the limit so rows denied by their own `get` rule do not leave the page short.
+        const fetchLimit = Math.min(Math.max(normalizedQuery.limit * 4, normalizedQuery.limit), SYSTEM_LIMITS.MAX_QUERY_LIMIT ?? 500);
+        const compiled = compileQueryToParameterizedSql({
+          projectId,
+          normalizedQuery: { ...normalizedQuery, limit: fetchLimit, select: null, startAfter: null, startAt: null } as typeof normalizedQuery,
+          matchedCompositeIndex: null,
+        });
+        const activeDocs = (tx.queryDocuments
+          ? ((await tx.queryDocuments(compiled)) as DocumentRecord[]).slice(0, fetchLimit)
+          : (await tx.listActiveDocumentsInCollection?.(normalizedQuery.collectionPath)) ?? []);
         const docs = activeDocs
           .filter((d: DocumentRecord) => {
             if (!documentMatchesQuery(d, normalizedQuery)) return false;
