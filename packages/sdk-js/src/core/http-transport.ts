@@ -149,7 +149,13 @@ export class HttpTransport {
     this.apiKey = options.apiKey;
     this.endpoint = normalizeEndpoint(options.endpoint);
     this.baseUrl = `${this.endpoint}/v1/projects/${encodePathSegment(options.projectId, "projectId")}`;
-    this.customFetch = options.customFetch ?? globalThis.fetch;
+    // Browsers throw "Illegal invocation" when fetch runs with any receiver but window/globalThis, and
+    // `this.customFetch(...)` would make the transport the receiver. Call it as a plain function instead,
+    // and look globalThis.fetch up at call time so a later polyfill or patch is honoured.
+    const userFetch = options.customFetch;
+    this.customFetch = userFetch
+      ? (input, init) => userFetch(input, init)
+      : (input, init) => globalThis.fetch(input, init);
 
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;

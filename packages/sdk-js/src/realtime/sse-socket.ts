@@ -181,7 +181,8 @@ export class SseSocket implements WebSocketLike {
     const controller = new AbortController();
     this.controller = controller;
     this.streamOpen = false;
-    const fetchFn = this.fetchFn ?? (globalThis.fetch as unknown as FetchLike | undefined);
+    // Plain-function call (no receiver) so browsers do not throw "Illegal invocation".
+    const fetchFn = this.fetchFn ?? (globalThis.fetch ? ((input, init) => globalThis.fetch(input, init)) as FetchLike : undefined);
     if (typeof fetchFn !== "function") {
       this.fail(generation, 1011, "fetch is not available");
       return;

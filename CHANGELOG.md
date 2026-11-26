@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **fix(sdk-js):** in a browser every request failed with "Illegal invocation" unless the app passed `customFetch`, because the transport called `globalThis.fetch` as a method of itself. The transport and the SSE socket now call fetch as a plain function, and the default is looked up at call time.
+
 ## 0.0.6
 
 Performance and reliability release for busy projects: realtime that holds up on Vercel, fewer control-database reads, and safer big-table queries. Upgrade the SDKs together with the API.
