@@ -2,10 +2,7 @@
 
 ## Unreleased
 
-### Fixed
-
-- Batch writes: the API no longer rejects ordinary 100-operation batches with "Total object keys exceed 500". The object-key limit now applies per write (500 keys each), and the body total scales with the number of writes (at most 100). The 5 MiB body cap and depth limits are unchanged.
-- `batchWriteChunked` (JS) and `writeBatchChunked` (Flutter) now default to 100 operations per request, the server limit, and cap larger `chunkSize` values at 100.
+- **fix(realtime):** realtime now works for a developer's own web app. Before, per-project CORS (origins on an API key) only covered `/v1/projects/...`, so the WebSocket handshake answered 403 and the SSE stream failed its preflight. `POST /v1/realtime/stream` now returns `Access-Control-Allow-Origin` when an active key of the project in the auth frame lists the origin, and the WebSocket accepts such an origin provisionally and closes it (1008) unless the auth frame names a project whose active keys list it. Null, wildcard and malformed origins are still refused at the handshake, other origins are refused at the auth frame, and third-party origins never receive `Access-Control-Allow-Credentials` (this also applies to the existing `/v1/projects/...` responses).
 
 ## 0.0.6
 
