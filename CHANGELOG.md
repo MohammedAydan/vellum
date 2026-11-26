@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **fix:** an API key with `allowedOrigins` rejected same-origin GET requests, because browsers send no `Origin` header on them. A GET or HEAD with `Sec-Fetch-Site: same-origin` (a header page scripts cannot set) is now checked against the origin of the request's own host. Every other request without an `Origin` header is still refused.
+
 ## 0.0.6
 
 Performance and reliability release for busy projects: realtime that holds up on Vercel, fewer control-database reads, and safer big-table queries. Upgrade the SDKs together with the API.

@@ -233,6 +233,20 @@ describe("§8 — Security Fortress penetration tests", () => {
     // a genuine origin block always carries the ORIGIN_NOT_ALLOWED message.
     const allowedBody = (await allowed.json()) as ErrorEnvelope;
     expect(allowedBody.error?.message ?? "").not.toBe("ORIGIN_NOT_ALLOWED");
+
+    // Same-origin GET: browsers send no Origin, only Sec-Fetch-Site. The request's own origin counts, once.
+    const blocked = async (init: { method?: string; headers: Record<string, string> }) => {
+      const res = await platform.app.request(path, { method: "GET", ...init });
+      const body = (await res.json()) as ErrorEnvelope;
+      return body.error?.message === "ORIGIN_NOT_ALLOWED";
+    };
+    const k = { "x-project-key": generated.fullKey };
+    expect(await blocked({ headers: { ...k, host: "allowed.app", "x-forwarded-proto": "https", "sec-fetch-site": "same-origin" } })).toBe(false);
+    expect(await blocked({ headers: { ...k, host: "evil.app", "x-forwarded-proto": "https", "sec-fetch-site": "same-origin" } })).toBe(true);
+    expect(await blocked({ headers: { ...k, host: "allowed.app", "x-forwarded-proto": "https" } })).toBe(true);
+    expect(await blocked({ headers: { ...k, host: "allowed.app", "x-forwarded-proto": "https", "sec-fetch-site": "cross-site" } })).toBe(true);
+    expect(await blocked({ headers: { ...k, host: "allowed.app", "x-forwarded-proto": "https", "sec-fetch-site": "same-origin" }, method: "POST" })).toBe(true);
+    expect(await blocked({ headers: { ...k, host: "allowed.app", "sec-fetch-site": "same-origin" } })).toBe(true);
   });
 
   /* ---------------------------------------------------------------- *

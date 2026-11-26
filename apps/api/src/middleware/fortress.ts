@@ -135,6 +135,29 @@ function normalizeOrigin(value: string | undefined | null): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+/**
+ * Browsers send no Origin header on a same-origin GET or HEAD, so an app served from the API's own host
+ * would be locked out of a key with allowedOrigins. For exactly that case the request's own origin stands in,
+ * when the browser also says Sec-Fetch-Site: same-origin (a forbidden header that page scripts cannot set).
+ * Every other request without an Origin header is still refused. Origin is a browser-side control; a
+ * non-browser client can already send any Origin it likes, so this opens nothing new to them.
+ */
+export function effectiveRequestOrigin(
+  method: string,
+  header: (name: string) => string | undefined
+): string | null {
+  const origin = header("origin");
+  if (typeof origin === "string" && origin.trim().length > 0) return normalizeOrigin(origin);
+  const verb = method.toUpperCase();
+  if (verb !== "GET" && verb !== "HEAD") return null;
+  if (header("sec-fetch-site")?.trim().toLowerCase() !== "same-origin") return null;
+  const host = (header("x-forwarded-host") ?? header("host"))?.split(",")[0]?.trim();
+  if (!host || /[\s/@]/.test(host)) return null;
+  const proto = header("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+  if (proto !== "https" && proto !== "http") return null;
+  return normalizeOrigin(`${proto}://${host}`);
+}
+
 function quotaOperationFor(method: string, path: string): QuotaOperation {
   if (path.includes("/realtime")) return "ws_connect";
   switch (method.toUpperCase()) {
@@ -442,7 +465,7 @@ export function attachFortressMiddleware(
           const ip = requestIp(c);
           const allowedOrigins = record.allowedOrigins ?? [];
           if (allowedOrigins.length > 0) {
-            const actual = normalizeOrigin(c.req.header("origin"));
+            const actual = effectiveRequestOrigin(c.req.method, (name) => c.req.header(name));
             const allowed =
               actual !== null &&
               allowedOrigins.some((candidate) => {
