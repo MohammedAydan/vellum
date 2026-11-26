@@ -53,7 +53,7 @@ A bare field in a boolean position is compared with true; there is no JavaScript
 | hasRole(role) | One value | auth.claims.role equals role. It does not inspect claims.roles. |
 | hasAnyRole(['writer', 'reviewer']) | One literal string array | Singular auth.claims.role is in that array. |
 | isEmailVerified() | None | auth.email_verified equals true. Does not itself require a uid. |
-| unchanged(['ownerId', 'createdAt']) | One literal string array | Each listed field in the full new data equals stored data. Dotted field paths work. Empty array returns true. Missing fields do not compare equal. |
+| unchanged(['ownerId', 'createdAt']) | One literal string array | Each listed field in the full new data equals stored data. Dotted field paths work. Empty array returns true. A field missing on both the stored and the new data, or null on both, counts as unchanged. A field present on only one side counts as changed. |
 | onlyChanged(['title']) | One literal string array | Negated equality for each listed field, with a diagnostic. Does NOT forbid other changes. Empty array returns true. Do not use as a write allowlist. |
 | hasKey(value, 'field') | Two values | Own direct key on a non-array object; reserved prototype-related keys are blocked. |
 | isType(value, 'type') | Two values | null, bool/boolean, string, number, array, map, or matching wire tag such as ref, int, ts, bytes, geo. |
