@@ -750,10 +750,12 @@ class Query<T> {
           final index = docs.indexWhere((doc) => doc.path == snap.path);
           // Out-of-order events from concurrent writes: ignore an update that
           // is older than the version already held.
-          if (operation == 'update' &&
+          // The same version again is a duplicate (an SSE reconnect or an
+          // overlapping catch-up) and is not delivered twice.
+          if ((operation == 'update' || operation == 'create') &&
               index >= 0 &&
               snap.version > 0 &&
-              docs[index].version > snap.version) {
+              docs[index].version >= snap.version) {
             return;
           }
           if (index >= 0) {

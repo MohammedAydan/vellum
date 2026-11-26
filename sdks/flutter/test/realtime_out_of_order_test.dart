@@ -75,6 +75,14 @@ void main() {
         'operation': 'update',
         'document': doc(4, 3)
       });
+      // The same version again is a duplicate and must not be delivered twice.
+      send({
+        'type': 'mutation',
+        'subId': subId,
+        'seqId': 5,
+        'operation': 'update',
+        'document': doc(4, 3)
+      });
       await Future<void>.delayed(const Duration(milliseconds: 400));
       expect(seen, [0, 2, 3]);
     } finally {

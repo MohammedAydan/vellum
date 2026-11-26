@@ -543,9 +543,11 @@ export class VellumClient implements VellumClientInterface {
       if (!snap) return;
       // Events from concurrent writes can arrive out of order. An update that carries an older
       // version than the document already held must not overwrite it.
-      if (operation === "update") {
+      // A replay of the same version (an SSE reconnect or an overlapping catch-up) is a duplicate and
+      // is not delivered again.
+      if (operation === "update" || operation === "create") {
         const held = sub.docs.get(snap.path);
-        if (held && snap.version > 0 && held.version > snap.version) return;
+        if (held && snap.version > 0 && held.version >= snap.version) return;
       }
       // Keep the optional bounded read cache consistent with incoming realtime writes.
       this.invalidateDocCache(snap.path);

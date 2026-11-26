@@ -45,6 +45,10 @@ describe("realtime events that arrive out of order", () => {
     expect(seen[seen.length - 1]).toBe(2);
     sock.receive({ type: "mutation", subId, seqId: 4, operation: "update", document: doc(4, 3) });
     expect(seen[seen.length - 1]).toBe(3);
+    // The same version again (an SSE reconnect replay) is a duplicate and is not delivered twice.
+    const before = seen.length;
+    sock.receive({ type: "mutation", subId, seqId: 5, operation: "update", document: doc(4, 3) });
+    expect(seen.length).toBe(before);
     off();
   });
 });
