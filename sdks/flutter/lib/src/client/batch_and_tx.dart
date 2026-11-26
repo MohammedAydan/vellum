@@ -81,7 +81,7 @@ class VellumWriteBatch {
 
   /// Submits all queued writes split into chunks of at most [chunkSize].
   Future<List<JsonMap>> commitChunked({
-    int chunkSize = 500,
+    int chunkSize = 100,
     String? idempotencyKeyPrefix,
   }) =>
       client.writeBatchChunked(

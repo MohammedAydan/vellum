@@ -19,6 +19,7 @@ import {
   assertQueryCost,
   assertSafeJsonPayload,
   deriveChainKey,
+  PAYLOAD_LIMITS,
   securityHeaders,
   verifyCsrfOrigin,
 } from "@vellum/security";
@@ -358,7 +359,22 @@ export function attachFortressMiddleware(
         });
       }
 
-      const outcome = assertSafeJsonPayload(body);
+      // The key budget is per document. A batch or transaction body carries up to MAX_BATCH_OPERATIONS
+      // documents, so its budget grows with the number of writes (bytes and depth stay bounded as before).
+      const writes = (body as { writes?: unknown } | null)?.writes;
+      let outcome = assertSafeJsonPayload(body);
+      if (!outcome.ok && Array.isArray(writes) && writes.length > 1 && /object keys/i.test(JSON.stringify(outcome))) {
+        // Batch body: enforce the key cap per write, with a total budget scaled by the number of writes.
+        const perWrite = writes.map((w) => assertSafeJsonPayload(w));
+        const bad = perWrite.find((o) => !o.ok);
+        outcome =
+          bad ??
+          assertSafeJsonPayload(body, {
+            ...PAYLOAD_LIMITS,
+            maxObjectKeys: PAYLOAD_LIMITS.maxObjectKeys * Math.min(writes.length, SYSTEM_LIMITS.MAX_BATCH_OPERATIONS),
+          });
+      }
+
       if (!outcome.ok) {
         const failed = outcome as Extract<GuardOutcome, { ok: false }>;
         safeRecord(

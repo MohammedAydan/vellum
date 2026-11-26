@@ -160,7 +160,7 @@ export interface BatchWriteChunkProgress {
 
 /** Options accepted by `batchWriteChunked`. */
 export interface BatchWriteChunkedOptions extends RequestOptions {
-  /** Maximum operations per `batchWrite` HTTP request. Defaults to `500`. */
+  /** Maximum operations per `batchWrite` HTTP request. Defaults to `100`, which is also the maximum (the server limit). */
   chunkSize?: number;
   /** Maximum concurrent in-flight `batchWrite` requests. Defaults to `4`. */
   concurrency?: number;
@@ -642,7 +642,7 @@ export interface VellumClientInterface {
   batchWrite(writes: Array<BatchWriteOperation | Record<string, unknown>>, options?: RequestOptions): Promise<unknown>;
   /**
    * Automatically chunk large write arrays into server-safe `batchWrite` calls
-   * (default 500 ops/batch) with bounded concurrency (default 4) and AbortSignal support.
+   * (default and maximum 100 ops/batch) with bounded concurrency (default 4) and AbortSignal support.
    */
   batchWriteChunked(
     operations: readonly unknown[],

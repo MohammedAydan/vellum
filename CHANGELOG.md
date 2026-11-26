@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- Batch writes: the API no longer rejects ordinary 100-operation batches with "Total object keys exceed 500". The object-key limit now applies per write (500 keys each), and the body total scales with the number of writes (at most 100). The 5 MiB body cap and depth limits are unchanged.
+- `batchWriteChunked` (JS) and `writeBatchChunked` (Flutter) now default to 100 operations per request, the server limit, and cap larger `chunkSize` values at 100.
+
 ## 0.0.6
 
 Performance and reliability release for busy projects: realtime that holds up on Vercel, fewer control-database reads, and safer big-table queries. Upgrade the SDKs together with the API.
