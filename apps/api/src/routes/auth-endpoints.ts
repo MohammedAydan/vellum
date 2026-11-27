@@ -749,18 +749,52 @@ export function createCustomerAuthRoutes(
     });
   });
 
-  // 4. Sign Out — revoke a session refresh jti when one is presented.
+  // 4. Sign Out. Whatever the caller presents (the access token in the Authorization header, a
+  // refresh JWT, or the opaque refresh token in the body or the realm cookie) ends the session:
+  // the access token is revoked by jti and every refresh session of that user in this realm is
+  // revoked, so neither the access token nor the refresh token works afterwards. A caller with no
+  // verifiable token gets the same 200 and nothing changes.
   routes.post("/auth/sign-out", async (c) => {
     const authHeader = c.req.header("authorization");
-    if (sessionService && authHeader) {
-      const raw = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : authHeader.trim();
+    const raw = authHeader
+      ? authHeader.startsWith("Bearer ")
+        ? authHeader.slice(7).trim()
+        : authHeader.trim()
+      : "";
+    const bodyJson = (await c.req.json().catch(() => ({}))) as unknown;
+    const body =
+      bodyJson && typeof bodyJson === "object" && !Array.isArray(bodyJson)
+        ? (bodyJson as Record<string, unknown>)
+        : {};
+    const opaqueRefresh = readControlRefreshToken(c, body, CONSOLE_REFRESH_COOKIE);
+    let userId: string | null = null;
+
+    if (sessionService && raw) {
       try {
-        const refresh = sessionService.verifyRefresh(raw);
-        await sessionService.revoke(refresh.jti, refresh.exp * 1000);
+        const access = sessionService.verifyAccess(raw);
+        await sessionService.revoke(access.jti, access.exp * 1000);
+        userId = access.uid;
       } catch {
-        // End-user JWTs are stateless; a missing refresh token is a no-op.
+        try {
+          const refresh = sessionService.verifyRefresh(raw);
+          await sessionService.revoke(refresh.jti, refresh.exp * 1000);
+          userId = refresh.sub;
+        } catch {
+          // Not a control-plane session token: nothing to revoke.
+        }
       }
     }
+    if (opaqueRefresh) {
+      const hash = sha256Hex(opaqueRefresh);
+      const session =
+        (await controlStore.getControlRefreshSessionByHash(hash)) ??
+        (await controlStore.getControlRefreshSessionByPreviousHash(hash));
+      if (session && session.realm === "customer_console") userId = userId ?? session.userId;
+    }
+    if (userId) {
+      await controlStore.revokeControlRefreshSessionsForUser(userId, "signed_out", "customer_console");
+    }
+    c.header("Set-Cookie", `${CONSOLE_REFRESH_COOKIE.name}=; Path=${CONSOLE_REFRESH_COOKIE.path}; HttpOnly; SameSite=Lax; Max-Age=0`);
     return c.json({ success: true, message: "Signed out successfully" });
   });
 

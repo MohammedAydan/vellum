@@ -1,6 +1,6 @@
 import * as React from "react";
-import { getStoredSession, setStoredSession, clearStoredSession, type UserSession } from "../lib/auth.js";
-import { resetApiClientState } from "../lib/api.js";
+import { getStoredSession, getStoredSessionAllowExpired, setStoredSession, clearStoredSession, type UserSession } from "../lib/auth.js";
+import { resetApiClientState, signOutRemote } from "../lib/api.js";
 import { queryClient } from "../lib/query-client.js";
 
 interface AuthContextValue {
@@ -39,6 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = React.useCallback(() => {
+    // Capture the tokens first: the server-side sign-out needs them after local state is cleared.
+    void signOutRemote(getStoredSessionAllowExpired());
     resetApiClientState();
     clearStoredSession();
     queryClient.clear();
