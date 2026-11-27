@@ -101,7 +101,7 @@ void main() {
     final sub = client.doc('chats/c1').snapshots().listen((snap) {
       seen.add(snap.exists);
     });
-    final subId = await ready.future.timeout(const Duration(seconds: 3));
+    await ready.future.timeout(const Duration(seconds: 3));
     return (
       seen: seen,
       send: (Map<String, Object?> f) async {

@@ -718,6 +718,7 @@ class VellumAuth implements VellumAuthPort {
                   VellumLinkedProvider.fromJson(Map<String, Object?>.from(m)))
               .toList(growable: false)
           : const <VellumLinkedProvider>[],
+      hasPassword: res['hasPassword'] == true,
     );
   }
 
