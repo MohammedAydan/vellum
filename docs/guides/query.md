@@ -93,6 +93,10 @@ for (final doc in snapshot.docs) {
 
 ---
 
+### Filtering on timestamps
+
+Compare a timestamp field with a `Date`, a `Timestamp` or an ISO 8601 string (`"2026-11-27T02:00:00.000Z"`). A plain millisecond number only matches fields that hold a number, so `where("createdAt", ">", Date.now() - 60000)` against a server timestamp returns no rows. Use `new Date(Date.now() - 60000)` instead. The server does not reject the number, because a number is a valid value for a numeric field.
+
 ## Server-Side Aggregations (`aggregate()`)
 
 Run `count`, `sum`, `avg`, `min`, and `max` directly in PostgreSQL without transferring raw documents over the wire.
