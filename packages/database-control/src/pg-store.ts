@@ -111,6 +111,12 @@ export interface PgControlPlaneStoreOptions {
  * is stored in plaintext beyond what the mirror already holds.
  */
 const SYNC_CACHE_MAX_ENTRIES = 2_000;
+
+function clampPoolInt(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = value === undefined ? NaN : Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
 const SYNC_CACHE_TTL_MS = 10_000;
 
 /** Throttle events outlive the longest window (signup budget, 1h) by a wide margin. */
@@ -271,11 +277,16 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
       const connectionString =
         configuredConnectionString ??
         "postgresql://vellum_control:control_secret@localhost:5432/control_db";
+      // Pool sizing and connect timeout are env-tunable (CONTROL_POOL_MAX,
+      // CONTROL_POOL_CONNECT_TIMEOUT_MS): a dead endpoint must fail fast
+      // instead of queueing invocations behind it.
+      const controlPoolMax = clampPoolInt(process.env["CONTROL_POOL_MAX"], 10, 1, 100);
+      const controlConnectTimeoutMs = clampPoolInt(process.env["CONTROL_POOL_CONNECT_TIMEOUT_MS"], 5_000, 1_000, 60_000);
       this.pool = new pg.Pool({
         connectionString,
-        max: 10,
+        max: controlPoolMax,
         idleTimeoutMillis: 30_000,
-        connectionTimeoutMillis: 15_000,
+        connectionTimeoutMillis: controlConnectTimeoutMs,
         application_name: "vellum-control-plane",
       });
       this.pool.on("error", (err: unknown) => {

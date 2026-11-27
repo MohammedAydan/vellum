@@ -25,8 +25,73 @@ function safeUnexpectedMessage(err: unknown): string {
   return "Internal Server Error";
 }
 
+/**
+ * PostgreSQL SQLSTATEs and Node socket codes that mean "the database cannot be
+ * reached right now" (quota/resource exhaustion, admin shutdown, connection
+ * failure). Mapped to a structured 503 instead of a bare 500 so clients can
+ * back off and retry.
+ */
+const DB_CONNECT_SQLSTATES = new Set([
+  "53000", // out_of_memory / Neon project quota exhaustion
+  "53100",
+  "53200",
+  "53300",
+  "57P01", // admin_shutdown
+  "57P02",
+  "57P03",
+  "08000",
+  "08001",
+  "08003",
+  "08004",
+  "08006",
+  "08007",
+  "08P01",
+]);
+const DB_CONNECT_NODE_CODES = new Set([
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "ENOTFOUND",
+  "EPIPE",
+  "EAI_AGAIN",
+]);
+const DB_CONNECT_MESSAGE_RE =
+  /timeout exceeded when trying to connect|Connection terminated unexpectedly|connection timeout|remaining connection slots are reserved|too many connections/i;
+
+/** Walk the error/cause chain looking for a database-connectivity failure. */
+function dbConnectErrorCode(err: unknown, depth = 0): string | null {
+  if (depth > 4 || err === null || typeof err !== "object") return null;
+  const code = (err as { code?: unknown }).code;
+  if (typeof code === "string") {
+    if (DB_CONNECT_SQLSTATES.has(code) || DB_CONNECT_NODE_CODES.has(code)) return code;
+  }
+  const message = (err as { message?: unknown }).message;
+  if (typeof message === "string" && DB_CONNECT_MESSAGE_RE.test(message)) return "CONNECTION_ERROR";
+  return dbConnectErrorCode((err as { cause?: unknown }).cause, depth + 1);
+}
+
 export const errorHandler: ErrorHandler = (err, c) => {
   const reqId = c.get("requestId") || c.req.header("x-request-id") || "req_unknown";
+
+  // Database-connectivity failures degrade gracefully: structured JSON 503
+  // with Retry-After, never a bare 500 (or worse, a platform-level crash page).
+  if (!(err instanceof VellumError)) {
+    const connectCode = dbConnectErrorCode(err);
+    if (connectCode !== null) {
+      c.header("Retry-After", "5");
+      return c.json(
+        {
+          error: {
+            code: "SERVICE_UNAVAILABLE",
+            message: "The database is temporarily unavailable. Please retry shortly.",
+            requestId: reqId,
+            details: { retryAfterSeconds: 5, retryable: true },
+          },
+        },
+        503
+      );
+    }
+  }
 
   if (err instanceof VellumError) {
     const status = (ERROR_HTTP_STATUS[err.code] ?? 500) as ContentfulStatusCode;

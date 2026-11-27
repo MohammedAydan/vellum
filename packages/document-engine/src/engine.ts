@@ -478,6 +478,68 @@ export class DocumentEngine implements DocumentEnginePort {
   }
 
   /**
+   * Authorization for a `get` whose target row is absent (missing or
+   * TTL-expired). Three outcomes:
+   *   - rule allows with no resource (e.g. `allow get: if true`)  -> return (caller gets 404)
+   *   - authenticated caller, collection `list` passes, and the `get` rule
+   *     would allow with any resource present (optimistic `resource.*`)      -> return (caller gets 404)
+   *   - anything else                                                        -> rethrow the 403
+   * The 403 branch keeps unauthenticated and collection-unauthorized callers
+   * from using the 404/403 split as an existence oracle.
+   */
+  private async authorizeMissingDocumentRead(
+    tx: StorageTxHandle,
+    apiKey: ApiKeyRecord | null,
+    ruleset: SecurityRulesetRecord | null,
+    authCtx: AuthContext,
+    bypassRules: boolean,
+    path: string
+  ): Promise<void> {
+    const base = {
+      apiKeyRecord: apiKey,
+      rulesetRecord: ruleset,
+      authContext: authCtx,
+      bypassRules,
+    };
+    try {
+      await this.authorizeTx(tx, { ...base, operation: "get", path, resourceData: null });
+      return;
+    } catch (error) {
+      if (!(error instanceof VellumError && error.code === "PERMISSION_DENIED")) {
+        throw error;
+      }
+      if (authCtx.uid === null) {
+        throw error;
+      }
+      // Collection-level list gate must pass before the optimistic probe.
+      const collectionPath = path.split("/").slice(0, -1).join("/");
+      try {
+        await this.authorizeTx(tx, {
+          ...base,
+          operation: "list",
+          path: `${collectionPath}/__collection_check__`,
+          collectionLevel: true,
+          resourceData: null,
+        });
+      } catch {
+        throw error;
+      }
+      // Optimistic probe: does the rule deny solely because resource is absent?
+      try {
+        await this.authorizeTx(tx, {
+          ...base,
+          operation: "get",
+          path,
+          resourceData: null,
+          optimisticResource: true,
+        });
+      } catch {
+        throw error;
+      }
+    }
+  }
+
+  /**
    * `authorizeOperation` for checks that run inside a transaction. When the ruleset reads other documents
    * (`get()` / `exists()`), the documents the matching rules ask for are read first (at most
    * `MAX_RULE_LOOKUPS` per check, through the transaction so they see the same data). Rulesets without
@@ -830,15 +892,24 @@ export class DocumentEngine implements DocumentEnginePort {
         this.telemetry.counter("db.round_trips", 1);
         this.telemetry.histogram("db.round_trips", 1);
 
-        await this.authorizeTx(tx, {
-          apiKeyRecord: apiKey,
-          rulesetRecord: ruleset,
-          operation: "get",
-          path: parsed.path,
-          authContext: authCtx,
-          resourceData: existing ? existing.data : null,
-          bypassRules: this.resolveBypassRules(ctx),
-        });
+        if (!existing) {
+          // Missing or TTL-expired row: three-valued read semantics. 404 only
+          // when the caller is authenticated, passes the collection-level list
+          // gate, and the `get` rule fails solely because `resource` is absent;
+          // anything else stays 403 so the read cannot act as an existence
+          // oracle for unauthorized callers.
+          await this.authorizeMissingDocumentRead(tx, apiKey, ruleset, authCtx, this.resolveBypassRules(ctx), parsed.path);
+        } else {
+          await this.authorizeTx(tx, {
+            apiKeyRecord: apiKey,
+            rulesetRecord: ruleset,
+            operation: "get",
+            path: parsed.path,
+            authContext: authCtx,
+            resourceData: existing.data,
+            bypassRules: this.resolveBypassRules(ctx),
+          });
+        }
 
         if (ctx.transactionToken) {
           // Persist the observed version into the PG-backed read_set inside the

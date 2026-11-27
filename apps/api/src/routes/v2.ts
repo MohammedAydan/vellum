@@ -590,6 +590,34 @@ export function createV2Routes(platform: VellumPlatformContext, helpers: V2Route
     const parsed = parseOrThrow(SimulateRulesSchema, await c.req.json(), "rules simulate request");
 
     let ruleset: unknown = parsed.rulesAst;
+    let diagnostics: unknown;
+    if (parsed.source !== undefined) {
+      // Raw DSL input: compile server-side first so clients never need to send
+      // a large compiled AST inline.
+      const dsl = requireRulesDsl();
+      try {
+        const compiled = dsl.compileRulesDsl(parsed.source);
+        ruleset = compiled.ast;
+        diagnostics = compiled.diagnostics;
+      } catch (err) {
+        if (isRulesDslSyntaxError(err)) {
+          const syntax = err as RulesDslSyntaxErrorLike;
+          return c.json(
+            {
+              error: {
+                code: "INVALID_ARGUMENT",
+                message: syntax.message,
+                line: syntax.line,
+                column: syntax.column,
+                snippet: syntax.snippet,
+              },
+            },
+            400
+          );
+        }
+        throw err;
+      }
+    }
     if (ruleset === undefined) {
       const active = await platform.controlStore.getActiveRulesetAsync(projectId);
       if (!active) {
@@ -605,7 +633,7 @@ export function createV2Routes(platform: VellumPlatformContext, helpers: V2Route
       resourceData: parsed.resourceData ?? null,
       incomingData: parsed.incomingData ?? null,
     });
-    return c.json(result);
+    return c.json(diagnostics === undefined ? result : { ...result, diagnostics });
   });
 
   // GET /v1/projects/:projectId/indexes/recommendations

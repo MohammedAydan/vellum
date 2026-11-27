@@ -15,7 +15,57 @@ import { pipeWebResponse } from "../../dist/runtime/node-stream.js";
 import { createProjectOriginChecker } from "../../dist/middleware/project-cors.js";
 import { handleMaintenanceRequest, startPurgeTick } from "../../dist/runtime/vercel-maintenance.js";
 
-const platform = await createVellumPlatformFromEnv();
+// A database outage at cold start must never crash the function (which turns
+// every route, including /v1/health/live, into FUNCTION_INVOCATION_FAILED).
+// Init lazily; a failed init is retried on the next request and answered with
+// a structured JSON 503 in the meantime.
+let platformPromise = null;
+function getPlatform() {
+  if (!platformPromise) {
+    platformPromise = createVellumPlatformFromEnv().catch((err) => {
+      platformPromise = null;
+      throw err;
+    });
+  }
+  return platformPromise;
+}
+
+const DB_CONNECT_CODES = new Set([
+  "53000", "53100", "53200", "53300", "57P01", "57P02", "57P03",
+  "08000", "08001", "08003", "08004", "08006", "08007", "08P01",
+  "ECONNREFUSED", "ETIMEDOUT", "ECONNRESET", "ENOTFOUND", "EPIPE", "EAI_AGAIN",
+]);
+function isDbConnectError(err, depth = 0) {
+  if (depth > 4 || err === null || typeof err !== "object") return false;
+  if (typeof err.code === "string" && DB_CONNECT_CODES.has(err.code)) return true;
+  if (typeof err.message === "string" && /timeout exceeded when trying to connect|Connection terminated unexpectedly|remaining connection slots are reserved|too many connections/i.test(err.message)) return true;
+  return isDbConnectError(err.cause, depth + 1);
+}
+
+function unavailableResponse(requestId) {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: "SERVICE_UNAVAILABLE",
+        message: "The database is temporarily unavailable. Please retry shortly.",
+        requestId,
+        details: { retryAfterSeconds: 5, retryable: true },
+      },
+    }),
+    { status: 503, headers: { "content-type": "application/json", "retry-after": "5", "x-request-id": requestId } }
+  );
+}
+
+// pg/socket noise on idle connections must not kill the serverless process;
+// anything else remains fatal and visible.
+process.on("uncaughtException", (err) => {
+  if (isDbConnectError(err)) {
+    console.error("Ignored database socket error:", err instanceof Error ? err.message : String(err));
+    return;
+  }
+  console.error(err);
+  process.exit(1);
+});
 
 const ALLOWED_VERCEL_ORIGINS = new Set([
   "https://vellum-console.vercel.app",
@@ -55,16 +105,32 @@ async function handler(req, res) {
     }
   }
 
+  const requestId = (req.headers && req.headers["x-request-id"]) || `req_${crypto.randomUUID()}`;
+
+  let platform;
+  try {
+    platform = await getPlatform();
+  } catch (err) {
+    console.error("Platform init failed:", err instanceof Error ? err.message : String(err));
+    await pipeWebResponse(unavailableResponse(requestId), res, {});
+    return;
+  }
+  startPostInit(platform);
+
   let response;
   try {
     const request = new Request(new URL(target, "http://localhost"), init);
     // Scheduled maintenance (Vercel cron, bearer CRON_SECRET) is answered before the platform router.
     response = (await handleMaintenanceRequest(request, platform.dataStore)) ?? (await platform.fetch(request));
   } catch (err) {
-    response = new Response(
-      JSON.stringify({ error: "INTERNAL_ERROR", reason: err instanceof Error ? err.message : String(err) }),
-      { status: 500, headers: { "content-type": "application/json" } }
-    );
+    if (isDbConnectError(err)) {
+      response = unavailableResponse(requestId);
+    } else {
+      response = new Response(
+        JSON.stringify({ error: { code: "INTERNAL", message: "Internal Server Error", requestId } }),
+        { status: 500, headers: { "content-type": "application/json" } }
+      );
+    }
   }
 
   const extra = {};
@@ -79,10 +145,23 @@ async function handler(req, res) {
   await pipeWebResponse(response, res, extra);
 }
 
-// Retention (outbox, tombstones, TTL): tick while the instance is alive; the daily cron is a backstop.
-if (process.env["VELLUM_DISABLE_PURGE_TICK"] !== "1") {
-  startPurgeTick(platform.dataStore, (err) => {
-    platform.logger.warn("Purge tick failed", { reason: err instanceof Error ? err.message.slice(0, 256) : String(err) });
+// Retention (outbox, tombstones, TTL) and realtime WebSocket attach need the
+// platform; both start once init first succeeds (and keep retrying via
+// getPlatform() until it does).
+let postInitStarted = false;
+function startPostInit(platform) {
+  if (postInitStarted) return;
+  postInitStarted = true;
+  if (process.env["VELLUM_DISABLE_PURGE_TICK"] !== "1") {
+    startPurgeTick(platform.dataStore, (err) => {
+      platform.logger.warn("Purge tick failed", { reason: err instanceof Error ? err.message.slice(0, 256) : String(err) });
+    });
+  }
+  attachRealtimeWebSocketServer(server, platform.realtimeHub, {
+    allowedOrigins: parseAllowedOrigins(getConfig().CORS_ALLOWED_ORIGINS),
+    isProjectOriginAllowed: createProjectOriginChecker(platform.controlStore),
+    // Vercel cuts a function at its max duration (300 s on Hobby). Close first, the SDK reconnects and resumes.
+    maxLifetimeMs: Number(process.env["REALTIME_WS_MAX_LIFETIME_MS"] ?? 265_000),
   });
 }
 
@@ -99,17 +178,24 @@ const server = http.createServer((req, res) => {
 });
 
 // Rewrites hand the function `/api/server?path=/v1/...`; the WebSocket handler needs the real path.
-server.on("upgrade", (req) => {
+// Upgrade requests arriving before platform init completes wait for it; if the
+// database is still down the socket is closed so the client retries.
+server.on("upgrade", (req, socket, head) => {
   const url = new URL(req.url || "/", "http://localhost");
   const target = url.searchParams.get("path");
   if (target) req.url = target;
+  if (postInitStarted) return; // the realtime handler (registered next) takes it
+  getPlatform()
+    .then((platform) => {
+      startPostInit(platform);
+      server.emit("upgrade", req, socket, head);
+    })
+    .catch(() => {
+      socket.destroy();
+    });
 });
 
-attachRealtimeWebSocketServer(server, platform.realtimeHub, {
-  allowedOrigins: parseAllowedOrigins(getConfig().CORS_ALLOWED_ORIGINS),
-  isProjectOriginAllowed: createProjectOriginChecker(platform.controlStore),
-  // Vercel cuts a function at its max duration (300 s on Hobby). Close first, the SDK reconnects and resumes.
-  maxLifetimeMs: Number(process.env["REALTIME_WS_MAX_LIFETIME_MS"] ?? 265_000),
-});
+// Warm the platform eagerly so the common path never pays the lazy-init cost.
+getPlatform().then(startPostInit).catch(() => undefined);
 
 export default server;

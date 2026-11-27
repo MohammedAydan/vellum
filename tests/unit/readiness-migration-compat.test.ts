@@ -58,22 +58,32 @@ describe("historical migration repair readiness", () => {
     expect(isMigrationChecksumCompatible("data_db", filename, replacement, historical)).toBe(false);
     expect(isMigrationChecksumCompatible("data_db", filename, historical, "f".repeat(64))).toBe(false);
   });
+  // The unauthenticated readiness response is a public projection (states +
+  // non-production reason counts only); migration filenames and checksums
+  // never leave the process. The 200/503 split still proves the drift/missing
+  // verdicts below.
   it("returns 200 with the historical 0013 ledger and applied 0014 repair", async () => {
     installProbe();
     const response = await healthRoutes.request("/health/ready");
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ ready: true, checks: { dataMigrations: { drift: [], missing: [] } } });
+    expect(await response.json()).toMatchObject({ ready: true, checks: { dataMigrations: { state: "ok" } } });
   });
   it("still returns 503 for any unrecognized checksum drift", async () => {
     installProbe({ drift: "f".repeat(64) });
     const response = await healthRoutes.request("/health/ready");
     expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ ready: false, checks: { dataMigrations: { drift: [filename] } } });
+    const body = (await response.json()) as { ready: boolean; checks: { dataMigrations: { state: string; reason?: string } } };
+    expect(body.ready).toBe(false);
+    expect(body.checks.dataMigrations.state).toBe("failed");
+    expect(body.checks.dataMigrations.reason).toContain("drift=1");
   });
   it("still returns 503 if forward repair 0014 has not been applied", async () => {
     installProbe({ missingRepair: true });
     const response = await healthRoutes.request("/health/ready");
     expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ ready: false, checks: { dataMigrations: { missing: ["0014_shared_cluster_role_convergence.sql"] } } });
+    const body = (await response.json()) as { ready: boolean; checks: { dataMigrations: { state: string; reason?: string } } };
+    expect(body.ready).toBe(false);
+    expect(body.checks.dataMigrations.state).toBe("failed");
+    expect(body.checks.dataMigrations.reason).toContain("missing=1");
   });
 });
