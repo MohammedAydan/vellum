@@ -23,6 +23,8 @@ export interface PgRealtimeInfrastructureOptions {
   hub: RealtimeGatewayHub;
   channels?: string[] | undefined;
   pollIntervalMs?: number | undefined;
+  /** LISTEN-healthy missed-notify poll cadence in ms. Defaults to 10000 (P1-4). */
+  healthyTenantPollMs?: number | undefined;
   batchSize?: number | undefined;
   onError?: ((error: Error) => void) | undefined;
 }
@@ -72,6 +74,11 @@ export function createPgRealtimeInfrastructure(
     channel: PG_OUTBOX_CHANNEL,
     batchSize: options.batchSize ?? 500,
     pollIntervalMs: options.pollIntervalMs ?? 1_000,
+    // LISTEN-healthy back-off (P1-4): with LISTEN up, polling live tenants
+    // every second only duplicates what NOTIFY already wakes; 10s is the
+    // missed-notify net. The noop bus (placeholder LISTEN) is never healthy,
+    // so it keeps every-cycle polling.
+    healthyTenantPollMs: listenIsPlaceholder ? 0 : (options.healthyTenantPollMs ?? 10_000),
   };
   if (options.onError) pollerOptions.onError = options.onError;
   const poller = new OutboxPoller(pollerOptions);

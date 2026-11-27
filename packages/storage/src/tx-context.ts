@@ -165,6 +165,9 @@ const RETRYABLE_PG_CODES: ReadonlySet<string> = new Set([
   "40P01", // deadlock_detected
 ]);
 
+/** Client-visible retry hint carried on lock-conflict (55P03) ABORTED_CONFLICT errors. */
+export const LOCK_CONFLICT_RETRY_AFTER_MS = 50;
+
 function getPgErrorCode(err: unknown): string | null {
   if (typeof err === "object" && err !== null && "code" in err) {
     const code = (err as { code?: unknown }).code;
@@ -267,7 +270,10 @@ export function buildPgTenantSetupSql(projectId: string): string {
   // Neon's pooler can hand out a backend whose search_path was left empty by a
   // previous `SET search_path` (pooled connections are reused). Pin it locally
   // so every tenant table resolves unqualified — fail closed, never leak.
-  return `BEGIN; SET LOCAL statement_timeout = '5000ms'; SET LOCAL search_path = public; ` +
+  // lock_timeout bounds how long a writer queues on a contended row: the
+  // conflict surfaces fast as ABORTED_CONFLICT (55P03, mapped below) instead
+  // of eating the whole statement_timeout budget.
+  return `BEGIN; SET LOCAL statement_timeout = '5000ms'; SET LOCAL lock_timeout = '1500ms'; SET LOCAL search_path = public; ` +
     `SELECT set_config('app.current_project_id', '${projectId}', true)`;
 }
 
@@ -275,6 +281,7 @@ export function buildPgTenantSetupSql(projectId: string): string {
 export const SQL_SET_TENANT_CONTEXT_PARAMETERIZED =
   `SELECT set_config('app.current_project_id', $1, true), ` +
   `set_config('statement_timeout', '5000ms', true), ` +
+  `set_config('lock_timeout', '1500ms', true), ` +
   `set_config('search_path', 'public', true)`;
 
 const DOCUMENT_COLUMNS = `project_id AS "projectId", path,
@@ -287,13 +294,15 @@ const DOCUMENT_COLUMNS = `project_id AS "projectId", path,
 /** Live-read predicate shared by every find/list statement (soft delete + TTL). */
 const LIVE_DOCUMENT_PREDICATE = `deleted_at IS NULL AND (expires_at IS NULL OR expires_at > now())`;
 
-export function getDocumentStatement(includeSoftDeleted: boolean, forUpdate: boolean): PreparedQueryConfig {
-  const suffix = `${includeSoftDeleted ? "All" : "Live"}${forUpdate ? "Locked" : ""}`;
+export function getDocumentStatement(includeSoftDeleted: boolean, forUpdate: boolean, nowait = false): PreparedQueryConfig {
+  const suffix = `${includeSoftDeleted ? "All" : "Live"}${forUpdate ? "Locked" : ""}${nowait ? "Nowait" : ""}`;
   // "Include soft deleted" is the admin/GC view: it deliberately bypasses both
   // the tombstone filter and the TTL filter so expired/tombstoned rows can be
   // inspected. Every normal read filters both with LIVE_DOCUMENT_PREDICATE.
   const liveClause = includeSoftDeleted ? "" : ` AND ${LIVE_DOCUMENT_PREDICATE}`;
-  const lockClause = forUpdate ? " FOR UPDATE" : "";
+  // NOWAIT (P1-4): hot documents fail fast with 55P03 -> ABORTED_CONFLICT
+  // instead of queueing behind a contender up to lock_timeout.
+  const lockClause = forUpdate ? (nowait ? " FOR UPDATE NOWAIT" : " FOR UPDATE") : "";
   return {
     name: `vellum_get_document_${suffix}`,
     text: `SELECT ${DOCUMENT_COLUMNS}
@@ -726,9 +735,9 @@ export function createSqlTransactionHandle(
       return mapped;
     },
 
-    async getDocument(path: string, includeSoftDeleted = false, forUpdate = false): Promise<DocumentRecord | null> {
+    async getDocument(path: string, includeSoftDeleted = false, forUpdate = false, nowait = false): Promise<DocumentRecord | null> {
       assertOpen();
-      const statement = getDocumentStatement(includeSoftDeleted, forUpdate);
+      const statement = getDocumentStatement(includeSoftDeleted, forUpdate, nowait);
       const { rows } = await runPrepared<DocumentRecord>(
         client,
         prepared,
@@ -1438,6 +1447,16 @@ export async function runInTenantTransactionAsync<T>(
       const code = getPgErrorCode(err);
       if (code === "57014") {
         throw new VellumError("QUERY_DEADLINE_EXCEEDED", "Database query exceeded 5000ms statement_timeout");
+      }
+      if (code === "55P03") {
+        // lock_timeout (or NOWAIT) on a contended row: a caller-actionable
+        // conflict with an explicit retry hint; the SDK retries with
+        // full-jitter backoff and blind writes retry internally.
+        throw new VellumError(
+          "ABORTED_CONFLICT",
+          "The document is locked by a concurrent write; retry with backoff",
+          { retryAfterMs: LOCK_CONFLICT_RETRY_AFTER_MS }
+        );
       }
       if (code !== null && RETRYABLE_PG_CODES.has(code) && attempt < maxRetries) {
         const jitter = Math.floor(Math.random() * retryBaseDelayMs);

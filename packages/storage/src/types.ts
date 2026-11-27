@@ -118,7 +118,11 @@ export interface QueriedDocument extends DocumentRecord {
 
 export interface TxHandle {
   readonly projectId: string;
-  getDocument(path: string, includeSoftDeleted?: boolean, forUpdate?: boolean): Promise<DocumentRecord | null>;
+  /**
+   * `nowait` (P1-4): fail fast with ABORTED_CONFLICT instead of queueing on a
+   * contended row lock; only meaningful with `forUpdate: true`.
+   */
+  getDocument(path: string, includeSoftDeleted?: boolean, forUpdate?: boolean, nowait?: boolean): Promise<DocumentRecord | null>;
   /**
    * V2: one SQL statement for an entire set of paths (relationship fan-out, zero N+1).
    * `includeDeleted` mirrors `getDocument(path, true)`: tombstones AND expired

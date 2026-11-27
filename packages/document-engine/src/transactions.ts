@@ -473,7 +473,10 @@ export function createTransactionManager(options: TransactionManagerOptions): Tr
       requireActive(scopedRow);
       for (const path of Object.keys(scopedRow!.readSet).sort()) {
         const expectedVersion = scopedRow!.readSet[path] ?? 0;
-        const doc = await tx.getDocument(path, false, true);
+        // NOWAIT: hot-doc OCC validation fails fast into ABORTED_CONFLICT (with
+        // a retryAfterMs hint) instead of queueing on the row lock; the SDK
+        // retries with full-jitter backoff.
+        const doc = await tx.getDocument(path, false, true, true);
         const actualVersion = doc ? doc.version : 0;
         if (actualVersion !== expectedVersion) {
           throw new VellumError(

@@ -347,6 +347,54 @@ describe("@vellum/realtime - poll-only tenant bootstrap", () => {
     expect(delivered).toEqual(["8"]);
     expect(poller.getWatermark(PROJECT_A)).toBe(8n);
   });
+
+  it("backs off live-tenant polls while LISTEN is healthy but still drains on NOTIFY", async () => {
+    // P1-4: with LISTEN up the 1s poll is only a missed-notify net. A live
+    // tenant is skipped between healthy-poll ticks, and a NOTIFY still wakes
+    // a drain immediately inside that window.
+    const mk = (n: number): OutboxEvent => ({
+      seqId: String(n), projectId: PROJECT_A, collectionPath: "items", path: `items/i${n}`, documentId: `i${n}`,
+      opType: "updated", version: 1, beforeData: null, afterData: { n },
+      committedAt: new Date().toISOString(),
+    });
+    const rows = [mk(6), mk(7), mk(8), mk(9)];
+    let safeWatermark = "7";
+    const delivered: string[] = [];
+    const dataStore = new DataPlaneStore();
+    dataStore.queryOutboxSafeWatermark = async () => safeWatermark;
+    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0", upToSeqId?: string) => {
+      const after = BigInt(afterSeqId);
+      const upTo = upToSeqId === undefined ? null : BigInt(upToSeqId);
+      return rows.filter((r) => BigInt(r.seqId) > after && (upTo === null || BigInt(r.seqId) <= upTo));
+    };
+    const connections = new Map([["c1", { authenticated: true, closed: false, projectId: PROJECT_A, connectedAt: Date.now() }]]);
+    const poller = new OutboxPoller({
+      bus: { async publish() {}, async subscribe() { return () => {}; }, async close() {} },
+      dataStore,
+      sink: { connections, async notifyCommittedEvents(_p, evs) { for (const e of evs) delivered.push(e.seqId); } },
+      pollIntervalMs: 40,
+      healthyTenantPollMs: 5_000,
+    });
+    await poller.start();
+    poller.initializeTenantNow(PROJECT_A);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(delivered).toEqual([]);
+    // Row 8 commits; healthy polls are backed off for 5s, so it is not delivered by polling.
+    safeWatermark = "8";
+    await new Promise((r) => setTimeout(r, 160));
+    expect(delivered).toEqual([]);
+    // A NOTIFY wakes the drain immediately, inside the backed-off window.
+    poller.handleNotification(JSON.stringify({ seqId: "8", projectId: PROJECT_A }));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(delivered).toEqual(["8"]);
+    // A row committed after that stays undelivered inside the backed-off
+    // window without a NOTIFY: polling it is exactly the cost the net avoids.
+    safeWatermark = "9";
+    await new Promise((r) => setTimeout(r, 160));
+    expect(delivered).toEqual(["8"]);
+    await poller.stop();
+    expect(poller.getWatermark(PROJECT_A)).toBe(8n);
+  });
 });
 
 describe("@vellum/realtime - stuck drain", () => {

@@ -77,6 +77,14 @@ export interface OutboxPollerOptions {
   pollIntervalMs?: number | undefined;
   /** Safety-net poll for tenants with no connected client, in ms. Defaults to 0 (never): idle tenants cost no database work. */
   idleTenantPollMs?: number | undefined;
+  /**
+   * LISTEN-healthy poll for tenants WITH a connected client, in ms. Defaults
+   * to 0 (poll every cycle). With LISTEN up the poll is only a missed-notify
+   * net, so production wiring sets this to a slow cadence (10000): live
+   * tenants are drained on that cadence instead of every poll interval. A
+   * pending rescan or an unhealthy LISTEN connection drains every cycle.
+   */
+  healthyTenantPollMs?: number | undefined;
   /** A drain running longer than this is replaced. Defaults to 8000. */
   drainStuckMs?: number | undefined;
   retryBaseMs?: number | undefined;
@@ -124,8 +132,10 @@ export class OutboxPoller implements OutboxPollerPort {
   private readonly pollIntervalMs: number;
   private readonly drainStuckMs: number;
   private readonly idleTenantPollMs: number;
+  private readonly healthyTenantPollMs: number;
   private readonly skippedIdle = new Set<string>();
   private readonly lastIdlePollAt = new Map<string, number>();
+  private readonly lastHealthyPollAt = new Map<string, number>();
   private readonly retryBaseMs: number;
   private readonly retryMaxMs: number;
   private readonly onError: ((error: Error) => void) | undefined;
@@ -159,6 +169,9 @@ export class OutboxPoller implements OutboxPollerPort {
     this.batchSize = Math.max(1, Math.min(5_000, Math.trunc(rawBatch)));
     this.pollIntervalMs = Math.max(50, Math.trunc(rawPoll));
     this.idleTenantPollMs = Number.isFinite(options.idleTenantPollMs) ? Math.max(0, options.idleTenantPollMs!) : 0;
+    this.healthyTenantPollMs = Number.isFinite(options.healthyTenantPollMs)
+      ? Math.max(0, options.healthyTenantPollMs!)
+      : 0;
     this.drainStuckMs = Number.isFinite(options.drainStuckMs) ? Math.max(50, options.drainStuckMs!) : DRAIN_STUCK_MS;
     this.retryBaseMs = Math.max(1, Math.trunc(rawRetryBase));
     this.retryMaxMs = Math.max(this.retryBaseMs, Math.trunc(rawRetryMax));
@@ -343,9 +356,21 @@ export class OutboxPoller implements OutboxPollerPort {
       }
       if (!live.has(key) && now - (this.lastIdlePollAt.get(key) ?? 0) < this.idleTenantPollMs) continue;
       if (!live.has(key)) this.lastIdlePollAt.set(key, now);
+      // LISTEN-healthy back-off (P1-4): with LISTEN up, the poll is only a
+      // missed-notify net for live tenants, so drain them on a slow cadence.
+      const known = this.tenants.get(key);
+      if (
+        live.has(key) &&
+        this.healthyTenantPollMs > 0 &&
+        this.unsubscribe !== null &&
+        !(known && known.pendingRescan) &&
+        now - (this.lastHealthyPollAt.get(key) ?? 0) < this.healthyTenantPollMs
+      ) continue;
+      if (live.has(key)) this.lastHealthyPollAt.set(key, now);
       void this.drain(this.registerTenant(ctx));
     }
     if (this.lastIdlePollAt.size > MAX_TRACKED_TENANTS * 2) this.lastIdlePollAt.clear();
+    if (this.lastHealthyPollAt.size > MAX_TRACKED_TENANTS * 2) this.lastHealthyPollAt.clear();
   }
 
   private hasLiveSession(projectId: string): boolean {
