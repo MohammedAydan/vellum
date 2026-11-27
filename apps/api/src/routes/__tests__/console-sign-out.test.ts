@@ -50,6 +50,18 @@ describe('console sign-out ends the session', () => {
     expect((await call(platform, 'GET', '/v1/auth/session', nextAccess)).status).toBe(401);
   });
 
+  it('a refresh token rotated seconds earlier cannot mint a session after sign-out', async () => {
+    const platform = createVellumPlatform({});
+    const s = await signup(platform, 'so-r0');
+    const r1res = await refresh(platform, s.refreshToken); // R0 -> R1
+    expect(r1res.status).toBe(200);
+    const r1 = (await r1res.json()) as { accessToken?: string; token?: string; refreshToken: string };
+    expect((await call(platform, 'POST', '/v1/auth/sign-out', (r1.accessToken ?? r1.token) as string)).status).toBe(200);
+    // R0 is still inside the 15 s grace window, but its family is revoked.
+    expect((await refresh(platform, s.refreshToken)).status).toBe(401);
+    expect((await refresh(platform, r1.refreshToken)).status).toBe(401);
+  });
+
   it('does not end another user\'s session and ignores garbage tokens', async () => {
     const platform = createVellumPlatform({});
     const a = await signup(platform, 'so-a');

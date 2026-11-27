@@ -253,6 +253,10 @@ async function issueConcurrentControlSession(
   session: ControlRefreshSessionRecord,
   nowMs: number
 ): Promise<RefreshedControlSession> {
+  // A revoked family (sign-out, replay detection, admin revoke) must not mint a new session from the grace window.
+  if (session.revoked) {
+    throw new VellumError("UNAUTHENTICATED", "Session revoked");
+  }
   const user = await loadRefreshUser(opts.controlStore, session.userId, Boolean(opts.requireSuperAdmin));
   const accessToken = await opts.signAccess(user);
   const fresh = issueControlTokens(accessToken, opts.cookieDescriptor, nowMs);

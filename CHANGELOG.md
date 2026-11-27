@@ -33,6 +33,10 @@ One release for the realtime, security-rules, auth and SDK fixes found in audits
 - **Realtime (JS, Flutter):** a delete in a document subscription reports `exists: false` and `data()` of `null`. An update older than the version already held is ignored.
 - **JS realtime** follows the browser's online and offline events.
 - **Errors:** a non-UUID project id gives `400 INVALID_ARGUMENT`. A `limit` below 1 or not an integer, and an empty `in` list, give `INVALID_ARGUMENT`.
+- **Auth:** console sign-out now ends the session on the server. It revokes the access token and every console refresh session of the user, and the 15 second refresh grace window no longer mints a session for a revoked token. The dashboard calls it on logout.
+- **Realtime:** a revoked or expired session stops receiving live data. The session is rechecked before each delivered event (at most every 5 seconds, `REALTIME_SESSION_RECHECK_MS`).
+- **Realtime (JS, Flutter):** the SSE fallback drops replayed mutations it has already seen for a subscription.
+- **Console sign-up:** email addresses are limited to 254 characters.
 - Audit fixes: dotted update paths, timers, timestamp ranges, throttle keys, client IP handling, registry reads, nested field operations, group-by types and message text.
 
 ## 0.0.7
