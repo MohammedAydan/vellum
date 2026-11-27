@@ -94,6 +94,7 @@ import type {
   RateLimiterLike,
   RelationRule,
   RealtimeHubLike,
+  RulesLookupBudget,
   TelemetryLike,
   TransactionBeginResult,
 } from "./types.js";
@@ -330,19 +331,65 @@ export class DocumentEngine implements DocumentEnginePort {
     );
   }
 
+  /** Default per-request cap on ruleset store reads (D1). */
+  private static readonly RULES_LOOKUP_MAX_LOADS = 4;
+
+  /**
+   * Auto-attached per-request budgets, keyed by the exact context object the
+   * caller passed in. A WeakMap (instead of mutating the context) keeps the
+   * budget from leaking across requests when callers reuse or spread a shared
+   * context literal: a spread copies data properties, which would otherwise
+   * carry a stale memoized ruleset into an unrelated request.
+   */
+  private static readonly rulesLookupBudgets = new WeakMap<EngineContext, RulesLookupBudget>();
+
   /**
    * Loads the active ruleset. Stores that can read PostgreSQL directly expose
    * `getActiveRulesetAsync`; it is preferred so a ruleset change or rollback
    * takes effect on the very next request on every instance.
+   *
+   * D1: the loaded ruleset is memoized on the request's engine context, so
+   * internal fan-out (batch chunks, relation includes) re-reads the store at
+   * most once per request instead of once per chunk. Actual store reads are
+   * counted against a per-request budget: an explicit `ctx.rulesLookupBudget`
+   * when the caller supplies one, otherwise an auto-attached budget keyed by
+   * the exact context object (see {@link rulesLookupBudgets}). The budget is fail closed:
+   * exhausting it denies the operation with PERMISSION_DENIED rather than
+   * letting a request read rules unbounded. Reads are metered via the
+   * `security.rules_lookups` telemetry counter.
    */
-  private async loadRuleset(projectId: string): Promise<SecurityRulesetRecord | null> {
+  private async loadRuleset(ctx: EngineContext): Promise<SecurityRulesetRecord | null> {
+    const projectId = ctx.projectId;
+    let budget = ctx.rulesLookupBudget;
+    if (!budget) {
+      budget = DocumentEngine.rulesLookupBudgets.get(ctx);
+      if (!budget) {
+        budget = { used: 0 };
+        DocumentEngine.rulesLookupBudgets.set(ctx, budget);
+      }
+    }
+    if (budget.cached !== undefined) return budget.cached as SecurityRulesetRecord | null;
+    const maxLoads = budget.maxLoads ?? DocumentEngine.RULES_LOOKUP_MAX_LOADS;
+    if (budget.used >= maxLoads) {
+      this.safeAudit("security.rules_budget_exceeded", {
+        projectId,
+        metadata: { used: budget.used, maxLoads },
+      });
+      throw new VellumError(
+        "PERMISSION_DENIED",
+        "Security rules evaluation budget exceeded for this request"
+      );
+    }
+    budget.used += 1;
+    this.telemetry.counter("security.rules_lookups", 1);
     const store = this.controlStore as ControlStoreLike & {
       getActiveRulesetAsync?: (id: string) => Promise<unknown>;
     };
-    const record = store.getActiveRulesetAsync
+    const record = ((store.getActiveRulesetAsync
       ? await store.getActiveRulesetAsync(projectId)
-      : store.getActiveRuleset(projectId);
-    return (record as SecurityRulesetRecord | null) ?? null;
+      : store.getActiveRuleset(projectId)) as SecurityRulesetRecord | null) ?? null;
+    budget.cached = record;
+    return record;
   }
 
   /** Resolves the owning org id for metering/audit without ever throwing. */
@@ -881,7 +928,7 @@ export class DocumentEngine implements DocumentEnginePort {
     this.validateEngineContext(ctx);
     await this.enforceRateLimit(ctx);
     const parsed = parseDocumentPath(ctx.path);
-    const ruleset = await this.loadRuleset(ctx.projectId);
+    const ruleset = await this.loadRuleset(ctx);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
 
@@ -965,7 +1012,7 @@ export class DocumentEngine implements DocumentEnginePort {
     if (ctx.transactionToken) throw new VellumError("INVALID_ARGUMENT", "referencedBy does not accept transaction tokens");
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
-    const ruleset = await this.loadRuleset(ctx.projectId);
+    const ruleset = await this.loadRuleset(ctx);
     const bypassRules = this.resolveBypassRules(ctx);
     const scope = JSON.stringify([ctx.projectId, apiKey.id, authCtx.uid, target, request.collection ?? null, request.field ?? null]);
     return this.dataStore.withTransaction(this.tenantOf(ctx), async (tx) => {
@@ -1163,7 +1210,7 @@ export class DocumentEngine implements DocumentEnginePort {
       );
     }
 
-    const ruleset = await this.loadRuleset(ctx.projectId);
+    const ruleset = await this.loadRuleset(ctx);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
     const txNowMs = Date.now();
@@ -1783,7 +1830,7 @@ export class DocumentEngine implements DocumentEnginePort {
         "startAfter and startAt cannot be used together"
       );
     }
-    const ruleset = await this.loadRuleset(ctx.projectId);
+    const ruleset = await this.loadRuleset(ctx);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
 
@@ -2056,7 +2103,7 @@ export class DocumentEngine implements DocumentEnginePort {
       throw new VellumError("INVALID_ARGUMENT", "Aggregate request requires at least one metric");
     }
 
-    const ruleset = await this.loadRuleset(ctx.projectId);
+    const ruleset = await this.loadRuleset(ctx);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
     authorizeOperation({
@@ -2170,7 +2217,7 @@ export class DocumentEngine implements DocumentEnginePort {
     }
     const limit = Math.min(requestedLimit, 5000);
 
-    const ruleset = await this.loadRuleset(ctx.projectId);
+    const ruleset = await this.loadRuleset(ctx);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
     authorizeOperation({
@@ -2423,7 +2470,7 @@ export class DocumentEngine implements DocumentEnginePort {
     }
 
     const parsed = paths.map((path) => parseDocumentPath(path));
-    const ruleset = await this.loadRuleset(ctx.projectId);
+    const ruleset = await this.loadRuleset(ctx);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
     const bypassRules = this.resolveBypassRules(ctx);
@@ -2585,7 +2632,7 @@ export class DocumentEngine implements DocumentEnginePort {
       );
     }
     const parsed = parseDocumentPath(ctx.path);
-    const ruleset = await this.loadRuleset(ctx.projectId);
+    const ruleset = await this.loadRuleset(ctx);
     const apiKey = this.resolveApiKey(ctx);
     const authCtx = this.resolveAuthContext(ctx);
     const nowIso = new Date().toISOString();
@@ -2858,7 +2905,7 @@ export class DocumentEngine implements DocumentEnginePort {
     // Export is a bulk read: it must authenticate AND enforce collection-level
     // `list` rules before any row is materialised (same gate as executeQuery).
     const apiKey = this.resolveApiKey(ctx);
-    const ruleset = await this.loadRuleset(ctx.projectId);
+    const ruleset = await this.loadRuleset(ctx);
     const authCtx = this.resolveAuthContext(ctx);
     authorizeOperation({
       apiKeyRecord: apiKey,

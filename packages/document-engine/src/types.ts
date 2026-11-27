@@ -246,8 +246,25 @@ export interface DocumentEngineOptions {
   audit?: AuditLike | undefined;
 }
 
+/**
+ * Per-request security-rules lookup budget (D1). The engine attaches one to
+ * the context on first use when the caller did not provide it, so every
+ * ruleset load inside one request context is counted together. When the
+ * budget is exhausted the engine fails closed (PERMISSION_DENIED).
+ */
+export interface RulesLookupBudget {
+  /** Maximum ruleset store reads allowed in this request (default 4). */
+  maxLoads?: number | undefined;
+  /** Store reads performed so far; managed by the engine. */
+  used: number;
+  /** Memoized ruleset for this request; managed by the engine. */
+  cached?: unknown;
+}
+
 export interface EngineContext {
   projectId: string;
+  /** Shared per-request rules-lookup budget; attached by the engine when absent. */
+  rulesLookupBudget?: RulesLookupBudget | undefined;
   /** Emits SQL/debug metadata in query results. Never set from a public request. */
   debug?: boolean | undefined;
   /** Stable idempotency key for retry-safe mutations. */
