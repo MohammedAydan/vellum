@@ -33,7 +33,7 @@ import { extractClientIp } from "../middleware/security.js";
 
 export const healthRoutes = new Hono();
 
-const SERVICE_VERSION = "0.0.8";
+const SERVICE_VERSION = "0.0.9";
 const PROCESS_STARTED_AT = Date.now();
 const PROBE_TIMEOUT_MS = 3_000;
 // Successful probes are cached long enough to keep PostgreSQL connection
