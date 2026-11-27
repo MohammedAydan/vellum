@@ -786,6 +786,40 @@ class VellumAuth implements VellumAuthPort {
   /// Pass [currentPassword] when changing [email] on an account that has a
   /// password. `password` is not forwarded; use [changePassword] to change it.
   @override
+  /// D3: one-call anonymous -> email/password upgrade. The uid, custom
+  /// claims and metadata survive; every OTHER session of the account is
+  /// revoked while this one keeps working. Throws FAILED_PRECONDITION when
+  /// the current account is not anonymous and ALREADY_EXISTS when the email
+  /// is taken.
+  @override
+  Future<VellumUser> upgradeAnonymousWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    final expectedEpoch = _sessionEpoch;
+    final res = await client.request(
+      'POST',
+      '/auth/upgrade-anonymous',
+      body: <String, Object?>{'email': email, 'password': password},
+    );
+    _requireCurrentEpoch(expectedEpoch);
+    final rawUser = res['user'];
+    if (rawUser is! Map ||
+        rawUser['id'] is! String ||
+        (rawUser['id'] as String).trim().isEmpty) {
+      throw const VellumException(
+          code: 'INVALID_AUTH_RESPONSE',
+          message: 'Invalid auth response: missing user.id',
+          statusCode: 502);
+    }
+    final user = VellumUser.fromJson(<String, Object?>{
+      ...(_currentUser?.toJson() ?? <String, Object?>{}),
+      ...rawUser.cast<String, Object?>(),
+    });
+    await _setCurrentUser(user);
+    return user;
+  }
+
   Future<VellumUser> updateProfile({
     String? email,
     String? displayName,

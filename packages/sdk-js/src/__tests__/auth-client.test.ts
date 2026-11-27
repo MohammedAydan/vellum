@@ -213,6 +213,31 @@ describe("@vellumdb/sdk-js - auth storage", () => {
   });
 });
 
+describe("@vellumdb/sdk-js - anonymous upgrade (D3)", () => {
+  it("posts credentials to /auth/upgrade-anonymous and refreshes the local user", async () => {
+    const upgraded = { ...PUBLIC_USER, isAnonymous: false, email: "up@example.com" };
+    const { calls, fetch } = recorder(({ url }) => {
+      if (url.endsWith("/auth/sign-in/anonymous")) {
+        return json({ ...session(), user: { ...PUBLIC_USER, email: null, isAnonymous: true } });
+      }
+      if (url.endsWith("/auth/upgrade-anonymous")) return json({ user: upgraded });
+      return json({});
+    });
+    const db = createClient({ projectId: "p", apiKey: "pk_test", customFetch: fetch });
+    await db.signInAnonymously();
+
+    const user = await db.upgradeAnonymousWithEmailAndPassword("up@example.com", "correct-horse-9");
+
+    const call = calls.find((c) => c.url.endsWith("/auth/upgrade-anonymous"));
+    expect(call?.body).toEqual({ email: "up@example.com", password: "correct-horse-9" });
+    expect(headersOf(call)["authorization"]).toBe(`Bearer ${FIRST_TOKEN}`);
+    expect(user.id).toBe("usr_1");
+    expect(user.isAnonymous).toBe(false);
+    expect(db.currentUser?.isAnonymous).toBe(false);
+    expect(db.currentUser?.email).toBe("up@example.com");
+  });
+});
+
 describe("@vellumdb/sdk-js - signOut and getUser", () => {
   it("revokes only the current session by default and clears local state", async () => {
     const storage: AuthStorage = new MemoryAuthStorage();

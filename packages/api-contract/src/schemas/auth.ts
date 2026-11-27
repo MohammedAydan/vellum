@@ -60,6 +60,12 @@ export const SignInAnonymousRequestSchema = z.object({
 });
 export type SignInAnonymousRequest = z.infer<typeof SignInAnonymousRequestSchema>;
 
+export const UpgradeAnonymousRequestSchema = z.object({
+  email: EmailSchema,
+  password: PasswordSchema,
+});
+export type UpgradeAnonymousRequest = z.infer<typeof UpgradeAnonymousRequestSchema>;
+
 export const AuthProviderEnum = z.string().min(1).max(64);
 
 export const SignInProviderRequestSchema = z

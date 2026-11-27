@@ -220,6 +220,13 @@ abstract interface class VellumAuthPort {
   Future<void> deleteAccount({String? password});
   Future<AuthActionResult> sendEmailVerification({String? email});
   Future<void> confirmEmailVerification(String token);
+  /// D3: upgrade the anonymous account to email/password (uid preserved,
+  /// other sessions revoked).
+  Future<VellumUser> upgradeAnonymousWithEmailAndPassword({
+    required String email,
+    required String password,
+  });
+
   Future<VellumUser> updateProfile({
     String? email,
     String? displayName,

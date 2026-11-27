@@ -749,6 +749,8 @@ export interface VellumClientInterface {
   signInWithEmailAndPassword(input: SignInWithEmailAndPasswordInput): Promise<AuthState | MfaRequiredResult>;
   signInWithEmailAndPassword(email: string, password: string): Promise<AuthState | MfaRequiredResult>;
   signInAnonymously(input?: SignInAnonymouslyInput): Promise<AuthState>;
+  /** D3: upgrade the anonymous account to email/password. The uid survives; other sessions are revoked. */
+  upgradeAnonymousWithEmailAndPassword(email: string, password: string): Promise<VellumAuthUser>;
   signInWithOAuth(input: SignInWithOAuthInput): Promise<AuthState>;
   signInWithOAuth(provider: string, payload?: SignInOAuthPayload): Promise<AuthState>;
   /** Google / GitHub sign-in in a popup (call from a click). Resolves to `MfaRequiredResult` when a second factor is required. */
