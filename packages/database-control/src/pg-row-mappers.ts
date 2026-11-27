@@ -45,6 +45,7 @@ export function mapAuthConfigRow(row: Record<string, unknown>): ProjectAuthConfi
     suspensionReason: typeof row["suspensionReason"] === "string" ? row["suspensionReason"] : null,
     maxUsersQuota: Number(row["maxUsersQuota"]),
     maxSignupsPerHour: Number(row["maxSignupsPerHour"]),
+    signupPerIpLimit: Number(row["signupPerIpLimit"]),
     enableEmailPassword: Boolean(row["enableEmailPassword"]),
     requireEmailVerification: Boolean(row["requireEmailVerification"]),
     enableAnonymousAuth: Boolean(row["enableAnonymousAuth"]),

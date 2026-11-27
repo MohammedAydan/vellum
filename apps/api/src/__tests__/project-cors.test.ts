@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import { createProjectCors, createProjectOriginChecker, type ProjectCorsStore } from "../middleware/project-cors.js";
 
-type Key = { projectId: string; allowedOrigins?: string[] | undefined; revokedAt: string | null; expiresAt: string | null };
+type Key = { projectId: string; allowedOrigins?: string[] | undefined; revokedAt: string | null; expiresAt: string | null; isDev?: boolean | undefined };
 
 let reads = 0;
 function setup(keys: Key[]) {
@@ -14,6 +14,12 @@ function setup(keys: Key[]) {
       return keys
         .filter((k) => k.projectId === projectId && !k.revokedAt && !(k.expiresAt && Date.parse(k.expiresAt) <= now))
         .flatMap((k) => k.allowedOrigins ?? []);
+    },
+    async hasActiveDevKey(projectId) {
+      const now = Date.now();
+      return keys.some(
+        (k) => k.projectId === projectId && !!k.isDev && !k.revokedAt && !(k.expiresAt && Date.parse(k.expiresAt) <= now)
+      );
     },
   };
   const app = new Hono();
@@ -128,5 +134,40 @@ describe("realtime stream and shared origin checker", () => {
     expect(await allowed("p2", "https://shop.example")).toBe(false);
     expect(await allowed("p3", "https://shop.example")).toBe(false);
     expect(await allowed("p1", "null")).toBe(false);
+  });
+});
+
+describe("localhost development bypass (dev-flagged keys)", () => {
+  it("allows localhost origins for a project with an active dev-flagged key, without credentials", async () => {
+    const { app } = setup([key({ isDev: true })]);
+    const res = await app.fetch(req("/v1/projects/p1/documents/notes", "http://localhost:5173"));
+    expect(res.headers.get("access-control-allow-origin")).toBe("http://localhost:5173");
+    expect(res.headers.get("access-control-allow-credentials")).toBeNull();
+  });
+  it("answers the localhost preflight for a dev-key project", async () => {
+    const { app } = setup([key({ isDev: true })]);
+    const res = await app.fetch(req("/v1/projects/p1/documents/notes", "http://127.0.0.1:3000", "OPTIONS"));
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-origin")).toBe("http://127.0.0.1:3000");
+  });
+  it("does not allow localhost origins for ordinary keys", async () => {
+    const { app } = setup([key()]);
+    const res = await app.fetch(req("/v1/projects/p1/documents/notes", "http://localhost:5173"));
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
+  });
+  it("does not extend the bypass to non-localhost origins or revoked dev keys", async () => {
+    const { app } = setup([key({ isDev: true }), key({ projectId: "p4", isDev: true, revokedAt: "2026-01-01T00:00:00Z" })]);
+    const evil = await app.fetch(req("/v1/projects/p1/documents/notes", "https://evil.example"));
+    expect(evil.headers.get("access-control-allow-origin")).toBeNull();
+    const revoked = await app.fetch(req("/v1/projects/p4/documents/notes", "http://localhost:5173"));
+    expect(revoked.headers.get("access-control-allow-origin")).toBeNull();
+  });
+  it("the shared checker (SSE/WS path) applies the same dev-key rule", async () => {
+    const { store } = setup([key({ isDev: true })]);
+    const allowed = createProjectOriginChecker(store);
+    expect(await allowed("p1", "http://localhost:5173")).toBe(true);
+    expect(await allowed("p1", "http://[::1]:8080")).toBe(true);
+    expect(await allowed("p1", "https://evil.example")).toBe(false);
+    expect(await allowed("p2", "http://localhost:5173")).toBe(false);
   });
 });

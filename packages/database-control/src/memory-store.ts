@@ -529,6 +529,7 @@ export class ControlPlaneStore implements ControlPlaneRepository {
     rateLimitRps = 100,
     expiresAt = null,
     createdBy = null,
+    isDev = false,
   }: RegisterApiKeyInput): ApiKeyRecord {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -542,6 +543,7 @@ export class ControlPlaneStore implements ControlPlaneRepository {
       secretHash,
       scopes: clonedScopes,
       rateLimitRps: Number.isFinite(rateLimitRps) && rateLimitRps >= 0 ? rateLimitRps : 100,
+      isDev,
       lastUsedAt: null,
       expiresAt,
       revokedAt: null,
@@ -591,6 +593,16 @@ export class ControlPlaneStore implements ControlPlaneRepository {
       for (const o of k.allowedOrigins ?? []) out.add(o);
     }
     return [...out];
+  }
+
+  async hasActiveDevKey(projectId: string): Promise<boolean> {
+    const now = Date.now();
+    for (const k of this.apiKeysById.values()) {
+      if (k.projectId !== projectId || !k.isDev || k.revokedAt) continue;
+      if (k.expiresAt && Date.parse(k.expiresAt) <= now) continue;
+      return true;
+    }
+    return false;
   }
 
   async touchApiKeyLastUsed(keyId: string): Promise<void> {
@@ -811,6 +823,7 @@ export class ControlPlaneStore implements ControlPlaneRepository {
         : (existing?.suspensionReason ?? null),
       maxUsersQuota: input.maxUsersQuota ?? existing?.maxUsersQuota ?? 50000,
       maxSignupsPerHour: input.maxSignupsPerHour ?? existing?.maxSignupsPerHour ?? 1000,
+      signupPerIpLimit: input.signupPerIpLimit ?? existing?.signupPerIpLimit ?? 30,
       enableEmailPassword: input.enableEmailPassword ?? existing?.enableEmailPassword ?? true,
       requireEmailVerification: input.requireEmailVerification ?? existing?.requireEmailVerification ?? false,
       enableAnonymousAuth: input.enableAnonymousAuth ?? existing?.enableAnonymousAuth ?? false,

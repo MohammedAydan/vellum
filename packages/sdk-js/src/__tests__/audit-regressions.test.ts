@@ -142,16 +142,17 @@ describe("SDK audit regressions", () => {
     expect(calls.some((url) => url.includes("transactions:commit"))).toBe(false);
     db.dispose();
   });
-  it("scopes default browser persistence by endpoint and project", async () => {
+  it("scopes opt-in browser persistence by endpoint and project", async () => {
     const values = new Map<string, string>();
     const storage: StorageLike = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => { values.set(key, value); }, removeItem: (key) => { values.delete(key); } };
     vi.stubGlobal("window", { localStorage: storage });
     try {
-      const a = createClient({ projectId: "a", apiKey: "key", customFetch: async () => json(session("A")) });
+      // Persistence is opt-in since 0.0.9 (S7): each client passes authPersistence: "local".
+      const a = createClient({ projectId: "a", apiKey: "key", authPersistence: "local", customFetch: async () => json(session("A")) });
       await a.signInWithEmailAndPassword("A", "password");
-      const b = createClient({ projectId: "b", apiKey: "key" });
-      const otherOrigin = createClient({ projectId: "a", apiKey: "key", endpoint: "https://other.test" });
-      const restored = createClient({ projectId: "a", apiKey: "key" });
+      const b = createClient({ projectId: "b", apiKey: "key", authPersistence: "local" });
+      const otherOrigin = createClient({ projectId: "a", apiKey: "key", endpoint: "https://other.test", authPersistence: "local" });
+      const restored = createClient({ projectId: "a", apiKey: "key", authPersistence: "local" });
       expect(b.currentUser).toBeNull();
       expect(otherOrigin.currentUser).toBeNull();
       expect(restored.currentUser?.id).toBe("A");

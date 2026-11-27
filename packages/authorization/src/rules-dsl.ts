@@ -542,7 +542,7 @@ class DslParser {
     if (this.current().type !== "ident") this.fail(`Expected ${what} but found '${this.current().raw || "end of input"}'`);
     return this.next();
   }
-  private warn(message: string, token: Token): void {
+  public warn(message: string, token: Token): void {
     this.diagnostics.push({
       message,
       line: token.line,
@@ -1178,11 +1178,146 @@ export function compileRulesDsl(source: string): CompileRulesDslResult {
     );
   }
 
+  detectWildcardOverlaps(rules, parsedRules, (message, token) => parser.warn(message, token as Token));
+
   return { ast, diagnostics: parser.diagnostics };
 }
 
 // ---------------------------------------------------------------------------
-// Public: decompile
+// Static analysis: wildcard-overlap warnings
+// ---------------------------------------------------------------------------
+
+interface PatternSegment {
+  kind: "literal" | "param" | "recursive";
+  value: string;
+}
+
+function splitMatchPattern(match: string): PatternSegment[] {
+  return match.split("/").map((seg) => {
+    if (seg.startsWith("{") && seg.endsWith("=**}")) {
+      return { kind: "recursive", value: seg.slice(1, -4) };
+    }
+    if (seg.startsWith("{") && seg.endsWith("}")) {
+      return { kind: "param", value: seg.slice(1, -1) };
+    }
+    return { kind: "literal", value: seg };
+  });
+}
+
+/**
+ * True when every path matched by `narrow` is also matched by `broad`, and
+ * `broad` is strictly wider (a wildcard where `narrow` pins a literal).
+ * Recursive wildcards cover any suffix from their position on.
+ */
+function patternCovers(broad: PatternSegment[], narrow: PatternSegment[]): { covers: boolean; wildcards: { name: string; literal: string }[] } {
+  const wildcards: { name: string; literal: string }[] = [];
+  const broadRecursiveAt = broad.findIndex((s) => s.kind === "recursive");
+  const narrowHasRecursive = narrow.some((s) => s.kind === "recursive");
+  if (narrowHasRecursive) {
+    // Variable-depth narrow patterns are too ambiguous to reason about safely.
+    return { covers: false, wildcards };
+  }
+  const compareLen = broadRecursiveAt === -1 ? broad.length : broadRecursiveAt;
+  if (broadRecursiveAt === -1 && broad.length !== narrow.length) return { covers: false, wildcards };
+  if (broadRecursiveAt !== -1 && broadRecursiveAt > narrow.length - 1) return { covers: false, wildcards };
+  let strictlyBroader = broadRecursiveAt !== -1;
+  for (let i = 0; i < compareLen; i += 1) {
+    const b = broad[i]!;
+    const n = narrow[i]!;
+    if (b.kind === "literal") {
+      if (n.kind !== "literal" || b.value !== n.value) return { covers: false, wildcards };
+    } else {
+      // param (or recursive at the tail, handled above) matches any segment
+      if (n.kind === "literal") {
+        strictlyBroader = true;
+        wildcards.push({ name: b.value, literal: n.value });
+      }
+    }
+  }
+  return { covers: strictlyBroader, wildcards };
+}
+
+function effectiveAllowExpr(rule: SecurityRuleDefinition, op: string): unknown {
+  const allow = rule.allow as Record<string, unknown>;
+  if (allow[op] !== undefined) return allow[op];
+  if ((op === "get" || op === "list") && allow["read"] !== undefined) return allow["read"];
+  if ((op === "create" || op === "update" || op === "delete") && allow["write"] !== undefined) return allow["write"];
+  return undefined;
+}
+
+function countExprNodes(expr: unknown, depth = 0): number {
+  if (depth > 64 || expr === null || typeof expr !== "object") return 1;
+  if (Array.isArray(expr)) return expr.reduce<number>((sum, item) => sum + countExprNodes(item, depth + 1), 1);
+  return Object.values(expr as Record<string, unknown>).reduce<number>((sum, item) => sum + countExprNodes(item, depth + 1), 1);
+}
+
+/** True when the expression pins `path.<name>` away from `literal` (a wildcard guard). */
+function expressionGuardsWildcard(expr: unknown, name: string, literal: string): boolean {
+  if (expr === null || typeof expr !== "object") return false;
+  const json = JSON.stringify(expr);
+  const varNeedle = `"var":"path.${name}"`;
+  return (
+    (json.includes(varNeedle) && (json.includes(`"val":"${literal}"`) || json.includes(`"val": "${literal}"`)) && json.includes('"op":"!="'))
+  );
+}
+
+const OVERLAP_OPS = ["get", "list", "create", "update", "delete", "read", "write"] as const;
+
+/**
+ * Warn when a parameterized wildcard `match` also covers a sibling `match`
+ * path whose allow predicate for the same operation is stricter. Rules in
+ * Vellum OR together: the broader block silently bypasses the stricter
+ * sibling. The warning clears when the wildcard is explicitly guarded
+ * (e.g. `if sub != 'messages'`).
+ */
+function detectWildcardOverlaps(
+  rules: SecurityRuleDefinition[],
+  parsedRules: { token: { line: number; column: number } }[],
+  warn: (message: string, token: { line: number; column: number }) => void
+): void {
+  const segmentCache = rules.map((rule) => splitMatchPattern(rule.match));
+  for (let i = 0; i < rules.length; i += 1) {
+    for (let j = 0; j < rules.length; j += 1) {
+      if (i === j) continue;
+      const { covers, wildcards } = patternCovers(segmentCache[i]!, segmentCache[j]!);
+      if (!covers) continue;
+      const broad = rules[i]!;
+      const narrow = rules[j]!;
+      const seenOps = new Set<string>();
+      for (const op of OVERLAP_OPS) {
+        if (seenOps.has(op)) continue;
+        seenOps.add(op);
+        const broadExpr = effectiveAllowExpr(broad, op);
+        const narrowExpr = effectiveAllowExpr(narrow, op);
+        if (broadExpr === undefined || broadExpr === false) continue; // broad grants nothing here
+        if (narrowExpr === undefined) continue; // sibling simply silent on this op
+        if (narrowExpr !== false) {
+          // Identical predicates are intentionally consistent; a broader rule
+          // with strictly more constraint nodes is treated as the stricter one.
+          // Everything else (fewer or equal nodes, different shape) is the
+          // footgun this warning exists for.
+          if (JSON.stringify(broadExpr) === JSON.stringify(narrowExpr)) continue;
+          if (countExprNodes(broadExpr) > countExprNodes(narrowExpr)) continue;
+        }
+        // A guard on the wildcard segment (`sub != 'messages'`) resolves the overlap.
+        if (
+          wildcards.length > 0 &&
+          wildcards.every((w) => expressionGuardsWildcard(broadExpr, w.name, w.literal))
+        ) {
+          continue;
+        }
+        const guardHint = wildcards.length > 0
+          ? ` Guard the wildcard (for example 'if ${wildcards.map((w) => `${w.name} != '${w.literal}'`).join(" && ")}') or tighten the broader rule.`
+          : " Tighten the broader rule or make the sibling at least as permissive.";
+        warn(
+          `WILDCARD_OVERLAP: match '${broad.match}' also matches every path covered by sibling match '${narrow.match}', but its '${op}' rule is looser. Rules OR together, so the stricter sibling does not protect those paths.${guardHint}`,
+          parsedRules[i]?.token ?? { line: 1, column: 1 }
+        );
+        break; // one warning per rule pair is enough
+      }
+    }
+  }
+}
 // ---------------------------------------------------------------------------
 
 function formatLiteral(value: unknown): string {

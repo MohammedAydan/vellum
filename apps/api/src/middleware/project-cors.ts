@@ -20,6 +20,28 @@ import { normalizeStrictOrigin } from "./security.js";
 export interface ProjectCorsStore {
   /** Origins on the project's active keys, read from the database on every call. */
   listActiveApiKeyOrigins(projectId: string): Promise<string[]>;
+  /** True when the project has an active dev-flagged key (localhost bypass). */
+  hasActiveDevKey(projectId: string): Promise<boolean>;
+}
+
+/** http(s) origins on localhost / 127.0.0.1 / [::1], any port. */
+const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+
+/** One diagnostic per (project, origin) per process, not per request. */
+const devBypassLogged = new Set<string>();
+
+/** Development escape hatch: a dev-flagged publishable key opens localhost origins. */
+async function isDevLocalhostAllowed(store: ProjectCorsStore, projectId: string, normalizedOrigin: string): Promise<boolean> {
+  if (!LOCALHOST_ORIGIN.test(normalizedOrigin)) return false;
+  if (!(await store.hasActiveDevKey(projectId))) return false;
+  const key = `${projectId}|${normalizedOrigin}`;
+  if (!devBypassLogged.has(key)) {
+    devBypassLogged.add(key);
+    console.info(
+      `[project-cors] allowing localhost origin ${normalizedOrigin} for project ${projectId}: a dev-flagged API key is active. Remove the dev flag before production use.`
+    );
+  }
+  return true;
 }
 
 const PROJECT_PATH = /^\/v1\/projects\/([^/]+)\/(.*)$/;
@@ -48,7 +70,8 @@ export function createProjectOriginChecker(store: ProjectCorsStore): (projectId:
     const normalized = normalizeStrictOrigin(origin);
     if (!normalized || !projectId) return false;
     const origins = await store.listActiveApiKeyOrigins(projectId);
-    return origins.some((raw) => normalizeStrictOrigin(raw) === normalized);
+    if (origins.some((raw) => normalizeStrictOrigin(raw) === normalized)) return true;
+    return isDevLocalhostAllowed(store, projectId, normalized);
   };
 }
 
@@ -66,7 +89,7 @@ export function createProjectCors(
     for (const raw of origins) {
       if (normalizeStrictOrigin(raw) === normalizedOrigin) return true;
     }
-    return false;
+    return isDevLocalhostAllowed(store, projectId, normalizedOrigin);
   }
 
   return async (c, next) => {

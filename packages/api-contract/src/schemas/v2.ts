@@ -196,9 +196,12 @@ export const SecurityRulesetAstSchema = z
   .superRefine((ast, ctx) => {
     const res = validateSafePayload(ast, {
       maxDepth: 20,
-      maxKeys: 2_000,
+      // Aligned with the ruleset-route payload budget: a real-world ruleset
+      // compiles to thousands of AST keys (a 20-block messaging ruleset is
+      // ~2,244), far past the old 2,000-key schema cap.
+      maxKeys: SYSTEM_LIMITS.RULESET_MAX_OBJECT_KEYS,
       maxArrayLength: MAX_RULESET_RULES,
-      maxBytes: 262_144,
+      maxBytes: 1_048_576,
     });
     if (!res.ok) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: res.message });
@@ -243,20 +246,30 @@ export type DecompileRulesRequest = z.infer<typeof DecompileRulesSchema>;
 export const RulesOperationEnum = z.enum(["get", "list", "create", "update", "delete"]);
 export type RulesOperation = z.infer<typeof RulesOperationEnum>;
 
-export const SimulateRulesSchema = z.object({
-  rulesAst: SecurityRulesetAstSchema.optional(),
-  operation: RulesOperationEnum,
-  path: z.string().min(1).max(2_048),
-  auth: z.union([SafeSimulateRecordSchema, z.null()]).optional(),
-  resourceData: SafeSimulateRecordSchema.nullable().optional(),
-  incomingData: SafeSimulateRecordSchema.nullable().optional(),
-});
+export const SimulateRulesSchema = z
+  .object({
+    rulesAst: SecurityRulesetAstSchema.optional(),
+    // Raw rules DSL, compiled server-side before simulating. Mutually
+    // exclusive with `rulesAst`; when both are omitted the project's active
+    // published ruleset is simulated.
+    source: z.string().min(1).max(MAX_RULES_DSL_BYTES).optional(),
+    operation: RulesOperationEnum,
+    path: z.string().min(1).max(2_048),
+    auth: z.union([SafeSimulateRecordSchema, z.null()]).optional(),
+    resourceData: SafeSimulateRecordSchema.nullable().optional(),
+    incomingData: SafeSimulateRecordSchema.nullable().optional(),
+  })
+  .refine((value) => !(value.rulesAst !== undefined && value.source !== undefined), {
+    message: "Pass either 'rulesAst' or 'source', not both",
+  });
 export type SimulateRulesRequest = z.infer<typeof SimulateRulesSchema>;
 
 export const SimulateRulesResultSchema = z.object({
   allowed: z.boolean(),
   matchedRule: z.string().nullable(),
   evaluationTrace: z.array(z.string()),
+  // Present when the simulated rules were compiled from a `source` input.
+  diagnostics: z.array(RulesDslDiagnosticSchema).optional(),
 });
 export type SimulateRulesResult = z.infer<typeof SimulateRulesResultSchema>;
 

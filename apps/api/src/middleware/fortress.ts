@@ -35,6 +35,49 @@ import type { ControlPlaneRepository } from "@vellum/database-control";
 
 const METERING_INTERVAL_MS = 5_000;
 
+// Payload-limit violations (oversize/too many keys/too deep) are rejected per
+// request with a 400 and recorded under the audit-only `payload_limits`
+// category - they never feed ThreatDetector's IP-ban thresholds. Only a
+// clearly abusive rate of violations escalates to a throttling 429.
+const PAYLOAD_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const PAYLOAD_LIMIT_MAX_VIOLATIONS = 20;
+const PAYLOAD_LIMIT_RETRY_AFTER_S = 600;
+const MAX_PAYLOAD_LIMIT_TRACKED_IPS = 10_000;
+
+interface PayloadLimitWindow {
+  lastAccess: number;
+  timestamps: number[];
+}
+
+const payloadLimitWindows = new Map<string, PayloadLimitWindow>();
+
+/**
+ * Count one payload-limit violation for `ip` and report whether the caller
+ * has crossed the throttling threshold inside the sliding window.
+ */
+export function recordPayloadLimitViolation(ip: string): boolean {
+  const now = Date.now();
+  let window = payloadLimitWindows.get(ip);
+  if (window === undefined) {
+    if (payloadLimitWindows.size >= MAX_PAYLOAD_LIMIT_TRACKED_IPS) {
+      const oldest = payloadLimitWindows.keys().next();
+      if (!oldest.done) payloadLimitWindows.delete(oldest.value);
+    }
+    window = { lastAccess: now, timestamps: [] };
+    payloadLimitWindows.set(ip, window);
+  }
+  window.lastAccess = now;
+  const cutoff = now - PAYLOAD_LIMIT_WINDOW_MS;
+  window.timestamps = window.timestamps.filter((ts) => ts > cutoff);
+  window.timestamps.push(now);
+  return window.timestamps.length > PAYLOAD_LIMIT_MAX_VIOLATIONS;
+}
+
+/** Test hook: reset the payload-limit violation windows. */
+export function resetPayloadLimitWindows(): void {
+  payloadLimitWindows.clear();
+}
+
 export interface FortressServices {
   threatDetector: ThreatDetector;
   metering: UsageMeteringEngine;
@@ -276,6 +319,30 @@ function quotaOperationFor(method: string, path: string): QuotaOperation {
   }
 }
 
+/**
+ * Reject a payload that exceeded a shape budget (key count, depth, byte size).
+ * Recorded under the audit-only `payload_limits` category so oversized-but-
+ * legitimate payloads never escalate to an IP ban; a clearly abusive streak
+ * of violations is throttled with 429 + Retry-After instead.
+ */
+function rejectPayloadLimit(
+  detector: ThreatDetector,
+  ip: string,
+  path: string,
+  message: string,
+  guardCode: string
+): never {
+  safeRecord(detector, "payload_limits", ip, message, { path, guardCode });
+  if (recordPayloadLimitViolation(ip)) {
+    throw new VellumError(
+      "TOO_MANY_REQUESTS",
+      "Too many oversized or malformed payloads from this client. Reduce payload size and retry later.",
+      { guardCode, retryAfterSeconds: PAYLOAD_LIMIT_RETRY_AFTER_S }
+    );
+  }
+  throw new VellumError("INVALID_ARGUMENT", message, { guardCode });
+}
+
 function safeRecord(
   detector: ThreatDetector,
   category: ThreatCategory,
@@ -493,16 +560,9 @@ export function attachFortressMiddleware(
               ? `A single document exceeds ${SYSTEM_LIMITS.DOCUMENT_MAX_OBJECT_KEYS} object keys. Split large documents into smaller documents or subcollections.`
               : failed.message;
         const guardCode = keyOverflow && isRulesetPath ? "RULESET_TOO_LARGE" : failed.code;
-        safeRecord(
-          services.threatDetector,
-          "prototype_pollution",
-          ip,
-          message,
-          { path: c.req.path, guardCode }
-        );
-        throw new VellumError("INVALID_ARGUMENT", message, {
-          guardCode,
-        });
+        // Shape-budget failures (key count, depth, byte size) are payload-limit
+        // violations, not injection attempts: audit-only, never IP-banning.
+        rejectPayloadLimit(services.threatDetector, ip, c.req.path, message, guardCode);
       }
 
       // Batch and transaction-commit bodies carry up to MAX_BATCH_OPERATIONS documents. The 500-key cap
@@ -513,9 +573,14 @@ export function attachFortressMiddleware(
 
       if (!outcome.ok) {
         const failed = outcome as Extract<GuardOutcome, { ok: false }>;
+        if (failed.threatCategory === undefined) {
+          // No threat category means a pure payload-budget failure: audit-only,
+          // throttle only abusive streaks, never IP-ban.
+          rejectPayloadLimit(services.threatDetector, ip, c.req.path, failed.message, failed.code);
+        }
         safeRecord(
           services.threatDetector,
-          failed.threatCategory ?? "prototype_pollution",
+          failed.threatCategory,
           ip,
           failed.message,
           { path: c.req.path, guardCode: failed.code }

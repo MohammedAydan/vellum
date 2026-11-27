@@ -20,7 +20,7 @@ import { VellumError } from "@vellum/core";
 import type { ServerFrame } from "@vellum/api-contract";
 import type { RealtimeGatewayHub } from "@vellum/realtime";
 import { PROJECT_CORS_EXPOSE_HEADERS, createProjectOriginChecker, type ProjectCorsStore } from "../middleware/project-cors.js";
-import { normalizeStrictOrigin } from "../middleware/security.js";
+import { extractClientIp, normalizeStrictOrigin } from "../middleware/security.js";
 
 export const SSE_MAX_FRAMES_PER_REQUEST = 64;
 /**
@@ -29,10 +29,13 @@ export const SSE_MAX_FRAMES_PER_REQUEST = 64;
  */
 export const SSE_DEFAULT_MAX_LIFETIME_MS = 55_000;
 export const SSE_DEFAULT_KEEPALIVE_MS = 15_000;
+/** Concurrent open streams per client IP (matches the WebSocket per-IP cap). */
+export const SSE_DEFAULT_MAX_STREAMS_PER_IP = 50;
 
 export interface RealtimeSseOptions {
   maxLifetimeMs?: number;
   keepAliveMs?: number;
+  maxStreamsPerIp?: number;
 }
 
 /** Serializes one server frame as an SSE message. */
@@ -52,8 +55,16 @@ export function createRealtimeSseRoutes(
     options.maxLifetimeMs ??
     (Number.isFinite(envLifetime) && envLifetime >= 5_000 ? envLifetime : SSE_DEFAULT_MAX_LIFETIME_MS);
   const keepAliveMs = options.keepAliveMs ?? SSE_DEFAULT_KEEPALIVE_MS;
+  const envPerIp = Number(process.env["REALTIME_SSE_MAX_STREAMS_PER_IP"]);
+  const maxStreamsPerIp =
+    options.maxStreamsPerIp ?? (Number.isFinite(envPerIp) && envPerIp >= 1 ? Math.floor(envPerIp) : SSE_DEFAULT_MAX_STREAMS_PER_IP);
 
   const projectOriginAllowed = platform.controlStore ? createProjectOriginChecker(platform.controlStore) : null;
+
+  // S10: concurrent-stream cap per client IP, in-process like the WebSocket
+  // connectionsByIp cap. A stream holds a slot from open until it closes or
+  // the client disconnects.
+  const streamsByIp = new Map<string, number>();
 
   routes.post("/realtime/stream", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { frames?: unknown } | null;
@@ -68,6 +79,24 @@ export function createRealtimeSseRoutes(
     if (!first || first.type !== "auth") {
       throw new VellumError("UNAUTHENTICATED", "The first frame must be an 'auth' frame");
     }
+
+    const clientIp = extractClientIp(c);
+    const open = streamsByIp.get(clientIp) ?? 0;
+    if (open >= maxStreamsPerIp) {
+      c.header("Retry-After", "5");
+      throw new VellumError("TOO_MANY_REQUESTS", "Too many concurrent realtime streams from this address", {
+        retryAfterSeconds: 5,
+      });
+    }
+    streamsByIp.set(clientIp, open + 1);
+    let slotHeld = true;
+    const releaseSlot = (): void => {
+      if (!slotHeld) return;
+      slotHeld = false;
+      const n = (streamsByIp.get(clientIp) ?? 1) - 1;
+      if (n <= 0) streamsByIp.delete(clientIp);
+      else streamsByIp.set(clientIp, n);
+    };
 
     // Cross-origin browser read access: only when an active key of the project in the auth frame lists the
     // origin. Globally allowed origins are handled by the deployment-wide CORS middleware.
@@ -97,7 +126,13 @@ export function createRealtimeSseRoutes(
             finish();
           }
         };
-        const session = hub.createConnectionSession((frame) => write(encodeSseFrame(frame)));
+        let session: ReturnType<RealtimeGatewayHub["createConnectionSession"]>;
+        try {
+          session = hub.createConnectionSession((frame) => write(encodeSseFrame(frame)));
+        } catch (err) {
+          releaseSlot();
+          throw err;
+        }
         const keepAlive = setInterval(() => write(`: keep-alive ${Date.now()}\n\n`), keepAliveMs);
         const lifetime = setTimeout(() => {
           write("event: reconnect\ndata: {}\n\n");
@@ -112,6 +147,7 @@ export function createRealtimeSseRoutes(
           clearInterval(keepAlive);
           clearTimeout(lifetime);
           session.close();
+          releaseSlot();
           try {
             controller.close();
           } catch {

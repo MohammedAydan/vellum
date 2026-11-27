@@ -85,7 +85,8 @@ db.dispose?.();
 | `endpoint` | `string` | `"http://localhost:8080"` | Base HTTP(S) origin. |
 | `realtimeUrl` | `string` | `<endpoint>/v1/realtime` | Explicit `ws://` or `wss://` override. |
 | `getAuthToken` | `() => Promise<string \| null> \| string \| null` | `null` | Custom bearer token provider (overrides managed `db.auth` session). |
-| `authStorage` | `AuthStorage \| null` | `BrowserLocalStorage` or `MemoryAuthStorage` | Pluggable session persistence adapter. |
+| `authPersistence` | `"local"` | _(unset)_ | Since 0.0.9 sessions are memory-only by default. Opt in to browser `localStorage` persistence with `"local"`. |
+| `authStorage` | `AuthStorage \| null` | _(unset)_ | Custom session persistence adapter (overrides `authPersistence`). |
 | `timeoutMs` | `number` | `30_000` | Per-request HTTP timeout (`AbortController`). Set `0` to disable. |
 | `maxRetries` | `number` | `3` | Transient retry count (429/5xx/network) for idempotent requests. Set `0` to disable. |
 | `retryBaseDelayMs` | `number` | `250` | Base delay for full-jitter exponential backoff. |

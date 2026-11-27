@@ -336,9 +336,12 @@ export class VellumClient implements VellumClientInterface {
       getAuthToken: config.getAuthToken ?? null,
       oauth: { baseUrl: `${this.endpoint}/v1/projects/${encodeURIComponent(this.projectId)}`, apiKey: this.apiKey },
       autoRefresh: config.autoRefresh !== false,
-      authStorage: config.authStorage ?? (resolveBrowserLocalStorage() ? new BrowserLocalStorage(
-        `${DEFAULT_AUTH_STORAGE_KEY}:${encodeURIComponent(this.endpoint)}:${encodeURIComponent(this.projectId)}`
-      ) : null),
+      // Sessions stay in memory unless the app opts into persistence (S7).
+      authStorage: config.authStorage ?? (config.authPersistence === "local" && resolveBrowserLocalStorage()
+        ? new BrowserLocalStorage(
+            `${DEFAULT_AUTH_STORAGE_KEY}:${encodeURIComponent(this.endpoint)}:${encodeURIComponent(this.projectId)}`
+          )
+        : null),
       onTokenChanged: (previousToken, nextToken) => {
         this.resetCaches(false);
         if (nextToken !== null && (nextToken === this.auth.currentUser?.accessToken ||

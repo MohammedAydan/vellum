@@ -139,6 +139,10 @@ export function createReadinessProbe(): ReadinessProbePort {
         connectionTimeoutMillis: options.connectionTimeoutMillis,
         applicationName: options.applicationName,
       });
+      // pg emits 'error' on idle/failed sockets; without a listener that event
+      // is an uncaught exception and can take the whole process down. Probe
+      // failures already surface through the awaited work()'s rejection.
+      client.on("error", () => undefined);
       await client.connect();
       try {
         return await work(client);

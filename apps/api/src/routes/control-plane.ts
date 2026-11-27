@@ -194,7 +194,10 @@ export function createControlPlaneRoutes(
       });
     }
 
-    const { name, keyType, expiresAt } = parsed.data;
+    const { name, keyType, expiresAt, isDev } = parsed.data;
+    if (isDev && keyType !== "publishable") {
+      throw new VellumError("INVALID_ARGUMENT", "Only publishable keys can be flagged as development keys");
+    }
 
     const keySession = getSession(c);
     if (keySession) {
@@ -214,6 +217,7 @@ export function createControlPlaneRoutes(
       secretHash: generated.secretHash,
       scopes: keyType === "secret" ? ["documents:read", "documents:write", "indexes:manage"] : ["documents:read", "documents:write"],
       expiresAt: expiresAt ?? null,
+      isDev: keyType === "publishable" ? (isDev ?? false) : false,
     });
     await publishInvalidation("api_key", generated.keyPrefix);
 

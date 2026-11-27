@@ -69,6 +69,11 @@ export const ApiKeySchema = z.object({
 export const CreateApiKeyRequestSchema = z.object({
   name: z.string().min(1).max(100),
   keyType: ApiKeyTypeEnum,
+  /**
+   * Development key: localhost/127.0.0.1 browser origins are allowed for this
+   * project without listing them on the key. Publishable keys only.
+   */
+  isDev: z.boolean().optional(),
   expiresAt: z
     .string()
     .max(64)

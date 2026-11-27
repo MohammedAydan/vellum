@@ -15,4 +15,9 @@ export type ThreatCategory =
   | "ssrf_attempt"
   | "cross_tenant_probe"
   | "ws_flood"
-  | "quota_abuse";
+  | "quota_abuse"
+  // Payload shape violations (key-count, depth, byte-size budgets). Audit-only:
+  // this category never feeds an auto-mitigation threshold in ThreatDetector,
+  // so a legitimate client that repeatedly sends oversized payloads is
+  // rejected per request but never IP-banned.
+  | "payload_limits";

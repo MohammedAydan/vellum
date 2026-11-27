@@ -36,6 +36,11 @@ export interface AuthRateLimitOptions {
    */
   keyFrom?: (c: Context) => string | Promise<string>;
   /**
+   * Resolve the maximum per request, e.g. from the project's auth config.
+   * Overrides `max`; the rate-limit scale still applies on top.
+   */
+  maxFrom?: (c: Context) => number | Promise<number>;
+  /**
    * When true every request is counted, not just responses with status >= 400.
    * Used by the non-enumerating password-reset / email-verify request endpoints.
    */
@@ -118,10 +123,11 @@ export function authRateLimit(
   throttle: ThrottleRepository
 ): MiddlewareHandler {
   const { windowMs, scope, countAll = false, bypassOnSuccess = false } = options;
-  const max = Math.ceil(options.max * authRateLimitScale());
   const retryAfterSeconds = Math.ceil(windowMs / 1000);
 
   return async (c, next) => {
+    const baseMax = options.maxFrom ? await options.maxFrom(c) : options.max;
+    const max = Math.max(1, Math.ceil(baseMax * authRateLimitScale()));
     const identity = options.keyFrom ? await options.keyFrom(c) : await defaultKey(c);
     // The composed key is an opaque bucket subject only — never logged or returned.
     const slot = await throttle.acquireThrottleSlot(scope, identity, windowMs, max);

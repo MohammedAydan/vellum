@@ -145,3 +145,29 @@ describe("realtime over SSE", () => {
     });
   });
 });
+
+describe("per-IP concurrent stream cap (S10)", () => {
+  it("rejects a second concurrent stream from the same address with 429, then frees the slot", async () => {
+    const prev = process.env["REALTIME_SSE_MAX_STREAMS_PER_IP"];
+    process.env["REALTIME_SSE_MAX_STREAMS_PER_IP"] = "1";
+    try {
+      const f = await fixture();
+      const first = await f.open([{ type: "auth", projectId: f.projectId, apiKey: f.rawKey }]);
+      expect(first.status).toBe(200);
+      // The first stream is still open: the next one from the same address is capped.
+      const second = await f.open([{ type: "auth", projectId: f.projectId, apiKey: f.rawKey }]);
+      expect(second.status).toBe(429);
+      expect(second.headers.get("retry-after")).toBe("5");
+      await second.body?.cancel();
+      // Closing the first stream frees the slot.
+      await first.body?.cancel();
+      await new Promise((r) => setTimeout(r, 50));
+      const third = await f.open([{ type: "auth", projectId: f.projectId, apiKey: f.rawKey }]);
+      expect(third.status).toBe(200);
+      await third.body?.cancel();
+    } finally {
+      if (prev === undefined) delete process.env["REALTIME_SSE_MAX_STREAMS_PER_IP"];
+      else process.env["REALTIME_SSE_MAX_STREAMS_PER_IP"] = prev;
+    }
+  });
+});

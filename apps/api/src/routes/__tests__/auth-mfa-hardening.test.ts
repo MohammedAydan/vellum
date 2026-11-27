@@ -19,9 +19,13 @@ async function fixture() {
   const signUp = await call("/sign-up/email", { email: "m@example.com", password: "Password123!" });
   const { accessToken } = (await signUp.json()) as { accessToken: string };
   const enrolled = (await (await call("/mfa/enroll", {}, accessToken)).json()) as { secret: string; recoveryCodes: string[] };
-  expect((await call("/mfa/verify", { code: generateTotpCode(enrolled.secret) }, accessToken)).status).toBe(200);
+  const enrollCode = generateTotpCode(enrolled.secret);
+  expect((await call("/mfa/verify", { code: enrollCode }, accessToken)).status).toBe(200);
+  // A used code stays burned for its whole validity window: mint fresh codes
+  // one step out (still inside the +/-1 step drift allowance).
+  const freshCode = () => generateTotpCode(enrolled.secret, Date.now() + 30_000);
   const signIn = async () => (await (await call("/sign-in/email", { email: "m@example.com", password: "Password123!" })).json()) as Record<string, unknown>;
-  return { call, accessToken, secret: enrolled.secret, recoveryCodes: enrolled.recoveryCodes, signIn };
+  return { call, accessToken, secret: enrolled.secret, enrollCode, freshCode, recoveryCodes: enrolled.recoveryCodes, signIn };
 }
 
 describe("TOTP MFA hardening", () => {
@@ -36,11 +40,22 @@ describe("TOTP MFA hardening", () => {
 
   it("rejects a TOTP code that was already used", async () => {
     const f = await fixture();
-    const code = generateTotpCode(f.secret);
+    const code = f.freshCode();
     const t1 = String((await f.signIn())["mfaTicket"]);
     const t2 = String((await f.signIn())["mfaTicket"]);
     expect((await f.call("/mfa/challenge", { mfaTicket: t1, code })).status).toBe(200);
     expect((await f.call("/mfa/challenge", { mfaTicket: t2, code })).status).toBe(401);
+  });
+
+  it("rejects the enrollment-verify code replayed at the challenge route (S9)", async () => {
+    const f = await fixture();
+    const ticket = String((await f.signIn())["mfaTicket"]);
+    expect((await f.call("/mfa/challenge", { mfaTicket: ticket, code: f.enrollCode })).status).toBe(401);
+  });
+
+  it("rejects the enrollment-verify code replayed at the disable route (S9)", async () => {
+    const f = await fixture();
+    expect((await f.call("/mfa/disable", { code: f.enrollCode }, f.accessToken)).status).toBe(401);
   });
 
   it("burns the ticket after repeated wrong codes", async () => {
@@ -65,7 +80,7 @@ describe("TOTP MFA hardening", () => {
   it("disabling needs a current code, then re-enrolling works", async () => {
     const f = await fixture();
     expect((await f.call("/mfa/disable", { code: "000000" }, f.accessToken)).status).toBe(401);
-    expect((await f.call("/mfa/disable", { code: generateTotpCode(f.secret) }, f.accessToken)).status).toBe(200);
+    expect((await f.call("/mfa/disable", { code: f.freshCode() }, f.accessToken)).status).toBe(200);
     const next = await f.signIn();
     expect(next["mfaRequired"]).toBeUndefined();
     expect(next["accessToken"]).toBeTruthy();

@@ -29,14 +29,49 @@ import {
   type RawPgClient,
 } from "@vellum/database-control";
 import { defaultReadinessProbe, type ReadinessProbePort } from "../composition/root.js";
+import { extractClientIp } from "../middleware/security.js";
 
 export const healthRoutes = new Hono();
 
 const SERVICE_VERSION = "0.0.8";
 const PROCESS_STARTED_AT = Date.now();
 const PROBE_TIMEOUT_MS = 3_000;
-const PROBE_CACHE_TTL_MS = 3_000;
+// Successful probes are cached long enough to keep PostgreSQL connection
+// churn near zero under load-balancer polling; failures are retried quickly.
+const PROBE_CACHE_TTL_OK_MS = 20_000;
+const PROBE_CACHE_TTL_FAIL_MS = 5_000;
+// An expired entry is still served (stale-while-revalidate) for this long
+// while a background refresh runs, so probe latency never sits on the
+// request path of a readiness check.
+const PROBE_STALE_GRACE_MS = 60_000;
 const LISTEN_CHANNEL = "vellum_health_ready_probe";
+
+// Unauthenticated probe floods cannot exhaust PostgreSQL: readiness endpoints
+// are rate-limited per client IP on top of the probe cache.
+const READY_RATE_WINDOW_MS = 60_000;
+const READY_RATE_MAX = 60;
+const MAX_READY_RATE_IPS = 10_000;
+const readyRateWindows = new Map<string, { lastAccess: number; count: number; windowStart: number }>();
+
+function readyRateLimited(ip: string): boolean {
+  const now = Date.now();
+  let entry = readyRateWindows.get(ip);
+  if (entry === undefined) {
+    if (readyRateWindows.size >= MAX_READY_RATE_IPS) {
+      const oldest = readyRateWindows.keys().next();
+      if (!oldest.done) readyRateWindows.delete(oldest.value);
+    }
+    entry = { lastAccess: now, count: 0, windowStart: now };
+    readyRateWindows.set(ip, entry);
+  }
+  entry.lastAccess = now;
+  if (now - entry.windowStart > READY_RATE_WINDOW_MS) {
+    entry.windowStart = now;
+    entry.count = 0;
+  }
+  entry.count += 1;
+  return entry.count > READY_RATE_MAX;
+}
 
 let shuttingDown = false;
 let activeReadinessProbe: ReadinessProbePort = defaultReadinessProbe;
@@ -45,6 +80,11 @@ let activeReadinessProbe: ReadinessProbePort = defaultReadinessProbe;
 export function setReadinessProbe(probe: ReadinessProbePort): void {
   activeReadinessProbe = probe;
   cachedReadiness = null;
+}
+
+/** Test hook: clear the readiness rate-limit windows. */
+export function resetReadinessRateLimits(): void {
+  readyRateWindows.clear();
 }
 
 /** Mark the server as draining so readiness probes immediately return 503. */
@@ -327,6 +367,18 @@ async function evaluatePostgresReadiness(): Promise<CachedReadiness> {
   if (cachedReadiness && cachedReadiness.expiresAt > now) {
     return cachedReadiness;
   }
+  // Stale-while-revalidate: serve the last result and refresh in the
+  // background so probe latency never sits on the readiness request path.
+  if (cachedReadiness && now - cachedReadiness.expiresAt < PROBE_STALE_GRACE_MS) {
+    if (!inFlightReadiness) {
+      void refreshPostgresReadiness().catch(() => undefined);
+    }
+    return cachedReadiness;
+  }
+  return refreshPostgresReadiness();
+}
+
+function refreshPostgresReadiness(): Promise<CachedReadiness> {
   if (inFlightReadiness) {
     return inFlightReadiness;
   }
@@ -369,7 +421,7 @@ async function evaluatePostgresReadiness(): Promise<CachedReadiness> {
     const entry: CachedReadiness = {
       ready,
       checks,
-      expiresAt: Date.now() + PROBE_CACHE_TTL_MS,
+      expiresAt: Date.now() + (ready ? PROBE_CACHE_TTL_OK_MS : PROBE_CACHE_TTL_FAIL_MS),
     };
     cachedReadiness = entry;
     return entry;
@@ -394,8 +446,42 @@ healthRoutes.get("/health/live", (c) => {
   });
 });
 
+/**
+ * Unauthenticated readiness responses are a strict public projection: check
+ * names and states only. Migration filenames, SHA-256 checksums, applied-at
+ * timestamps, literal SQL probe strings, and PostgreSQL error codes stay
+ * internal (they are visible in server logs, never on this endpoint).
+ */
+function publicReadinessChecks(
+  checks: CachedReadiness["checks"]
+): Record<string, { state: CheckState; reason?: string | null }> {
+  const includeReason = !isProduction();
+  const project = (check: { state: CheckState; reason: string | null }) =>
+    includeReason ? { state: check.state, reason: check.reason } : { state: check.state };
+  return {
+    controlDb: project(checks.controlDb),
+    dataDb: project(checks.dataDb),
+    controlMigrations: project(checks.controlMigrations),
+    dataMigrations: project(checks.dataMigrations),
+    realtimeListen: project(checks.realtimeListen),
+  };
+}
+
 healthRoutes.get("/health/ready", async (c) => {
   c.header("Cache-Control", "no-store");
+  if (readyRateLimited(extractClientIp(c))) {
+    c.header("Retry-After", "60");
+    return c.json(
+      {
+        error: {
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many readiness probes from this client. The result is cached; poll less often.",
+          details: { retryAfterSeconds: 60 },
+        },
+      },
+      429
+    );
+  }
   const mode = databaseMode();
   const envelope = {
     version: SERVICE_VERSION,
@@ -437,7 +523,7 @@ healthRoutes.get("/health/ready", async (c) => {
       ...envelope,
       status: probe.ready ? "ready" : "unready",
       ready: probe.ready,
-      checks: probe.checks,
+      checks: publicReadinessChecks(probe.checks),
     },
     probe.ready ? 200 : 503
   );
@@ -459,19 +545,26 @@ healthRoutes.get("/health", async (c) => {
     dataState = probe.checks.dataDb.state === "ok" ? "connected" : "disconnected";
   }
 
-  return c.json({
-    status: "ok",
-    version: SERVICE_VERSION,
-    deprecated: true,
-    useInstead: ["/v1/health/live", "/v1/health/ready"],
-    mode,
-    planes: {
-      controlDb: controlState,
-      dataDb: dataState,
-      realtimePubSub: dataState,
+  // Never report "ok" while a required plane is down: degraded maps to 503 so
+  // monitors and load balancers see the outage.
+  const degraded = mode === "postgres" && (controlState === "disconnected" || dataState === "disconnected");
+
+  return c.json(
+    {
+      status: degraded ? "degraded" : "ok",
+      version: SERVICE_VERSION,
+      deprecated: true,
+      useInstead: ["/v1/health/live", "/v1/health/ready"],
+      mode,
+      planes: {
+        controlDb: controlState,
+        dataDb: dataState,
+        realtimePubSub: dataState,
+      },
+      timestamp: new Date().toISOString(),
     },
-    timestamp: new Date().toISOString(),
-  });
+    degraded ? 503 : 200
+  );
 });
 
 healthRoutes.get("/openapi.json", (c) => {

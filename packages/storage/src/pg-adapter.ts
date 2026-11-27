@@ -100,11 +100,17 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
       // a connect that cannot be established within 30s fails fast rather than
       // queueing behind a dead endpoint; maxLifetimeSeconds rotates physically
       // aged connections to avoid leaking session state across long lives.
+      const connectTimeoutMs = clampPositiveInt(
+        process.env["DATA_POOL_CONNECT_TIMEOUT_MS"],
+        5_000,
+        1_000,
+        120_000
+      );
       this.pool = new pg.Pool({
         connectionString,
         max: poolMax,
         idleTimeoutMillis: 30_000,
-        connectionTimeoutMillis: 30_000,
+        connectionTimeoutMillis: connectTimeoutMs,
         maxLifetimeSeconds: 30 * 60,
       });
       // Prevent unhandled 'error' events on idle clients from crashing Node.js.

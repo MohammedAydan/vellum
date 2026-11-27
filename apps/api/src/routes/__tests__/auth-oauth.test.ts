@@ -245,12 +245,13 @@ describe("OAuth sign-in (mock Google and GitHub)", () => {
 
       const wrong = await f.call("POST", "/mfa/challenge", f.publicKeyStr, { mfaTicket: ticket, code: "000000" });
       expect(wrong.status).toBe(401);
-      const done = await f.call("POST", "/mfa/challenge", f.publicKeyStr, { mfaTicket: ticket, code: generateTotpCode(enrolled.secret) });
+      // The enrollment code is single-use (S9); challenge with the next step's code.
+      const done = await f.call("POST", "/mfa/challenge", f.publicKeyStr, { mfaTicket: ticket, code: generateTotpCode(enrolled.secret, Date.now() + 30_000) });
       expect(done.status).toBe(200);
       expect(((await done.json()) as { accessToken?: string }).accessToken).toBeTruthy();
       // The one-time exchange code and the ticket are both spent.
       expect((await f.call("POST", "/oauth/exchange", f.publicKeyStr, { code, codeVerifier: verifier })).status).toBe(401);
-      expect((await f.call("POST", "/mfa/challenge", f.publicKeyStr, { mfaTicket: ticket, code: generateTotpCode(enrolled.secret) })).status).toBe(401);
+      expect((await f.call("POST", "/mfa/challenge", f.publicKeyStr, { mfaTicket: ticket, code: generateTotpCode(enrolled.secret, Date.now() + 30_000) })).status).toBe(401);
     }
   });
 

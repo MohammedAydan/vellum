@@ -153,6 +153,20 @@ export interface RuleEvaluationContext {
   lookups?: RuleLookups | undefined;
   /** Set when a rule needed a document it could not read; the rule is then denied. */
   lookupState?: { failed: boolean } | undefined;
+  /**
+   * Missing-resource probe: every `resource.*` operand resolves to a sentinel
+   * that makes any comparison it touches evaluate true. Used only to answer
+   * "would this rule allow if the document existed?" when deciding between
+   * 404 and 403 for a read of a non-existent or TTL-expired document.
+   */
+  optimisticResource?: boolean | undefined;
+}
+
+/** Sentinel for optimistic `resource.*` resolution (see RuleEvaluationContext). */
+const OPTIMISTIC_RESOURCE: unique symbol = Symbol("vellum.optimisticResource");
+
+function isOptimistic(value: unknown): boolean {
+  return value === OPTIMISTIC_RESOURCE;
 }
 
 const LOOKUP_COLLECTION = /^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+)*$/;
@@ -391,6 +405,9 @@ function resolveOperand(operand: unknown, context: RuleEvaluationContext): unkno
       }
       return context.pathParams[param] ?? null;
     }
+    if (context.optimisticResource === true && (varPath === "resource" || varPath === "resource.data" || varPath.startsWith("resource.data."))) {
+      return OPTIMISTIC_RESOURCE;
+    }
     if (varPath === "resource.data") return context.resourceData ?? null;
     if (varPath.startsWith("resource.data.")) {
       return getFieldByPath(context.resourceData ?? {}, varPath.slice(14));
@@ -456,6 +473,7 @@ function evaluateAstNodeInternal(
     case "==": {
       const l = resolveOperand(expr.left, context);
       const r = resolveOperand(expr.right, context);
+      if (isOptimistic(l) || isOptimistic(r)) return true;
       if (l === null && r === null && (isAuthIdentityOperand(expr.left) || isAuthIdentityOperand(expr.right))) {
         return false;
       }
@@ -464,6 +482,7 @@ function evaluateAstNodeInternal(
     case "!=": {
       const l = resolveOperand(expr.left, context);
       const r = resolveOperand(expr.right, context);
+      if (isOptimistic(l) || isOptimistic(r)) return true;
       return l !== undefined && r !== undefined && !wireValuesEqual(l, r);
     }
     case "<":
@@ -472,6 +491,7 @@ function evaluateAstNodeInternal(
     case ">=": {
       const l = resolveOperand(expr.left, context);
       const r = resolveOperand(expr.right, context);
+      if (isOptimistic(l) || isOptimistic(r)) return true;
       if (l === undefined || r === undefined || l === null || r === null) return false;
       const cmp = compareWireValues(l, r, "asc");
       if (expr.op === "<") return cmp < 0;
@@ -482,6 +502,7 @@ function evaluateAstNodeInternal(
     case "in": {
       const l = resolveOperand(expr.left, context);
       const r = resolveOperand(expr.right, context);
+      if (isOptimistic(l) || isOptimistic(r)) return true;
       if (!Array.isArray(r) || r.length > MAX_IN_OPERAND_ELEMENTS) return false;
       // An unauthenticated identity (null) never matches a null entry in the list.
       if (l === null && isAuthIdentityOperand(expr.left)) return false;
@@ -495,6 +516,7 @@ function evaluateAstNodeInternal(
     case "hasKey": {
       const l = resolveOperand(expr.left, context);
       const r = resolveOperand(expr.right, context);
+      if (isOptimistic(l) || isOptimistic(r)) return true;
       return Boolean(
         l &&
           typeof l === "object" &&
@@ -507,6 +529,7 @@ function evaluateAstNodeInternal(
     case "isType": {
       const l = resolveOperand(expr.left, context);
       const expectedType = resolveOperand(expr.right, context);
+      if (isOptimistic(l)) return true;
       if (expectedType === "null") return l === null;
       if (expectedType === "bool" || expectedType === "boolean") return typeof l === "boolean";
       if (expectedType === "string") return typeof l === "string";
@@ -573,6 +596,13 @@ export interface AuthorizeOperationParams {
   collectionLevel?: boolean | undefined;
   /** Documents read for `get()` / `exists()` in rules (see `collectRuleLookups`). */
   lookups?: RuleLookups | undefined;
+  /**
+   * Internal probe used only when the target document is known to be absent
+   * (missing or TTL-expired): `resource.*` operands resolve optimistically so
+   * the caller can tell "rule would allow if the document existed" (404)
+   * apart from "rule denies regardless of the document" (403).
+   */
+  optimisticResource?: boolean | undefined;
 }
 
 export interface AuthorizationResult {
@@ -616,6 +646,7 @@ export function authorizeOperation({
   bypassRules = false,
   collectionLevel = false,
   lookups,
+  optimisticResource = false,
 }: AuthorizeOperationParams): AuthorizationResult {
   // Explicit, auditable system bypass. Must be strictly boolean `true`.
   if (bypassRules === true) {
@@ -711,6 +742,7 @@ export function authorizeOperation({
               requestTimeMs,
               lookups,
               lookupState,
+              optimisticResource,
             });
       // A rule that needed a document it could not read never allows, even through `not`.
       if (allowed && !lookupState.failed) {
