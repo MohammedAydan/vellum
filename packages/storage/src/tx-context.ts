@@ -422,10 +422,25 @@ export const SQL_QUERY_OUTBOX = `SELECT seq_id::text AS "seqId", project_id AS "
         committed_at::text AS "committedAt"
    FROM realtime_outbox
   WHERE project_id = $1::uuid AND seq_id > $2::bigint
+    AND ($3::bigint IS NULL OR seq_id <= $3::bigint)
+    AND xid8 < pg_snapshot_xmin(pg_current_snapshot())
   ORDER BY seq_id ASC
   LIMIT 500`;
 
 export const SQL_QUERY_OUTBOX_MAX = `SELECT COALESCE(MAX(seq_id), 0)::text AS "seqId"
+   FROM realtime_outbox
+  WHERE project_id = $1::uuid`;
+
+/**
+ * P0-2 commit-order-safe watermark. `firstUnsafe` is the lowest seq_id whose
+ * writing transaction was still in flight when this snapshot was taken; every
+ * seq below it is final (committed and visible, or an aborted sequence gap),
+ * so the safe watermark is `firstUnsafe - 1`. With nothing in flight the safe
+ * watermark is simply the current max. Callers combine the two in JS so the
+ * arithmetic stays in bigint-land.
+ */
+export const SQL_OUTBOX_SAFE_WATERMARK = `SELECT MAX(seq_id)::text AS "maxSeq",
+       (MIN(seq_id) FILTER (WHERE xid8 >= pg_snapshot_xmin(pg_current_snapshot())))::text AS "firstUnsafe"
    FROM realtime_outbox
   WHERE project_id = $1::uuid`;
 
@@ -1042,15 +1057,17 @@ export function createSqlTransactionHandle(
       }
     },
 
-    async queryOutboxSince(afterSeqId = "0"): Promise<OutboxEvent[]> {
+    async queryOutboxSince(afterSeqId = "0", upToSeqId?: string): Promise<OutboxEvent[]> {
       assertOpen();
       // Runs inside the tenant transaction so RLS is enforced (never a raw pool query).
       const { rows } = await runPrepared<OutboxEvent>(
         client,
         prepared,
-        "vellum_query_outbox",
+        // v2: xid8-safe read with an optional upper bound (P0-2). A new statement
+        // name because pooled connections may still hold the 2-parameter v1 text.
+        "vellum_query_outbox_v2",
         SQL_QUERY_OUTBOX,
-        [projectId, afterSeqId]
+        [projectId, afterSeqId, upToSeqId ?? null]
       );
       return rows;
     },
@@ -1060,6 +1077,18 @@ export function createSqlTransactionHandle(
       const { rows } = await client.query(SQL_QUERY_OUTBOX_MAX, [projectId]);
       const seqId = (rows[0] as { seqId?: string } | undefined)?.seqId;
       return typeof seqId === "string" ? seqId : "0";
+    },
+
+    async outboxSafeWatermark(): Promise<string> {
+      assertOpen();
+      const { rows } = await client.query(SQL_OUTBOX_SAFE_WATERMARK, [projectId]);
+      const row = rows[0] as { maxSeq?: string | null; firstUnsafe?: string | null } | undefined;
+      const firstUnsafe = typeof row?.firstUnsafe === "string" ? BigInt(row.firstUnsafe) : null;
+      if (firstUnsafe !== null) {
+        const safe = firstUnsafe - 1n;
+        return (safe > 0n ? safe : 0n).toString();
+      }
+      return typeof row?.maxSeq === "string" && row.maxSeq !== null ? row.maxSeq : "0";
     },
 
     async queryDocuments(compiled: CompiledQuery): Promise<QueriedDocument[]> {

@@ -47,6 +47,8 @@ export interface OutboxPollerPort {
   start(): Promise<void>;
   stop(): Promise<void>;
   getWatermark(projectId: string): bigint | null;
+  /** P0-2: initialize the tenant watermark from the safe watermark at session-auth time. */
+  initializeTenantNow?(projectId: string): void;
   handleNotification(payload: string): void;
   discoverTenants(): TenantContext[];
 }

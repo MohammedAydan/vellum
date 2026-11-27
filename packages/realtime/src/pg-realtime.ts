@@ -76,6 +76,12 @@ export function createPgRealtimeInfrastructure(
   if (options.onError) pollerOptions.onError = options.onError;
   const poller = new OutboxPoller(pollerOptions);
 
+  // P0-2: initialize a tenant's watermark the moment its first session
+  // authenticates, before any subscribe snapshot is taken, so a write landing
+  // between the snapshot and this instance's first drain is fanned out live
+  // instead of skipped.
+  options.hub.setTenantSessionStartHook?.((projectId) => poller.initializeTenantNow(projectId));
+
   let stopPromise: Promise<void> | null = null;
 
   return {

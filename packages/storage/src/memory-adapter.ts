@@ -942,19 +942,34 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
     });
   }
 
-  public async queryOutboxSince(ctx: TenantContext, afterSeqId = "0"): Promise<OutboxEvent[]> {
+  public async queryOutboxSince(ctx: TenantContext, afterSeqId = "0", upToSeqId?: string): Promise<OutboxEvent[]> {
     requireMemoryTenant(ctx);
     let minSeq: bigint;
+    let maxSeq: bigint | null = null;
     try {
       minSeq = BigInt(afterSeqId || "0");
+      if (upToSeqId !== undefined) maxSeq = BigInt(upToSeqId);
     } catch {
-      throw new VellumError("INVALID_ARGUMENT", `Invalid outbox sequence id '${afterSeqId}'`);
+      throw new VellumError("INVALID_ARGUMENT", `Invalid outbox sequence range '${afterSeqId}'..'${upToSeqId ?? ""}'`);
     }
     return this.outbox.filter(
       (ev) =>
         ev.projectId === ctx.projectId &&
-        BigInt(ev.seqId) > minSeq
+        BigInt(ev.seqId) > minSeq &&
+        (maxSeq === null || BigInt(ev.seqId) <= maxSeq)
     );
+  }
+
+  /** In-memory writes are visible the moment they are appended, so the safe watermark is the max. */
+  public async queryOutboxSafeWatermark(ctx: TenantContext): Promise<string> {
+    requireMemoryTenant(ctx);
+    let max = 0n;
+    for (const ev of this.outbox) {
+      if (ev.projectId !== ctx.projectId) continue;
+      const seq = BigInt(ev.seqId);
+      if (seq > max) max = seq;
+    }
+    return max.toString();
   }
 
   public async runIndexBuilderWorker(

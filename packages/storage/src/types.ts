@@ -155,9 +155,18 @@ export interface TxHandle {
    * fails closed if tenant context is ever omitted.
    */
   queryDocuments(compiled: CompiledQuery): Promise<QueriedDocument[]>;
-  queryOutboxSince?(afterSeqId?: string): Promise<OutboxEvent[]>;
+  queryOutboxSince?(afterSeqId?: string, upToSeqId?: string): Promise<OutboxEvent[]>;
   /** Highest outbox seq_id of this project ("0" when none). */
   queryOutboxMaxSeq?(): Promise<string>;
+  /**
+   * P0-2 commit-order-safe watermark: the highest seq_id whose writing
+   * transaction is known resolved (committed or aborted) at this snapshot.
+   * Every row with seq_id at or below it is final and visible; a row above it
+   * may still be in flight. Read inside the same transaction as an
+   * `initial_sync` snapshot so the snapshot reflects everything the watermark
+   * claims. Defaults to `queryOutboxMaxSeq` on adapters without xid8 gating.
+   */
+  outboxSafeWatermark?(): Promise<string>;
   listActiveDocumentsInCollection?(collectionPath: string): Promise<DocumentRecord[]>;
   /** Live documents in a collection, counted up to `cap` (index-only, stops reading at the cap). */
   countLiveDocumentsUpTo?(collectionPath: string, cap: number): Promise<number>;
@@ -287,9 +296,15 @@ export interface StorageAdapter extends AuthOperations {
   createCompositeIndex(ctx: TenantContext, collectionPath: string, fields: IndexFieldItem[]): Promise<CompositeIndexRecord>;
   listCompositeIndexes(ctx: TenantContext): Promise<CompositeIndexRecord[]>;
   deleteCompositeIndex(ctx: TenantContext, indexId: string): Promise<boolean>;
-  queryOutboxSince(ctx: TenantContext, afterSeqId?: string): Promise<OutboxEvent[]>;
+  queryOutboxSince(ctx: TenantContext, afterSeqId?: string, upToSeqId?: string): Promise<OutboxEvent[]>;
   /** Highest outbox seq_id of the tenant's project ("0" when none). Optional: adapters without a durable outbox omit it. */
   queryOutboxMaxSeq?(ctx: TenantContext): Promise<string>;
+  /**
+   * P0-2 commit-order-safe watermark (see {@link TxHandle.outboxSafeWatermark}).
+   * Optional: adapters without xid8 gating omit it and callers fall back to
+   * `queryOutboxMaxSeq`.
+   */
+  queryOutboxSafeWatermark?(ctx: TenantContext): Promise<string>;
   /**
    * Builds `building` composite indexes. Resumable and time-boxable so it can
    * run inside a serverless request (`deadlineMs`) and be retried until done.

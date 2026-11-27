@@ -24,7 +24,14 @@ describe("createPgRealtimeInfrastructure", () => {
     const connections = new Map([["c1", { authenticated: true, closed: false, projectId: "p1" }]]);
     const infra = createPgRealtimeInfrastructure({
       connectionString: "postgres://user:pw@CHANGE_ME_HOST:5432/db",
-      dataStore: { async queryOutboxSince(_ctx: unknown, after = "0") { return rows.filter((r) => BigInt(r.seqId) > BigInt(after)); } } as never,
+      dataStore: {
+        async queryOutboxSince(_ctx: unknown, after = "0", upTo?: string) {
+          const cap = upTo === undefined ? null : BigInt(upTo);
+          return rows.filter((r) => BigInt(r.seqId) > BigInt(after) && (cap === null || BigInt(r.seqId) <= cap));
+        },
+        // P0-2: the safe watermark tracks the rows that have "resolved".
+        async queryOutboxSafeWatermark() { return rows[rows.length - 1]?.seqId ?? "0"; },
+      } as never,
       hub: { connections, async notifyCommittedEvents(_p: string, evs: OutboxEvent[]) { for (const e of evs) delivered.push(e.seqId); } } as never,
       pollIntervalMs: 50,
     });
