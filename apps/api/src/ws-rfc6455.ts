@@ -20,7 +20,7 @@ import type { Socket } from "node:net";
 import { SYSTEM_LIMITS } from "@vellum/core";
 import type { RealtimeGatewayHub } from "@vellum/realtime";
 import { getConfig } from "./config.js";
-import { assertSafeJsonStructure, normalizeStrictOrigin } from "./middleware/security.js";
+import { assertSafeJsonStructure, extractClientIpFromHeaders, normalizeStrictOrigin } from "./middleware/security.js";
 
 const WS_MAGIC_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -188,7 +188,15 @@ export function attachRealtimeWebSocketServer(
       return;
     }
 
-    const clientIp = req.socket.remoteAddress ?? "unknown";
+    // Behind a proxy (for example Vercel) the socket peer is the proxy, not
+    // the client: resolve the per-IP bucket through the same spoof-resistant
+    // header rules as the HTTP middleware so one NAT cannot starve the pool
+    // and one attacker cannot spoof their way around the cap.
+    const headerValue = (name: string): string | undefined => {
+      const value = req.headers[name];
+      return typeof value === "string" ? value : Array.isArray(value) ? value[0] : undefined;
+    };
+    const clientIp = extractClientIpFromHeaders(headerValue, req.socket.remoteAddress);
     const ipCount = connectionsByIp.get(clientIp) ?? 0;
     if (ipCount >= maxConnectionsPerIp) {
       socket.write("HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n");

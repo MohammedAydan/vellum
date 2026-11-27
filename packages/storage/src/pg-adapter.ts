@@ -15,6 +15,7 @@ import type { CompiledQuery, WhereClause } from "@vellum/query-engine";
 import type { AggregateRequest, AggregateRow, DeleteWhereOptions } from "./aggregates.js";
 import {
   batchInsertIndexEntries,
+  buildCollectionPathMatchSql,
   runIdempotencyCleanup,
   runInTenantTransactionAsync,
   toPgClientLike,
@@ -303,13 +304,21 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
           fields: IndexFieldItem[];
         };
         try {
-          // Resume where a previous (time-boxed or interrupted) run stopped:
-          // entries are written in ascending document_id order.
+          // Resume where a previous (time-boxed or interrupted) run stopped.
+          // A wildcard-template index spans many concrete collection paths
+          // whose document ids overlap, so the resume key is the
+          // (collection_path, document_id) tuple, never document_id alone.
           const { rows: resumeRows } = await client.query(
-            `SELECT max(document_id) AS last FROM document_index_entries WHERE index_id = $1::uuid`,
+            `SELECT collection_path AS "collectionPath", document_id AS "documentId"
+               FROM document_index_entries WHERE index_id = $1::uuid
+              ORDER BY collection_path DESC, document_id DESC LIMIT 1`,
             [idx.id]
           );
-          let lastDocId = (resumeRows[0] as { last: string | null } | undefined)?.last ?? "";
+          let lastCollectionPath =
+            (resumeRows[0] as { collectionPath: string } | undefined)?.collectionPath ?? "";
+          let lastDocId = (resumeRows[0] as { documentId: string } | undefined)?.documentId ?? "";
+          const pathMatch = buildCollectionPathMatchSql(idx.collectionPath, 2);
+          const resumeBase = 2 + pathMatch.params.length;
           let timedOut = false;
           while (true) {
             if (Date.now() >= deadline) {
@@ -321,12 +330,13 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
                       data, created_at::text AS "createdAt", updated_at::text AS "updatedAt"
                  FROM documents
                 WHERE project_id = $1::uuid
-                  AND collection_path = $2 AND deleted_at IS NULL
+                  AND ${pathMatch.clause} AND deleted_at IS NULL
                   AND (expires_at IS NULL OR expires_at > now())
-                  AND document_id > $3
-                ORDER BY document_id ASC
+                  AND (collection_path > $${resumeBase}
+                       OR (collection_path = $${resumeBase} AND document_id > $${resumeBase + 1}))
+                ORDER BY collection_path ASC, document_id ASC
                 LIMIT 500`,
-              [idx.projectId, idx.collectionPath, lastDocId]
+              [idx.projectId, ...pathMatch.params, lastCollectionPath, lastDocId]
             );
             if (batchDocs.length === 0) break;
 
@@ -336,7 +346,7 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
               const doc = rawDoc as DocumentRecord;
               return {
                 indexId: idx.id,
-                collectionPath: idx.collectionPath,
+                collectionPath: doc.collectionPath,
                 sortKey: encodeCompositeSortKey(doc, idx.fields),
                 documentId: doc.documentId,
                 path: doc.path,
@@ -350,6 +360,7 @@ export class PgStorageAdapter extends AuthMethodDelegates implements StorageAdap
             );
             const lastEntry = entries[entries.length - 1];
             if (lastEntry === undefined) break;
+            lastCollectionPath = lastEntry.collectionPath;
             lastDocId = lastEntry.documentId;
           }
 

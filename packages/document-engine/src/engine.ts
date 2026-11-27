@@ -15,6 +15,7 @@ import {
   normalizeAndValidateDocumentData,
   getFieldByPath,
   validateCollectionName,
+  canonicalizeCollectionPathToTemplate,
 } from "@vellum/core";
 import {
   authorizeOperation,
@@ -58,6 +59,7 @@ import type {
   TxHandle as StorageTxHandle,
   UpdateCollectionInput,
 } from "@vellum/storage";
+import { aggregateRowsInMemory } from "@vellum/storage";
 import { applyFieldTransforms } from "./transforms.js";
 import { parseFieldPath, setPath, toIsoDate } from "./path-utils.js";
 import { resolveTelemetry } from "./telemetry.js";
@@ -73,6 +75,7 @@ import { createTransactionManager, type TransactionManager } from "./transaction
 import type { DocumentEnginePort } from "./contracts/engine-port.js";
 import type {
   AggregateRequest,
+  AggregateRow,
   AggregateResult,
   AuditLike,
   BatchMutation,
@@ -1882,7 +1885,8 @@ export class DocumentEngine implements DocumentEnginePort {
             {
               collectionPath: normalizedQuery.collectionPath,
               suggestedIndex: {
-                collectionPath: normalizedQuery.collectionPath,
+                collectionPath: canonicalizeCollectionPathToTemplate(normalizedQuery.collectionPath),
+                exampleCollectionPath: normalizedQuery.collectionPath,
                 fields: normalizedQuery.orderBy
                   .filter((o) => o.field !== "documentId" && o.field !== "__name__")
                   .map((o) => ({ path: o.field, dir: o.dir })),
@@ -1906,7 +1910,8 @@ export class DocumentEngine implements DocumentEnginePort {
                   collectionPath: normalizedQuery.collectionPath,
                   maxUnindexedDocs: maxDocs,
                   suggestedIndex: {
-                    collectionPath: normalizedQuery.collectionPath,
+                    collectionPath: canonicalizeCollectionPathToTemplate(normalizedQuery.collectionPath),
+                    exampleCollectionPath: normalizedQuery.collectionPath,
                     fields: suggestCompositeIndex(normalizedQuery),
                   },
                 }
@@ -2061,6 +2066,69 @@ export class DocumentEngine implements DocumentEnginePort {
    * runs a fully parameterized SQL (or equivalent in-memory) GROUP BY inside
    * the tenant transaction.
    */
+  /**
+   * Cap on rows the row-filtered aggregate fallback will page through on the
+   * request path. `VELLUM_AGGREGATE_ROW_FILTER_MAX` overrides; `0` disables
+   * the fallback entirely (restores the pre-0.0.9 blanket 403).
+   */
+  private resolveAggregateRowFilterMax(): number {
+    const raw = process.env["VELLUM_AGGREGATE_ROW_FILTER_MAX"];
+    if (raw === undefined || raw === "") return 10_000;
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 1_000_000) return 10_000;
+    return parsed;
+  }
+
+  /**
+   * P1-2 fallback for member-scoped rules: SQL GROUP BY cannot be filtered
+   * row by row, so run the aggregate over the rows the caller can actually
+   * read. The normal query path applies the identical collection-level `list`
+   * gate plus per-document `get` filtering, so only authorized rows are
+   * aggregated - the same set a `collection.get()` would return. Sums and
+   * averages never touch hidden documents, so no oracle or timing side
+   * channel opens on forbidden fields. Paging is bounded by
+   * {@link resolveAggregateRowFilterMax}; past the cap the request is refused
+   * with PERMISSION_DENIED exactly as before, so a collection-scale scan
+   * never runs on the request path.
+   */
+  private async aggregateViaVisibleRows(
+    ctx: EngineContext,
+    request: AggregateRequest
+  ): Promise<AggregateRow[]> {
+    const maxRows = this.resolveAggregateRowFilterMax();
+    const visible: PublicDocument[] = [];
+    let cursor: string | null = null;
+    for (;;) {
+      const remaining = maxRows + 1 - visible.length;
+      if (remaining <= 0) break;
+      const page = await this.executeQueryImpl({
+        ...ctx,
+        querySpec: {
+          collectionPath: request.collectionPath,
+          where: request.where ?? [],
+          or: request.or ?? [],
+          orderBy: [{ field: "documentId", dir: "asc" }],
+          limit: Math.min(1000, remaining),
+          startAfter: cursor,
+        },
+      });
+      for (const doc of page.documents) visible.push(doc);
+      if (visible.length > maxRows) {
+        throw new VellumError(
+          "PERMISSION_DENIED",
+          `Aggregates and counts on '${request.collectionPath}' are not allowed because its get rule depends on each document and the readable set exceeds ${maxRows} rows. Narrow the filters, read the documents with a query, or use a server key.`,
+          { collectionPath: request.collectionPath, maxRows }
+        );
+      }
+      if (page.nextCursor === null || page.documents.length === 0) break;
+      cursor = page.nextCursor;
+    }
+    // Usage (document reads) was already recorded per page by executeQueryImpl.
+    // PublicDocument carries the fields the in-memory aggregator reads
+    // (documentId/path/data/timestamps), matching DocumentRecord structurally.
+    return aggregateRowsInMemory(visible as unknown as DocumentRecord[], request);
+  }
+
   public async aggregateDocuments(
     ctx: EngineContext & { request: AggregateRequest }
   ): Promise<AggregateResult> {
@@ -2134,11 +2202,13 @@ export class DocumentEngine implements DocumentEnginePort {
         error.code === "PERMISSION_DENIED" &&
         hasRowLevelGetRule(ruleset, `${collectionPath}/__collection_check__`)
       ) {
-        throw new VellumError(
-          "PERMISSION_DENIED",
-          `Aggregates and counts on '${collectionPath}' are not allowed because its get rule depends on each document. Read the documents with a query or use a server key.`,
-          { collectionPath }
-        );
+        // P1-2: a member-scoped `get` rule no longer turns every client
+        // count/aggregate into a blanket 403. Aggregate over the rows the
+        // caller can actually read instead (bounded; see the fallback).
+        return {
+          rows: await this.aggregateViaVisibleRows(ctx, { ...request, collectionPath }),
+          executionTimeMs: Number((performance.now() - startTime).toFixed(3)),
+        };
       }
       throw error;
     }

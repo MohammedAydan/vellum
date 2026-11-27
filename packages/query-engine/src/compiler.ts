@@ -26,6 +26,7 @@ import {
   parseCollectionPath,
   validateFieldName,
   validateWireValue,
+  indexCollectionPathCovers,
 } from "@vellum/core";
 import { buildNestedJsonObject, escapeLikePattern } from "./operators.js";
 import type {
@@ -1111,7 +1112,7 @@ export function selectCompositeIndexForQuery(
   for (const idx of availableIndexes) {
     if (
       !idx ||
-      idx.collectionPath !== normalizedQuery.collectionPath ||
+      !indexCollectionPathCovers(idx.collectionPath, normalizedQuery.collectionPath) ||
       idx.status !== "ready" ||
       !Array.isArray(idx.fields) ||
       idx.fields.length < requiredCount
@@ -1153,12 +1154,18 @@ export function selectCompositeIndexForQuery(
     }
     if (!suffixOk) continue;
 
-    // 3. Cost ranking: prefer the tightest (narrowest) index with fewest unused trailing fields.
+    // 3. Cost ranking: prefer the tightest (narrowest) index with fewest unused
+    // trailing fields; at equal width prefer a concrete-path index over a
+    // wildcard template (narrower blast radius if the template is ever dropped).
     const extraFields = idx.fields.length - requiredCount;
-    if (extraFields < bestExtraFields) {
+    const isExactPath = idx.collectionPath === normalizedQuery.collectionPath;
+    if (
+      extraFields < bestExtraFields ||
+      (extraFields === bestExtraFields && isExactPath && bestMatch !== null && bestMatch.collectionPath !== normalizedQuery.collectionPath)
+    ) {
       bestExtraFields = extraFields;
       bestMatch = idx;
-      if (extraFields === 0) break; // Optimal exact-width match found.
+      if (extraFields === 0 && isExactPath) break; // Optimal exact-width, exact-path match found.
     }
   }
 

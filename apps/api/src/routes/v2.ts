@@ -23,6 +23,7 @@ import {
   normalizeIndexFieldSpec,
   type IndexAdvisorIndex,
   type IndexAdvisorQuery,
+  canonicalizeCollectionPathToTemplate,
 } from "@vellum/core";
 import {
   authorizeOperation,
@@ -385,7 +386,9 @@ export function createIndexAdvisor(
         const input: RecordIndexRecommendationInput = {
           projectId: tenant.projectId,
           fingerprint: coverage.fingerprint,
-          collectionPath: query.collectionPath,
+          // Recommendations dedupe on the same wildcard template the
+          // suggestion link carries, not on the concrete instance path.
+          collectionPath: canonicalizeCollectionPathToTemplate(query.collectionPath),
           recommendedFields: coverage.recommendedFields,
           sampleQuery: options.sampleQuery,
           reason: coverage.reason,

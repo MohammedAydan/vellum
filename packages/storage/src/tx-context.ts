@@ -29,7 +29,7 @@ import { referenceMatchJsonPath } from "./referenced-by.js";
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
-import { VellumError, encodeCompositeSortKey } from "@vellum/core";
+import { VellumError, encodeCompositeSortKey, indexCollectionPathCovers, isTemplateCollectionPath } from "@vellum/core";
 import { computeIndexDefinitionHash, type CompiledQuery, type WhereClause } from "@vellum/query-engine";
 import {
   compileAggregateSql,
@@ -147,6 +147,8 @@ export interface SqlBatchTxHandle extends SqlTxHandle {
 interface CachedIndexDefinition {
   id: string;
   fields: IndexFieldItem[];
+  /** Concrete or wildcard-template path; template defs match segment-wise. */
+  collectionPath: string;
 }
 
 interface ActiveTxFrame {
@@ -311,8 +313,41 @@ export function getDocumentStatement(includeSoftDeleted: boolean, forUpdate: boo
   };
 }
 
-export const SQL_GET_INDEXES = `SELECT id, fields FROM document_indexes
-  WHERE project_id = $1::uuid AND collection_path = $2`;
+// All of the project's index definitions are loaded per tenant transaction
+// (a project's index count is small) so wildcard-template records
+// (`chats/*/messages`) are matched segment-wise in JS; SQL `LIKE` would treat
+// `*` literally and per-segment matching stays pure and deterministic.
+export const SQL_GET_INDEXES = `SELECT id, fields, collection_path AS "collectionPath" FROM document_indexes
+  WHERE project_id = $1::uuid`;
+
+/**
+ * SQL WHERE fragment matching `documents.collection_path` against an index
+ * record's collection path (concrete or wildcard template), plus its bind
+ * params. Templates match segment-wise: same segment count, literals equal at
+ * collection positions, `*` matches exactly one document-id segment. Every
+ * value is a bind parameter; no LIKE wildcards are involved (`*` is not a SQL
+ * wildcard, so literal equality and split_part comparisons stay sargable).
+ * `firstParamIndex` is the `$N` the fragment's first parameter takes.
+ */
+export function buildCollectionPathMatchSql(
+  indexCollectionPath: string,
+  firstParamIndex: number
+): { clause: string; params: string[] } {
+  if (!isTemplateCollectionPath(indexCollectionPath)) {
+    return { clause: `collection_path = $${firstParamIndex}`, params: [indexCollectionPath] };
+  }
+  const segments = indexCollectionPath.split("/");
+  const params: string[] = [];
+  const parts: string[] = [
+    `(LENGTH(collection_path) - LENGTH(REPLACE(collection_path, '/', ''))) = ${segments.length - 1}`,
+  ];
+  segments.forEach((segment, i) => {
+    if (i % 2 === 1 && segment === "*") return;
+    params.push(segment);
+    parts.push(`split_part(collection_path, '/', ${i + 1}) = $${firstParamIndex + params.length - 1}`);
+  });
+  return { clause: parts.join(" AND "), params };
+}
 
 /** UNNEST batch upsert — V2 adds the 12th (expires_at) array. */
 export const SQL_INSERT_DOCUMENTS_UNNEST = `INSERT INTO documents (
@@ -692,9 +727,11 @@ export function createSqlTransactionHandle(
       prepared,
       "vellum_get_indexes",
       SQL_GET_INDEXES,
-      [projectId, collectionPath]
+      [projectId]
     );
-    const defs = rows;
+    const defs = rows.filter(
+      (def) => typeof def.collectionPath === "string" && indexCollectionPathCovers(def.collectionPath, collectionPath)
+    );
     indexesByCollection.set(collectionPath, defs);
     return defs;
   }
@@ -1047,7 +1084,9 @@ export function createSqlTransactionHandle(
         );
         const created = rows[0];
         if (created === undefined) throw new Error("document_indexes INSERT returned no row");
-        indexesByCollection.delete(collectionPath);
+        // The new record may be a wildcard template covering many concrete
+        // collection keys, so per-key invalidation is not enough.
+        indexesByCollection.clear();
         return created;
       } catch (error: unknown) {
         // The (project, definition_hash) unique constraint makes a repeated

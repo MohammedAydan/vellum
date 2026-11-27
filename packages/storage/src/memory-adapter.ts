@@ -14,6 +14,7 @@ import {
   getFieldByPath,
   compareWireValues,
   validateCollectionName,
+  indexCollectionPathCovers,
 } from "@vellum/core";
 import {
   computeIndexDefinitionHash,
@@ -820,7 +821,7 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
     for (const idx of this.indexes.values()) {
       if (
         idx.projectId !== ctx.projectId ||
-        idx.collectionPath !== docRow.collectionPath
+        !indexCollectionPathCovers(idx.collectionPath, docRow.collectionPath)
       ) {
         continue;
       }
