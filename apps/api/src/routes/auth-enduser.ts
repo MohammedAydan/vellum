@@ -1553,6 +1553,15 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       }
       throw new VellumError("UNAUTHENTICATED", "Invalid verification code");
     }
+    // A TOTP code is single-use across every MFA route: a code observed during
+    // enrollment must not be replayed at /mfa/challenge or /mfa/disable inside
+    // its validity window. Recovery codes are already consumed atomically.
+    if (recoveryIndex === -1) {
+      if (await totpCodeWasUsed(tenant, user.id, body.code)) {
+        throw new VellumError("UNAUTHENTICATED", "Invalid verification code");
+      }
+      await markTotpCodeUsed(tenant, user.id, body.code);
+    }
     await clearMfaFailures(tenant, failureKey);
     await storage.upsertAuthMfa(tenant.ctx, {
       userId: user.id,

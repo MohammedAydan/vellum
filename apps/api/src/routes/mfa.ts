@@ -257,6 +257,13 @@ function integrityHash(secret: string, pepper: string): string {
 }
 
 /** TOTP verification via the `otplib` dependency; ±30s tolerance (one step). */
+/** A TOTP code stays cryptographically valid for up to 90 s (step + drift). */
+const TOTP_REPLAY_TTL_MS = 120_000;
+
+function sha256Hex(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
 function verifyTotp(secret: string, code: string): boolean {
   try {
     const result = verifySync({
@@ -342,6 +349,21 @@ export function createMfaRoutes(options: MfaRouteOptions): Hono {
     const claims = getSession(c);
     if (!claims) throw new VellumError("UNAUTHENTICATED", "A valid session is required");
     return claims;
+  }
+
+  /**
+   * Single-use TOTP: reserve the (user, code) pair in the durable throttle
+   * store for the code's validity window. Returns true when the code was
+   * already spent by an earlier accepted request (any MFA route).
+   */
+  async function totpCodeWasUsed(userId: string, code: string): Promise<boolean> {
+    const slot = await controlStore.throttle.acquireThrottleSlot(
+      "mfa-totp-used",
+      sha256Hex(`${userId}|${code}`),
+      TOTP_REPLAY_TTL_MS,
+      1
+    );
+    return !slot.acquired;
   }
 
   async function audit(c: Context, action: string, metadata: Record<string, unknown> = {}): Promise<void> {
@@ -455,6 +477,9 @@ export function createMfaRoutes(options: MfaRouteOptions): Hono {
     if (!/^\d{6}$/.test(code) || !verifyTotp(secret, code)) {
       throw new VellumError("UNAUTHENTICATED", "Invalid TOTP verification code");
     }
+    if (await totpCodeWasUsed(claims.uid, code)) {
+      throw new VellumError("UNAUTHENTICATED", "Invalid TOTP verification code");
+    }
 
     await store.upsert({ ...record, enabled: true, verifiedAt: new Date().toISOString() });
     limiter.reset(throttleKey);
@@ -478,7 +503,7 @@ export function createMfaRoutes(options: MfaRouteOptions): Hono {
     if (/^\d{6}$/.test(normalised)) {
       method = "totp";
       const { secret } = await decryptOrFail(record);
-      if (!verifyTotp(secret, normalised)) {
+      if (!verifyTotp(secret, normalised) || (await totpCodeWasUsed(claims.uid, normalised))) {
         throw new VellumError("UNAUTHENTICATED", "Invalid TOTP code");
       }
     } else {
