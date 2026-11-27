@@ -321,6 +321,29 @@ export function refreshSessionToken(): Promise<string | null> {
   return task;
 }
 
+/**
+ * Tell the server to end the console session (revokes the access token and the refresh session).
+ * Best effort: a network error must never keep the user signed in locally, so failures are swallowed.
+ */
+export async function signOutRemote(session: { token: string; refreshToken?: string | undefined } | null): Promise<void> {
+  if (!session?.token) return;
+  try {
+    await fetchWithTimeout(
+      resolveEndpointUrl("/v1/auth/sign-out"),
+      {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify(session.refreshToken ? { refreshToken: session.refreshToken } : {}),
+        keepalive: true,
+      },
+      DEFAULT_REQUEST_TIMEOUT_MS
+    );
+  } catch {
+    // Local sign-out proceeds regardless.
+  }
+}
+
 interface ErrorDetails {
   message: string;
   code?: string;
