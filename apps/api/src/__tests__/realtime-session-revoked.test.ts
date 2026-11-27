@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createVellumPlatform } from "../index.js";
-import { encodeSseFrame } from "../routes/realtime-sse.js";
 
 const platforms: ReturnType<typeof createVellumPlatform>[] = [];
 afterEach(() => {
