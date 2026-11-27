@@ -172,7 +172,12 @@ export const BrowserLocalAuthStorage = BrowserLocalStorage;
 export type BrowserLocalAuthStorage = BrowserLocalStorage;
 
 /** Choose an explicit store, browser storage when available, or memory. */
+/**
+ * Sessions are memory-only by default (S7): a refresh token in `localStorage`
+ * is readable by any injected script, so persistence is opt-in via the
+ * client's `authPersistence: "local"` or an explicit `AuthStorage`.
+ */
 export function resolveAuthStorage(explicit: AuthStorage | null | undefined): AuthStorage {
   if (explicit) return explicit;
-  return resolveBrowserLocalStorage() === null ? new MemoryAuthStorage() : new BrowserLocalStorage();
+  return new MemoryAuthStorage();
 }

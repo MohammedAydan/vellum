@@ -148,17 +148,40 @@ afterEach(() => {
 });
 
 describe("@vellumdb/sdk-js - auth storage", () => {
-  it("defaults to memory storage in Node and to browser storage when available", () => {
+  it("defaults to memory storage everywhere; persistence is opt-in (S7)", () => {
     vi.stubGlobal("window", undefined);
     expect(resolveAuthStorage(null)).toBeInstanceOf(MemoryAuthStorage);
     expect(resolveAuthStorage(undefined)).toBeInstanceOf(MemoryAuthStorage);
 
+    // Even with browser localStorage available the default stays in memory.
     const storage = fakeStorage();
     vi.stubGlobal("window", { localStorage: storage });
-    expect(resolveAuthStorage(null)).toBeInstanceOf(BrowserLocalStorage);
+    expect(resolveAuthStorage(null)).toBeInstanceOf(MemoryAuthStorage);
 
     const explicit = new MemoryAuthStorage();
     expect(resolveAuthStorage(explicit)).toBe(explicit);
+  });
+
+  it("authPersistence: 'local' opts into browser localStorage, explicit authStorage wins", async () => {
+    const backing = fakeStorage();
+    vi.stubGlobal("window", { localStorage: backing });
+    const { fetch } = recorder(({ url }) => (url.endsWith("/auth/sign-up/email") ? json(session()) : json({})));
+
+    const first = createClient({ projectId: "p", apiKey: "pk_test", customFetch: fetch, authPersistence: "local" });
+    await first.signUpWithEmailAndPassword("bob@example.com", "password123");
+    const keys = Object.keys(backing.data);
+    expect(keys.some((k) => k.startsWith("vellum.auth.session.v1:"))).toBe(true);
+
+    // A second client hydrates from the persisted session without a network call.
+    const second = createClient({ projectId: "p", apiKey: "pk_test", customFetch: fetch, authPersistence: "local" });
+    expect(second.currentUser?.id).toBe("usr_1");
+
+    // Without the opt-in nothing is persisted.
+    const fresh = fakeStorage();
+    vi.stubGlobal("window", { localStorage: fresh });
+    const third = createClient({ projectId: "p", apiKey: "pk_test", customFetch: fetch });
+    await third.signUpWithEmailAndPassword("carol@example.com", "password123");
+    expect(Object.keys(fresh.data)).toHaveLength(0);
   });
 
   it("validates stored sessions and drops corrupt entries without logging", () => {

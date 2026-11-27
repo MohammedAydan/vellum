@@ -62,11 +62,15 @@ export interface ClientConfig {
   realtimeUrl?: string;
   getAuthToken?: (() => Promise<string | null> | string | null) | null;
   /**
-   * Session persistence. Default browser storage is scoped by endpoint and project.
-   * Defaults to `BrowserLocalStorage` when
-   * `window.localStorage` is available, otherwise `MemoryAuthStorage`.
+   * Session persistence. Since 0.0.9 sessions are memory-only by default: a
+   * persisted refresh token is readable by any injected script. Pass
+   * `authPersistence: "local"` to keep the session in browser `localStorage`
+   * (scoped by endpoint and project), or supply a custom `authStorage`.
+   * An explicit `authStorage` always wins over `authPersistence`.
    */
   authStorage?: AuthStorage | null;
+  /** Opt-in session persistence. `"local"` stores the session in browser `localStorage`. */
+  authPersistence?: "local";
   /** Silent token refresh (60 s before expiry and on 401). Defaults to `true`. */
   autoRefresh?: boolean;
   customFetch?: typeof globalThis.fetch;
