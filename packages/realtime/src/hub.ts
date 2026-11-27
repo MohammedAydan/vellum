@@ -148,7 +148,12 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     this.jwtSecret = options.jwtSecret ?? "vellum_jwt_secret_v1";
     const ttl = Number(process.env["REALTIME_KEY_RECHECK_TTL_MS"] ?? 3000);
     this.keyRecheckTtlMs = Number.isFinite(ttl) && ttl >= 0 ? ttl : 3000;
+    const sessionTtl = Number(process.env["REALTIME_SESSION_RECHECK_MS"] ?? 5000);
+    this.sessionRecheckMs = Number.isFinite(sessionTtl) && sessionTtl >= 0 ? sessionTtl : 5000;
   }
+
+  /** How often a socket's end-user session is confirmed active, both for inbound frames and before each delivered event. */
+  private readonly sessionRecheckMs: number;
 
   /**
    * Active-key results for the per-event credential recheck, kept for a few seconds so an event stream does
@@ -322,7 +327,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     };
   }
 
-  /** Last time each socket's auth session was confirmed active (re-checked at most once a minute). */
+  /** Last time each socket's auth session was confirmed active (re-checked at most every `sessionRecheckMs`, 5 s by default). */
   private readonly sessionCheckedAt = new WeakMap<ConnectionSession, number>();
 
   private async isSessionStillActive(projectId: string, sid: string, uid: string): Promise<boolean> {
@@ -337,7 +342,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     const uid = session.authContext.uid;
     if (typeof sid !== "string" || !uid || !session.projectId) return null;
     const now = Date.now();
-    if (now - (this.sessionCheckedAt.get(session) ?? 0) < 60_000) return null;
+    if (this.sessionRecheckMs > 0 && now - (this.sessionCheckedAt.get(session) ?? 0) < this.sessionRecheckMs) return null;
     this.sessionCheckedAt.set(session, now);
     if (await this.isSessionStillActive(session.projectId, sid, uid)) return null;
     return new VellumError("UNAUTHENTICATED", "End-user session is no longer active");
@@ -906,6 +911,13 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           code: expiryErr.code,
           message: expiryErr.message,
         });
+        this.closeSession(session);
+        continue;
+      }
+      // A session revoked after connect (sign-out, disabled user) must stop receiving data, not only stop sending.
+      const revokedErr = await this.checkSessionStillActive(session);
+      if (revokedErr) {
+        session.sendFrame({ type: "error", code: revokedErr.code, message: revokedErr.message });
         this.closeSession(session);
         continue;
       }
