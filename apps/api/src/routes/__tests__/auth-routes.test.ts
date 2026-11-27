@@ -135,7 +135,8 @@ describe("@vellum/api - End-User & Admin Auth REST tiers", () => {
     const answer = await platform.fetch(
       jsonRequest(
         `${base}/mfa/challenge`,
-        { mfaTicket: challenged.mfaTicket, code },
+        // The enrollment code is single-use (S9); challenge with the next step's code.
+        { mfaTicket: challenged.mfaTicket, code: generateTotpCode(enrolled.secret, Date.now() + 30_000) },
         { "x-vellum-api-key": apiKey }
       )
     );

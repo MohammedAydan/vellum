@@ -134,6 +134,8 @@ function subjectFor(tokenType: string): string {
   switch (tokenType) {
     case "email_verification":
       return "Verify your Vellum email address";
+    case "email_claim":
+      return "Confirm this email address for your Vellum account";
     case "password_reset":
       return "Reset your Vellum password";
     case "magic_link":

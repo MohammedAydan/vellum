@@ -27,6 +27,7 @@ import {
   verifyTotpCode,
 } from "@vellum/auth";
 import {
+  EmailClaimConfirmRequestSchema,
   EmailVerifyConfirmRequestSchema,
   EmailVerifyRequestSchema,
   MfaChallengeRequestSchema,
@@ -92,6 +93,7 @@ import {
 
 const TOKEN_TYPE_PASSWORD_RESET = "password_reset";
 const TOKEN_TYPE_EMAIL_VERIFICATION = "email_verification";
+const TOKEN_TYPE_EMAIL_CLAIM = "email_claim";
 const TOKEN_TYPE_MFA_CHALLENGE = "mfa_challenge";
 const TOKEN_TYPE_OAUTH_EXCHANGE = "oauth_exchange";
 /** Redirect-less mobile/desktop sign-in: the app polls with its PKCE verifier instead of receiving a deep link. */
@@ -1284,7 +1286,28 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       }
     }
     if (body.email !== undefined) {
-      const email = body.email;
+      const email = body.email.trim().toLowerCase();
+      if (current.email === null && !current.passwordHash) {
+        // Anonymous email claim (S8): the address is never written to the
+        // account up front. A claim token bound to (email, token) goes to the
+        // mailbox; the address attaches only when the mailbox owner confirms
+        // at /email/claim/confirm. The response is identical whether or not
+        // the address already belongs to another account, so this endpoint
+        // cannot be used to enumerate registered emails (no ALREADY_EXISTS
+        // oracle). When the address is taken, confirmation is a no-op success
+        // and the existing account keeps it (same non-destructive semantics
+        // as the provider sign-in path).
+        const token = newOpaqueToken();
+        const expiresAt = new Date(Date.now() + ACTION_TOKEN_TTL_MS).toISOString();
+        await storage.saveAuthToken(tenant.ctx, {
+          userId: current.id,
+          tokenHash: sha256(`email-claim:${email}:${token}`),
+          tokenType: TOKEN_TYPE_EMAIL_CLAIM,
+          expiresAt,
+        });
+        const delivery = await deliverToken(tenant, config, { to: email, token, tokenType: TOKEN_TYPE_EMAIL_CLAIM, expiresAt });
+        return c.json({ user: publicUser(current), emailClaim: "pending_verification", ...delivery });
+      }
       const collision = await storage.getAuthUserByEmail(tenant.ctx, email);
       if (collision && collision.id !== current.id) {
         throw new VellumError("ALREADY_EXISTS", "An end-user with this email already exists");
@@ -1489,6 +1512,31 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const body = parseOrThrow(EmailVerifyConfirmRequestSchema, await c.req.json());
     const record = await storage.consumeAuthToken(tenant.ctx, sha256(body.token), TOKEN_TYPE_EMAIL_VERIFICATION);
     const user = await storage.updateAuthUser(tenant.ctx, record.userId, { emailVerified: true });
+    await projectIfEnabled(tenant, config, user);
+    return c.json({ success: true, user: publicUser(user) });
+  });
+
+  // Anonymous-account email claim confirmation (S8). The token only verifies
+  // for the exact address it was issued for. When the address already belongs
+  // to another account (or was claimed in the meantime), confirmation is a
+  // no-op success: the existing account keeps the address and the caller
+  // learns nothing about it.
+  routes.post("/email/claim/confirm", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    const config = await ensureAuthConfig(platform, tenant.projectId);
+    const body = parseOrThrow(EmailClaimConfirmRequestSchema, await c.req.json());
+    const email = body.email.trim().toLowerCase();
+    const record = await storage.consumeAuthToken(
+      tenant.ctx,
+      sha256(`email-claim:${email}:${body.token}`),
+      TOKEN_TYPE_EMAIL_CLAIM
+    );
+    const collision = await storage.getAuthUserByEmail(tenant.ctx, email);
+    if (collision && collision.id !== record.userId) {
+      return c.json({ success: true });
+    }
+    const user = await storage.updateAuthUser(tenant.ctx, record.userId, { email, emailVerified: true });
     await projectIfEnabled(tenant, config, user);
     return c.json({ success: true, user: publicUser(user) });
   });

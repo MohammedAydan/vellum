@@ -146,6 +146,13 @@ export const EmailVerifyConfirmRequestSchema = z.object({
 });
 export type EmailVerifyConfirmRequest = z.infer<typeof EmailVerifyConfirmRequestSchema>;
 
+/** Anonymous-account email claim: the token binds the exact address it was issued for. */
+export const EmailClaimConfirmRequestSchema = z.object({
+  token: OpaqueTokenSchema,
+  email: EmailSchema,
+});
+export type EmailClaimConfirmRequest = z.infer<typeof EmailClaimConfirmRequestSchema>;
+
 /* -------------------------------------------------------------------------- */
 /* End-user: MFA                                                               */
 /* -------------------------------------------------------------------------- */
