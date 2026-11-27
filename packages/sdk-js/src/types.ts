@@ -125,6 +125,38 @@ export interface ClientConfig {
    * bearer tokens — only the one-click URL and the parsed suggestion payload.
    */
   onIndexSuggestion?: (event: IndexSuggestionEvent) => void;
+  /**
+   * Opt-in persistent write outbox (offline writes). When a mutating request
+   * fails transiently (network down, timeout, 429/5xx after retries), the op
+   * is persisted with a stable Idempotency-Key and replayed in order once the
+   * connection recovers; the original promise rejects with
+   * `code: "OFFLINE_QUEUED"` and `queued: true` so the caller knows the write
+   * has NOT landed yet. Storage: IndexedDB, localStorage fallback, in-memory
+   * last resort (edge runtimes). A cross-tab lock elects a single flushing
+   * tab; permanent 4xx rejections go to `onDeadLetter` and are dropped.
+   */
+  offlineWrites?: {
+    /** Set false to keep the outbox constructed but never enqueue. Defaults to true when the object is present. */
+    enabled?: boolean;
+    storage?: "auto" | "indexeddb" | "localstorage" | "memory";
+    /** Hard cap on queued ops. Defaults to 500. */
+    maxOps?: number;
+    /** Permanent-failure (4xx) sink; the op is dropped after this runs. */
+    onDeadLetter?: (op: StoredWriteOp, error: unknown) => void;
+    /** Flush retry interval in ms. Defaults to 5000. */
+    flushIntervalMs?: number;
+  };
+}
+
+/** A persisted offline write op (see the `offlineWrites` client option). */
+export interface StoredWriteOp {
+  id: string;
+  method: string;
+  relativePath: string;
+  body: unknown;
+  extraHeaders: Record<string, string>;
+  enqueuedAt: number;
+  attempts: number;
 }
 
 /** Alias of `ClientConfig` for ergonomic Firebase/Supabase-style imports. */

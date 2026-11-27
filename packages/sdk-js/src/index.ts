@@ -18,6 +18,7 @@ export { completeOAuthPopup, confirmationCode, type OAuthPopupOptions, type OAut
 export * from "./realtime/realtime-transport.js";
 export * from "./realtime/sse-socket.js";
 export * from "./realtime/fallback-socket.js";
+export * from "./offline/outbox.js";
 export * from "./references/snapshots.js";
 export * from "./references/document-ref.js";
 export * from "./references/query-builder.js";
