@@ -36,6 +36,7 @@ import {
   PasswordConfirmRequestSchema,
   PasswordResetRequestSchema,
   SignInAnonymousRequestSchema,
+  UpgradeAnonymousRequestSchema,
   SignInEmailRequestSchema,
   SignInProviderRequestSchema,
   SignOutRequestSchema,
@@ -90,6 +91,7 @@ import {
   sha256,
   type AuthTenant,
 } from "./auth-shared.js";
+import { resolveEndUserAuth } from "../middleware/tenant-auth.js";
 
 const TOKEN_TYPE_PASSWORD_RESET = "password_reset";
 const TOKEN_TYPE_EMAIL_VERIFICATION = "email_verification";
@@ -652,6 +654,59 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
       })
     );
     return c.json(await issueSession(tenant, user, c), 201);
+  });
+
+  // D3: one-call anonymous -> email/password upgrade. The uid and every
+  // document, custom claim and metadata field survive; only the OTHER
+  // sessions are revoked (the session performing the upgrade stays valid).
+  // Email collision answers ALREADY_EXISTS exactly like /sign-up/email, so
+  // this endpoint leaks nothing the sign-up endpoint does not already leak.
+  routes.post("/upgrade-anonymous", async (c) => {
+    const tenant = await resolveAuthTenant(c, platform);
+    await requireProjectApiKey(c, platform, tenant);
+    const config = await ensureAuthConfig(platform, tenant.projectId);
+    if (!config.enableEmailPassword) {
+      throw new VellumError("PERMISSION_DENIED", "Email/password sign-in is disabled for this project");
+    }
+    const current = await requireEndUser(c, platform, tenant);
+    if (!current.isAnonymous) {
+      throw new VellumError(
+        "FAILED_PRECONDITION",
+        "Only anonymous accounts can be upgraded with this endpoint"
+      );
+    }
+    const body = parseOrThrow(UpgradeAnonymousRequestSchema, await c.req.json());
+    assertPasswordPolicy(body.password, config);
+    const email = body.email.trim().toLowerCase();
+    const collision = await storage.getAuthUserByEmail(tenant.ctx, email);
+    if (collision && collision.id !== current.id) {
+      throw new VellumError("ALREADY_EXISTS", "An end-user with this email already exists");
+    }
+    const now = new Date().toISOString();
+    const updated = await storage.updateAuthUser(tenant.ctx, current.id, {
+      email,
+      emailVerified: false,
+      isAnonymous: false,
+      passwordHash: await hashPassword(body.password),
+      lastSignInAt: now,
+    });
+    await storage.upsertAuthIdentity(tenant.ctx, {
+      userId: current.id,
+      provider: "password",
+      providerUserId: current.id,
+      identityData: { email },
+      lastSignInAt: now,
+    });
+    // Revoke every session except the one performing the upgrade.
+    const authContext = await resolveEndUserAuth(c, platform);
+    const currentSid = typeof authContext.token?.["sid"] === "string" ? authContext.token["sid"] : null;
+    for (const session of await storage.listUserSessions(tenant.ctx, current.id)) {
+      if (session.id !== currentSid && !session.revoked) {
+        await storage.revokeAuthSession(tenant.ctx, session.id, "anonymous_upgrade");
+      }
+    }
+    await projectIfEnabled(tenant, config, updated);
+    return c.json({ user: publicUser(updated) });
   });
 
   routes.post("/sign-in/provider", async (c) => {

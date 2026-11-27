@@ -1354,6 +1354,11 @@ export class VellumClient implements VellumClientInterface {
     return this.auth.signInAnonymously(input);
   }
 
+  /** D3: upgrade the anonymous account to email/password (uid preserved). */
+  public upgradeAnonymousWithEmailAndPassword(email: string, password: string): Promise<VellumAuthUser> {
+    return this.auth.upgradeAnonymousWithEmailAndPassword(email, password);
+  }
+
   public signInWithOAuth(input: SignInWithOAuthInput): Promise<AuthState>;
   public signInWithOAuth(provider: string, payload?: SignInOAuthPayload): Promise<AuthState>;
   public signInWithOAuth(

@@ -236,10 +236,17 @@ document engine reads the project's persisted rules from the control plane
 field for forward compatibility. A delete with no configured rules simply tombstones the
 target document as in v1.
 
-### 2.1 Managing rules — `GET/PUT /v1/projects/:projectId/relation-rules`
+### 2.1 Managing rules — console-only in 0.0.9
 
 Rules are customer data, persisted in `control_db.project_relation_rules` (migration
-0012) and managed through the control plane:
+0012). In 0.0.9 the management surface is **the console (dashboard) only**: the
+`GET/PUT /v1/projects/:projectId/relation-rules` routes require a console realm
+session and reject project API keys (`pk_`/`sk_`). There is deliberately no SDK or
+secret-key surface yet — see `docs/decisions/ADR-007-relation-rules-sdk-surface.md`
+for the planned `sk_`/SDK design. The engine enforces the configured actions on every
+delete regardless of how the rules were edited.
+
+For completeness, the console routes behave as follows:
 
 - `GET /v1/projects/:projectId/relation-rules` returns `{ projectId, version, rules }`.
 - `PUT /v1/projects/:projectId/relation-rules` replaces the full rule set atomically:

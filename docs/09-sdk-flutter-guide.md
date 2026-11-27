@@ -346,6 +346,14 @@ switch (res) {
 
 // Revoke all active sessions on every device
 await client.auth.signOut(allSessions: true);
+
+// D3: upgrade an anonymous account to email/password in one call.
+// The uid and all data survive; every other session is revoked.
+final upgraded = await client.auth.upgradeAnonymousWithEmailAndPassword(
+  email: 'ada@example.com',
+  password: 'secret-password',
+);
+print(upgraded.isAnonymous); // false
 ```
 
 ---

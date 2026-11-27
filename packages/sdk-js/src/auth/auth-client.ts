@@ -453,6 +453,21 @@ export class VellumAuthClient {
     return sanitizeAndClone(session);
   }
 
+  /**
+   * D3: one-call anonymous -> email/password upgrade. The uid, custom claims
+   * and metadata survive; every OTHER session of the account is revoked while
+   * this one keeps working. Rejects with FAILED_PRECONDITION when the current
+   * account is not anonymous and ALREADY_EXISTS when the email is taken.
+   */
+  public async upgradeAnonymousWithEmailAndPassword(email: string, password: string): Promise<VellumAuthUser> {
+    const epoch = this.state.sessionEpoch;
+    const payload = await this.request<Record<string, unknown>>("POST", "/auth/upgrade-anonymous", { email, password });
+    this.assertSession(epoch);
+    const user = parseAuthUser(payload["user"]);
+    if (this.state.currentUserValue) this.commitUser({ ...this.state.currentUserValue, ...user }, true, false);
+    return sanitizeAndClone(user);
+  }
+
   public signInWithOAuth(input: SignInWithOAuthInput): Promise<AuthState>;
   public signInWithOAuth(provider: string, payload?: SignInOAuthPayload): Promise<AuthState>;
   public async signInWithOAuth(

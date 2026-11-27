@@ -425,6 +425,7 @@ Wire semantics: `docs/REALTIME-INCLUDES-CONTRACT.md`.
 All methods live on `db.auth` and are mirrored directly on `db`:
 
 - **Session creation**: `signUpWithEmailAndPassword`, `signInWithEmailAndPassword` (returns `AuthState | MfaRequiredResult`), `signInAnonymously`, `signInWithOAuth`
+- **Anonymous upgrade (D3)**: `upgradeAnonymousWithEmailAndPassword(email, password)` converts the signed-in anonymous account in one call; the uid and all data survive, every other session is revoked, and the promise resolves to the updated `VellumAuthUser`
 - **MFA**: `enrollTotpMfa`, `confirmTotpMfa`, `verifyMfaChallenge`
 - **Account recovery & verification**: `sendPasswordResetEmail`, `confirmPasswordReset`, `sendEmailVerification`, `confirmEmailVerification`
 - **Profile & tokens**: `getUser`, `updateProfile`, `getIdToken(forceRefresh?)`, `currentUser`, `onAuthStateChanged(cb)` (fires once immediately with the current user or `null`), `signOut({ allSessions? })`

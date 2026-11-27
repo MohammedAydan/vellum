@@ -2,6 +2,64 @@
 
 ## Unreleased
 
+## 0.0.9 (beta)
+
+Remediation release across security, realtime, both SDKs and docs. The API, JS SDK and Flutter SDK ship together; the JS SDK contains one intentional breaking change (P0-4). The version constant bump lands with the final remediation track; this section maps every finding ID to what shipped, where, and how it was verified.
+
+### Upgrade notes (breaking / behavior changes)
+
+- **P0-4 (breaking, sdk-js):** `db.doc(path).onSnapshot` now delivers a `DocumentSnapshot` (`exists`, `data()`, `version`, timestamps, `included`, `redactedRefs`) instead of the query-style realtime snapshot. Missing and deleted documents deliver `exists === false` with `data() === null`, and identical `(exists, version)` states are delivered once. Query/collection listeners are unchanged. Migration: read `snap.exists` / `snap.data()` instead of iterating `snap.changes`; a delete arrives as `exists === false`, not a `removed` change entry. Flutter already used `DocumentSnapshot` streams and gains the same missing-doc and dedupe behavior.
+- **S7 (behavior change, sdk-js):** auth sessions are memory-only by default everywhere; persistence is opt-in via `authPersistence: "local"` (or an explicit `authStorage`). Upgrading without opting in signs users out on reload once.
+- Control-plane migration **0019** (sign-up per-IP limit, dev key flag) and data-plane migration **0016** (`realtime_outbox.xid8`) run automatically on deploy. Control and data planes must stay separate physical databases (one migrations directory per plane, shared `schema_migrations` table).
+
+### Track 1 - security & backend (PR #148)
+
+| ID | What shipped | Files (entry points) | Verified by |
+| :-- | :-- | :-- | :-- |
+| S3 / P0-1 | Payload-budget 429s never feed the IP ban; only real `__proto__`/constructor-as-key attacks and SSRF count; `payload_limits` category; raw DSL `source` accepted by simulate/validate | `packages/security/src/fortress.ts`, `packages/api-contract/src/schemas/v2.ts` | `payload-limits-threat.test.ts`, `rules-simulate-regression.test.ts` (25 compile+simulate loops of a >2,200-key ruleset, 10 oversize payloads without a block, 3 real `__proto__` still block) |
+| S1 / S2 / P0-5 | `/health/ready` public projection only (no filenames, checksums, SQL, error codes); degraded `/health` answers 503 when a plane is down; `/health/live` never touches the DB | `apps/api/src/routes/health.ts` | `health-hardening.test.ts` |
+| S6 | DB connect-class errors map to JSON 503 + `Retry-After` + `X-Request-Id`; readiness cache 20s/5s with a single probe client; lazy Vercel init; pool connect timeouts | `apps/api/src/error-handler.ts`, `api/server/index.js`, `packages/storage/src/pg-store.ts` | `health-hardening.test.ts` |
+| P0-3 | Three-valued missing-document reads: 404 only when absent AND authenticated AND list passes AND the rule passes with optimistic `resource.*`; everything else 403. `request.data` documented as the final merged state | `packages/authorization/src/rules-ast.ts`, `packages/document-engine/src/engine.ts` | `missing-doc-read-semantics.test.ts` (8 tests) |
+| P1-1 | Rules compiler warns on wildcard overlap with a stricter explicit sibling | `packages/authorization/src/rules-dsl.ts` | `rules-wildcard-overlap.test.ts` (Rules Studio surfacing ships in Track 5) |
+| P1-3 | Per-project sign-up per-IP limit (default 30, bounds 1-10,000); localhost CORS dev toggle for dev-flagged `pk_` keys with a clear preflight diagnostic | `apps/api/src/app.ts`, control-plane migration 0019 | apps/api suite |
+| S8 | Anonymous email claim via mailbox confirmation (`pendingEmail`, single-use `email_claim` token, constant response shape, no `ALREADY_EXISTS` oracle) | `apps/api/src/routes/auth-enduser.ts` | `auth-email-claim.test.ts` |
+| S9 | Single-use TOTP codes on `/mfa/verify` (end-user and console) | `apps/api/src/routes/auth-enduser.ts`, `apps/api/src/routes/mfa.ts` | `console-mfa-replay.test.ts` |
+| S10 | Per-IP concurrent realtime stream cap (SSE parity with WS, 429 + `Retry-After`) | `apps/api/src/` realtime routes | apps/api suite |
+| S7 | sdk-js sessions memory-only by default, opt-in persistence | `packages/sdk-js/src/auth/auth-storage.ts` | `auth-client.test.ts` |
+| D1 | Per-request rules-lookup budget (memoized once per request, fail-closed cap 4, audit + telemetry) | `packages/document-engine/` | document-engine suite (168 tests) |
+
+### Track 2 - realtime & performance (PR #149)
+
+| ID | What shipped | Files | Verified by |
+| :-- | :-- | :-- | :-- |
+| P0-2 | Commit-order-safe realtime delivery: `xid8` outbox column, delivery strictly below `pg_snapshot_xmin`, bootstrap from `max(seq_id)` in the same transaction as `initial_sync`, resume via the safe watermark; fan-out skips sessions with no candidate subs, batched revocation check, bounded concurrency 32 with per-subscription order | `packages/realtime/`, data migration 0016 | late-commit, large-history bootstrap, 200x connect-write race (WS+SSE), forced-disconnect 0-miss/0-dup, 1,000-sub fan-out tests |
+| P1-4 | Pool/lock policy: `lock_timeout` 1500ms on tenant setups, `55P03` -> `ABORTED_CONFLICT` + `retryAfterMs=50`, NOWAIT OCC locks on hot documents, LISTEN-healthy poll back-off | `packages/database-control/`, `apps/api/src/` | Benchmarks on a throwaway PostgreSQL 18.7 (60k docs, 50 workers x 20 increments on one hot document): WAIT mode p95 1447ms / wall 5.6s vs NOWAIT p95 232ms / wall 1.5s; outbox safe-watermark at 60k rows p95 19.6ms, capped 500-row page fetch p95 8ms (`tests/load/track2-realtime-bench.ts`) |
+
+### Track 3 - SDKs (PR #150)
+
+| ID | What shipped | Files | Verified by |
+| :-- | :-- | :-- | :-- |
+| P0-4 | `doc.onSnapshot` -> `DocumentSnapshot` (breaking, see upgrade notes); missing/deleted -> `exists: false`; `(exists, version)` dedupe | `packages/sdk-js/src/references/document-ref.ts`, Flutter `references.dart` | sdk-js suite 231 tests; Flutter tests via CI Dart leg (no local toolchain) |
+| P1-5 | WS->SSE fallback stall fix in both SDKs (fallback timer cleared on the first delivered frame, not on open); `client.onIndexSuggestion(listener)` returns an unsubscribe function; optional persistent offline write outbox for sdk-js (IndexedDB with localStorage fallback, ordered flush, stable `Idempotency-Key` from the first attempt, cross-tab leader lock, dead-letter callback on permanent 4xx) | `packages/sdk-js/src/realtime/fallback-socket.ts`, `packages/sdk-js/src/offline/outbox.ts`, Flutter `sse_channel.dart` | `offline-outbox.test.ts`, fallback stall tests both SDKs |
+| P1-6 | Flutter `connectionState` / `connectionStateStream` with transport kind (`websocket`/`sse`); deduplicated initial emit and missing-doc `exists: false` in both SDKs | Flutter `vellum_client.dart`, `realtime_manager.dart` | Flutter connection-state/dedupe tests via CI Dart leg |
+| - | Session-changed fix: identity switch A->B kills live subscriptions (subject comparison; subjectless refreshed token treated as refresh); one transport error per subscription per outage instead of one per reconnect attempt; `Retry-After` floor 250ms; 5xx/4xx classification with `retryable`; `listIdentities()` canonical + deprecated alias in both SDKs; `disableMfa(code | { code })` | sdk-js `vellum-client.ts`, `http-transport.ts`; Flutter `auth_client.dart` | sdk-js suite, Flutter tests via CI |
+
+### Track 4 - auth feature & docs (this PR)
+
+| ID | What shipped | Files | Verified by |
+| :-- | :-- | :-- | :-- |
+| D3 | `upgradeAnonymousWithEmailAndPassword` end to end: `POST /auth/upgrade-anonymous` (uid preserved, password identity linked, other sessions revoked with reason `anonymous_upgrade`, 412 non-anonymous, 409 email taken), `auth.upgradeAnonymousWithEmailAndPassword(email, password)` in sdk-js, `client.auth.upgradeAnonymousWithEmailAndPassword({email, password})` in Flutter, docs in EN+AR | `apps/api/src/routes/auth-enduser.ts`, `packages/sdk-js`, `sdks/flutter` | `auth-upgrade-anonymous.test.ts` (server: upgrade flow, other-session revocation, collision/non-anonymous/unauthenticated rejections), SDK unit tests |
+| D2 | Relation-rules management stays console-only in 0.0.9; docs/12 states it plainly; ADR-007 records the planned scope-gated `sk_`/SDK surface | `docs/12-relationships-and-advanced-queries.md`, `docs/decisions/ADR-007-relation-rules-sdk-surface.md` | docs pages test |
+| D4 | llms.txt / llms-full.txt / per-page Markdown are generated from the pages at build; a drift-guard test re-renders every page in both languages through the generator pipeline and asserts index coverage | `apps/docs/src/__tests__/llms-drift.test.ts` | docs test leg |
+
+### Reviewed, no code change
+
+- **P1-2** (`count()`/`aggregate()` under member-scoped rules): status confirmed in Track 5's final report - the current fail-closed 403 is deliberate (pushing per-document rule predicates into SQL aggregation would re-open the oracle/timing side channel on forbidden fields). Tracked for a scoped design; see the final Track 5 notes.
+
+### Track 5 (lands in the final 0.0.9 PR)
+
+Wildcard index templates in full (advisor canonicalization, template-aware coverage, backfill builder, cache keys, query compiler, concrete-index migration, ADR-006 rewritten as the shipped design), WS per-IP cap behind the Vercel proxy (`x-forwarded-for`), Rules Studio wildcard-overlap surfacing, console UI gaps, and the 0.0.9 version bump.
+
 ## 0.0.8 (post-release backend patch)
 
 Backend and console fixes shipped on top of the published 0.0.8 release. No SDK or API-contract changes, so the published 0.0.8 packages (npm, pub.dev) stay valid; the backend deploy carries these fixes.

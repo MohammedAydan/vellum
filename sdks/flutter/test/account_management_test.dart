@@ -68,6 +68,11 @@ void main() {
             'hasPassword': false,
           };
         }
+        if (url.endsWith('/auth/upgrade-anonymous') && method == 'POST') {
+          final session = _session();
+          (session['user'] as Map<String, dynamic>)['isAnonymous'] = false;
+          return <String, dynamic>{'user': session['user']};
+        }
         if (method == 'DELETE') return <String, dynamic>{'success': true};
         return _session();
       },
@@ -89,6 +94,24 @@ void main() {
     });
     expect(user.id, 'usr_1');
     expect(client.auth.currentUser?.id, 'usr_1');
+  });
+
+  test('upgradeAnonymousWithEmailAndPassword posts credentials and updates the user (D3)', () async {
+    await client.auth.signInAnonymously();
+    final user = await client.auth.upgradeAnonymousWithEmailAndPassword(
+      email: 'up@example.com',
+      password: 'new-password-2',
+    );
+    final call = calls.last;
+    expect(call['method'], 'POST');
+    expect(call['url'], endsWith('/auth/upgrade-anonymous'));
+    expect(call['body'], <String, Object?>{
+      'email': 'up@example.com',
+      'password': 'new-password-2',
+    });
+    expect(user.id, 'usr_1');
+    expect(user.isAnonymous, isFalse);
+    expect(client.auth.currentUser?.isAnonymous, isFalse);
   });
 
   test('deleteAccount sends DELETE /auth/user and signs out locally', () async {
