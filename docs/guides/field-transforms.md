@@ -63,6 +63,8 @@ Transforms are accepted in write paths where the engine validates data with fiel
 
 They are **not** valid in `create` payloads or in query values. A sentinel appearing where transforms are not allowed raises `INVALID_ARGUMENT`.
 
+A transform must be a field value, not an array element. `{ events: [fieldOp.serverTimestamp()] }` is rejected with `INVALID_ARGUMENT` ("Field operation ($op) is not permitted in this context"). To record a time inside a list, set a separate field with `serverTimestamp()`, or use `arrayUnion` with a client-side `Date`.
+
 ## Atomicity and ordering
 
 - All transforms in a single write are applied inside the same database transaction, using one shared transaction timestamp for `serverTimestamp`.
