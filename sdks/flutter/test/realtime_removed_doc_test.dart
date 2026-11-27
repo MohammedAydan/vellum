@@ -71,6 +71,7 @@ void main() {
   Future<
       ({
         List<bool> seen,
+        String subId,
         Future<void> Function(Map<String, Object?>) send,
         Future<void> Function() close,
       })> docHarness({bool resolveCache = false}) async {
@@ -101,9 +102,10 @@ void main() {
     final sub = client.doc('chats/c1').snapshots().listen((snap) {
       seen.add(snap.exists);
     });
-    await ready.future.timeout(const Duration(seconds: 3));
+    final subId = await ready.future.timeout(const Duration(seconds: 3));
     return (
       seen: seen,
+      subId: subId,
       send: (Map<String, Object?> f) async {
         sockets.first.add(jsonEncode(f));
       },
@@ -122,7 +124,7 @@ void main() {
   test('a missing document reports exists == false once', () async {
     final h = await docHarness();
     try {
-      await h.send({'type': 'initial_sync', 'subId': 'ignored', 'seqId': 1, 'documents': []});
+      await h.send({'type': 'initial_sync', 'subId': h.subId, 'seqId': 1, 'documents': []});
       await Future<void>.delayed(const Duration(milliseconds: 500));
       expect(h.seen, [false]);
     } finally {
@@ -139,8 +141,8 @@ void main() {
       'data': {'n': 1}
     };
     try {
-      await h.send({'type': 'initial_sync', 'subId': 'x', 'seqId': 1, 'documents': [doc]});
-      await h.send({'type': 'mutation', 'subId': 'x', 'seqId': 2, 'operation': 'update', 'document': doc});
+      await h.send({'type': 'initial_sync', 'subId': h.subId, 'seqId': 1, 'documents': [doc]});
+      await h.send({'type': 'mutation', 'subId': h.subId, 'seqId': 2, 'operation': 'update', 'document': doc});
       await Future<void>.delayed(const Duration(milliseconds: 500));
       expect(h.seen, [true]);
     } finally {
@@ -175,10 +177,10 @@ void main() {
     try {
       final s2 = client.doc('chats/c1').snapshots().listen((_) {});
       await Future<void>.delayed(const Duration(milliseconds: 800));
-      await s2.cancel();
       expect(states, contains(VellumRealtimeConnectionState.connected));
       expect(client.connectionState.state,
           VellumRealtimeConnectionState.connected);
+      await s2.cancel();
     } finally {
       await sub.cancel();
       await listener.cancel();
