@@ -836,7 +836,7 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
 
       if (docRow.deletedAt === null) {
         const sortKey = encodeCompositeSortKey(docRow, idx.fields);
-        const entryKey = `${sortKey.toString("hex")}:${docRow.documentId}`;
+        const entryKey = `${docRow.collectionPath}:${sortKey.toString("hex")}:${docRow.documentId}`;
         entriesMap.set(entryKey, {
           indexId: idx.id,
           projectId: ctx.projectId,
@@ -987,7 +987,7 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
           const entriesMap = this.indexEntries.get(idx.id) ?? new Map<string, CompositeIndexEntry>();
           for (const doc of docs) {
             const sortKey = encodeCompositeSortKey(doc, idx.fields);
-            const entryKey = `${sortKey.toString("hex")}:${doc.documentId}`;
+            const entryKey = `${doc.collectionPath}:${sortKey.toString("hex")}:${doc.documentId}`;
             entriesMap.set(entryKey, {
               indexId: idx.id,
               projectId: idx.projectId,

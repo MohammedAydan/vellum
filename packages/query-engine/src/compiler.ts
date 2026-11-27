@@ -946,7 +946,7 @@ export function compileQueryToParameterizedSql({
       `SELECT ${selectList}, encode(ie.sort_key, 'hex') AS "sortKeyHex" ` +
       `FROM document_index_entries ie ` +
       `JOIN documents d ON d.project_id = ie.project_id AND d.path = ie.path ` +
-      `WHERE ie.index_id = ${idxParam}::uuid AND ie.project_id = $1::uuid AND ${predicates.join(" AND ")} ` +
+      `WHERE ie.index_id = ${idxParam}::uuid AND ie.project_id = $1::uuid AND ie.collection_path = $2 AND ${predicates.join(" AND ")} ` +
       `ORDER BY ie.sort_key ASC, ie.document_id ASC LIMIT ${limitParam};`;
   } else {
     sql =

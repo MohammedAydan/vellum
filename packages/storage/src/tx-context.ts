@@ -438,7 +438,7 @@ export const SQL_INSERT_INDEX_ENTRIES = `INSERT INTO document_index_entries (
         u.collection_path, u.sort_key, u.document_id, u.path
    FROM unnest($2::uuid[], $3::text[], $4::bytea[], $5::text[], $6::text[])
      AS u(index_id, collection_path, sort_key, document_id, path)
- ON CONFLICT (index_id, sort_key, document_id) DO NOTHING`;
+ ON CONFLICT (index_id, collection_path, sort_key, document_id) DO NOTHING`;
 
 export const SQL_INSERT_OUTBOX = `INSERT INTO realtime_outbox (
    project_id, collection_path, path, document_id,
