@@ -401,3 +401,83 @@ describe("@vellum/core index advisor", () => {
     ).toBeNull();
   });
 });
+
+describe("@vellum/core index advisor wildcard templates (P1-3)", () => {
+  const nestedQuery: IndexAdvisorQuery = {
+    collectionPath: "chats/chat_123/messages",
+    where: [{ field: "senderId", op: "==" }],
+    orderBy: [{ field: "createdAt", dir: "desc" }],
+  };
+
+  it("emits the wildcard template path with the concrete path as example metadata", () => {
+    const result = analyzeQueryIndexCoverage(nestedQuery, [], OPTIONS);
+    expect(result.covered).toBe(false);
+    const payload = decodeSuggestPayload(result.suggestPayload!);
+    expect(payload).not.toBeNull();
+    expect(payload!.collectionPath).toBe("chats/*/messages");
+    expect(payload!.exampleCollectionPath).toBe("chats/chat_123/messages");
+    expect(result.dashboardUrl).toContain("suggest=");
+  });
+
+  it("fingerprints on the template, so two instances of the same subcollection dedupe", () => {
+    const a = analyzeQueryIndexCoverage(nestedQuery, [], OPTIONS);
+    const b = analyzeQueryIndexCoverage(
+      { ...nestedQuery, collectionPath: "chats/chat_999/messages" },
+      [],
+      OPTIONS
+    );
+    expect(a.fingerprint).toBe(b.fingerprint);
+  });
+
+  it("does not add exampleCollectionPath for root collections", () => {
+    const result = analyzeQueryIndexCoverage(
+      { collectionPath: "posts", where: [{ field: "a", op: "==" }, { field: "b", op: "==" }], orderBy: [] },
+      [],
+      OPTIONS
+    );
+    const payload = decodeSuggestPayload(result.suggestPayload!);
+    expect(payload!.collectionPath).toBe("posts");
+    expect(payload!.exampleCollectionPath).toBeUndefined();
+  });
+
+  it("treats a ready template index as covering a concrete query path", () => {
+    const result = analyzeQueryIndexCoverage(nestedQuery, [
+      {
+        collectionPath: "chats/*/messages",
+        fields: [
+          { path: "senderId", dir: "asc" },
+          { path: "createdAt", dir: "desc" },
+        ],
+        status: "ready",
+      },
+    ], OPTIONS);
+    expect(result.covered).toBe(true);
+    expect(result.suggestPayload).toBeUndefined();
+  });
+
+  it("does not let a template cover a different literal segment or depth", () => {
+    const base = {
+      fields: [
+        { path: "senderId", dir: "asc" as const },
+        { path: "createdAt", dir: "desc" as const },
+      ],
+      status: "ready",
+    };
+    expect(analyzeQueryIndexCoverage(nestedQuery, [{ ...base, collectionPath: "rooms/*/messages" }], OPTIONS).covered).toBe(false);
+    expect(analyzeQueryIndexCoverage(nestedQuery, [{ ...base, collectionPath: "chats/*/messages/*" }], OPTIONS).covered).toBe(false);
+  });
+
+  it("keeps exact concrete coverage working", () => {
+    const result = analyzeQueryIndexCoverage(nestedQuery, [
+      {
+        collectionPath: "chats/chat_123/messages",
+        fields: [
+          { path: "senderId", dir: "asc" },
+          { path: "createdAt", dir: "desc" },
+        ],
+        status: "ready",
+      },
+    ], OPTIONS);
+    expect(result.covered).toBe(true);
+  });
+});

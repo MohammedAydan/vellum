@@ -2108,7 +2108,7 @@ export class DocumentEngine implements DocumentEnginePort {
           where: request.where ?? [],
           or: request.or ?? [],
           orderBy: [{ field: "documentId", dir: "asc" }],
-          limit: Math.min(1000, remaining),
+          limit: Math.min(SYSTEM_LIMITS.MAX_QUERY_LIMIT, remaining),
           startAfter: cursor,
         },
       });

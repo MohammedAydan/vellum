@@ -9,6 +9,7 @@ import {
   constantTimeEqual,
   createCorsOriginValidator,
   extractClientIp,
+  extractClientIpFromHeaders,
   mapWithConcurrency,
   normalizeStrictOrigin,
   parseAllowedOrigins,
@@ -287,5 +288,64 @@ describe("@vellum/api - production security, reliability & scale hardening", () 
       expect(results).toEqual([2, 4, 6, 8, 10, 12, 14, 16]);
       expect(peak).toBeLessThanOrEqual(3);
     });
+  });
+});
+
+describe("extractClientIpFromHeaders (WebSocket upgrade path, S10)", () => {
+  const originalHops = process.env["TRUST_PROXY_HOPS"];
+  const originalVercel = process.env["VERCEL"];
+  afterEach(() => {
+    if (originalHops === undefined) delete process.env["TRUST_PROXY_HOPS"];
+    else process.env["TRUST_PROXY_HOPS"] = originalHops;
+    if (originalVercel === undefined) delete process.env["VERCEL"];
+    else process.env["VERCEL"] = originalVercel;
+  });
+
+  const lookup =
+    (headers: Record<string, string>) =>
+    (name: string): string | undefined =>
+      headers[name];
+
+  it("uses the socket peer when no proxy hops are trusted", () => {
+    process.env["TRUST_PROXY_HOPS"] = "0";
+    delete process.env["VERCEL"];
+    const ip = extractClientIpFromHeaders(lookup({ "x-forwarded-for": "203.0.113.9" }), "10.0.0.5");
+    expect(ip).toBe("10.0.0.5");
+  });
+
+  it("takes the rightmost untrusted hop so a spoofed leftmost XFF entry cannot move the bucket", () => {
+    process.env["TRUST_PROXY_HOPS"] = "1";
+    delete process.env["VERCEL"];
+    const ip = extractClientIpFromHeaders(
+      lookup({ "x-forwarded-for": "192.0.2.1, 198.51.100.77" }),
+      "10.0.0.5"
+    );
+    expect(ip).toBe("198.51.100.77");
+  });
+
+  it("prefers the Vercel-set header on Vercel even with extra XFF hops", () => {
+    process.env["TRUST_PROXY_HOPS"] = "1";
+    process.env["VERCEL"] = "1";
+    const ip = extractClientIpFromHeaders(
+      lookup({
+        "x-forwarded-for": "192.0.2.1, 198.51.100.77, 76.76.21.9",
+        "x-vercel-forwarded-for": "203.0.113.7",
+      }),
+      "10.0.0.5"
+    );
+    expect(ip).toBe("203.0.113.7");
+  });
+
+  it("falls back to the socket peer when forwarded headers are absent or invalid", () => {
+    process.env["TRUST_PROXY_HOPS"] = "1";
+    delete process.env["VERCEL"];
+    expect(extractClientIpFromHeaders(lookup({}), "10.0.0.5")).toBe("10.0.0.5");
+    expect(extractClientIpFromHeaders(lookup({ "x-forwarded-for": "not an ip!!" }), "10.0.0.5")).toBe("10.0.0.5");
+    expect(extractClientIpFromHeaders(lookup({}), undefined)).toBe("unknown");
+  });
+
+  it("normalizes IPv4-mapped IPv6 peers", () => {
+    process.env["TRUST_PROXY_HOPS"] = "0";
+    expect(extractClientIpFromHeaders(lookup({}), "::ffff:203.0.113.7")).toBe("203.0.113.7");
   });
 });
