@@ -202,7 +202,8 @@ class SseWebSocketChannel extends StreamChannelMixin<Object?>
     _idleTimer = Timer(idleTimeout, () {
       if (generation != _generation || _closed) return;
       if (!_incoming.isClosed) {
-        _incoming.addError(TimeoutException('Realtime stream idle', idleTimeout));
+        _incoming
+            .addError(TimeoutException('Realtime stream idle', idleTimeout));
       }
       _fail(generation, 1006, 'stream idle');
     });
@@ -327,6 +328,10 @@ class SseWebSocketChannel extends StreamChannelMixin<Object?>
         : (rawSeq is String ? int.tryParse(rawSeq) : null);
     if (subId is String && seq != null && _subs.containsKey(subId)) {
       final prev = _lastSeq[subId];
+      // A mutation at or below the last seq already delivered is a replay (for example after a
+      // stream renewal): drop it so listeners see each change once.
+      if (frame['type'] == 'mutation' && prev != null && seq <= prev)
+        return false;
       if (prev == null || seq > prev) _lastSeq[subId] = seq;
     }
     _emit(frame);

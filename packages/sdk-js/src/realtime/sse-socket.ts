@@ -297,6 +297,9 @@ export class SseSocket implements WebSocketLike {
     const seqNum = typeof seq === "number" ? seq : typeof seq === "string" && /^\d+$/.test(seq) ? Number(seq) : null;
     if (typeof subId === "string" && seqNum !== null && this.subs.has(subId)) {
       const prev = this.lastSeq.get(subId);
+      // A mutation at or below the last seq already delivered for this subscription is a replay (for example
+      // after a stream renewal): drop it so listeners see each change once.
+      if (frame["type"] === "mutation" && prev !== undefined && seqNum <= prev) return false;
       if (prev === undefined || seqNum > prev) this.lastSeq.set(subId, seqNum);
     }
     this.emit(frame);
