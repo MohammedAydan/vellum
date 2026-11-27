@@ -70,6 +70,8 @@ offQuery();
 offState();
 ```
 
+**Snapshot shape.** A document subscription and a query subscription deliver the same `RealtimeSnapshot`, so read a document subscription through `snapshot.changes`. Each change has a `type` (`added`, `modified` or `removed`), a `seqId` and a `doc`. The first callback carries the current document as `added`. A deleted document arrives as a `removed` change whose `doc.exists` is `false` and whose `doc.data()` is `null`. `snapshot.docs` is only filled for query subscriptions; it is empty for a document path. In Flutter, `doc.snapshots()` emits one `DocumentSnapshot` per event, and a deleted document has `exists == false`.
+
 > **Cache Consistency**: Incoming realtime `initial_sync` and `mutation` frames automatically invalidate the matching path in `BoundedReadCache`.
 
 ---
