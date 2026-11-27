@@ -140,3 +140,27 @@ describe("SseSocket stall detection", () => {
     expect(e.reason).toBe("stream stalled");
   });
 });
+
+describe("SseSocket replay dedupe", () => {
+  it("delivers a mutation once even when a renewed stream replays it", async () => {
+    const m = (seq: number) => `data: {"type":"mutation","subId":"s1","seqId":${seq},"operation":"update","document":{"version":${seq}}}\n\n`;
+    let calls = 0;
+    const fetchFn = async () => {
+      calls += 1;
+      if (calls === 1) return sseResponse(['data: {"type":"auth_ack","status":"authenticated","connectionId":"c"}\n\n'], true);
+      return sseResponse(['data: {"type":"auth_ack","status":"authenticated","connectionId":"c2"}\n\n', m(5), m(5), m(4), m(6)], true);
+    };
+    const received: Array<Record<string, unknown>> = [];
+    const socket = new SseSocket("https://h.example", { fetchFn: fetchFn as never });
+    socket.onmessage = (e) => received.push(JSON.parse(e.data as string));
+    await new Promise<void>((r) => {
+      socket.onopen = () => r();
+    });
+    socket.send(JSON.stringify({ type: "auth", projectId: "p", apiKey: "k" }));
+    await new Promise((r) => setTimeout(r, 30));
+    socket.send(JSON.stringify({ type: "subscribe", subId: "s1", path: "items/a" }));
+    await new Promise((r) => setTimeout(r, 60));
+    expect(received.filter((f) => f["type"] === "mutation").map((f) => f["seqId"])).toEqual([5, 6]);
+    socket.close();
+  });
+});

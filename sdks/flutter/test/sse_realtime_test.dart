@@ -105,6 +105,41 @@ void main() {
       await channel.sink.close();
     });
 
+    test('delivers a mutation once when a renewed stream replays it', () async {
+      String m(int seq) =>
+          'data: {"type":"mutation","subId":"s1","seqId":$seq,"operation":"update","document":{}}\n\n';
+      handler = (request, body) {
+        request.response.bufferOutput = false;
+        request.response.headers.contentType =
+            ContentType('text', 'event-stream');
+        request.response.write(
+            'data: {"type":"auth_ack","status":"authenticated","connectionId":"c"}\n\n');
+        final frames = (body['frames'] as List).cast<Map<String, Object?>>();
+        if (frames.length > 1) {
+          request.response.write(m(5) + m(5) + m(4) + m(6));
+        }
+        request.response.flush();
+      };
+      final channel = SseWebSocketChannel(streamUrl());
+      final received = <Map<String, Object?>>[];
+      channel.stream.listen((data) =>
+          received.add(jsonDecode(data as String) as Map<String, Object?>));
+      await channel.ready;
+      channel.sink
+          .add(jsonEncode({'type': 'auth', 'projectId': 'p', 'apiKey': 'k'}));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      channel.sink.add(
+          jsonEncode({'type': 'subscribe', 'subId': 's1', 'path': 'items/a'}));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(
+          received
+              .where((f) => f['type'] == 'mutation')
+              .map((f) => f['seqId'])
+              .toList(),
+          [5, 6]);
+      await channel.sink.close();
+    });
+
     test('HTTP errors become an error frame and close the stream', () async {
       handler = (request, body) {
         request.response.statusCode = 401;
@@ -129,11 +164,14 @@ void main() {
       expect(channel.closeCode, 1008);
     });
 
-    test('keep-alive comments prove liveness: no idle failure past the timeout', () async {
+    test('keep-alive comments prove liveness: no idle failure past the timeout',
+        () async {
       handler = (request, body) {
         request.response.bufferOutput = false;
-        request.response.headers.contentType = ContentType('text', 'event-stream');
-        request.response.write('data: {"type":"auth_ack","status":"authenticated"}\n\n');
+        request.response.headers.contentType =
+            ContentType('text', 'event-stream');
+        request.response
+            .write('data: {"type":"auth_ack","status":"authenticated"}\n\n');
         request.response.flush();
         var n = 0;
         Timer.periodic(const Duration(milliseconds: 40), (t) {
@@ -149,28 +187,36 @@ void main() {
           }
         });
       };
-      final channel = SseWebSocketChannel(streamUrl(), idleTimeout: const Duration(milliseconds: 120));
+      final channel = SseWebSocketChannel(streamUrl(),
+          idleTimeout: const Duration(milliseconds: 120));
       final errors = <Object>[];
       channel.stream.listen((_) {}, onError: errors.add);
-      channel.sink.add(jsonEncode({'type': 'auth', 'projectId': 'p', 'apiKey': 'k'}));
+      channel.sink
+          .add(jsonEncode({'type': 'auth', 'projectId': 'p', 'apiKey': 'k'}));
       await Future<void>.delayed(const Duration(milliseconds: 380));
       expect(errors, isEmpty);
       expect(channel.closeCode, isNull);
       channel.sink.close();
     });
 
-    test('a silent stream is failed after the idle timeout so the transport can reconnect', () async {
+    test(
+        'a silent stream is failed after the idle timeout so the transport can reconnect',
+        () async {
       handler = (request, body) {
         request.response.bufferOutput = false;
-        request.response.headers.contentType = ContentType('text', 'event-stream');
-        request.response.write('data: {"type":"auth_ack","status":"authenticated"}\n\n');
+        request.response.headers.contentType =
+            ContentType('text', 'event-stream');
+        request.response
+            .write('data: {"type":"auth_ack","status":"authenticated"}\n\n');
         request.response.flush(); // then nothing, connection stays open
       };
-      final channel = SseWebSocketChannel(streamUrl(), idleTimeout: const Duration(milliseconds: 150));
+      final channel = SseWebSocketChannel(streamUrl(),
+          idleTimeout: const Duration(milliseconds: 150));
       final errors = <Object>[];
       final done = Completer<void>();
       channel.stream.listen((_) {}, onError: errors.add, onDone: done.complete);
-      channel.sink.add(jsonEncode({'type': 'auth', 'projectId': 'p', 'apiKey': 'k'}));
+      channel.sink
+          .add(jsonEncode({'type': 'auth', 'projectId': 'p', 'apiKey': 'k'}));
       await done.future.timeout(const Duration(seconds: 3));
       expect(channel.closeCode, 1006);
       expect(channel.closeReason, 'stream idle');
@@ -181,10 +227,12 @@ void main() {
       handler = (request, body) {
         // Accept the request and never respond.
       };
-      final channel = SseWebSocketChannel(streamUrl(), idleTimeout: const Duration(milliseconds: 150));
+      final channel = SseWebSocketChannel(streamUrl(),
+          idleTimeout: const Duration(milliseconds: 150));
       final done = Completer<void>();
       channel.stream.listen((_) {}, onError: (_) {}, onDone: done.complete);
-      channel.sink.add(jsonEncode({'type': 'auth', 'projectId': 'p', 'apiKey': 'k'}));
+      channel.sink
+          .add(jsonEncode({'type': 'auth', 'projectId': 'p', 'apiKey': 'k'}));
       await done.future.timeout(const Duration(seconds: 3));
       expect(channel.closeCode, 1006);
     });
