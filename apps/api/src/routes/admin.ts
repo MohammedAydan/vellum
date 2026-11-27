@@ -356,7 +356,7 @@ export function createAdminRoutes(
 
     return safeJson(c, {
       status: "healthy",
-      version: "0.0.7",
+      version: "0.0.8",
       tenantsCount: orgs.length,
       projectsCount: projects.length,
       keysCount: keys.length,

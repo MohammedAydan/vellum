@@ -1,6 +1,6 @@
 # JavaScript / TypeScript SDK Guide (`@vellumdb/sdk-js`)
 
-Complete engineering guide for `@vellumdb/sdk-js` v0.0.7 — grounded directly in `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`.
+Complete engineering guide for `@vellumdb/sdk-js` v0.0.8 — grounded directly in `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`.
 
 > **Security Note**: The document plane is API-key scoped with an optional end-user EdDSA bearer token. Use publishable `pk_` keys in browsers and reserve secret `sk_` keys strictly for trusted server environments.
 

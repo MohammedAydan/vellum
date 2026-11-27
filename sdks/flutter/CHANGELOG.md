@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.8
+
+Lockstep release with the platform. Works with the 0.0.7 API, and the 0.0.8 API is recommended.
+
+- `addWithRelated` accepts at most 100 documents, the batch write limit.
+- A deleted document in `doc.snapshots()` has `exists == false`.
+- Network failures throw a `VellumException` with code `NETWORK_ERROR` and status 0.
+- A realtime update older than the version already held is ignored.
+
+Full platform notes are in the root CHANGELOG.
+
 ## 0.0.7
 
 Lockstep release with the platform. Works with the 0.0.6 API, and the 0.0.7 API is recommended.

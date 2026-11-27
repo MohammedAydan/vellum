@@ -1,5 +1,5 @@
 // Examples for the Advanced configuration page. They mirror the public SDK
-// surface of @vellumdb/sdk-js and vellum_flutter 0.0.7.
+// surface of @vellumdb/sdk-js and vellum_flutter 0.0.8.
 
 export const autoIdTs = `// doc() without an id creates a new 20-character, time-sortable id locally.
 // No network call is made until you write.
@@ -149,4 +149,4 @@ createClient({ endpoint, projectId, apiKey, realtimeTransport: "sse" });
 const stop = db.collection("tasks").onSnapshot((snap) => console.log(snap.docs.length));`;
 
 export const secureStoragePubspec = `dependencies:
-  vellum_flutter: ^0.0.7 # persistent encrypted sessions are built in`;
+  vellum_flutter: ^0.0.8 # persistent encrypted sessions are built in`;
