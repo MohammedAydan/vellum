@@ -145,7 +145,7 @@ const AUTH_CONFIG_COLUMNS = `id, project_id AS "projectId",
                 auth_service_suspended AS "authServiceSuspended",
                 suspension_reason AS "suspensionReason",
                 max_users_quota AS "maxUsersQuota",
-                max_signups_per_hour AS "maxSignupsPerHour",
+                max_signups_per_hour AS "maxSignupsPerHour", signup_per_ip_limit AS "signupPerIpLimit",
                 enable_email_password AS "enableEmailPassword",
                 require_email_verification AS "requireEmailVerification",
                 enable_anonymous_auth AS "enableAnonymousAuth",
@@ -367,7 +367,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
       const apiKeys = await client.query(
         `SELECT id, project_id AS "projectId", name,
                 key_type AS "keyType", key_prefix AS "keyPrefix", secret_hash AS "secretHash",
-                scopes, allowed_origins AS "allowedOrigins", allowed_ips AS "allowedIps",
+                scopes, allowed_origins AS "allowedOrigins", allowed_ips AS "allowedIps", is_dev AS "isDev",
                 rate_limit_rps AS "rateLimitRps", last_used_at AS "lastUsedAt",
                 expires_at AS "expiresAt", revoked_at AS "revokedAt", created_by AS "createdBy",
                 created_at AS "createdAt"
@@ -828,7 +828,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
 
   private static readonly API_KEY_COLUMNS = `id, project_id AS "projectId", name,
                 key_type AS "keyType", key_prefix AS "keyPrefix", secret_hash AS "secretHash",
-                scopes, allowed_origins AS "allowedOrigins", allowed_ips AS "allowedIps",
+                scopes, allowed_origins AS "allowedOrigins", allowed_ips AS "allowedIps", is_dev AS "isDev",
                 rate_limit_rps AS "rateLimitRps", last_used_at AS "lastUsedAt",
                 expires_at AS "expiresAt", revoked_at AS "revokedAt", created_by AS "createdBy",
                 created_at AS "createdAt"`;
@@ -883,6 +883,20 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
       [projectId]
     );
     return rows.map((r: { origin: string }) => r.origin);
+  }
+
+  public async hasActiveDevKey(projectId: string): Promise<boolean> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) return false;
+    const { rows } = await this.pool.query(
+      `SELECT 1 AS one
+         FROM api_keys
+        WHERE project_id = $1::uuid AND is_dev
+          AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > now())
+        LIMIT 1`,
+      [projectId]
+    );
+    return rows.length > 0;
   }
 
   public async touchApiKeyLastUsed(keyId: string): Promise<void> {
@@ -1394,6 +1408,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
     rateLimitRps = 100,
     expiresAt = null,
     createdBy = null,
+    isDev = false,
   }: RegisterApiKeyInput): Promise<ApiKeyRecord> {
     const id = crypto.randomUUID();
     const clonedScopes = Array.isArray(scopes) ? [...scopes] : [];
@@ -1403,11 +1418,11 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
       const { rows } = await this.pool.query(
         `INSERT INTO api_keys (
            id, project_id, name, key_type, key_prefix, secret_hash,
-           scopes, rate_limit_rps, expires_at, created_by
-         ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::text[], $8, $9::timestamptz, $10::uuid)
+           scopes, rate_limit_rps, expires_at, created_by, is_dev
+         ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::text[], $8, $9::timestamptz, $10::uuid, $11)
          RETURNING id, project_id AS "projectId", name,
                    key_type AS "keyType", key_prefix AS "keyPrefix", secret_hash AS "secretHash",
-                   scopes, allowed_origins AS "allowedOrigins", allowed_ips AS "allowedIps",
+                   scopes, allowed_origins AS "allowedOrigins", allowed_ips AS "allowedIps", is_dev AS "isDev",
                 rate_limit_rps AS "rateLimitRps", last_used_at AS "lastUsedAt",
                    expires_at AS "expiresAt", revoked_at AS "revokedAt", created_by AS "createdBy",
                    created_at AS "createdAt"`,
@@ -1422,6 +1437,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
           safeRateLimit,
           expiresAt,
           createdBy,
+          isDev,
         ]
       );
       const row = rows[0] as ApiKeyRecord;
@@ -1459,7 +1475,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
         WHERE id = $1::uuid
         RETURNING id, project_id AS "projectId", name,
                   key_type AS "keyType", key_prefix AS "keyPrefix", secret_hash AS "secretHash",
-                  scopes, allowed_origins AS "allowedOrigins", allowed_ips AS "allowedIps",
+                  scopes, allowed_origins AS "allowedOrigins", allowed_ips AS "allowedIps", is_dev AS "isDev",
                 rate_limit_rps AS "rateLimitRps", last_used_at AS "lastUsedAt",
                   expires_at AS "expiresAt", revoked_at AS "revokedAt", created_by AS "createdBy",
                   created_at AS "createdAt"`,
@@ -1794,6 +1810,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
         : (existing?.suspensionReason ?? null),
       maxUsersQuota: input.maxUsersQuota ?? existing?.maxUsersQuota ?? 50000,
       maxSignupsPerHour: input.maxSignupsPerHour ?? existing?.maxSignupsPerHour ?? 1000,
+      signupPerIpLimit: input.signupPerIpLimit ?? existing?.signupPerIpLimit ?? 30,
       enableEmailPassword: input.enableEmailPassword ?? existing?.enableEmailPassword ?? true,
       requireEmailVerification: input.requireEmailVerification ?? existing?.requireEmailVerification ?? false,
       enableAnonymousAuth: input.enableAnonymousAuth ?? existing?.enableAnonymousAuth ?? false,
@@ -1816,7 +1833,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
       const { rows } = await client.query(
         `INSERT INTO project_auth_configs (
            id, project_id, auth_service_suspended, suspension_reason,
-           max_users_quota, max_signups_per_hour, enable_email_password,
+           max_users_quota, max_signups_per_hour, signup_per_ip_limit, enable_email_password,
            require_email_verification, enable_anonymous_auth, enable_totp_mfa,
            enable_user_projection, projection_collection_path, password_min_length,
            password_require_uppercase, password_require_number, password_require_symbol,
@@ -1825,13 +1842,14 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
            custom_smtp_config_encrypted, created_at, updated_at
          ) VALUES (
            $1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-           $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb, $23, now(), now()
+           $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23::jsonb, $24, now(), now()
          )
          ON CONFLICT (project_id) DO UPDATE SET
            auth_service_suspended = EXCLUDED.auth_service_suspended,
            suspension_reason = EXCLUDED.suspension_reason,
            max_users_quota = EXCLUDED.max_users_quota,
            max_signups_per_hour = EXCLUDED.max_signups_per_hour,
+           signup_per_ip_limit = EXCLUDED.signup_per_ip_limit,
            enable_email_password = EXCLUDED.enable_email_password,
            require_email_verification = EXCLUDED.require_email_verification,
            enable_anonymous_auth = EXCLUDED.enable_anonymous_auth,
@@ -1852,7 +1870,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
            updated_at = now()
          RETURNING id, project_id AS "projectId",
            auth_service_suspended AS "authServiceSuspended", suspension_reason AS "suspensionReason",
-           max_users_quota AS "maxUsersQuota", max_signups_per_hour AS "maxSignupsPerHour",
+           max_users_quota AS "maxUsersQuota", max_signups_per_hour AS "maxSignupsPerHour", signup_per_ip_limit AS "signupPerIpLimit",
            enable_email_password AS "enableEmailPassword",
            require_email_verification AS "requireEmailVerification",
            enable_anonymous_auth AS "enableAnonymousAuth", enable_totp_mfa AS "enableTotpMfa",
@@ -1876,6 +1894,7 @@ export class PgControlPlaneStore implements ControlPlaneRepository {
           resolved.suspensionReason,
           resolved.maxUsersQuota,
           resolved.maxSignupsPerHour,
+          resolved.signupPerIpLimit,
           resolved.enableEmailPassword,
           resolved.requireEmailVerification,
           resolved.enableAnonymousAuth,

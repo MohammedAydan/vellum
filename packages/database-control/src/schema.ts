@@ -105,6 +105,8 @@ export const apiKeys = pgTable(
     allowedOrigins: jsonb("allowed_origins").notNull().default([]),
     /** V1 §2.4: source IPs allowed to use this key (empty = no restriction). */
     allowedIps: jsonb("allowed_ips").notNull().default([]),
+    /** Development key: localhost/127.0.0.1 browser origins are allowed without listing them. */
+    isDev: boolean("is_dev").notNull().default(false),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
@@ -232,6 +234,8 @@ export const projectAuthConfigs = pgTable(
     suspensionReason: text("suspension_reason"),
     maxUsersQuota: integer("max_users_quota").notNull().default(50000),
     maxSignupsPerHour: integer("max_signups_per_hour").notNull().default(1000),
+    /** Per-IP sign-up attempts allowed per 15 minutes on the end-user sign-up route. */
+    signupPerIpLimit: integer("signup_per_ip_limit").notNull().default(30),
     enableEmailPassword: boolean("enable_email_password").notNull().default(true),
     requireEmailVerification: boolean("require_email_verification").notNull().default(false),
     enableAnonymousAuth: boolean("enable_anonymous_auth").notNull().default(false),

@@ -248,6 +248,8 @@ export const AuthConfigPatchSchema = z
     suspensionReason: z.string().max(1000).nullable().optional(),
     maxUsersQuota: z.number().int().min(1).max(10_000_000).optional(),
     maxSignupsPerHour: z.number().int().min(1).max(1_000_000).optional(),
+    /** Per-IP sign-up attempts per 15 minutes on the end-user sign-up route. */
+    signupPerIpLimit: z.number().int().min(1).max(10_000).optional(),
     enableEmailPassword: z.boolean().optional(),
     requireEmailVerification: z.boolean().optional(),
     enableAnonymousAuth: z.boolean().optional(),

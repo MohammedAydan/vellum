@@ -123,6 +123,8 @@ export interface ApiKeyRecord {
   allowedOrigins?: string[];
   /** Source IPs permitted for this key; empty array means unrestricted. */
   allowedIps?: string[];
+  /** Development key: localhost/127.0.0.1 browser origins are allowed without listing them. */
+  isDev?: boolean;
   lastUsedAt: string | null;
   expiresAt: string | null;
   revokedAt: string | null;
@@ -216,6 +218,8 @@ export interface RegisterApiKeyInput {
   rateLimitRps?: number;
   expiresAt?: string | null;
   createdBy?: string | null;
+  /** Flag a publishable key as a development key (localhost CORS bypass). */
+  isDev?: boolean;
 }
 
 export interface PublishSecurityRulesetInput {
@@ -293,6 +297,8 @@ export interface ProjectAuthConfig {
   suspensionReason: string | null;
   maxUsersQuota: number;
   maxSignupsPerHour: number;
+  /** Per-IP sign-up attempts allowed per 15 minutes (end-user email sign-up route). */
+  signupPerIpLimit: number;
   enableEmailPassword: boolean;
   requireEmailVerification: boolean;
   enableAnonymousAuth: boolean;
@@ -320,6 +326,7 @@ export interface UpsertAuthConfigInput {
   suspensionReason?: string | null | undefined;
   maxUsersQuota?: number | undefined;
   maxSignupsPerHour?: number | undefined;
+  signupPerIpLimit?: number | undefined;
   enableEmailPassword?: boolean | undefined;
   requireEmailVerification?: boolean | undefined;
   enableAnonymousAuth?: boolean | undefined;
@@ -413,6 +420,8 @@ export interface ControlPlaneRepository {
   listProjectApiKeys(projectId: string): Promise<ApiKeyRecord[]>;
   /** Origins listed on the active, unexpired keys of a project (one DB read, no local copy). */
   listActiveApiKeyOrigins(projectId: string): Promise<string[]>;
+  /** True when the project has at least one active (unrevoked, unexpired) dev-flagged key. */
+  hasActiveDevKey(projectId: string): Promise<boolean>;
   /** Marks a key as used now. Best effort and throttled by the implementation. */
   touchApiKeyLastUsed(keyId: string): Promise<void>;
   getActiveRuleset(projectId: string): SecurityRulesetRecord | null;

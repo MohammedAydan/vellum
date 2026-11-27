@@ -153,6 +153,7 @@ export function applyAuthConfigPatch(
   if (patch.suspensionReason !== undefined) input.suspensionReason = patch.suspensionReason;
   if (patch.maxUsersQuota !== undefined) input.maxUsersQuota = patch.maxUsersQuota;
   if (patch.maxSignupsPerHour !== undefined) input.maxSignupsPerHour = patch.maxSignupsPerHour;
+  if (patch.signupPerIpLimit !== undefined) input.signupPerIpLimit = patch.signupPerIpLimit;
   if (patch.enableEmailPassword !== undefined) input.enableEmailPassword = patch.enableEmailPassword;
   if (patch.requireEmailVerification !== undefined) input.requireEmailVerification = patch.requireEmailVerification;
   if (patch.enableAnonymousAuth !== undefined) input.enableAnonymousAuth = patch.enableAnonymousAuth;
@@ -349,6 +350,7 @@ export function publicAuthConfig(config: ProjectAuthConfig): Record<string, unkn
     suspensionReason: config.suspensionReason,
     maxUsersQuota: config.maxUsersQuota,
     maxSignupsPerHour: config.maxSignupsPerHour,
+    signupPerIpLimit: config.signupPerIpLimit,
     enableEmailPassword: config.enableEmailPassword,
     requireEmailVerification: config.requireEmailVerification,
     enableAnonymousAuth: config.enableAnonymousAuth,

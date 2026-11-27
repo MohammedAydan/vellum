@@ -351,10 +351,22 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     "/v1/projects/:projectId/auth/sign-in/email",
     authRateLimit({ ...LOGIN_LIMIT, scope: "enduser-sign-in", keyFrom: endUserKey }, platform.controlStore.throttle)
   );
-  // 30 sign-up attempts / 15 min per (project, ip); every attempt counts.
+  // Sign-up attempts / 15 min per (project, ip); every attempt counts. The
+  // limit is per project (auth config `signupPerIpLimit`, default 30).
   app.use(
     "/v1/projects/:projectId/auth/sign-up/email",
-    authRateLimit({ max: 30, windowMs: 15 * 60 * 1000, countAll: true, scope: "enduser-sign-up", keyFrom: endUserIpKey }, platform.controlStore.throttle)
+    authRateLimit(
+      {
+        max: 30,
+        maxFrom: (c) =>
+          platform.controlStore.getAuthConfig(c.req.param("projectId") ?? "")?.signupPerIpLimit ?? 30,
+        windowMs: 15 * 60 * 1000,
+        countAll: true,
+        scope: "enduser-sign-up",
+        keyFrom: endUserIpKey,
+      },
+      platform.controlStore.throttle
+    )
   );
   app.use(
     "/v1/projects/:projectId/auth/sign-in/anonymous",

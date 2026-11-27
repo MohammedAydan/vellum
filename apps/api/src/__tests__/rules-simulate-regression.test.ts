@@ -32,8 +32,8 @@ async function fixture() {
 
 function countKeys(value: unknown): number {
   if (value === null || typeof value !== "object") return 0;
-  if (Array.isArray(value)) return value.reduce((sum, item) => sum + countKeys(item), 0);
-  return Object.values(value as Record<string, unknown>).reduce((sum, item) => sum + countKeys(item), Object.keys(value as object).length);
+  if (Array.isArray(value)) return value.reduce<number>((sum, item) => sum + countKeys(item), 0);
+  return Object.values(value as Record<string, unknown>).reduce<number>((sum, item) => sum + countKeys(item), Object.keys(value as object).length);
 }
 
 // 200 match blocks (the per-ruleset cap) with a two-term predicate compile to
