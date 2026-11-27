@@ -105,7 +105,7 @@ void main() {
     final sessions = await client.auth.listSessions();
     expect(sessions.single.id, 's1');
     await client.auth.revokeSession('s1');
-    final linked = await client.auth.listLinkedProviders();
+    final linked = await client.auth.listIdentities();
     expect(linked.providers.single.provider, 'google');
     expect(linked.hasPassword, isFalse);
     await client.auth.unlinkProvider('google', currentPassword: 'old-password-1');

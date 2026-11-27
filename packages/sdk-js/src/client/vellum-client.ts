@@ -24,6 +24,7 @@ import { RealtimeTransport, toRealtimeUrl } from "../realtime/realtime-transport
 import { SseSocket } from "../realtime/sse-socket.js";
 import { createFallbackSocketFactory } from "../realtime/fallback-socket.js";
 import { defaultWebSocketFactory } from "../realtime/realtime-transport.js";
+import { PersistentWriteOutbox } from "../offline/outbox.js";
 import type { RealtimeFrame, RealtimeTransportState, WebSocketFactory } from "../realtime/realtime-transport.js";
 import { CollectionReference, type CollectionReferenceContext } from "../references/collection-ref.js";
 import { DocumentReference, expandUpdatePaths } from "../references/document-ref.js";
@@ -52,10 +53,12 @@ import type {
   DocumentReferenceInterface,
   DocumentSnapshot,
   EmailVerifyConfirmResult,
+  DisableMfaInput,
   EnrollTotpMfaInput,
   ExportResult,
   ImportDocumentInput,
   ImportResult,
+  IndexSuggestionEvent,
   ListCollectionsOptions,
   MfaRequiredResult,
   RealtimeChange,
@@ -109,6 +112,22 @@ interface RealtimeInternalState {
   currentConnectionState: ConnectionState;
   realtimeTransport: RealtimeTransport | null;
   subscriptionSeq: number;
+  /** True between the first transport fault and the next connected state: at most one error per sub per outage. */
+  outageErrorDelivered: boolean;
+}
+
+function hasIdempotencyHeader(headers: Record<string, string>): boolean {
+  for (const [key, value] of Object.entries(headers)) {
+    const lower = key.toLowerCase();
+    if ((lower === "idempotency-key" || lower === "x-idempotency-key") && value.trim().length > 0) return true;
+  }
+  return false;
+}
+
+function createOutboxOpId(): string {
+  const cryptoObj = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (cryptoObj && typeof cryptoObj.randomUUID === "function") return cryptoObj.randomUUID();
+  return `op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function parseSeqNumber(value: unknown): number | null {
@@ -252,6 +271,9 @@ export class VellumClient implements VellumClientInterface {
   private readonly realtimeUrl: string | null;
   private readonly realtimeHub: unknown;
   private readonly webSocketFactory: WebSocketFactory | null;
+  private readonly indexSuggestionListeners = new Set<(event: IndexSuggestionEvent) => void>();
+  private writeOutbox: PersistentWriteOutbox | null = null;
+  private outboxFlushTimer: ReturnType<typeof setInterval> | null = null;
   private readonly realtimeTransportKind: "auto" | "websocket" | "sse";
   private readonly customFetch: typeof globalThis.fetch | null;
   private readonly realtimeTransportOptions: ClientConfig["realtimeTransportOptions"];
@@ -289,8 +311,48 @@ export class VellumClient implements VellumClientInterface {
       ...(config.retryMaxDelayMs !== undefined ? { retryMaxDelayMs: config.retryMaxDelayMs } : {}),
       ...(config.retryRandomFn !== undefined ? { retryRandomFn: config.retryRandomFn } : {}),
       ...(config.warnOnMissingIndexes !== undefined ? { warnOnMissingIndexes: config.warnOnMissingIndexes } : {}),
-      ...(config.onIndexSuggestion !== undefined ? { onIndexSuggestion: config.onIndexSuggestion } : {}),
+      onIndexSuggestion: (event) => {
+        for (const listener of [...this.indexSuggestionListeners]) {
+          try {
+            listener(event);
+          } catch {
+            // A throwing listener must never break the underlying request.
+          }
+        }
+      },
     });
+    if (config.onIndexSuggestion !== undefined) {
+      this.indexSuggestionListeners.add(config.onIndexSuggestion);
+    }
+
+    if (config.offlineWrites !== undefined && config.offlineWrites.enabled !== false) {
+      this.writeOutbox = new PersistentWriteOutbox({
+        namespace: `${this.endpoint}|${this.projectId}`,
+        ...(config.offlineWrites.storage !== undefined ? { storage: config.offlineWrites.storage } : {}),
+        ...(config.offlineWrites.maxOps !== undefined ? { maxOps: config.offlineWrites.maxOps } : {}),
+        ...(config.offlineWrites.onDeadLetter !== undefined ? { onDeadLetter: config.offlineWrites.onDeadLetter } : {}),
+      });
+      const intervalMs =
+        typeof config.offlineWrites.flushIntervalMs === "number" && config.offlineWrites.flushIntervalMs >= 500
+          ? Math.floor(config.offlineWrites.flushIntervalMs)
+          : 5_000;
+      this.outboxFlushTimer = setInterval(() => {
+        void this.flushWriteOutbox();
+      }, intervalMs);
+      this.outboxFlushTimer.unref?.();
+      const g = globalThis as { addEventListener?: (type: string, listener: () => void) => void };
+      if (typeof g.addEventListener === "function") {
+        try {
+          g.addEventListener("online", () => {
+            void this.flushWriteOutbox();
+          });
+        } catch {
+          // non-DOM global; timer-driven flush still applies
+        }
+      }
+      // Replay anything a previous page life left behind.
+      void this.flushWriteOutbox();
+    }
 
     const readCache =
       config.cache?.enabled === true
@@ -328,6 +390,7 @@ export class VellumClient implements VellumClientInterface {
       currentConnectionState: "disconnected",
       realtimeTransport: null,
       subscriptionSeq: 0,
+      outageErrorDelivered: false,
     };
 
     this.auth = new VellumAuthClient({
@@ -344,8 +407,23 @@ export class VellumClient implements VellumClientInterface {
         : null),
       onTokenChanged: (previousToken, nextToken) => {
         this.resetCaches(false);
-        if (nextToken !== null && (nextToken === this.auth.currentUser?.accessToken ||
-          (parseJwtSubject(previousToken) !== null && parseJwtSubject(previousToken) === parseJwtSubject(nextToken)))) {
+        // An identity switch (A -> B, or sign-out) must KILL every live
+        // subscription: each one was authorized for the previous identity and
+        // the server still fans the old principal's frames into it. Only a
+        // token refresh for the SAME subject (or the first sign-in from an
+        // unauthenticated state) may reauthenticate in place. Comparing
+        // against currentUser.accessToken is wrong here: on A -> B the new
+        // token IS the current user's token, which would reauthenticate A's
+        // subscriptions as B instead of killing them.
+        const prevSubject = parseJwtSubject(previousToken);
+        const nextSubject = parseJwtSubject(nextToken);
+        // nextSubject === null (a token without a readable subject) cannot
+        // PROVE an identity switch; Vellum access tokens always carry `sub`,
+        // so treat it as a refresh rather than killing live subscriptions.
+        if (
+          nextToken !== null &&
+          (nextSubject === null || prevSubject === null || prevSubject === nextSubject)
+        ) {
           this.reauthenticateRealtime(nextToken);
         } else {
           this.cacheState.sessionEpoch += 1;
@@ -374,7 +452,7 @@ export class VellumClient implements VellumClientInterface {
         extraHeaders?: Record<string, string>,
         includeAuth?: boolean,
         signal?: AbortSignal
-      ) => this.transport.request<R>(method, relativePath, body, extraHeaders, includeAuth, signal),
+      ) => this.requestWithOutbox<R>(method, relativePath, body, extraHeaders ?? {}, includeAuth ?? true, signal),
       prepareRead: () => this.auth.getValidAccessToken(),
       getSessionEpoch: () => this.cacheState.sessionEpoch,
       readCache: this.cacheState.readCache,
@@ -492,6 +570,7 @@ export class VellumClient implements VellumClientInterface {
     if (this.realtimeState.currentConnectionState === next) return;
     const previous = this.realtimeState.currentConnectionState;
     this.realtimeState.currentConnectionState = next;
+    if (next === "connected") this.realtimeState.outageErrorDelivered = false;
     for (const listener of [...this.realtimeState.connectionStateListeners]) {
       try {
         listener(next, previous);
@@ -505,6 +584,18 @@ export class VellumClient implements VellumClientInterface {
     this.realtimeState.connectionStateListeners.add(listener);
     return () => {
       this.realtimeState.connectionStateListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Subscribe to index-advisor suggestions (`x-vellum-index-*` response
+   * headers). Returns an Unsubscribe function. The config-time
+   * `onIndexSuggestion` callback is equivalent to registering it here.
+   */
+  public onIndexSuggestion(listener: (event: IndexSuggestionEvent) => void): () => void {
+    this.indexSuggestionListeners.add(listener);
+    return () => {
+      this.indexSuggestionListeners.delete(listener);
     };
   }
 
@@ -622,6 +713,12 @@ export class VellumClient implements VellumClientInterface {
         this.setConnectionState(mapTransportState(transportState));
       },
       onError: (error: unknown) => {
+        // A transport-level fault is a CONNECTION event, not a per-subscriber
+        // protocol error: deliver it once per outage, not once per reconnect
+        // attempt to every subscriber. Targeted protocol errors still reach
+        // their own subscriber via `error` / `sub_error` frames.
+        if (this.realtimeState.outageErrorDelivered) return;
+        this.realtimeState.outageErrorDelivered = true;
         for (const sub of this.realtimeState.activeSubscriptions.values()) {
           if (sub.onError) sub.onError(error);
         }
@@ -763,6 +860,93 @@ export class VellumClient implements VellumClientInterface {
   }
 
   /* --------------------------------------------------------------------- */
+  /* Persistent write outbox (offline writes)                               */
+  /* --------------------------------------------------------------------- */
+
+  /**
+   * Queued-op replay. Sends through the raw transport with the op's stable
+   * Idempotency-Key; never re-enters the outbox guard.
+   */
+  private async flushWriteOutbox(): Promise<void> {
+    const outbox = this.writeOutbox;
+    if (!outbox) return;
+    try {
+      await outbox.flush(async (op) => {
+        await this.transport.request(
+          op.method,
+          op.relativePath,
+          op.body,
+          { ...op.extraHeaders, "Idempotency-Key": op.id },
+          true
+        );
+      });
+    } catch {
+      // A flush failure is retried by the timer / online listener; the ops stay queued.
+    }
+  }
+
+  /** Pending offline-write count, or 0 when the outbox is not enabled. */
+  public offlineWriteQueueSize(): Promise<number> {
+    return this.writeOutbox ? this.writeOutbox.size() : Promise.resolve(0);
+  }
+
+  /**
+   * Mutating-request guard: attaches a stable Idempotency-Key to the initial
+   * attempt and, on a transient failure with the outbox enabled, persists the
+   * op for ordered replay. The caller sees a rejection with
+   * `code: "OFFLINE_QUEUED"` and `queued: true` - the write has NOT landed.
+   */
+  private async requestWithOutbox<R>(
+    method: string,
+    relativePath: string,
+    body: unknown,
+    extraHeaders: Record<string, string>,
+    includeAuth: boolean,
+    signal?: AbortSignal
+  ): Promise<R> {
+    const mutating = !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
+    const outbox = mutating ? this.writeOutbox : null;
+    let headers = extraHeaders;
+    let opId: string | null = null;
+    if (outbox && !hasIdempotencyHeader(extraHeaders)) {
+      opId = createOutboxOpId();
+      headers = { ...extraHeaders, "Idempotency-Key": opId };
+    }
+    try {
+      const result = await this.transport.request<R>(method, relativePath, body, headers, includeAuth, signal);
+      if (outbox) void this.flushWriteOutbox();
+      return result;
+    } catch (error) {
+      if (!outbox) throw error;
+      const errLike = error as { code?: string; status?: number } | null;
+      if (errLike?.code === "REQUEST_ABORTED" || signal?.aborted) throw error;
+      const status = errLike?.status;
+      // No response at all (network down / timeout) reports status 0 or none;
+      // only a real 4xx answer is permanent.
+      const transient =
+        errLike?.code === "NETWORK_ERROR" ||
+        typeof status !== "number" ||
+        status === 0 ||
+        status === 429 ||
+        status >= 500;
+      if (!transient) throw error;
+      const op = await outbox.enqueue({
+        ...(opId !== null ? { id: opId } : {}),
+        method: method.toUpperCase(),
+        relativePath,
+        body,
+        extraHeaders: headers,
+      });
+      throw Object.assign(
+        new Error(
+          `@vellumdb/sdk-js: write could not reach the server and was queued offline (outbox id ${op.id}); it will be replayed in order when the connection recovers`
+        ),
+        { code: "OFFLINE_QUEUED", queued: true, outboxId: op.id, cause: error }
+      );
+    }
+  }
+
+  /* --------------------------------------------------------------------- */
   /* References                                                             */
   /* --------------------------------------------------------------------- */
 
@@ -787,7 +971,7 @@ export class VellumClient implements VellumClientInterface {
         ? { ...op, data: expandUpdatePaths(op["data"] as Record<string, unknown>) }
         : op
     );
-    const res = await this.transport.request("POST", "/batchWrite", { writes: expanded }, {}, true, options.signal);
+    const res = await this.requestWithOutbox("POST", "/batchWrite", { writes: expanded }, {}, true, options.signal);
     for (const op of writes) {
       if (isRecord(op) && typeof op["path"] === "string" && op["path"].length > 0) {
         this.invalidateDocCache(op["path"]);
@@ -1236,8 +1420,10 @@ export class VellumClient implements VellumClientInterface {
       : this.auth.confirmTotpMfa(codeOrInput);
   }
 
-  public disableMfa(code: string): Promise<void> {
-    return this.auth.disableMfa(code);
+  public disableMfa(input: DisableMfaInput): Promise<void>;
+  public disableMfa(code: string): Promise<void>;
+  public disableMfa(codeOrInput: string | DisableMfaInput): Promise<void> {
+    return typeof codeOrInput === "string" ? this.auth.disableMfa(codeOrInput) : this.auth.disableMfa(codeOrInput);
   }
 
   public sendPasswordResetEmail(input: SendPasswordResetEmailInput): Promise<ActionTokenResult>;
@@ -1293,8 +1479,14 @@ export class VellumClient implements VellumClientInterface {
     return this.auth.revokeSession(sessionId);
   }
 
+  /** Canonical identity listing (alias: the deprecated {@link listLinkedProviders}). */
+  public listIdentities(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }> {
+    return this.auth.listIdentities();
+  }
+
+  /** @deprecated Use {@link listIdentities}. */
   public listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }> {
-    return this.auth.listLinkedProviders();
+    return this.auth.listIdentities();
   }
 
   public unlinkProvider(provider: string, options?: { currentPassword?: string }): Promise<void> {
@@ -1330,6 +1522,8 @@ export class VellumClient implements VellumClientInterface {
   /* --------------------------------------------------------------------- */
 
   public dispose(): void {
+    // The client instance is frozen at construction: clear, never reassign.
+    if (this.outboxFlushTimer) clearInterval(this.outboxFlushTimer);
     this.auth.dispose();
     this.realtimeState.activeSubscriptions.clear();
     if (this.realtimeState.realtimeTransport) {

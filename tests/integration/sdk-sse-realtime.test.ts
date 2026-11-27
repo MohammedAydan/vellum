@@ -7,7 +7,7 @@ import { createVellumPlatform } from "../../apps/api/src/index.js";
 import { CustomerDashboardService } from "../../apps/dashboard/src/index.js";
 import { createClient } from "../../packages/sdk-js/src/index.js";
 import { resetRealtimeFallbackCache } from "../../packages/sdk-js/src/index.js";
-import type { RealtimeSnapshot } from "../../packages/sdk-js/src/index.js";
+import type { DocumentSnapshot } from "../../packages/sdk-js/src/index.js";
 
 function harness(transport: "auto" | "sse" = "sse") {
   const platform = createVellumPlatform();
@@ -55,40 +55,40 @@ describe("sdk-js realtime over SSE", () => {
   it("auto mode tries WebSocket first and falls back to SSE when the host cannot upgrade", async () => {
     resetRealtimeFallbackCache();
     const { platform, client } = harness("auto");
-    const snaps: RealtimeSnapshot<Record<string, unknown>>[] = [];
+    const snaps: DocumentSnapshot<Record<string, unknown>>[] = [];
     const ref = client.collection("tickets").doc("t9");
     const off = ref.onSnapshot((s) => snaps.push(s));
+    // P0-4: a document missing at subscribe time emits exists === false first.
     await waitFor(() => snaps.length > 0, 15_000);
+    expect(snaps[0]!.exists).toBe(false);
     await ref.create({ n: 1 });
-    await waitFor(() => snaps.some((s) => s.changes.some((c) => c.doc.path === "tickets/t9" && c.doc.data()["n"] === 1)), 15_000);
+    await waitFor(() => snaps.some((s) => s.exists && s.data()!["n"] === 1), 15_000);
     off();
     platform.metering.stop();
   }, 30_000);
 
   it("delivers create, update and delete quickly and survives adding a second subscription", async () => {
     const { platform, client } = harness();
-    const snaps: RealtimeSnapshot<Record<string, unknown>>[] = [];
+    const snaps: DocumentSnapshot<Record<string, unknown>>[] = [];
     const ref = client.collection("tickets").doc("t1");
     const off = ref.onSnapshot((s) => snaps.push(s));
     await waitFor(() => snaps.length > 0);
 
-    const other: RealtimeSnapshot<Record<string, unknown>>[] = [];
+    const other: DocumentSnapshot<Record<string, unknown>>[] = [];
     const off2 = client.collection("tickets").doc("t2").onSnapshot((s) => other.push(s));
     await waitFor(() => other.length > 0);
 
-    const has = (op: (c: { doc: { path: string; data(): Record<string, unknown> } }) => boolean) =>
-      snaps.some((s) => s.changes.some((c) => c.doc.path === "tickets/t1" && op(c as never)));
-
     const t0 = Date.now();
     await ref.create({ n: 1 });
-    await waitFor(() => has((c) => c.doc.data()["n"] === 1));
+    await waitFor(() => snaps.some((s) => s.exists && s.data()!["n"] === 1));
     const latency = Date.now() - t0;
     expect(latency).toBeLessThan(1000);
 
     await ref.update({ n: 2 });
-    await waitFor(() => has((c) => c.doc.data()["n"] === 2));
+    await waitFor(() => snaps.some((s) => s.exists && s.data()!["n"] === 2));
     await ref.delete();
-    await waitFor(() => snaps.some((s) => s.changes.some((c) => c.type === "removed" && c.doc.path === "tickets/t1")));
+    // P0-4: a delete lands as exists === false with data() === null.
+    await waitFor(() => snaps.some((s) => !s.exists && s.path === "tickets/t1" && s.version > 0));
 
     off();
     off2();

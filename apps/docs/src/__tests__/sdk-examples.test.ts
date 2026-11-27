@@ -22,7 +22,10 @@ describe('displayed SDK consumer examples', () => {
       expect(js).not.toContain('toVellum(');
       const realtime = read(`apps/docs/src/pages/${lang}/realtime.tsx`);
       expect(realtime).not.toContain('snap.doc.included');
-      expect(realtime).toContain('snap.changes');
+      // P0-4: document listeners deliver DocumentSnapshot (exists/data()),
+      // not the query-level RealtimeSnapshot changes list.
+      expect(realtime).not.toContain('snap.changes');
+      expect(realtime).toContain('snap.exists');
     }
     expect(read('apps/docs/src/pages/ar/sdks/flutter.tsx')).not.toContain('maxDocuments:');
   });

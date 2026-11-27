@@ -4,7 +4,7 @@ import http from "node:http";
 import type { Socket, AddressInfo } from "node:net";
 import { hashApiKey, type ApiKeyRecord } from "@vellum/authorization";
 import { RealtimeGatewayHub } from "@vellum/realtime";
-import { createClient, type RealtimeSnapshot } from "@vellumdb/sdk-js";
+import { createClient, type DocumentSnapshot } from "@vellumdb/sdk-js";
 import { attachRealtimeWebSocketServer } from "../../apps/api/src/ws-rfc6455.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PgControlPlaneStore } from "@vellum/database-control/adapters";
@@ -296,24 +296,24 @@ describe.skipIf(!enabled)("relations / real PostgreSQL", () => {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const port = (server.address() as AddressInfo).port;
     const clients = [rawServer, rawPublic].map((apiKey) => createClient({ projectId, apiKey, endpoint: `http://127.0.0.1:${port}` }));
-    const snapshots: RealtimeSnapshot[][] = [[], []];
+    const snapshots: DocumentSnapshot[][] = [[], []];
     const failures: unknown[] = [];
     try {
       for (let index = 0; index < clients.length; index++) clients[index]!.doc("posts/ws-parent").onSnapshot(
         (snapshot) => snapshots[index]!.push(snapshot), (error) => failures.push(error), { resolveIncludes: true, include: ["author"] });
       await until(() => snapshots.every((items) => items.length > 0) || failures.length > 0);
       expect(failures).toEqual([]);
-      expect(snapshots[0]![0]!.docs[0]!.included?.["author"]).toMatchObject({ data: { name: "PG private author" } });
-      expect(snapshots[1]![0]!.docs[0]!.included?.["author"]).toBeNull();
-      expect(snapshots[1]![0]!.docs[0]!.redactedRefs).toContain("author");
+      expect(snapshots[0]!.at(-1)!.included?.["author"]).toMatchObject({ data: { name: "PG private author" } });
+      expect(snapshots[1]!.at(-1)!.included?.["author"]).toBeNull();
+      expect(snapshots[1]!.at(-1)!.redactedRefs).toContain("author");
       await engine.updateDocument({ ...tenant, path: "posts/ws-parent", data: { title: "live update" } });
       const event = (await adapter.queryOutboxSince(tenant)).at(-1)!;
       hub.watermarks.set(projectId, BigInt(event.seqId) - 1n);
       await hub.notifyCommittedEvents(projectId, [event]);
       await until(() => snapshots.every((items) => items.length >= 2) || failures.length > 0);
       expect(failures).toEqual([]);
-      expect(snapshots[0]!.at(-1)!.docs[0]!.included?.["author"]).toMatchObject({ data: { name: "PG private author" } });
-      expect(JSON.stringify(snapshots[1]!.at(-1)!.docs[0]!.included)).not.toContain("PG private author");
+      expect(snapshots[0]!.at(-1)!.included?.["author"]).toMatchObject({ data: { name: "PG private author" } });
+      expect(JSON.stringify(snapshots[1]!.at(-1)!.included)).not.toContain("PG private author");
     } finally {
       for (const client of clients) client.dispose();
       ws.closeAllWebSockets();

@@ -336,23 +336,46 @@ class DocumentReference<T> {
   }) {
     late StreamController<DocumentSnapshot<T>> controller;
     String? subId;
+    // Dedupe (Track 3): the same (exists, version) is never delivered twice,
+    // so a cached onListen snapshot and its identical initial_sync copy
+    // collapse into one emission.
+    bool? lastExists;
+    int? lastVersion;
+
+    void emit(DocumentSnapshot<T> snap) {
+      if (controller.isClosed) return;
+      if (lastExists == snap.exists && lastVersion == snap.version) return;
+      lastExists = snap.exists;
+      lastVersion = snap.version;
+      controller.add(snap);
+    }
 
     void handleFrame(JsonMap frame) {
       if (controller.isClosed) return;
       final type = frame['type'];
       if (type == 'initial_sync') {
         final docs = frame['documents'];
+        var sawDoc = false;
         if (docs is List) {
           for (final raw in docs) {
             final snap = snapshotFromWire<T>(raw, fromJson);
-            if (snap != null && !controller.isClosed) controller.add(snap);
+            if (snap != null) {
+              sawDoc = true;
+              emit(snap);
+            }
           }
+        }
+        // Missing document (Track 3): report exists == false instead of
+        // staying silent, so listeners can distinguish "missing" from
+        // "nothing received yet".
+        if (!sawDoc) {
+          emit(DocumentSnapshot<T>(id: id, path: path, version: 0, data: null));
         }
       } else if (type == 'mutation') {
         final wire = snapshotFromWire<T>(frame['document'], fromJson);
         if (wire != null && !controller.isClosed) {
           // A deleted document reports exists == false and data() == null.
-          controller.add(frame['operation'] == 'delete'
+          emit(frame['operation'] == 'delete'
               ? DocumentSnapshot<T>(
                   id: wire.id,
                   path: wire.path,
@@ -382,7 +405,7 @@ class DocumentReference<T> {
         if (cached != null &&
             cached is DocumentSnapshot<T> &&
             !controller.isClosed) {
-          controller.add(cached);
+          emit(cached);
         }
         subId = client.realtime.subscribe(
           <String, Object?>{

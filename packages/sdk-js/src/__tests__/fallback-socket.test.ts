@@ -52,6 +52,27 @@ describe("WebSocket-first socket with SSE fallback", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("falls back to SSE when the WebSocket OPENS but never delivers a frame (proxy stall)", async () => {
+    const ws = new FakeWs();
+    const calls: string[] = [];
+    const factory = createFallbackSocketFactory({
+      webSocketFactory: () => ws,
+      sse: { fetchFn: sseFetch(calls) as never },
+      openTimeoutMs: 30,
+    });
+    const socket = await factory("wss://stall.example/v1/realtime");
+    const opened = new Promise<void>((r) => (socket.onopen = () => r()));
+    // The upgrade completes, so onopen fires - but no server frame ever arrives.
+    ws.readyState = 1;
+    ws.onopen?.({});
+    await opened;
+    // After the timeout the socket must be in SSE mode anyway: auth frames replay there.
+    await new Promise((r) => setTimeout(r, 60));
+    socket.send('{"type":"auth","projectId":"p","apiKey":"k"}');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls.length).toBeGreaterThan(0);
+  });
+
   it("falls back to SSE when the WebSocket errors before opening, and remembers the host", async () => {
     const ws = new FakeWs();
     const calls: string[] = [];

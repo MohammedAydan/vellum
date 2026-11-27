@@ -109,12 +109,11 @@ const stopConn = db.onConnectionStateChange((state, prev) => {
   console.log(\`Realtime state: \${prev} -> \${state}\`);
 });
 
-// اشتراك مستند واحد — تصل التغييرات داخل snapshot.changes
+// اشتراك مستند واحد — يصل كل تغيير كـ DocumentSnapshot (exists / data())
 const stopUser = db.collection("users").doc("u_123").onSnapshot(
-  (snapshot) => {
-    for (const change of snapshot.changes) {
-      console.log(change.type, change.seqId, change.doc.path);
-    }
+  (snap) => {
+    if (!snap.exists) return; // مستند غير موجود أو محذوف
+    console.log(snap.id, snap.version, snap.data());
   },
   (err) => console.error("Realtime error:", err)
 );
@@ -296,9 +295,8 @@ await querySub.cancel();`,
               lang: "ts",
               code: `const off = db.doc("orders/ord_1").onSnapshot(
   (snap) => {
-    for (const change of snap.changes) {
-      console.log(change.doc.included, change.doc.redactedRefs);
-    }
+    if (!snap.exists) return;
+    console.log(snap.included, snap.redactedRefs);
   },
   (err) => console.error(err),
   { resolveIncludes: true, include: ["customer", { field: "items", select: ["sku"] }] }

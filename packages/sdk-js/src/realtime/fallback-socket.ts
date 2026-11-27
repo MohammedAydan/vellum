@@ -70,8 +70,12 @@ class FallbackSocket implements WebSocketLike {
     try {
       const ws = await this.options.webSocketFactory(this.url);
       this.attach(ws);
+      // The timer is cleared on the FIRST MESSAGE, not on open: a proxy can
+      // complete the upgrade and then never deliver a frame, which used to
+      // stall the subscription forever. Any ws-mode error/close before the
+      // first message already falls back via the handlers below.
       this.openTimer = setTimeout(() => {
-        if (this.mode === "ws" && !this.opened) this.useSse(new Error("WebSocket open timed out"));
+        if (this.mode === "ws" && !this.gotMessage) this.useSse(new Error("WebSocket delivered no frame before the open timeout"));
       }, this.options.openTimeoutMs ?? DEFAULT_WS_OPEN_TIMEOUT_MS);
       this.openTimer.unref?.();
     } catch (error: unknown) {
@@ -83,7 +87,6 @@ class FallbackSocket implements WebSocketLike {
     this.inner = socket;
     socket.onopen = (event) => {
       if (this.inner !== socket) return;
-      this.clearOpenTimer();
       const reopening = this.opened;
       this.opened = true;
       this.readyState = 1;
@@ -96,6 +99,7 @@ class FallbackSocket implements WebSocketLike {
     socket.onmessage = (event) => {
       if (this.inner !== socket) return;
       this.gotMessage = true;
+      this.clearOpenTimer();
       this.onmessage?.(event);
     };
     socket.onerror = (event) => {

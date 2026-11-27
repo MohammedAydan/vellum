@@ -445,11 +445,36 @@ export class DocumentReference<T = Record<string, unknown>> implements DocumentR
     return res;
   }
 
+  /**
+   * BREAKING (0.0.9, P0-4): document listeners receive a `DocumentSnapshot<T>`
+   * directly, Firestore-style, not the query-shaped `RealtimeSnapshot`. The
+   * first emit is the current state; a document that does not exist (or was
+   * deleted) emits `exists: false` with `data() === null`. Replays of an
+   * already-delivered state (initial sync followed by the same-version live
+   * event, SSE reconnects) are deduped on (exists, version).
+   */
   public onSnapshot(
-    callback: (snapshot: RealtimeSnapshot<T>) => void,
+    callback: (snapshot: DocumentSnapshot<T>) => void,
     onError?: ((err: unknown) => void) | null,
     options: RealtimeListenOptions = {}
   ): () => void {
-    return this.ctx.subscribeRealtime<T>({ path: this.path, ...options, ...(options.include ? { include: options.include.map(normalizeInclude) } : {}) }, callback, onError ?? null, this.converter);
+    const id = this.path.split("/").pop() ?? this.path;
+    let lastEmitted: { exists: boolean; version: number } | null = null;
+    return this.ctx.subscribeRealtime<T>(
+      { path: this.path, ...options, ...(options.include ? { include: options.include.map(normalizeInclude) } : {}) },
+      (snapshot: RealtimeSnapshot<T>) => {
+        const changed = [...snapshot.changes].reverse().find((change) => change.doc.path === this.path);
+        const held = snapshot.docs.find((doc) => doc.path === this.path);
+        const snap = changed?.doc ?? held ?? buildMissingDocumentSnapshot<T>(this.path, id);
+        const key = { exists: snap.exists, version: snap.version };
+        if (lastEmitted !== null && lastEmitted.exists === key.exists && lastEmitted.version === key.version) {
+          return;
+        }
+        lastEmitted = key;
+        callback(snap);
+      },
+      onError ?? null,
+      this.converter
+    );
   }
 }

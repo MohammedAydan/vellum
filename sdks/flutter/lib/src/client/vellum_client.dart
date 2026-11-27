@@ -421,6 +421,30 @@ class VellumClient implements VellumClientPort {
 
   @override
   late final VellumRealtimeManager realtime;
+
+  /// Realtime connection state (Track 3): current state plus the transport
+  /// actually in use (`websocket` or `sse`) when knowable.
+  VellumConnectionState get connectionState {
+    final kind = realtime.activeTransportKind ??
+        switch (realtimeMode) {
+          VellumRealtimeMode.auto => null,
+          VellumRealtimeMode.websocket => 'websocket',
+          VellumRealtimeMode.sse => 'sse',
+        };
+    return VellumConnectionState(state: realtime.connectionState, transportKind: kind);
+  }
+
+  /// Broadcast stream of realtime connection-state transitions (Track 3).
+  Stream<VellumConnectionState> get connectionStateStream =>
+      realtime.connectionStateStream.map((state) => VellumConnectionState(
+            state: state,
+            transportKind: realtime.activeTransportKind ??
+                switch (realtimeMode) {
+                  VellumRealtimeMode.auto => null,
+                  VellumRealtimeMode.websocket => 'websocket',
+                  VellumRealtimeMode.sse => 'sse',
+                },
+          ));
   VellumAuth? _auth;
 
   VellumClient({
