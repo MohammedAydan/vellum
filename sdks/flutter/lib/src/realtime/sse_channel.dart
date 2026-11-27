@@ -393,7 +393,6 @@ class FallbackWebSocketChannel extends StreamChannelMixin<Object?>
   StreamSubscription<Object?>? _innerSub;
   Timer? _openTimer;
   bool _usingFallback = false;
-  bool _opened = false;
   bool _gotMessage = false;
   bool _closed = false;
   String? _authRaw;
@@ -446,7 +445,6 @@ class FallbackWebSocketChannel extends StreamChannelMixin<Object?>
     });
     channel.ready.then((_) {
       if (_inner != channel || _closed) return;
-      _opened = true;
       if (!_ready.isCompleted) _ready.complete();
     }, onError: (Object error) {
       if (_inner == channel && !_usingFallback) _useFallback(error);
@@ -504,7 +502,6 @@ class FallbackWebSocketChannel extends StreamChannelMixin<Object?>
     fallback.ready.then((_) {
       if (_inner != fallback || _closed) return;
       final wasOpen = _ready.isCompleted;
-      _opened = true;
       if (!_ready.isCompleted) _ready.complete();
       if (wasOpen) {
         // The transport already authenticated over the dropped WebSocket.

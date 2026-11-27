@@ -372,8 +372,6 @@ class _SilentWebSocketChannel extends StreamChannelMixin<Object?>
   String? get closeReason => null;
   @override
   String? get protocol => null;
-  @override
-  dynamic get extensions => null;
 }
 
 class _SilentSink implements WebSocketSink {

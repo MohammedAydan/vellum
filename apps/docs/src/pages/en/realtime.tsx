@@ -203,9 +203,8 @@ await sub.cancel();`,
               lang: "ts",
               code: `const off = db.doc("orders/ord_1").onSnapshot(
   (snap) => {
-    for (const change of snap.changes) {
-      console.log(change.doc.included, change.doc.redactedRefs);
-    }
+    if (!snap.exists) return; // missing or deleted document
+    console.log(snap.included, snap.redactedRefs);
   },
   (err) => console.error(err),
   { resolveIncludes: true, include: ["customer", { field: "items", select: ["sku"] }] }

@@ -89,7 +89,7 @@ describe("persistent write outbox (offlineWrites)", () => {
     const dead: Array<{ op: StoredWriteOp; code: string | undefined }> = [];
     let online = false;
     const seen: string[] = [];
-    const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    const fetch = (async (url: string | URL | Request, _init?: RequestInit) => {
       if (!online) throw new TypeError("fetch failed");
       const u = String(url);
       seen.push(u);

@@ -73,7 +73,7 @@ void main() {
         List<bool> seen,
         Future<void> Function(Map<String, Object?>) send,
         Future<void> Function() close,
-      })> _harness({bool resolveCache = false}) async {
+      })> docHarness({bool resolveCache = false}) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final sockets = <WebSocket>[];
     final ready = Completer<String>();
@@ -120,7 +120,7 @@ void main() {
   }
 
   test('a missing document reports exists == false once', () async {
-    final h = await _harness();
+    final h = await docHarness();
     try {
       await h.send({'type': 'initial_sync', 'subId': 'ignored', 'seqId': 1, 'documents': []});
       await Future<void>.delayed(const Duration(milliseconds: 500));
@@ -131,7 +131,7 @@ void main() {
   });
 
   test('identical (exists, version) emissions are deduplicated', () async {
-    final h = await _harness();
+    final h = await docHarness();
     final doc = {
       'documentId': 'c1',
       'path': 'chats/c1',
