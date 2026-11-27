@@ -330,8 +330,9 @@ class SseWebSocketChannel extends StreamChannelMixin<Object?>
       final prev = _lastSeq[subId];
       // A mutation at or below the last seq already delivered is a replay (for example after a
       // stream renewal): drop it so listeners see each change once.
-      if (frame['type'] == 'mutation' && prev != null && seq <= prev)
+      if (frame['type'] == 'mutation' && prev != null && seq <= prev) {
         return false;
+      }
       if (prev == null || seq > prev) _lastSeq[subId] = seq;
     }
     _emit(frame);
