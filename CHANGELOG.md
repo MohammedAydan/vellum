@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+## 0.0.8
+
+One release for the realtime, security-rules, auth and SDK fixes found in audits and live tests. Upgrade the SDKs together with the API. The SDKs are in beta, so some behavior changes below are breaking.
+
+### Upgrade notes
+
+- Three control-plane migrations (`0016` to `0018`) run automatically when the API is deployed with its normal build.
+- **JS behavior change:** `onAuthStateChanged` now calls its listener once right away with the current user (or `null`), like Flutter's `authStateChanges` and Firebase. A listener that only expected later changes will see one extra call.
+- **`addWithRelated` accepts at most 100 documents** (parent plus related), the same limit as `batchWrite`. Before, the SDKs allowed 500 and the API rejected anything over 100.
+- JS writes that contain `NaN` or `Infinity` now throw `INVALID_ARGUMENT` instead of being stored as `null`.
+- Network failures (offline, DNS, refused) now surface as an error with `code: "NETWORK_ERROR"` and `status: 0` in JS and Flutter.
+- Realtime does not need `DATA_DATABASE_URL_LISTEN`. Without it each instance polls the outbox about once a second for tenants with connected clients. Set a direct (non-pooled) connection string to also get instant wake-ups; each instance with LISTEN holds one direct connection.
+- `DATA_POOL_MAX` is now honoured for the data-plane pool.
+
+### Added
+
+- **Security rules:** `get()` and `exists()` lookups in rules, evaluated by the engine, by realtime, and in the docs. `list` rule semantics are unchanged. Live queries apply the same rules: when a subscriber can no longer read a document, their query gets a removal for it. Roll the ruleset out after the new API version is live, because an older API instance rejects rules that use these functions.
+- **Auth:** a per-project SMTP setting for verification and password-reset email.
+
+### Changed
+
+- The Index Advisor warning in the JS SDK is one line.
+- Docs: batch limit corrected to 100 and `BATCH_SIZE_EXCEEDED` explained, account-enumeration behavior of sign-up, reset and verify, the realtime snapshot shape, TypeScript run steps in the quickstart.
+
+### Fixed
+
+- **Realtime, multi-instance:** updates are no longer missed when the write and the client connection are served by different instances. The outbox poller always runs, and rows that commit late are delivered.
+- **Realtime:** a cold instance no longer replays old history as live events. The watermark returned on subscribe is the newest outbox sequence of the project. Idle tenants cost no database work.
+- **Realtime (JS, Flutter):** a delete in a document subscription reports `exists: false` and `data()` of `null`. An update older than the version already held is ignored.
+- **JS realtime** follows the browser's online and offline events.
+- **Errors:** a non-UUID project id gives `400 INVALID_ARGUMENT`. A `limit` below 1 or not an integer, and an empty `in` list, give `INVALID_ARGUMENT`.
+- Audit fixes: dotted update paths, timers, timestamp ranges, throttle keys, client IP handling, registry reads, nested field operations, group-by types and message text.
+
 ## 0.0.7
 
 Fixes found by building a real chat app on 0.0.6: realtime and requests from a browser, batch writes, and missing documents. Upgrade the SDKs together with the API.

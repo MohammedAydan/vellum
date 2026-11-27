@@ -7,7 +7,7 @@ description: Exported-symbol reference for @vellumdb/sdk-js — client, referenc
 
 # JavaScript SDK (`@vellumdb/sdk-js`)
 
-Complete API reference for `@vellumdb/sdk-js` v0.0.7 derived from `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`. For narrative walkthroughs see [Quickstart](../quickstart.md), [Query](../query.md), [Pagination](../pagination.md), [Realtime](../realtime.md), and [Batch Writes & Transactions](../batch-and-transactions.md).
+Complete API reference for `@vellumdb/sdk-js` v0.0.8 derived from `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`. For narrative walkthroughs see [Quickstart](../quickstart.md), [Query](../query.md), [Pagination](../pagination.md), [Realtime](../realtime.md), and [Batch Writes & Transactions](../batch-and-transactions.md).
 
 ```ts
 import {

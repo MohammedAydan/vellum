@@ -1,8 +1,8 @@
 // Registry releases used by both language versions. Source-checkout setup belongs in README.
 export const betaJavaScriptInstall = `# Node.js 22+ recommended
-npm install @vellumdb/sdk-js@0.0.7
-# or: pnpm add @vellumdb/sdk-js@0.0.7`;
+npm install @vellumdb/sdk-js@0.0.8
+# or: pnpm add @vellumdb/sdk-js@0.0.8`;
 export const betaDartInstall = `# Dart 3.4+ / compatible Flutter. Add to pubspec.yaml:
 dependencies:
-  vellum_flutter: ^0.0.7
+  vellum_flutter: ^0.0.8
 # Then run: dart pub get (or flutter pub get)`;

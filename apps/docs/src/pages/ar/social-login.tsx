@@ -10,8 +10,8 @@ export default function Page() {
       description="دع المستخدمين يسجّلون الدخول بحساب Google أو GitHub أو Apple من الويب أو من تطبيق Flutter. ينفّذ Vellum خطوات OAuth على الخادم، فلا يتعامل تطبيقك مع أي سر خاص بالمزوّد."
     >
       <AlphaNotice lang="ar" />
-      <Callout tone="warning" title="يتطلب الإصدار 0.0.7 أو أحدث">
-        الدوال في هذه الصفحة متاحة من الإصدار 0.0.7 لحزمتي JavaScript وFlutter.
+      <Callout tone="warning" title="يتطلب الإصدار 0.0.8 أو أحدث">
+        الدوال في هذه الصفحة متاحة من الإصدار 0.0.8 لحزمتي JavaScript وFlutter.
       </Callout>
 
       <Section id="how" title="كيف يعمل">
