@@ -58,9 +58,22 @@ class FakeSink implements OutboxFanoutSink {
 
 function fakeStore(rows: OutboxEvent[]): StorageAdapter {
   return {
-    queryOutboxSince: async (_ctx: TenantContext, afterSeqId = "0") => {
+    // P0-2: like the in-memory adapter, every row here is committed, so the
+    // head is the safe watermark.
+    queryOutboxSafeWatermark: async (_ctx: TenantContext) => {
+      let max = 0n;
+      for (const row of rows) {
+        const seq = BigInt(row.seqId);
+        if (seq > max) max = seq;
+      }
+      return max.toString();
+    },
+    queryOutboxSince: async (_ctx: TenantContext, afterSeqId = "0", upToSeqId?: string) => {
       const after = BigInt(afterSeqId);
-      return rows.filter((row) => BigInt(row.seqId) > after).slice(0, 500);
+      const upTo = upToSeqId === undefined ? null : BigInt(upToSeqId);
+      return rows
+        .filter((row) => BigInt(row.seqId) > after && (upTo === null || BigInt(row.seqId) <= upTo))
+        .slice(0, 500);
     },
   } as unknown as StorageAdapter;
 }
@@ -104,7 +117,9 @@ describe("realtime outbox poller (unit)", () => {
   it("delivers an event once when NOTIFY and polling both observe it", async () => {
     const bus = new FakeBus();
     const sink = new FakeSink();
-    const store = fakeStore([event(TENANT_A, 1)]);
+    // P0-2: rows are inserted after the tenant watermark is initialized;
+    // anything at or below the init head belongs to initial_sync, not the poller.
+    const { store, rows } = mutableStore();
     const poller = new OutboxPoller({
       bus,
       dataStore: store,
@@ -114,6 +129,9 @@ describe("realtime outbox poller (unit)", () => {
     await poller.start();
     try {
       sink.connections.set("c1", { authenticated: true, closed: false, projectId: TENANT_A.projectId });
+      await waitFor(() => poller.stats.polls > 0);
+      await new Promise((r) => setTimeout(r, 60)); // let the init drain finish
+      rows.push(event(TENANT_A, 1));
       bus.emit(note(TENANT_A, 1));
       await waitFor(() => sink.batches.length > 0);
       await new Promise((r) => setTimeout(r, 120)); // several extra poll ticks + duplicate NOTIFY
@@ -173,7 +191,8 @@ describe("realtime outbox poller (unit)", () => {
     });
     await poller.start();
     try {
-      bus.emit(note(TENANT_A, 2)); // establishes watermark=1 without poll-only bootstrap
+      bus.emit(note(TENANT_A, 2)); // registers + initializes the tenant (empty store: watermark 0)
+      await new Promise((r) => setTimeout(r, 60));
       rows.push(event(TENANT_A, 2), event(TENANT_B, 3), event(TENANT_A, 10));
       bus.emit(note(TENANT_A, 10)); // seq 3..9 missing for tenant A => gap
       await waitFor(() => sink.batches.length > 0);

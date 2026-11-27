@@ -8,10 +8,13 @@
  * unavailable, so the system degrades to polling instead of losing events.
  *
  * Invariants:
- *  - one monotonically increasing watermark per projectId (never fast-forwarded
- *    past unread rows on out-of-order or bursty NOTIFY wake-ups);
- *  - events with seqId <= watermark are never delivered again (NOTIFY + poll
- *    observing the same row therefore yields exactly one delivery);
+ *  - one monotonically increasing watermark per projectId;
+ *  - delivery is gated on the commit-order-safe watermark (P0-2): only rows
+ *    whose writing transaction was resolved at read time are fetched, so a
+ *    late-committing transaction can never be skipped by the watermark and no
+ *    wall-clock cutoff or grace window is involved;
+ *  - events with seqId <= watermark are never fetched again (NOTIFY + poll
+ *    observing the same row therefore yields exactly one fetch);
  *  - catch-up is capped at 500 rows per SQL query (the outbox index page size);
  *  - cross-tenant rows are filtered out before fan-out;
  *  - tracked tenants map is bounded to prevent unbounded memory growth.
@@ -74,6 +77,14 @@ export interface OutboxPollerOptions {
   pollIntervalMs?: number | undefined;
   /** Safety-net poll for tenants with no connected client, in ms. Defaults to 0 (never): idle tenants cost no database work. */
   idleTenantPollMs?: number | undefined;
+  /**
+   * LISTEN-healthy poll for tenants WITH a connected client, in ms. Defaults
+   * to 0 (poll every cycle). With LISTEN up the poll is only a missed-notify
+   * net, so production wiring sets this to a slow cadence (10000): live
+   * tenants are drained on that cadence instead of every poll interval. A
+   * pending rescan or an unhealthy LISTEN connection drains every cycle.
+   */
+  healthyTenantPollMs?: number | undefined;
   /** A drain running longer than this is replaced. Defaults to 8000. */
   drainStuckMs?: number | undefined;
   retryBaseMs?: number | undefined;
@@ -87,23 +98,10 @@ const LISTEN_RETRY_MS = 15_000;
 /** A drain running longer than this is treated as stuck (for example on a connection that died) and replaced. */
 const DRAIN_STUCK_MS = 8_000;
 
-/** Margin for clock differences between the API instance and the database when bootstrapping a tenant. */
-const CONNECT_SKEW_MARGIN_MS = 2_000;
-
-/** How long a delivered row stays in the re-read window so a transaction that committed late is not skipped. */
-const LATE_COMMIT_GRACE_MS = 3_000;
-
 interface TenantState extends TenantContext {
   key: string;
+  /** Highest delivered seq; only ever advances to the commit-order-safe watermark or below. */
   watermark: bigint;
-  /**
-   * Sequence numbers above `watermark` that were already delivered, with the delivery time. A row's
-   * seq is assigned at INSERT, but it becomes visible at COMMIT, so a row with a lower seq can commit
-   * after a higher one was already read. Those rows are still fetched (the query starts at
-   * `watermark`) and delivered once; `watermark` only moves past rows delivered at least
-   * `LATE_COMMIT_GRACE_MS` ago.
-   */
-  delivered: Map<bigint, number>;
   initialized: boolean;
   inFlight: boolean;
   /** Start time and generation of the running drain, so a drain stuck on a dead connection can be replaced. */
@@ -134,8 +132,10 @@ export class OutboxPoller implements OutboxPollerPort {
   private readonly pollIntervalMs: number;
   private readonly drainStuckMs: number;
   private readonly idleTenantPollMs: number;
+  private readonly healthyTenantPollMs: number;
   private readonly skippedIdle = new Set<string>();
   private readonly lastIdlePollAt = new Map<string, number>();
+  private readonly lastHealthyPollAt = new Map<string, number>();
   private readonly retryBaseMs: number;
   private readonly retryMaxMs: number;
   private readonly onError: ((error: Error) => void) | undefined;
@@ -169,6 +169,9 @@ export class OutboxPoller implements OutboxPollerPort {
     this.batchSize = Math.max(1, Math.min(5_000, Math.trunc(rawBatch)));
     this.pollIntervalMs = Math.max(50, Math.trunc(rawPoll));
     this.idleTenantPollMs = Number.isFinite(options.idleTenantPollMs) ? Math.max(0, options.idleTenantPollMs!) : 0;
+    this.healthyTenantPollMs = Number.isFinite(options.healthyTenantPollMs)
+      ? Math.max(0, options.healthyTenantPollMs!)
+      : 0;
     this.drainStuckMs = Number.isFinite(options.drainStuckMs) ? Math.max(50, options.drainStuckMs!) : DRAIN_STUCK_MS;
     this.retryBaseMs = Math.max(1, Math.trunc(rawRetryBase));
     this.retryMaxMs = Math.max(this.retryBaseMs, Math.trunc(rawRetryMax));
@@ -249,10 +252,34 @@ export class OutboxPoller implements OutboxPollerPort {
   /** Current committed watermark for a tenant, or null when never observed. */
   public getWatermark(projectId: string): bigint | null {
     const entry = this.tenants.get(this.keyFor(projectId));
-    if (!entry) return null;
-    let high = entry.watermark;
-    for (const seq of entry.delivered.keys()) if (seq > high) high = seq;
-    return high;
+    if (!entry || !entry.initialized) return null;
+    return entry.watermark;
+  }
+
+  /**
+   * P0-2: the gateway hub calls this when a session authenticates so the
+   * tenant's watermark is initialized from the commit-order-safe watermark
+   * *before* any subscribe snapshot is taken. That ordering guarantees a write
+   * that lands between a subscription's snapshot and this instance's first
+   * drain is above the tenant watermark and therefore fanned out live instead
+   * of being skipped.
+   */
+  public initializeTenantNow(projectId: string): void {
+    if (this.closed) return;
+    const entry = this.registerTenant({ projectId });
+    if (entry.initialized) return;
+    const task = (async () => {
+      await this.initializeEntry(entry);
+    })();
+    this.inFlightTasks.add(task);
+    void task
+      .catch((err: unknown) => {
+        this.stats.errors += 1;
+        this.reportError(err);
+      })
+      .finally(() => {
+        this.inFlightTasks.delete(task);
+      });
   }
 
   /** Feed a raw NOTIFY payload into the poller (also used by tests). */
@@ -264,7 +291,7 @@ export class OutboxPoller implements OutboxPollerPort {
     // Only projects with a live client on this instance need a drain; others would cost a transaction per write per instance.
     if (!this.hasLiveSession(note.projectId)) return;
     const observed = BigInt(note.seqId);
-    const entry = this.registerTenant(note, observed);
+    const entry = this.registerTenant(note);
     if (entry.initialized && observed > entry.watermark + 1n) {
       // Explicit gap detection: the wake-up skipped at least one sequence.
       // Never fast-forward watermark here — drain() will fetch every row > watermark
@@ -329,9 +356,21 @@ export class OutboxPoller implements OutboxPollerPort {
       }
       if (!live.has(key) && now - (this.lastIdlePollAt.get(key) ?? 0) < this.idleTenantPollMs) continue;
       if (!live.has(key)) this.lastIdlePollAt.set(key, now);
+      // LISTEN-healthy back-off (P1-4): with LISTEN up, the poll is only a
+      // missed-notify net for live tenants, so drain them on a slow cadence.
+      const known = this.tenants.get(key);
+      if (
+        live.has(key) &&
+        this.healthyTenantPollMs > 0 &&
+        this.unsubscribe !== null &&
+        !(known && known.pendingRescan) &&
+        now - (this.lastHealthyPollAt.get(key) ?? 0) < this.healthyTenantPollMs
+      ) continue;
+      if (live.has(key)) this.lastHealthyPollAt.set(key, now);
       void this.drain(this.registerTenant(ctx));
     }
     if (this.lastIdlePollAt.size > MAX_TRACKED_TENANTS * 2) this.lastIdlePollAt.clear();
+    if (this.lastHealthyPollAt.size > MAX_TRACKED_TENANTS * 2) this.lastHealthyPollAt.clear();
   }
 
   private hasLiveSession(projectId: string): boolean {
@@ -366,7 +405,7 @@ export class OutboxPoller implements OutboxPollerPort {
     }
   }
 
-  private registerTenant(ctx: TenantContext, observedSeq?: bigint): TenantState {
+  private registerTenant(ctx: TenantContext): TenantState {
     const key = this.keyFor(ctx.projectId);
     let entry = this.tenants.get(key);
     if (!entry) {
@@ -375,7 +414,6 @@ export class OutboxPoller implements OutboxPollerPort {
         key,
         projectId: ctx.projectId,
         watermark: 0n,
-        delivered: new Map(),
         initialized: false,
         inFlight: false,
         drainStartedAt: 0,
@@ -387,67 +425,62 @@ export class OutboxPoller implements OutboxPollerPort {
       };
       this.tenants.set(key, entry);
     }
-    if (observedSeq !== undefined && observedSeq > 0n && !entry.initialized) {
-      // The notification carries the exact inserted seq; start one before it
-      // so the triggering row is fetched on the first catch-up query.
-      entry.watermark = observedSeq - 1n;
-      entry.initialized = true;
-    }
     return entry;
   }
 
-  /** Earliest open-time of a live session on this tenant, or null when unknown or none. */
-  private earliestLiveConnectedAt(projectId: string): number | null {
-    let min: number | null = null;
-    const sessions = this.sink.connections;
-    if (!sessions) return null;
-    for (const session of sessions.values()) {
-      if (!session.authenticated || session.closed || session.projectId !== projectId) continue;
-      if (typeof session.connectedAt !== "number") continue;
-      if (min === null || session.connectedAt < min) min = session.connectedAt;
-    }
-    return min;
-  }
-
   /**
-   * Poll-only tenant bootstrap: skip history, but not what happened since a client connected.
-   * Starting at the current head would drop a write made between a client subscribing and the
-   * first poll (up to one poll interval), so the watermark starts at the newest row committed
-   * before the earliest live connection (minus a clock-skew margin) when one is known.
+   * Poll-only tenant bootstrap: start at the commit-order-safe watermark (P0-2).
+   * Every row at or below it belongs to a resolved transaction, so nothing a
+   * live session could observe is skipped; rows still in flight are picked up
+   * by later drains as their transactions resolve. Adapters without xid8
+   * gating fall back to the head (in-memory adapters commit atomically, so the
+   * head is safe there). No wall-clock cutoffs are involved.
    */
   private async initializeEntry(entry: TenantState): Promise<void> {
     if (entry.initialized) return;
-    const connectedAt = this.earliestLiveConnectedAt(entry.projectId);
-    const cutoff = connectedAt === null ? null : connectedAt - CONNECT_SKEW_MARGIN_MS;
-    let after = "0";
-    let last: bigint = 0n;
-    let beforeCutoff: bigint = 0n;
-    let reachedEnd = false;
-    for (let i = 0; i < 10; i += 1) {
-      if (this.closed) return;
-      const rows = await this.dataStore.queryOutboxSince(entry, after);
-      if (rows.length === 0) { reachedEnd = true; break; }
-      const tail = rows[rows.length - 1];
-      if (!tail) break;
-      for (const row of rows) {
-        try {
-          const seq = BigInt(row.seqId);
-          if (seq > last) last = seq;
-          if (cutoff !== null) {
-            const at = Date.parse(row.committedAt);
-            if (Number.isFinite(at) && at < cutoff && seq > beforeCutoff) beforeCutoff = seq;
-          }
-        } catch {
-          /* ignore malformed seq */
-        }
+    let watermark = "0";
+    if (typeof this.dataStore.queryOutboxSafeWatermark === "function") {
+      watermark = await this.dataStore.queryOutboxSafeWatermark(entry);
+    } else if (typeof this.dataStore.queryOutboxMaxSeq === "function") {
+      watermark = await this.dataStore.queryOutboxMaxSeq(entry);
+    } else {
+      // Adapters without a max query: page to the head (bounded scan).
+      let after = "0";
+      for (let i = 0; i < 10; i += 1) {
+        if (this.closed) return;
+        const rows = await this.dataStore.queryOutboxSince(entry, after);
+        const tail = rows[rows.length - 1];
+        if (!tail) break;
+        watermark = tail.seqId;
+        if (rows.length < this.batchSize) break;
+        after = tail.seqId;
       }
-      if (rows.length < this.batchSize) { reachedEnd = true; break; }
-      after = tail.seqId;
     }
     if (!entry.initialized) {
-      // A history longer than the scan cap cannot be compared by time; keep the head-based start.
-      entry.watermark = cutoff === null || !reachedEnd ? last : beforeCutoff;
+      let seq: bigint;
+      try {
+        seq = BigInt(watermark);
+      } catch {
+        seq = 0n;
+      }
+      entry.watermark = seq;
       entry.initialized = true;
+    }
+  }
+
+  /** Commit-order-safe upper bound for this drain, or null when the adapter cannot provide one. */
+  private async safeUpperBound(entry: TenantState): Promise<bigint | null> {
+    let raw: string | null = null;
+    if (typeof this.dataStore.queryOutboxSafeWatermark === "function") {
+      raw = await this.dataStore.queryOutboxSafeWatermark(entry);
+    } else if (typeof this.dataStore.queryOutboxMaxSeq === "function") {
+      raw = await this.dataStore.queryOutboxMaxSeq(entry);
+    }
+    if (raw === null) return null;
+    try {
+      return BigInt(raw);
+    } catch {
+      return null;
     }
   }
 
@@ -468,11 +501,22 @@ export class OutboxPoller implements OutboxPollerPort {
 
     const task = (async () => {
       await this.initializeEntry(entry);
-      // Page through everything after the watermark. `cursor` pages; `watermark` only advances past
-      // rows that have been delivered for longer than the late-commit grace period.
+      // P0-2: deliver only rows up to the commit-order-safe watermark. Every seq
+      // at or below `upper` belongs to a transaction that was resolved when the
+      // bound was read, so the capped fetch sees exactly the committed rows in
+      // (watermark, upper] and the watermark can advance straight to each
+      // delivered page tail - a late-committing transaction is never skipped,
+      // it is simply delivered by a later drain once it resolves.
+      const safe = await this.safeUpperBound(entry);
+      // Adapters without any max query (the bounded-scan bootstrap fallback)
+      // page unbounded: every row the fetch returns is committed, so the
+      // per-page watermark advance stays safe.
+      let upper: bigint | null = entry.watermark;
+      if (safe !== null && safe > upper) upper = safe;
+      if (safe === null) upper = null;
       let cursor = entry.watermark;
-      while (!this.closed && entry.drainGen === gen) {
-        const rows = await this.dataStore.queryOutboxSince(entry, cursor.toString());
+      while (!this.closed && entry.drainGen === gen && (upper === null || cursor < upper)) {
+        const rows = await this.dataStore.queryOutboxSince(entry, cursor.toString(), upper === null ? undefined : upper.toString());
         if (entry.drainGen !== gen) return;
         if (rows.length === 0) break;
         const fresh: OutboxEvent[] = [];
@@ -485,22 +529,23 @@ export class OutboxPoller implements OutboxPollerPort {
           } catch {
             continue;
           }
+          if (upper !== null && seq > upper) continue;
           if (seq > pageMax) pageMax = seq;
-          if (seq > entry.watermark && !entry.delivered.has(seq)) fresh.push(ev);
+          if (seq > entry.watermark) fresh.push(ev);
         }
         if (fresh.length > 0) {
           await this.sink.notifyCommittedEvents(entry.projectId, fresh);
-          const now = Date.now();
-          for (const ev of fresh) entry.delivered.set(BigInt(ev.seqId), now);
           this.stats.batchesDelivered += 1;
           this.stats.eventsDelivered += fresh.length;
         }
         entry.attempts = 0;
         if (pageMax <= cursor) break;
         cursor = pageMax;
+        // Advance per delivered page: the page is at or below the safe upper
+        // bound, so nothing skipped here can still be in flight.
+        entry.watermark = pageMax;
         if (rows.length < this.batchSize) break;
       }
-      this.advanceWatermark(entry);
     })();
 
     this.inFlightTasks.add(task);
@@ -524,20 +569,6 @@ export class OutboxPoller implements OutboxPollerPort {
           this.drain(entry);
         }
       });
-  }
-
-  /** Move the watermark past rows delivered more than the grace period ago, and forget them. */
-  private advanceWatermark(entry: TenantState): void {
-    const cutoff = Date.now() - LATE_COMMIT_GRACE_MS;
-    let next = entry.watermark;
-    for (const [seq, at] of entry.delivered) {
-      if (at <= cutoff && seq > next) next = seq;
-    }
-    if (next === entry.watermark) return;
-    entry.watermark = next;
-    for (const seq of entry.delivered.keys()) {
-      if (seq <= next) entry.delivered.delete(seq);
-    }
   }
 
   private scheduleRetry(entry: TenantState): void {

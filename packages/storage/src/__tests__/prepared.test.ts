@@ -170,7 +170,7 @@ describe("@vellum/storage - batched prepared statements", () => {
     // V2: the four sequential setup awaits collapse to ONE interpolated
     // multi-statement simple query on the pg path.
     expect(texts[0]).toBe(
-      `BEGIN; SET LOCAL statement_timeout = '5000ms'; SET LOCAL search_path = public; ` +
+      `BEGIN; SET LOCAL statement_timeout = '5000ms'; SET LOCAL lock_timeout = '1500ms'; SET LOCAL search_path = public; ` +
         `SELECT set_config('app.current_project_id', '${TENANT.projectId}', true)`
     );
     expect(client.calls[0]?.params).toBeUndefined();
@@ -196,6 +196,32 @@ describe("@vellum/storage - batched prepared statements", () => {
     ).rejects.toMatchObject({ code: "QUERY_DEADLINE_EXCEEDED" });
     expect(client.calls.map((call) => call.text)).toContain("ROLLBACK");
     expect(client.released).toBe(true);
+  });
+
+  it("translates a 55P03 lock conflict to ABORTED_CONFLICT with a retry hint and does not retry internally", async () => {
+    const client = new RecordingClient();
+    const originalQuery = client.query.bind(client);
+    let attempts = 0;
+    client.query = async (arg: PgQueryArg, params?: unknown[]) => {
+      const text = typeof arg === "string" ? arg : arg.text;
+      if (text.includes("set_config")) {
+        attempts += 1;
+        await originalQuery(arg, params);
+        throw Object.assign(new Error("lock not available"), { code: "55P03" });
+      }
+      return originalQuery(arg, params);
+    };
+    await expect(
+      runInTenantTransactionAsync(poolFor(client), TENANT, async () => "never")
+    ).rejects.toMatchObject({ code: "ABORTED_CONFLICT", details: { retryAfterMs: 50 } });
+    expect(attempts).toBe(1);
+    expect(client.calls.map((call) => call.text)).toContain("ROLLBACK");
+    expect(client.released).toBe(true);
+  });
+
+  it("offers a NOWAIT getDocument statement variant for hot documents", () => {
+    expect(getDocumentStatement(false, true, true).text).toContain("FOR UPDATE NOWAIT");
+    expect(getDocumentStatement(false, true, true).name).not.toBe(getDocumentStatement(false, true).name);
   });
 });
 

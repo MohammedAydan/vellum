@@ -125,6 +125,36 @@ class IndexedSubscriptionMap extends Map<string, SubscriptionRecord> {
   }
 }
 
+/** P0-2: maximum sessions checked or delivered to concurrently during one fan-out. */
+const FANOUT_SESSION_CONCURRENCY = 32;
+
+/**
+ * Run `worker` over `items` with at most `limit` in flight. Items are visited
+ * in order and each item starts only after a lane frees up, so per-item side
+ * effects for one event stay ordered while independent items overlap.
+ */
+async function runBounded<T>(items: readonly T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
+  if (items.length === 0) return;
+  let next = 0;
+  const lanes = Math.max(1, Math.min(limit, items.length));
+  const runners: Promise<void>[] = [];
+  for (let lane = 0; lane < lanes; lane += 1) {
+    runners.push(
+      (async () => {
+        for (;;) {
+          const index = next;
+          next += 1;
+          if (index >= items.length) return;
+          const item = items[index];
+          if (item === undefined && index >= items.length) return;
+          await worker(item as T);
+        }
+      })()
+    );
+  }
+  await Promise.all(runners);
+}
+
 export class RealtimeGatewayHub implements RealtimeGatewayPort {
   public readonly controlStore: ControlStoreForRealtime;
   public readonly dataStore: StorageAdapter;
@@ -140,6 +170,13 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
   private readonly subscriptionIndex = new Map<string, Map<SubscriptionRecord, ConnectionSession>>();
   /** Bumped on every index change so an in-flight fan-out can notice a subscription added while it awaited. */
   private readonly subscriptionIndexVersion = { n: 0 };
+  /** P0-2: invoked when a session authenticates so the outbox poller initializes the tenant watermark first. */
+  private tenantSessionStartHook: ((projectId: string) => void) | null = null;
+
+  /** Wire the outbox poller's tenant bootstrap; called once during composition. */
+  public setTenantSessionStartHook(hook: ((projectId: string) => void) | null): void {
+    this.tenantSessionStartHook = hook;
+  }
 
   constructor(options: RealtimeHubOptions) {
     this.apiKeyPepper = options.apiKeyPepper;
@@ -468,6 +505,15 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       session.authContext = authContext;
       this.indexSessionForProject(session, frame.projectId);
 
+      // P0-2: the tenant's poller watermark must exist before any subscribe
+      // snapshot below, so a write landing between snapshot and first drain is
+      // fanned out live instead of skipped. Never fail auth over the hook.
+      try {
+        this.tenantSessionStartHook?.(frame.projectId);
+      } catch {
+        /* poller warm-up only */
+      }
+
       session.sendFrame({
         type: "auth_ack",
         status: "authenticated",
@@ -545,6 +591,9 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
       }
     }
 
+    // Fallback watermark for adapters whose transactions cannot read the
+    // outbox; the in-transaction safe watermark below replaces it whenever
+    // available. In-memory adapters commit atomically, so the head is safe.
     let currentWatermark = "0";
     if (isOutboxSeqReadable(this.dataStore)) {
       currentWatermark = this.dataStore.outboxSeq.toString();
@@ -604,6 +653,14 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     try {
       await this.dataStore.withTransaction({ projectId }, async (tx: TxHandle) => {
       if (session.closed || session.subscriptions.get(frame.subId) !== subRecord) return;
+      // P0-2: the watermark travels with the snapshot. Read inside the same
+      // transaction, every row at or below the safe watermark was committed
+      // before this transaction's first statement, so the documents read below
+      // reflect everything the watermark claims - no wall-clock cutoff, and a
+      // client resuming from it can never miss a late-committing row.
+      if (typeof tx.outboxSafeWatermark === "function") {
+        currentWatermark = await tx.outboxSafeWatermark();
+      }
       const initialDocs: DocumentRecord[] = [];
       if (targetPath) {
         const doc = await tx.getDocument(targetPath, false);
@@ -884,43 +941,58 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     const collectCandidates = (): Map<SubscriptionRecord, ConnectionSession> => {
       const out = new Map<SubscriptionRecord, ConnectionSession>();
       for (const route of [`d:${ev.path}`, `c:${ev.collectionPath}`]) {
-        const bucket = this.subscriptionIndex.get(`${projectId}\u0000${route}`);
+        const bucket = this.subscriptionIndex.get(`${projectId} ${route}`);
         if (bucket) for (const [record, owner] of bucket) out.set(record, owner);
       }
       return out;
     };
+    // P0-2: decide *synchronously* whether any subscription can match this
+    // event (same document path, or a query on the same collection). With no
+    // candidate the event costs zero awaits: no include expansion, no ruleset
+    // read, no credential checks for uninvolved sessions.
+    let candidates = collectCandidates();
+    if (candidates.size === 0) return;
+
     // Only subscriptions that can match this event (same document path, or a query on the same collection).
-    const recipients = [...collectCandidates()].map(([subRecord, session]) => ({ session, subRecord }));
+    const recipients = [...candidates].map(([subRecord, session]) => ({ session, subRecord }));
     const documents = await this.prepareIncludedEvent(projectId, ev, recipients);
     const nowMs = Date.now();
     const ruleset = await this.rulesetFor(projectId);
     const keyMemo = new Map<string, Promise<ApiKeyRecord | null | undefined>>();
     // Re-read after the awaits above: a subscription added meanwhile must still see this event.
-    let candidates = collectCandidates();
+    candidates = collectCandidates();
     let candidatesVersion = this.subscriptionIndexVersion.n;
 
-    const lookupCache = new Map<string, Record<string, unknown> | null>();
-    for (const session of [...tenantSessions]) {
-      if (!session.authenticated || session.closed || session.projectId !== projectId) {
-        continue;
-      }
+    // P0-2: credential expiry and end-user revocation are checked once per
+    // *candidate* session (not once per connected session), with the per-key
+    // lookup memoised across them, and the batch runs with bounded concurrency
+    // instead of one sequential round-trip per session per event.
+    const candidateSessions = [
+      ...new Set(
+        [...candidates.values()].filter(
+          (session) => session.authenticated && !session.closed && session.projectId === projectId
+        )
+      ),
+    ];
+    const admitted = new Set<ConnectionSession>();
+    await runBounded(candidateSessions, FANOUT_SESSION_CONCURRENCY, async (session) => {
       const expiryErr = await this.checkSessionCredentialExpiry(session, nowMs, keyMemo);
-      if (expiryErr) {
-        session.sendFrame({
-          type: "error",
-          code: expiryErr.code,
-          message: expiryErr.message,
-        });
-        this.closeSession(session);
-        continue;
-      }
       // A session revoked after connect (sign-out, disabled user) must stop receiving data, not only stop sending.
-      const revokedErr = await this.checkSessionStillActive(session);
+      const revokedErr = expiryErr ?? (await this.checkSessionStillActive(session));
       if (revokedErr) {
         session.sendFrame({ type: "error", code: revokedErr.code, message: revokedErr.message });
         this.closeSession(session);
-        continue;
+        return;
       }
+      admitted.add(session);
+    });
+
+    const lookupCache = new Map<string, Record<string, unknown> | null>();
+    // P0-2: bounded concurrency across sessions; each session's own
+    // subscriptions are still visited in order and events reach the hub in
+    // ascending seq order, so per-subscription delivery order is preserved.
+    await runBounded(candidateSessions, FANOUT_SESSION_CONCURRENCY, async (session) => {
+      if (!admitted.has(session) || session.closed) return;
       if (candidatesVersion !== this.subscriptionIndexVersion.n) {
         candidates = collectCandidates();
         candidatesVersion = this.subscriptionIndexVersion.n;
@@ -934,7 +1006,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           document: documents.get(subRecord),
         });
       }
-    }
+    });
   }
 
   private eventPayload(ev: OutboxEvent): ReturnType<RealtimeGatewayHub["toDocPayload"]> {

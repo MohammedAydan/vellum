@@ -165,6 +165,9 @@ const RETRYABLE_PG_CODES: ReadonlySet<string> = new Set([
   "40P01", // deadlock_detected
 ]);
 
+/** Client-visible retry hint carried on lock-conflict (55P03) ABORTED_CONFLICT errors. */
+export const LOCK_CONFLICT_RETRY_AFTER_MS = 50;
+
 function getPgErrorCode(err: unknown): string | null {
   if (typeof err === "object" && err !== null && "code" in err) {
     const code = (err as { code?: unknown }).code;
@@ -267,7 +270,10 @@ export function buildPgTenantSetupSql(projectId: string): string {
   // Neon's pooler can hand out a backend whose search_path was left empty by a
   // previous `SET search_path` (pooled connections are reused). Pin it locally
   // so every tenant table resolves unqualified — fail closed, never leak.
-  return `BEGIN; SET LOCAL statement_timeout = '5000ms'; SET LOCAL search_path = public; ` +
+  // lock_timeout bounds how long a writer queues on a contended row: the
+  // conflict surfaces fast as ABORTED_CONFLICT (55P03, mapped below) instead
+  // of eating the whole statement_timeout budget.
+  return `BEGIN; SET LOCAL statement_timeout = '5000ms'; SET LOCAL lock_timeout = '1500ms'; SET LOCAL search_path = public; ` +
     `SELECT set_config('app.current_project_id', '${projectId}', true)`;
 }
 
@@ -275,6 +281,7 @@ export function buildPgTenantSetupSql(projectId: string): string {
 export const SQL_SET_TENANT_CONTEXT_PARAMETERIZED =
   `SELECT set_config('app.current_project_id', $1, true), ` +
   `set_config('statement_timeout', '5000ms', true), ` +
+  `set_config('lock_timeout', '1500ms', true), ` +
   `set_config('search_path', 'public', true)`;
 
 const DOCUMENT_COLUMNS = `project_id AS "projectId", path,
@@ -287,13 +294,15 @@ const DOCUMENT_COLUMNS = `project_id AS "projectId", path,
 /** Live-read predicate shared by every find/list statement (soft delete + TTL). */
 const LIVE_DOCUMENT_PREDICATE = `deleted_at IS NULL AND (expires_at IS NULL OR expires_at > now())`;
 
-export function getDocumentStatement(includeSoftDeleted: boolean, forUpdate: boolean): PreparedQueryConfig {
-  const suffix = `${includeSoftDeleted ? "All" : "Live"}${forUpdate ? "Locked" : ""}`;
+export function getDocumentStatement(includeSoftDeleted: boolean, forUpdate: boolean, nowait = false): PreparedQueryConfig {
+  const suffix = `${includeSoftDeleted ? "All" : "Live"}${forUpdate ? "Locked" : ""}${nowait ? "Nowait" : ""}`;
   // "Include soft deleted" is the admin/GC view: it deliberately bypasses both
   // the tombstone filter and the TTL filter so expired/tombstoned rows can be
   // inspected. Every normal read filters both with LIVE_DOCUMENT_PREDICATE.
   const liveClause = includeSoftDeleted ? "" : ` AND ${LIVE_DOCUMENT_PREDICATE}`;
-  const lockClause = forUpdate ? " FOR UPDATE" : "";
+  // NOWAIT (P1-4): hot documents fail fast with 55P03 -> ABORTED_CONFLICT
+  // instead of queueing behind a contender up to lock_timeout.
+  const lockClause = forUpdate ? (nowait ? " FOR UPDATE NOWAIT" : " FOR UPDATE") : "";
   return {
     name: `vellum_get_document_${suffix}`,
     text: `SELECT ${DOCUMENT_COLUMNS}
@@ -422,10 +431,25 @@ export const SQL_QUERY_OUTBOX = `SELECT seq_id::text AS "seqId", project_id AS "
         committed_at::text AS "committedAt"
    FROM realtime_outbox
   WHERE project_id = $1::uuid AND seq_id > $2::bigint
+    AND ($3::bigint IS NULL OR seq_id <= $3::bigint)
+    AND xid8 < pg_snapshot_xmin(pg_current_snapshot())
   ORDER BY seq_id ASC
   LIMIT 500`;
 
 export const SQL_QUERY_OUTBOX_MAX = `SELECT COALESCE(MAX(seq_id), 0)::text AS "seqId"
+   FROM realtime_outbox
+  WHERE project_id = $1::uuid`;
+
+/**
+ * P0-2 commit-order-safe watermark. `firstUnsafe` is the lowest seq_id whose
+ * writing transaction was still in flight when this snapshot was taken; every
+ * seq below it is final (committed and visible, or an aborted sequence gap),
+ * so the safe watermark is `firstUnsafe - 1`. With nothing in flight the safe
+ * watermark is simply the current max. Callers combine the two in JS so the
+ * arithmetic stays in bigint-land.
+ */
+export const SQL_OUTBOX_SAFE_WATERMARK = `SELECT MAX(seq_id)::text AS "maxSeq",
+       (MIN(seq_id) FILTER (WHERE xid8 >= pg_snapshot_xmin(pg_current_snapshot())))::text AS "firstUnsafe"
    FROM realtime_outbox
   WHERE project_id = $1::uuid`;
 
@@ -711,9 +735,9 @@ export function createSqlTransactionHandle(
       return mapped;
     },
 
-    async getDocument(path: string, includeSoftDeleted = false, forUpdate = false): Promise<DocumentRecord | null> {
+    async getDocument(path: string, includeSoftDeleted = false, forUpdate = false, nowait = false): Promise<DocumentRecord | null> {
       assertOpen();
-      const statement = getDocumentStatement(includeSoftDeleted, forUpdate);
+      const statement = getDocumentStatement(includeSoftDeleted, forUpdate, nowait);
       const { rows } = await runPrepared<DocumentRecord>(
         client,
         prepared,
@@ -1042,15 +1066,17 @@ export function createSqlTransactionHandle(
       }
     },
 
-    async queryOutboxSince(afterSeqId = "0"): Promise<OutboxEvent[]> {
+    async queryOutboxSince(afterSeqId = "0", upToSeqId?: string): Promise<OutboxEvent[]> {
       assertOpen();
       // Runs inside the tenant transaction so RLS is enforced (never a raw pool query).
       const { rows } = await runPrepared<OutboxEvent>(
         client,
         prepared,
-        "vellum_query_outbox",
+        // v2: xid8-safe read with an optional upper bound (P0-2). A new statement
+        // name because pooled connections may still hold the 2-parameter v1 text.
+        "vellum_query_outbox_v2",
         SQL_QUERY_OUTBOX,
-        [projectId, afterSeqId]
+        [projectId, afterSeqId, upToSeqId ?? null]
       );
       return rows;
     },
@@ -1060,6 +1086,18 @@ export function createSqlTransactionHandle(
       const { rows } = await client.query(SQL_QUERY_OUTBOX_MAX, [projectId]);
       const seqId = (rows[0] as { seqId?: string } | undefined)?.seqId;
       return typeof seqId === "string" ? seqId : "0";
+    },
+
+    async outboxSafeWatermark(): Promise<string> {
+      assertOpen();
+      const { rows } = await client.query(SQL_OUTBOX_SAFE_WATERMARK, [projectId]);
+      const row = rows[0] as { maxSeq?: string | null; firstUnsafe?: string | null } | undefined;
+      const firstUnsafe = typeof row?.firstUnsafe === "string" ? BigInt(row.firstUnsafe) : null;
+      if (firstUnsafe !== null) {
+        const safe = firstUnsafe - 1n;
+        return (safe > 0n ? safe : 0n).toString();
+      }
+      return typeof row?.maxSeq === "string" && row.maxSeq !== null ? row.maxSeq : "0";
     },
 
     async queryDocuments(compiled: CompiledQuery): Promise<QueriedDocument[]> {
@@ -1409,6 +1447,16 @@ export async function runInTenantTransactionAsync<T>(
       const code = getPgErrorCode(err);
       if (code === "57014") {
         throw new VellumError("QUERY_DEADLINE_EXCEEDED", "Database query exceeded 5000ms statement_timeout");
+      }
+      if (code === "55P03") {
+        // lock_timeout (or NOWAIT) on a contended row: a caller-actionable
+        // conflict with an explicit retry hint; the SDK retries with
+        // full-jitter backoff and blind writes retry internally.
+        throw new VellumError(
+          "ABORTED_CONFLICT",
+          "The document is locked by a concurrent write; retry with backoff",
+          { retryAfterMs: LOCK_CONFLICT_RETRY_AFTER_MS }
+        );
       }
       if (code !== null && RETRYABLE_PG_CODES.has(code) && attempt < maxRetries) {
         const jitter = Math.floor(Math.random() * retryBaseDelayMs);

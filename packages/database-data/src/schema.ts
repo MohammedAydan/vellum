@@ -28,6 +28,13 @@ const bytea = customType<{ data: Buffer; notNull: false; default: false }>({
   },
 });
 
+/** PostgreSQL `xid8` (full transaction id). Written by the column DEFAULT, never by the app. */
+const xid8 = customType<{ data: string; notNull: true; default: true }>({
+  dataType() {
+    return "xid8";
+  },
+});
+
 export const documents = pgTable(
   "documents",
   {
@@ -119,6 +126,8 @@ export const realtimeOutbox = pgTable(
     beforeData: jsonb("before_data"),
     afterData: jsonb("after_data"),
     committedAt: timestamp("committed_at", { withTimezone: true }).notNull().defaultNow(),
+    /** P0-2: writing transaction id; delivery is gated on `xid8 < pg_snapshot_xmin(...)`. */
+    xid8: xid8("xid8").notNull().default(sql`pg_current_xact_id()`),
   },
   (table) => ({
     projSeqIdx: index("idx_outbox_project_seq").on(table.projectId, table.seqId),

@@ -94,9 +94,14 @@ describe("@vellum/realtime - Security, Reliability & Performance Hardening", () 
       async close() {},
     };
     const dataStore = new DataPlaneStore();
-    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0") => {
+    // P0-2: model the xid8-gated read. The safe watermark starts behind the
+    // rows (they are still in flight) and advances once they resolve.
+    let safeWatermark = "1";
+    dataStore.queryOutboxSafeWatermark = async () => safeWatermark;
+    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0", upToSeqId?: string) => {
       const after = BigInt(afterSeqId);
-      return rows.filter((r) => BigInt(r.seqId) > after);
+      const upTo = upToSeqId === undefined ? null : BigInt(upToSeqId);
+      return rows.filter((r) => BigInt(r.seqId) > after && (upTo === null || BigInt(r.seqId) <= upTo));
     };
 
     const poller = new OutboxPoller({
@@ -111,8 +116,11 @@ describe("@vellum/realtime - Security, Reliability & Performance Hardening", () 
     });
 
     await poller.start();
-    // Seed initial watermark at 1 via notification for seq 2, then jump straight to 5.
-    poller.handleNotification(JSON.stringify({ seqId: 2, projectId: PROJECT_A }));
+    // The tenant initializes while rows 2-5 are still in flight (safe head 1).
+    poller.initializeTenantNow(PROJECT_A);
+    await new Promise((r) => setTimeout(r, 30));
+    // Rows 2-5 resolve; the wake-up for seq 5 must backfill 2-4 in order.
+    safeWatermark = "5";
     poller.handleNotification(JSON.stringify({ seqId: 5, projectId: PROJECT_A }));
     await new Promise((r) => setTimeout(r, 30));
     await poller.stop();
@@ -258,11 +266,20 @@ describe("@vellum/realtime - outbox rows that commit late", () => {
       seqId: String(n), projectId: PROJECT_A, collectionPath: "items", path: `items/i${n}`, documentId: `i${n}`,
       opType: "updated", version: 1, beforeData: null, afterData: { n }, committedAt: new Date().toISOString(),
     });
-    // Seq 11 committed first; seq 10 (inserted earlier, committed later) appears only on the next read.
-    const rows: OutboxEvent[] = [mk(9), mk(11)];
+    // P0-2: seq 11 is committed, but seq 10 (inserted earlier) is still in
+    // flight, so the safe watermark stops at 9 and row 11 waits. Once 10
+    // resolves, both are delivered in strict seq order - the watermark can
+    // never skip 10, and no grace window is involved.
+    const rows: OutboxEvent[] = [mk(9), mk(10), mk(11)];
+    let safeWatermark = "9";
     const delivered: string[] = [];
     const dataStore = new DataPlaneStore();
-    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0") => rows.filter((r) => BigInt(r.seqId) > BigInt(afterSeqId));
+    dataStore.queryOutboxSafeWatermark = async () => safeWatermark;
+    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0", upToSeqId?: string) => {
+      const after = BigInt(afterSeqId);
+      const upTo = upToSeqId === undefined ? null : BigInt(upToSeqId);
+      return rows.filter((r) => BigInt(r.seqId) > after && (upTo === null || BigInt(r.seqId) <= upTo));
+    };
     const poller = new OutboxPoller({
       bus: { async publish() {}, async subscribe() { return () => {}; }, async close() {} },
       dataStore,
@@ -270,35 +287,50 @@ describe("@vellum/realtime - outbox rows that commit late", () => {
       pollIntervalMs: 60_000,
     });
     await poller.start();
-    poller.handleNotification(JSON.stringify({ seqId: 9, projectId: PROJECT_A }));
+    // The tenant initializes at the safe head 9 while 10 is in flight.
+    poller.initializeTenantNow(PROJECT_A);
+    await new Promise((r) => setTimeout(r, 30));
+    // 11 is committed and visible, but 10 is still in flight: the safe
+    // watermark stays at 9 and 11 is NOT delivered ahead of 10.
+    poller.handleNotification(JSON.stringify({ seqId: 11, projectId: PROJECT_A }));
     await new Promise((r) => setTimeout(r, 50));
-    expect(delivered).toEqual(["9", "11"]);
-    rows.splice(1, 0, mk(10));
+    expect(delivered).toEqual([]);
+    // 10 commits; the safe watermark passes both and they arrive in seq order.
+    safeWatermark = "11";
     poller.handleNotification(JSON.stringify({ seqId: 10, projectId: PROJECT_A }));
     await new Promise((r) => setTimeout(r, 50));
-    expect(delivered).toEqual(["9", "11", "10"]);
+    expect(delivered).toEqual(["10", "11"]);
     // Re-reading must not duplicate anything.
     poller.handleNotification(JSON.stringify({ seqId: 11, projectId: PROJECT_A }));
     await new Promise((r) => setTimeout(r, 50));
-    expect(delivered).toEqual(["9", "11", "10"]);
+    expect(delivered).toEqual(["10", "11"]);
     await poller.stop();
   });
 });
 
 describe("@vellum/realtime - poll-only tenant bootstrap", () => {
-  it("does not drop a write made after a client connected but before the first poll", async () => {
-    const connectedAt = Date.now();
-    const old = (n: number): OutboxEvent => ({
+  it("initializes the tenant at session auth so a write before the first poll is not dropped", async () => {
+    // P0-2: no wall-clock cutoffs. The hub initializes the tenant watermark
+    // from the safe watermark when the session authenticates; a write that
+    // commits after auth but before the first poll is above that watermark
+    // and is delivered, while history at or below it is left to initial_sync.
+    const mk = (n: number): OutboxEvent => ({
       seqId: String(n), projectId: PROJECT_A, collectionPath: "items", path: `items/i${n}`, documentId: `i${n}`,
       opType: "updated", version: 1, beforeData: null, afterData: { n },
-      committedAt: new Date(connectedAt - 60_000).toISOString(),
+      committedAt: new Date().toISOString(),
     });
-    const fresh: OutboxEvent = { ...old(8), committedAt: new Date(connectedAt + 100).toISOString() };
-    const rows = [old(6), old(7), fresh];
+    const rows = [mk(6), mk(7), mk(8)];
+    // At auth time rows 6-7 are resolved; row 8 commits right after.
+    let safeWatermark = "7";
     const delivered: string[] = [];
     const dataStore = new DataPlaneStore();
-    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0") => rows.filter((r) => BigInt(r.seqId) > BigInt(afterSeqId));
-    const connections = new Map([["c1", { authenticated: true, closed: false, projectId: PROJECT_A, connectedAt }]]);
+    dataStore.queryOutboxSafeWatermark = async () => safeWatermark;
+    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0", upToSeqId?: string) => {
+      const after = BigInt(afterSeqId);
+      const upTo = upToSeqId === undefined ? null : BigInt(upToSeqId);
+      return rows.filter((r) => BigInt(r.seqId) > after && (upTo === null || BigInt(r.seqId) <= upTo));
+    };
+    const connections = new Map([["c1", { authenticated: true, closed: false, projectId: PROJECT_A, connectedAt: Date.now() }]]);
     const poller = new OutboxPoller({
       bus: { async publish() {}, async subscribe() { return () => {}; }, async close() {} },
       dataStore,
@@ -306,9 +338,62 @@ describe("@vellum/realtime - poll-only tenant bootstrap", () => {
       pollIntervalMs: 50,
     });
     await poller.start();
+    poller.initializeTenantNow(PROJECT_A);
+    await new Promise((r) => setTimeout(r, 50));
+    // Row 8 commits after the tenant was initialized.
+    safeWatermark = "8";
     await new Promise((r) => setTimeout(r, 200));
     await poller.stop();
     expect(delivered).toEqual(["8"]);
+    expect(poller.getWatermark(PROJECT_A)).toBe(8n);
+  });
+
+  it("backs off live-tenant polls while LISTEN is healthy but still drains on NOTIFY", async () => {
+    // P1-4: with LISTEN up the 1s poll is only a missed-notify net. A live
+    // tenant is skipped between healthy-poll ticks, and a NOTIFY still wakes
+    // a drain immediately inside that window.
+    const mk = (n: number): OutboxEvent => ({
+      seqId: String(n), projectId: PROJECT_A, collectionPath: "items", path: `items/i${n}`, documentId: `i${n}`,
+      opType: "updated", version: 1, beforeData: null, afterData: { n },
+      committedAt: new Date().toISOString(),
+    });
+    const rows = [mk(6), mk(7), mk(8), mk(9)];
+    let safeWatermark = "7";
+    const delivered: string[] = [];
+    const dataStore = new DataPlaneStore();
+    dataStore.queryOutboxSafeWatermark = async () => safeWatermark;
+    dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0", upToSeqId?: string) => {
+      const after = BigInt(afterSeqId);
+      const upTo = upToSeqId === undefined ? null : BigInt(upToSeqId);
+      return rows.filter((r) => BigInt(r.seqId) > after && (upTo === null || BigInt(r.seqId) <= upTo));
+    };
+    const connections = new Map([["c1", { authenticated: true, closed: false, projectId: PROJECT_A, connectedAt: Date.now() }]]);
+    const poller = new OutboxPoller({
+      bus: { async publish() {}, async subscribe() { return () => {}; }, async close() {} },
+      dataStore,
+      sink: { connections, async notifyCommittedEvents(_p, evs) { for (const e of evs) delivered.push(e.seqId); } },
+      pollIntervalMs: 40,
+      healthyTenantPollMs: 5_000,
+    });
+    await poller.start();
+    poller.initializeTenantNow(PROJECT_A);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(delivered).toEqual([]);
+    // Row 8 commits; healthy polls are backed off for 5s, so it is not delivered by polling.
+    safeWatermark = "8";
+    await new Promise((r) => setTimeout(r, 160));
+    expect(delivered).toEqual([]);
+    // A NOTIFY wakes the drain immediately, inside the backed-off window.
+    poller.handleNotification(JSON.stringify({ seqId: "8", projectId: PROJECT_A }));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(delivered).toEqual(["8"]);
+    // A row committed after that stays undelivered inside the backed-off
+    // window without a NOTIFY: polling it is exactly the cost the net avoids.
+    safeWatermark = "9";
+    await new Promise((r) => setTimeout(r, 160));
+    expect(delivered).toEqual(["8"]);
+    await poller.stop();
+    expect(poller.getWatermark(PROJECT_A)).toBe(8n);
   });
 });
 
@@ -321,6 +406,9 @@ describe("@vellum/realtime - stuck drain", () => {
       opType: "updated", version: 2, beforeData: null, afterData: { n: 1 }, committedAt: new Date().toISOString(),
     };
     const dataStore = new DataPlaneStore();
+    // Init at 0, then row 5 resolves; the first real fetch hangs on a dead connection.
+    let watermarkCalls = 0;
+    dataStore.queryOutboxSafeWatermark = async () => ((watermarkCalls += 1) === 1 ? "0" : "5");
     dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0") => {
       calls += 1;
       if (calls === 1) return await new Promise<OutboxEvent[]>(() => {}); // a query on a dead connection
@@ -349,6 +437,9 @@ describe("@vellum/realtime - LISTEN unavailable", () => {
     };
     const delivered: string[] = [];
     const dataStore = new DataPlaneStore();
+    // Init at 0, then row 7 resolves.
+    let watermarkCalls = 0;
+    dataStore.queryOutboxSafeWatermark = async () => ((watermarkCalls += 1) === 1 ? "0" : "7");
     dataStore.queryOutboxSince = async (_ctx, afterSeqId = "0") => (BigInt(ev.seqId) > BigInt(afterSeqId) ? [ev] : []);
     const connections = new Map([["c1", { authenticated: true, closed: false, projectId: PROJECT_A, connectedAt: Date.now() - 1_000 }]]);
     const errors: string[] = [];

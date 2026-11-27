@@ -17,7 +17,7 @@ export type TxHandlePort = TxHandle;
 
 /** Outbound durable outbox read port. */
 export interface OutboxPort {
-  queryOutboxSince(ctx: TenantContext, afterSeqId?: string): Promise<OutboxEvent[]>;
+  queryOutboxSince(ctx: TenantContext, afterSeqId?: string, upToSeqId?: string): Promise<OutboxEvent[]>;
 }
 
 /** Bounded in-process TTL cache port. */

@@ -288,6 +288,14 @@ describe("@vellum/realtime - Realtime Gateway Hub", () => {
       resumeSeqId: 9,
     });
 
+    // Wait until the subscription is registered (indexing happens before the
+    // gated replay read), so the racing live event has a candidate to buffer for.
+    for (let i = 0; i < 100; i += 1) {
+      const sess = [...hub.connections.values()][0];
+      if (sess && sess.subscriptions.has("sub_resume")) break;
+      await new Promise((r) => setTimeout(r, 0));
+    }
+
     // Live delivery for a newer row lands while replay is still awaiting.
     await hub.notifyCommittedEvents(TENANT.projectId, [
       outboxEvent(12, "Live 12"),
