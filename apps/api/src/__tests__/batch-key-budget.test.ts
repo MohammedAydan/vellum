@@ -58,15 +58,21 @@ describe("batch bodies get a per-document key budget", () => {
 
   it("still rejects one document that has too many keys", async () => {
     const { batch } = await fixture();
-    const res = await batch([op(0, 600), op(1, 1)]);
+    const res = await batch([op(0, 10_001), op(1, 1)]);
     expect(res.status).toBe(400);
-    expect(JSON.stringify(await res.json())).toContain("object keys");
+    expect(JSON.stringify(await res.json())).toContain("Split large documents");
   });
 
   it("still rejects a single-write body over the budget", async () => {
     const { batch } = await fixture();
-    const res = await batch([op(0, 600)]);
+    const res = await batch([op(0, 10_001)]);
     expect(res.status).toBe(400);
+  });
+
+  it("accepts a single write whose document is past the old 500-key cap", async () => {
+    const { batch } = await fixture();
+    const res = await batch([op(0, 800)]);
+    expect(res.status).toBeLessThan(300);
   });
 
   it("accepts a full batch sent as `operations`", async () => {
@@ -77,7 +83,7 @@ describe("batch bodies get a per-document key budget", () => {
 
   it("does not let a fake `writes` array lift the key cap on other routes", async () => {
     const { post } = await fixture();
-    const junk = Object.fromEntries(Array.from({ length: 800 }, (_, k) => [`j${k}`, k]));
+    const junk = Object.fromEntries(Array.from({ length: 10_001 }, (_, k) => [`j${k}`, k]));
     const res = await post("/documents/items/x", { data: junk, writes: [{}, {}, {}, {}] }, "PUT");
     expect(res.status).toBe(400);
     expect(JSON.stringify(await res.json())).toContain("object keys");

@@ -22,6 +22,8 @@ export declare const SYSTEM_LIMITS: {
   readonly OUTBOX_RETENTION_HOURS: 24;
   readonly RULES_AST_MAX_DEPTH: 10;
   readonly RULES_AST_MAX_NODES: 100;
+  readonly DOCUMENT_MAX_OBJECT_KEYS: 10000;
+  readonly RULESET_MAX_OBJECT_KEYS: 25000;
 };
 
 export declare const ERROR_HTTP_STATUS: {

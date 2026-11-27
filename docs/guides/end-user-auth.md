@@ -60,9 +60,17 @@ After token rotation the SDK re-sends the `auth` frame on the live connection.
 - `password/reset` and `email/verify/request` always answer `{ "success": true, "sent": true }`, including when the email is unknown or the project has no SMTP configured. A successful `sendPasswordResetEmail()` therefore does not prove an email was delivered. Configure SMTP for the project and check delivery on your side.
 - Password policy failures return `INVALID_ARGUMENT` with a message that names the unmet rule, such as the minimum length.
 
+## Password policy
+
+Every self-service password choice (sign-up, `password/change`, `password/confirm`) requires at least 8 characters and rejects passwords from the well-known common lists (for example `12345678` or `password`, case-insensitive) with `INVALID_ARGUMENT`, regardless of the project's own policy. Projects can raise the minimum length and require uppercase letters, numbers and symbols in the auth config.
+
+## User metadata is user-controlled
+
+The `metadata` object on an end-user record is written by that user through `PATCH /user` and at sign-up. Treat it as untrusted input: never read it in security rules and never use it for authorization, plan, or role decisions. Trusted per-user data belongs in your own collection (for example `users/{uid}` fields you write with a server key), protected by security rules. Roles and custom claims are set only through the admin API with a server key; end users cannot set them (such requests are rejected).
+
 ## Rate limits
 
-In-process sliding windows (no Redis): 10 failed logins / 15 min per `(ip,email)`; 5 reset/verify requests / 15 min (keyed by `(ip,email)` or `ip + SHA-256(signed bearer)` when no email); 5 failed MFA attempts / 5 min (also counted in the database, so it holds across serverless instances). A TOTP code works once. Enrolling again while MFA is on is refused; turn it off first with a current code. Social sign-in (Google, GitHub) also asks for the second factor when the user has MFA on. Throttled responses are `429 TOO_MANY_REQUESTS` with `Retry-After`.
+Durable sliding windows in PostgreSQL, shared by every API instance (no Redis): 10 failed logins / 15 min per `(ip,email)`; 50 failed logins / 15 min per account across all addresses; 5 reset/verify requests / 15 min (keyed by `(ip,email)` or `ip + SHA-256(signed bearer)` when no email); 5 failed MFA attempts / 5 min. A TOTP code works once. Enrolling again while MFA is on is refused; turn it off first with a current code. Social sign-in (Google, GitHub) also asks for the second factor when the user has MFA on. Throttled responses are `429 TOO_MANY_REQUESTS` with `Retry-After`. The per-account ceiling never locks the real owner out: while it is full, wrong passwords get `429` but the correct password still signs in.
 
 ## Read next
 

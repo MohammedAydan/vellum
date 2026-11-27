@@ -302,3 +302,37 @@ describe("auth throttle keys survive an earlier body-reading middleware", () => 
     expect((await post("real@example.test", "correct-horse")).status).toBe(200);
   });
 });
+
+describe("bypassOnSuccess (per-account ceilings)", () => {
+  function bypassApp(): Hono {
+    const app = new Hono();
+    app.onError(errorHandler);
+    app.use(
+      "/login",
+      authRateLimit(
+        { max: 3, windowMs: 15 * 60 * 1000, scope: "test-bypass", bypassOnSuccess: true },
+        new MemoryThrottleRepository()
+      )
+    );
+    app.post("/login", async (c) => {
+      const body = (await c.req.json()) as { password?: string };
+      return body.password === "correct-horse" ? c.json({ ok: true }) : c.json({ ok: false }, 401);
+    });
+    return app;
+  }
+
+  it("lets the correct credential through a full bucket while wrong ones stay throttled", async () => {
+    const app = bypassApp();
+    for (let i = 0; i < 3; i += 1) {
+      expect((await postLogin(app, "victim@example.test", "wrong")).status).toBe(401);
+    }
+    // Bucket full: wrong passwords get the 429...
+    const blocked = await postLogin(app, "victim@example.test", "wrong");
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get("Retry-After")).toBe("900");
+    // ...but the right one signs in, so nobody can lock the owner out.
+    expect((await postLogin(app, "victim@example.test", "correct-horse")).status).toBe(200);
+    // And afterwards wrong guesses are still refused.
+    expect((await postLogin(app, "victim@example.test", "wrong")).status).toBe(429);
+  });
+});

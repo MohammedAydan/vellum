@@ -119,6 +119,8 @@ These constants come from `@vellum/coreSYSTEM_LIMITS` and are enforced at the en
 | `MAX_WS_OUTBOUND_BUFFER_BYTES` | 1,048,576 (1 MiB) | `SLOW_CONSUMER_DISCONNECT` (429) |
 | `RULES_AST_MAX_DEPTH` | 10 | `QUERY_TOO_COMPLEX` (400) |
 | `RULES_AST_MAX_NODES` | 100 per rule | `QUERY_TOO_COMPLEX` (400) |
+| `DOCUMENT_MAX_OBJECT_KEYS` | 10,000 object keys per document (each write in a batch, transaction or import gets its own budget) | 400 |
+| `RULESET_MAX_OBJECT_KEYS` | 25,000 object keys per published ruleset | 400, guardCode `RULESET_TOO_LARGE` |
 | Composite indexes per free / pro plan | 50 / 200 | `QUOTA_EXCEEDED` (429) |
 | Tombstone retention | 7 days (default) | — |
 | Outbox retention | 24 hours | — |
@@ -150,6 +152,8 @@ Always include `X-Request-Id` (or `error.requestId`) in bug reports. Logs are re
 
 ## Throttled auth requests (429)
 
-Sign-in and sign-up endpoints limit attempts per IP, for example 30 end-user sign-ups per IP per 15 minutes. A throttled request fails with `TOO_MANY_REQUESTS` and a `Retry-After` header. In the SDKs the error carries `retryAfter` (seconds): `err.retryAfter` in JavaScript and `VellumException.retryAfter` in Dart. Wait that long before retrying.
+Sign-in and sign-up endpoints limit attempts per IP, for example 30 end-user sign-ups per IP per 15 minutes. Failed sign-ins are capped twice: 10 per 15 minutes per `(ip, email)`, and 50 per 15 minutes per account across all addresses. A throttled request fails with `TOO_MANY_REQUESTS` and a `Retry-After` header. In the SDKs the error carries `retryAfter` (seconds): `err.retryAfter` in JavaScript and `VellumException.retryAfter` in Dart. Wait that long before retrying.
+
+The per-account ceiling can never lock the real owner out: while the bucket is full, wrong passwords get `429` but the correct password still signs in. Without this, anyone who knows a user's email could keep that user locked out of their own account. The per-`(ip,email)` limit has no such bypass, so single-source guessing stays capped.
 
 For load tests and end-to-end test runs on a server you control, set `AUTH_RATE_LIMIT_SCALE` to a number above 1 (for example `20`) to multiply every auth limit. It is off by default and capped at 1000. Never set it on a production deployment: it weakens brute-force protection.

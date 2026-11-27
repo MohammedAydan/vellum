@@ -19,12 +19,14 @@ import {
   assertQueryCost,
   assertSafeJsonPayload,
   deriveChainKey,
+  PAYLOAD_LIMITS,
   securityHeaders,
   verifyCsrfOrigin,
 } from "@vellum/security";
 import {
   assertSafeJsonStructure,
   constantTimeEqual,
+  DEFAULT_MAX_JSON_KEYS,
   extractClientIp,
 } from "./security.js";
 import type { JsonSafetyOutcome } from "./security.js";
@@ -78,22 +80,99 @@ function makeMeteringLogger(
  */
 const BATCH_PATH = /\/(?:documents:batchWrite|batchWrite|transactions:commit)$/;
 
-/** Payload guard with a per-write key budget on batch and transaction-commit routes. */
-function checkJsonPayloadForRoute(path: string, body: unknown): GuardOutcome {
-  if (BATCH_PATH.test(path) && body !== null && typeof body === "object" && !Array.isArray(body)) {
+// Ruleset publishing (security rules, relation rules, compile/decompile/simulate) carries a
+// single large rules AST in the body, not user documents, so the 500-key per-document cap
+// with its batch wording was both too small and misleading there. These routes get their own
+// budget and error.
+const RULESET_PATH = /\/(?:rulesets|relation-rules|rules\/(?:compile|decompile|simulate))$/;
+
+// Collection import carries many documents in one request (a bare array, or
+// `{ documents, mode }`); each document gets its own key budget.
+const IMPORT_PATH = /\/collections\/[^/]+\/import$/;
+// Auth users:import carries up to 100 user records in one request.
+const USERS_IMPORT_PATH = /\/users:import$/;
+// Single-document reads/writes (`/v1/.../documents/<path>` and the console equivalents).
+const DOCUMENT_PATH = /\/documents\//;
+
+const DOCUMENT_KEY_LIMITS = {
+  ...PAYLOAD_LIMITS,
+  maxObjectKeys: SYSTEM_LIMITS.DOCUMENT_MAX_OBJECT_KEYS,
+};
+
+/** Accurate message when one document (or one write in a batch) exceeds the key budget. */
+function documentKeyFailure(): GuardOutcome {
+  return {
+    ok: false,
+    code: "INVALID_ARGUMENT",
+    message: `A single document exceeds ${SYSTEM_LIMITS.DOCUMENT_MAX_OBJECT_KEYS} object keys. Split large documents into smaller documents or subcollections.`,
+  };
+}
+
+function checkDocumentKeys(data: unknown): GuardOutcome {
+  const outcome = assertSafeJsonPayload(data, DOCUMENT_KEY_LIMITS);
+  if (!outcome.ok && outcome.message.startsWith("Total object keys")) {
+    return documentKeyFailure();
+  }
+  return outcome;
+}
+
+/** Envelope + per-item check for routes that carry a list of documents/writes. */
+function checkItemsPayload(body: unknown, fields: readonly string[]): GuardOutcome | null {
+  if (Array.isArray(body)) {
+    for (const item of body) {
+      const outcome = checkDocumentKeys(item);
+      if (!outcome.ok) return outcome;
+    }
+    return { ok: true };
+  }
+  if (body !== null && typeof body === "object") {
     const record = body as Record<string, unknown>;
-    for (const field of ["writes", "operations", "mutations"] as const) {
+    for (const field of fields) {
       const items = record[field];
-      if (Array.isArray(items) && items.length > 1 && items.length <= SYSTEM_LIMITS.MAX_BATCH_OPERATIONS) {
+      if (Array.isArray(items)) {
         const envelope = assertSafeJsonPayload({ ...record, [field]: [] });
         if (!envelope.ok) return envelope;
         for (const item of items) {
-          const outcome = assertSafeJsonPayload(item);
+          const outcome = checkDocumentKeys(item);
           if (!outcome.ok) return outcome;
         }
         return { ok: true };
       }
     }
+  }
+  return null;
+}
+
+/** Payload guard with per-route key budgets. */
+function checkJsonPayloadForRoute(path: string, body: unknown): GuardOutcome {
+  if (RULESET_PATH.test(path)) {
+    const outcome = assertSafeJsonPayload(body, {
+      ...PAYLOAD_LIMITS,
+      maxObjectKeys: SYSTEM_LIMITS.RULESET_MAX_OBJECT_KEYS,
+    });
+    if (!outcome.ok && outcome.message.startsWith("Total object keys")) {
+      return {
+        ok: false,
+        code: "RULESET_TOO_LARGE",
+        message: `The ruleset is too large: it has more than ${SYSTEM_LIMITS.RULESET_MAX_OBJECT_KEYS} object keys. Simplify the rules or split them across more collections.`,
+      };
+    }
+    return outcome;
+  }
+  if (BATCH_PATH.test(path)) {
+    const checked = checkItemsPayload(body, ["writes", "operations", "mutations"]);
+    if (checked !== null) return checked;
+  }
+  if (IMPORT_PATH.test(path)) {
+    const checked = checkItemsPayload(body, ["documents"]);
+    if (checked !== null) return checked;
+  }
+  if (USERS_IMPORT_PATH.test(path)) {
+    const checked = checkItemsPayload(body, ["users"]);
+    if (checked !== null) return checked;
+  }
+  if (DOCUMENT_PATH.test(path)) {
+    return checkDocumentKeys(body);
   }
   return assertSafeJsonPayload(body);
 }
@@ -386,20 +465,43 @@ export function attachFortressMiddleware(
         return;
       }
 
-      const structureCheck = assertSafeJsonStructure(body);
+      // Structural key budget per route class, mirroring checkJsonPayloadForRoute:
+      // ruleset routes carry one large rules AST; batch/import routes are bounded
+      // by their 5 MiB byte cap (a key can never outnumber bytes); single-document
+      // routes get the document budget so the payload guard's accurate message wins.
+      const isRulesetPath = RULESET_PATH.test(c.req.path);
+      const isBatchLikePath =
+        BATCH_PATH.test(c.req.path) || IMPORT_PATH.test(c.req.path) || USERS_IMPORT_PATH.test(c.req.path);
+      const isDocumentPath = DOCUMENT_PATH.test(c.req.path);
+      const structureMaxKeys = isRulesetPath
+        ? SYSTEM_LIMITS.RULESET_MAX_OBJECT_KEYS
+        : isBatchLikePath
+          ? SYSTEM_LIMITS.MAX_BATCH_PAYLOAD_BYTES
+          : isDocumentPath
+            ? SYSTEM_LIMITS.DOCUMENT_MAX_OBJECT_KEYS
+            : DEFAULT_MAX_JSON_KEYS;
+      const structureCheck = assertSafeJsonStructure(body, { maxKeys: structureMaxKeys });
       if (!structureCheck.ok) {
         // Type-only assertion for Vercel's separate function TS config, which
         // does not narrow this discriminated union (the package tsconfig does).
         const failed = structureCheck as Extract<JsonSafetyOutcome, { ok: false }>;
+        const keyOverflow = failed.code === "JSON_KEY_LIMIT_EXCEEDED";
+        const message =
+          keyOverflow && isRulesetPath
+            ? `The ruleset is too large: it has more than ${SYSTEM_LIMITS.RULESET_MAX_OBJECT_KEYS} object keys. Simplify the rules or split them across more collections.`
+            : keyOverflow && isDocumentPath
+              ? `A single document exceeds ${SYSTEM_LIMITS.DOCUMENT_MAX_OBJECT_KEYS} object keys. Split large documents into smaller documents or subcollections.`
+              : failed.message;
+        const guardCode = keyOverflow && isRulesetPath ? "RULESET_TOO_LARGE" : failed.code;
         safeRecord(
           services.threatDetector,
           "prototype_pollution",
           ip,
-          failed.message,
-          { path: c.req.path, guardCode: failed.code }
+          message,
+          { path: c.req.path, guardCode }
         );
-        throw new VellumError("INVALID_ARGUMENT", failed.message, {
-          guardCode: failed.code,
+        throw new VellumError("INVALID_ARGUMENT", message, {
+          guardCode,
         });
       }
 

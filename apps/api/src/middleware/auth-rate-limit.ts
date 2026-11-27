@@ -40,6 +40,19 @@ export interface AuthRateLimitOptions {
    * Used by the non-enumerating password-reset / email-verify request endpoints.
    */
   countAll?: boolean;
+  /**
+   * When true and the bucket is exhausted, the handler still runs: a successful
+   * response (< 400) is allowed through, while a failed one (4xx) gets the 429.
+   * Use ONLY on the per-account sign-in ceilings, never on the per-(ip,email)
+   * limits. An attacker who knows a victim's email can fill the account bucket
+   * with failed attempts from rotating addresses; without this, the real owner
+   * is then locked out of their own account for the whole window (a lockout
+   * DoS). Wrong guesses stay capped by the per-(ip,email) limit that runs
+   * first, so this opens no new brute-force path — it only stops a lockout
+   * from ever beating the correct password. 5xx responses pass through
+   * untouched so infrastructure errors are never masked as throttling.
+   */
+  bypassOnSuccess?: boolean;
 }
 
 /** Spoof-resistant client IP. No value is logged anywhere. */
@@ -104,7 +117,7 @@ export function authRateLimit(
   options: AuthRateLimitOptions,
   throttle: ThrottleRepository
 ): MiddlewareHandler {
-  const { windowMs, scope, countAll = false } = options;
+  const { windowMs, scope, countAll = false, bypassOnSuccess = false } = options;
   const max = Math.ceil(options.max * authRateLimitScale());
   const retryAfterSeconds = Math.ceil(windowMs / 1000);
 
@@ -113,6 +126,17 @@ export function authRateLimit(
     // The composed key is an opaque bucket subject only — never logged or returned.
     const slot = await throttle.acquireThrottleSlot(scope, identity, windowMs, max);
     if (!slot.acquired) {
+      if (bypassOnSuccess) {
+        // The composed handler converts downstream throws into responses before
+        // `next()` resolves (see the header comment), so c.res is the verdict.
+        await next();
+        const status = c.res.status;
+        if (status < 400 || status >= 500) return;
+        c.header("Retry-After", String(retryAfterSeconds));
+        throw new VellumError("TOO_MANY_REQUESTS", "Too many attempts. Please try again later.", {
+          retryAfterSeconds,
+        });
+      }
       c.header("Retry-After", String(retryAfterSeconds));
       throw new VellumError("TOO_MANY_REQUESTS", "Too many attempts. Please try again later.", {
         retryAfterSeconds,

@@ -119,6 +119,8 @@ if (e.code === "RATE_LIMITED") {
 | `MAX_WS_OUTBOUND_BUFFER_BYTES` | 1,048,576 (1 MiB) | `SLOW_CONSUMER_DISCONNECT` (429) |
 | `RULES_AST_MAX_DEPTH` | 10 | `QUERY_TOO_COMPLEX` (400) |
 | `RULES_AST_MAX_NODES` | 100 لكل قاعدة | `QUERY_TOO_COMPLEX` (400) |
+| `DOCUMENT_MAX_OBJECT_KEYS` | 10,000 مفتاح كائن لكل مستند (لكل عملية كتابة داخل الدُفعة أو المعاملة أو الاستيراد ميزانيتها الخاصة) | 400 |
+| `RULESET_MAX_OBJECT_KEYS` | 25,000 مفتاح كائن لكل مجموعة قواعد منشورة | 400، guardCode `RULESET_TOO_LARGE` |
 | الفهارس المركّبة لكل خطة مجاني/احترافي | 50 / 200 | `QUOTA_EXCEEDED` (429) |
 | الاحتفاظ بعلامات الحذف | 7 أيام (افتراضي) | — |
 | الاحتفاظ بصندوق البريد | 24 ساعة | — |

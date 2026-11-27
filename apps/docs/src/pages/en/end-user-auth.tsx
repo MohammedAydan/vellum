@@ -125,6 +125,12 @@ export default function Page() {
             <code> sessionId</code>, <code>expiresAt</code>, and the redacted <code>user</code>. Invalid credentials
             return <code>UNAUTHENTICATED</code>; disabled accounts return <code>PERMISSION_DENIED</code>.
           </P>
+          <P>
+            Failed sign-ins are throttled: 10 failures per 15 minutes per (IP, email), and 50 failures per
+            15 minutes per account across all addresses. A full bucket answers <code>TOO_MANY_REQUESTS</code> with
+            a <code>Retry-After</code> header — but only for wrong passwords. The correct password always signs in,
+            so an attacker who knows a user&apos;s email cannot lock that user out of their own account.
+          </P>
         </Api>
         <Api method="POST" path={`${PREFIX}/sign-up/email`}>
           <P>
@@ -132,6 +138,12 @@ export default function Page() {
             <code> photoUrl</code>, <code>phoneNumber</code>, and <code>metadata</code>. Claims cannot be set by end users; use a server key with the admin API.
             Existing emails return <code>ALREADY_EXISTS</code>, and a full project returns
             <code> QUOTA_EXCEEDED</code>.
+          </P>
+          <P>
+            Password policy: at least 8 characters (projects can raise this and require uppercase, numbers
+            and symbols), and passwords from the well-known common lists (such as <code>12345678</code>{" "}
+            or <code>password</code>) are always rejected with <code>INVALID_ARGUMENT</code>, whatever the
+            project&apos;s own policy allows.
           </P>
         </Api>
 
@@ -154,13 +166,20 @@ export default function Page() {
           head={["Method", "Path", "Notes"]}
           rows={[
             ["GET", <code>/user</code>, "Returns the current user's redacted record."],
-            ["PATCH", <code>/user</code>, "Updates profile fields, metadata and custom claims; changing email clears verification."],
+            ["PATCH", <code>/user</code>, "Updates profile fields and metadata; changing email clears verification and requires the current password."],
             ["POST", <code>/password/reset</code>, "Always { success: true, sent: true } — never reveals whether an email exists."],
             ["POST", <code>/password/confirm</code>, "Consumes the one-hour token, sets the new password and revokes all sessions."],
             ["POST", <code>/email/verify/request</code>, "Non-enumerating; accepts an email or the current bearer."],
             ["POST", <code>/email/verify/confirm</code>, "Consumes the token and marks the email verified."],
           ]}
         />
+        <Callout tone="warning" title="User metadata is user-controlled">
+          The <code>metadata</code> object on an end-user record is written by that user through{" "}
+          <code>PATCH /user</code> and by sign-up. Treat it as untrusted input: never read it in security
+          rules and never use it for authorization, plan, or role decisions. Trusted per-user data belongs in
+          your own collection (for example <code>users/{'{uid}'}</code> fields you write with a server key),
+          protected by security rules; roles and claims are set only through the admin API with a server key.
+        </Callout>
 
         <H3 id="mfa-routes">MFA</H3>
         <Table

@@ -19,6 +19,7 @@ import { readTenantSecurity } from "./admin-metadata.js";
 import { Hono, type Context } from "hono";
 import { timingSafeEqual } from "node:crypto";
 import { VellumError } from "@vellum/core";
+import { isCommonPassword, COMMON_PASSWORD_MESSAGE } from "@vellum/auth";
 import { getConfig } from "../config.js";
 import type { Role, SessionService } from "@vellum/authorization";
 import type { ControlPlaneRepository } from "@vellum/database-control";
@@ -242,6 +243,9 @@ export function createAdminRoutes(
     }
     if (password.length < 8) {
       throw new VellumError("INVALID_ARGUMENT", "Master owner password must be at least 8 characters");
+    }
+    if (isCommonPassword(password)) {
+      throw new VellumError("INVALID_ARGUMENT", COMMON_PASSWORD_MESSAGE);
     }
 
     const user = await controlStore.createUser({

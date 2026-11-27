@@ -1,10 +1,12 @@
-/tmp/vellum-new/examples/ts/_harness.ts:138
-    throw new Error(`harness: sign-in failed with HTTP ${token.status}`);
-          ^
+/home/sandbox/vellum/examples/ts/_harness.ts:46
+  if (!value) throw new Error(`Set ${name} for a disposable test project`);
+                    ^
 
-Error: harness: sign-in failed with HTTP 404
-    at harness (/tmp/vellum-new/examples/ts/_harness.ts:138:11)
-    at process.processTicksAndRejections (node:internal/process/task_<redacted>:103:5)
-    at async <anonymous> (/tmp/vellum-new/examples/ts/errors.ts:13:11)
+Error: Set VELLUM_EMAIL for a disposable test project
+    at requiredEnv (/home/sandbox/vellum/examples/ts/_harness.ts:46:21)
+    at <anonymous> (/home/sandbox/vellum/examples/ts/_harness.ts:49:15)
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
 
 Node.js v22.23.5

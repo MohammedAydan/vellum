@@ -12,6 +12,7 @@ import { getCookie } from "hono/cookie";
 import crypto from "node:crypto";
 import { promisify } from "node:util";
 import { VellumError } from "@vellum/core";
+import { isCommonPassword, COMMON_PASSWORD_MESSAGE } from "@vellum/auth";
 import { getApiKeyHeader } from "../middleware/tenant-auth.js";
 import { constantTimeEqual, extractClientIp } from "../middleware/security.js";
 import { getQueryPool } from "./usage.js";
@@ -463,6 +464,9 @@ export function createCustomerAuthRoutes(
     }
     if (!password || password.length < 8) {
       throw new VellumError("INVALID_ARGUMENT", "Password must be at least 8 characters");
+    }
+    if (isCommonPassword(password)) {
+      throw new VellumError("INVALID_ARGUMENT", COMMON_PASSWORD_MESSAGE);
     }
 
     // Check if user already exists
