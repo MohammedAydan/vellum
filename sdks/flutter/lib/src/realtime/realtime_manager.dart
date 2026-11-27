@@ -10,8 +10,34 @@ class VellumRealtimeManager implements VellumRealtimePort {
   final Map<String, void Function(Object)> _errorHandlers = <String, void Function(Object)>{};
   final Map<String, void Function()> _closeHandlers = <String, void Function()>{};
   int _counter = 0;
+  VellumRealtimeConnectionState _connectionState =
+      VellumRealtimeConnectionState.disconnected;
+  final StreamController<VellumRealtimeConnectionState>
+      _connectionStateController =
+      StreamController<VellumRealtimeConnectionState>.broadcast();
+  bool _outageErrorDelivered = false;
 
   VellumRealtimeManager(this.client);
+
+  /// Current connection state of the realtime transport (Track 3).
+  VellumRealtimeConnectionState get connectionState => _connectionState;
+
+  /// Broadcast stream of connection-state transitions (Track 3).
+  Stream<VellumRealtimeConnectionState> get connectionStateStream =>
+      _connectionStateController.stream;
+
+  /// Kind of the live transport (`websocket` / `sse`) when knowable, else null.
+  String? get activeTransportKind => _transport?.activeTransportKind;
+
+  void _onConnectionState(VellumRealtimeConnectionState state) {
+    _connectionState = state;
+    if (state == VellumRealtimeConnectionState.connected) {
+      _outageErrorDelivered = false;
+    }
+    if (!_connectionStateController.isClosed) {
+      _connectionStateController.add(state);
+    }
+  }
 
   @override
   String subscribe(
@@ -43,10 +69,16 @@ class VellumRealtimeManager implements VellumRealtimePort {
         handler?.call(frame);
       },
       onError: (Object error) {
+        // Once per subscription per outage (Track 3): a transport-level fault
+        // fans a single error to each subscription until the connection
+        // recovers, instead of an error per failed connect attempt.
+        if (_outageErrorDelivered) return;
+        _outageErrorDelivered = true;
         for (final handler in _errorHandlers.values) {
           handler(error);
         }
       },
+      onConnectionStateChange: _onConnectionState,
       channelFactory: client.webSocketChannelFactory ??
           switch (client.realtimeMode) {
             VellumRealtimeMode.auto => FallbackWebSocketChannel.connect,
@@ -86,6 +118,7 @@ class VellumRealtimeManager implements VellumRealtimePort {
     final transport = _transport;
     _transport = null;
     transport?.close();
+    _onConnectionState(VellumRealtimeConnectionState.disconnected);
     for (final closer in closers) {
       try {
         closer();

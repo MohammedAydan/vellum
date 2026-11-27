@@ -704,6 +704,24 @@ class VellumAuth implements VellumAuthPort {
         'DELETE', '/auth/sessions/${Uri.encodeComponent(sessionId)}');
   }
 
+  /// Canonical name for listing the identities linked to the current user
+  /// (Track 3); [listLinkedProviders] is kept as a deprecated alias.
+  @override
+  Future<VellumLinkedProviders> listIdentities() async {
+    final res = await client.request('GET', '/auth/identities');
+    final list = res['identities'];
+    return VellumLinkedProviders(
+      providers: list is List
+          ? list
+              .whereType<Map<Object?, Object?>>()
+              .map((m) =>
+                  VellumLinkedProvider.fromJson(Map<String, Object?>.from(m)))
+              .toList(growable: false)
+          : const <VellumLinkedProvider>[],
+    );
+  }
+
+  @Deprecated('Use listIdentities() instead.')
   @override
   Future<VellumLinkedProviders> listLinkedProviders() async {
     final res = await client.request('GET', '/auth/identities');

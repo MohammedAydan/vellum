@@ -420,6 +420,12 @@ class FallbackWebSocketChannel extends StreamChannelMixin<Object?>
   /// Default factory used by the SDK in [VellumRealtimeMode.auto].
   static WebSocketChannel connect(Uri url) => FallbackWebSocketChannel(url);
 
+  /// `true` once this channel has fallen back to SSE (HTTP streaming).
+  bool get usingFallback => _usingFallback;
+
+  /// The transport actually in use: `websocket` until a fallback, `sse` after.
+  String get transportKind => _usingFallback ? 'sse' : 'websocket';
+
   void _startPrimary() {
     final WebSocketChannel channel;
     try {
@@ -429,14 +435,17 @@ class FallbackWebSocketChannel extends StreamChannelMixin<Object?>
       return;
     }
     _attach(channel);
+    // The timer is cancelled on the FIRST MESSAGE, not on ready: a proxy can
+    // complete the upgrade and then never deliver a frame, which used to
+    // stall the subscription forever. Pre-message errors/done already fall
+    // back via _attach.
     _openTimer = Timer(_openTimeout, () {
-      if (!_usingFallback && !_opened) {
-        _useFallback(TimeoutException('WebSocket open timed out'));
+      if (!_usingFallback && !_gotMessage) {
+        _useFallback(TimeoutException('WebSocket delivered no frame before the open timeout'));
       }
     });
     channel.ready.then((_) {
       if (_inner != channel || _closed) return;
-      _openTimer?.cancel();
       _opened = true;
       if (!_ready.isCompleted) _ready.complete();
     }, onError: (Object error) {
@@ -450,6 +459,8 @@ class FallbackWebSocketChannel extends StreamChannelMixin<Object?>
       (Object? data) {
         if (_inner != channel) return;
         _gotMessage = true;
+        _openTimer?.cancel();
+        _openTimer = null;
         if (!_incoming.isClosed) _incoming.add(data);
       },
       onError: (Object error) {

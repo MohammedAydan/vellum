@@ -198,6 +198,8 @@ abstract interface class VellumAuthPort {
   Future<void> revokeSession(String sessionId);
 
   /// Sign-in methods linked to the account.
+  Future<VellumLinkedProviders> listIdentities();
+  @Deprecated('Use listIdentities() instead.')
   Future<VellumLinkedProviders> listLinkedProviders();
 
   /// Removes a linked sign-in method. Refused when it is the last one.

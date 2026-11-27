@@ -37,6 +37,25 @@ class RealtimeFrames {
 /// Channel factory seam (defaults to `WebSocketChannel.connect`).
 typedef RealtimeChannelFactory = WebSocketChannel Function(Uri url);
 
+/// Connection state of the realtime transport, surfaced on the client as
+/// `connectionState` / `connectionStateStream` (Track 3).
+enum VellumRealtimeConnectionState { connecting, connected, reconnecting, disconnected }
+
+/// Connection state plus the transport kind actually in use (Track 3).
+class VellumConnectionState {
+  final VellumRealtimeConnectionState state;
+
+  /// `websocket` or `sse` when knowable; null before the first connect in
+  /// auto mode.
+  final String? transportKind;
+
+  const VellumConnectionState({required this.state, this.transportKind});
+
+  @override
+  String toString() =>
+      'VellumConnectionState($state${transportKind != null ? ', $transportKind' : ''})';
+}
+
 class _TrackedSubscription {
   final String subId;
   final JsonMap target;
@@ -52,6 +71,7 @@ class VellumRealtimeTransport {
   final Future<JsonMap> Function() auth;
   final void Function(JsonMap frame) onFrame;
   final void Function(Object error)? onError;
+  final void Function(VellumRealtimeConnectionState state)? onConnectionStateChange;
   final RealtimeChannelFactory channelFactory;
   final Duration heartbeatInterval;
   final Duration pongTimeout;
@@ -80,6 +100,7 @@ class VellumRealtimeTransport {
     required this.auth,
     required this.onFrame,
     this.onError,
+    this.onConnectionStateChange,
     RealtimeChannelFactory? channelFactory,
     this.heartbeatInterval = const Duration(seconds: 15),
     this.pongTimeout = const Duration(seconds: 35),
@@ -91,6 +112,25 @@ class VellumRealtimeTransport {
         backoffMs = backoffMs ?? ((attempt) => computeReconnectBackoffMs(attempt));
 
   bool get isAuthenticated => _authenticated;
+
+  /// Kind of the live channel when it is known: `websocket` or `sse` from the
+  /// auto-fallback channel; null otherwise (forced modes know their kind at
+  /// the client).
+  String? get activeTransportKind {
+    final channel = _channel;
+    if (channel is FallbackWebSocketChannel) return channel.transportKind;
+    return null;
+  }
+
+  void _emitConnectionState(VellumRealtimeConnectionState state) {
+    final listener = onConnectionStateChange;
+    if (listener == null) return;
+    try {
+      listener(state);
+    } catch (_) {
+      // A throwing listener must never break realtime state transitions.
+    }
+  }
 
   /// Number of frames currently buffered in the bounded outbound queue.
   int get outboundQueueLength => _outboundQueue.length;
@@ -153,6 +193,7 @@ class VellumRealtimeTransport {
   void close() {
     _closed = true;
     _authenticated = false;
+    _emitConnectionState(VellumRealtimeConnectionState.disconnected);
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
     _reconnectTimer?.cancel();
@@ -173,6 +214,7 @@ class VellumRealtimeTransport {
   }
 
   void _open() {
+    _emitConnectionState(VellumRealtimeConnectionState.connecting);
     _connectTimer?.cancel();
     _connectTimer = Timer(connectTimeout, () {
       if (!_authenticated) _fail(TimeoutException('Realtime connection timed out'));
@@ -224,6 +266,7 @@ class VellumRealtimeTransport {
       _connectTimer?.cancel();
       _connectTimer = null;
       _authenticated = true;
+      _emitConnectionState(VellumRealtimeConnectionState.connected);
       _attempt = 0;
       _lastReconnectDelayMs = 500;
       _lastPongAt = DateTime.now();
@@ -339,6 +382,7 @@ class VellumRealtimeTransport {
 
   void _scheduleReconnect() {
     if (_closed || _reconnectTimer != null) return;
+    _emitConnectionState(VellumRealtimeConnectionState.reconnecting);
     final delay = _useCustomBackoff
         ? backoffMs(_attempt)
         : computeDecorrelatedJitterBackoffMs(_lastReconnectDelayMs);

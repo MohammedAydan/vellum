@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stream_channel/stream_channel.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:vellum_flutter/vellum_flutter.dart';
 
@@ -311,6 +312,27 @@ void main() {
       await channel.sink.close();
     });
 
+    test('falls back when the WebSocket opens but never delivers a frame (Track 3 stall)',
+        () async {
+      var fellBack = false;
+      final channel = FallbackWebSocketChannel(
+        Uri.parse('ws://127.0.0.1:${server.port}/v1/realtime'),
+        primaryFactory: (_) => _SilentWebSocketChannel(),
+        openTimeout: const Duration(milliseconds: 300),
+        onFallback: (_) => fellBack = true,
+      );
+      final received = <Map<String, Object?>>[];
+      channel.stream.listen((data) =>
+          received.add(jsonDecode(data as String) as Map<String, Object?>));
+      await channel.ready.timeout(const Duration(seconds: 5));
+      channel.sink
+          .add(jsonEncode({'type': 'auth', 'projectId': 'p', 'apiKey': 'k'}));
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+      expect(fellBack, isTrue);
+      expect(received.first['type'], 'auth_ack');
+      await channel.sink.close();
+    });
+
     test('falls back when the WebSocket factory throws and remembers the host',
         () async {
       var primaryCalls = 0;
@@ -328,4 +350,41 @@ void main() {
       expect(primaryCalls, 1);
     });
   });
+}
+
+/// A WebSocket whose `ready` completes but which never delivers a frame:
+/// the pre-Track-3 stall shape (proxy completed the upgrade, then silence).
+class _SilentWebSocketChannel extends StreamChannelMixin<Object?>
+    implements WebSocketChannel {
+  final StreamController<Object?> _incoming = StreamController<Object?>();
+  final _SilentSink _sink = _SilentSink();
+  final Completer<void> _ready = Completer<void>()..complete();
+
+  @override
+  Stream<Object?> get stream => _incoming.stream;
+  @override
+  WebSocketSink get sink => _sink;
+  @override
+  Future<void> get ready => _ready.future;
+  @override
+  int? get closeCode => null;
+  @override
+  String? get closeReason => null;
+  @override
+  String? get protocol => null;
+  @override
+  dynamic get extensions => null;
+}
+
+class _SilentSink implements WebSocketSink {
+  @override
+  void add(Object? event) {}
+  @override
+  void addError(Object error, [StackTrace? stackTrace]) {}
+  @override
+  Future<void> addStream(Stream<Object?> stream) async {}
+  @override
+  Future<void> close([int? closeCode, String? closeReason]) async {}
+  @override
+  Future<void> get done => Completer<void>().future;
 }
