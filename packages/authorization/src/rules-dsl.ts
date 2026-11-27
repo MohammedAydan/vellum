@@ -542,7 +542,7 @@ class DslParser {
     if (this.current().type !== "ident") this.fail(`Expected ${what} but found '${this.current().raw || "end of input"}'`);
     return this.next();
   }
-  private warn(message: string, token: Token): void {
+  public warn(message: string, token: Token): void {
     this.diagnostics.push({
       message,
       line: token.line,
@@ -1247,8 +1247,8 @@ function effectiveAllowExpr(rule: SecurityRuleDefinition, op: string): unknown {
 
 function countExprNodes(expr: unknown, depth = 0): number {
   if (depth > 64 || expr === null || typeof expr !== "object") return 1;
-  if (Array.isArray(expr)) return expr.reduce((sum, item) => sum + countExprNodes(item, depth + 1), 1);
-  return Object.values(expr as Record<string, unknown>).reduce((sum, item) => sum + countExprNodes(item, depth + 1), 1);
+  if (Array.isArray(expr)) return expr.reduce<number>((sum, item) => sum + countExprNodes(item, depth + 1), 1);
+  return Object.values(expr as Record<string, unknown>).reduce<number>((sum, item) => sum + countExprNodes(item, depth + 1), 1);
 }
 
 /** True when the expression pins `path.<name>` away from `literal` (a wildcard guard). */
