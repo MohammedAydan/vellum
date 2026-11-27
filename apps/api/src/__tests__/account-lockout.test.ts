@@ -21,11 +21,19 @@ describe('per-account sign-in throttle', () => {
     }
     expect(statuses.filter((s) => s === 401).length).toBeLessThanOrEqual(50);
     expect(statuses.at(-1)).toBe(429);
-    // The correct password is also refused while the account is locked out.
+    // Lockout-DoS defence: a wrong password still gets the 429 while the
+    // per-account bucket is full...
+    const wrong = await platform.fetch(new Request('http://localhost/v1/auth/sign-in/email', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '198.51.100.250' },
+      body: JSON.stringify({ email: 'victim-lockout@example.invalid', password: 'still-wrong' }),
+    }));
+    expect(wrong.status).toBe(429);
+    // ...but the correct password always signs the real owner in, so filling
+    // the bucket can never lock them out of their own account.
     const good = await platform.fetch(new Request('http://localhost/v1/auth/sign-in/email', {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '198.51.100.250' },
       body: JSON.stringify({ email: 'victim-lockout@example.invalid', password: 'FixtureOnly123!' }),
     }));
-    expect(good.status).toBe(429);
+    expect(good.status).toBe(200);
   });
 });

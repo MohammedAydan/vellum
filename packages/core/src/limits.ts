@@ -27,6 +27,15 @@ export const SYSTEM_LIMITS = {
   OUTBOX_RETENTION_HOURS: 24,
   RULES_AST_MAX_DEPTH: 10,
   RULES_AST_MAX_NODES: 100,
+  // A single document (or a single write inside a batch/transaction/import)
+  // has its own payload key budget, far above the 500-key default request
+  // cap: realistic documents legitimately carry thousands of nested fields.
+  // The 1 MiB document byte cap above stays the hard size bound.
+  DOCUMENT_MAX_OBJECT_KEYS: 10_000,
+  // Publishing a security/relation ruleset has its own payload key budget,
+  // far above the 500-key per-document cap: a realistic ruleset for tens of
+  // collections legitimately exceeds it. The per-rule AST limits above stay.
+  RULESET_MAX_OBJECT_KEYS: 25_000,
 } as const;
 
 export type SystemLimits = typeof SYSTEM_LIMITS;

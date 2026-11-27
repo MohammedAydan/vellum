@@ -306,7 +306,10 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
   // source address (rotating proxies, a botnet, or a spoofable forwarding
   // header on a directly exposed deployment), so a password could be guessed
   // without limit. 50 failures / 15 min per account bounds that.
-  const ACCOUNT_LIMIT = { max: 50, windowMs: 15 * 60 * 1000 } as const;
+  // bypassOnSuccess: filling this bucket can never lock the real owner out —
+  // a correct password still signs in (wrong guesses stay capped per (ip,email)
+  // above). Without it, anyone who knows an email could lock that account.
+  const ACCOUNT_LIMIT = { max: 50, windowMs: 15 * 60 * 1000, bypassOnSuccess: true } as const;
   const emailOnlyKey = (prefix: string) => async (c: Context): Promise<string> => {
     let email = "";
     try {

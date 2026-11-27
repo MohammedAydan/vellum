@@ -164,14 +164,14 @@ export default function Page() {
         <Table
           head={["الطريقة", "المسار النسبي", "الوظيفة"]}
           rows={[
-            ["POST", <code>/sign-up/email</code>, "إنشاء مستخدم بالبريد وكلمة المرور وإصدار جلسة (201)."],
+            ["POST", <code>/sign-up/email</code>, "إنشاء مستخدم بالبريد وكلمة المرور وإصدار جلسة (201). يفرض سياسة كلمة المرور: 8 أحرف على الأقل ورفض كلمات المرور الشائعة دائماً."],
             ["POST", <code>/sign-in/email</code>, <>تسجيل الدخول؛ قد يُعيد <code>mfaRequired</code> وتذكرة MFA.</>],
             ["POST", <code>/sign-in/anonymous</code>, "إنشاء مستخدم مجهول وإصدار جلسة (201)."],
             ["POST", <code>/sign-in/provider</code>, "الدخول عبر مزوّد هوية وربط الهوية أو إنشاء المستخدم."],
             ["POST", <code>/token/refresh</code>, "تدوير رمز التحديث وإصدار زوج رموز جديد."],
             ["POST", <code>/sign-out</code>, "إبطال جلسة محدّدة أو جميع جلسات المستخدم."],
             ["GET", <code>/user</code>, "قراءة الملف الشخصي للمستخدم المصادَّق."],
-            ["PATCH", <code>/user</code>, "تحديث الملف الشخصي والمطالبات وإعادة إسقاط المستند."],
+            ["PATCH", <code>/user</code>, "تحديث الملف الشخصي والبيانات الوصفية (metadata)؛ تغيير البريد يلغي تحققه ويتطلب كلمة المرور الحالية."],
             ["POST", <code>/password/reset</code>, "إرسال رمز إعادة تعيين؛ استجابة غير كاشفة دائماً."],
             ["POST", <code>/password/confirm</code>, "استهلاك الرمز وتغيير كلمة المرور وإبطال الجلسات."],
             ["POST", <code>/email/verify/request</code>, "إرسال رمز تأكيد البريد؛ استجابة غير كاشفة دائماً."],
@@ -210,6 +210,15 @@ export default function Page() {
             },
           ]}
         />
+        <Callout tone="warning" title="البيانات الوصفية للمستخدم يتحكم بها المستخدم">
+          <P>
+            كائن <code>metadata</code> على سجل المستخدم النهائي يكتبه المستخدم نفسه عبر{" "}
+            <code>PATCH /user</code> وعند التسجيل. تعامل معه كمدخل غير موثوق: لا تقرأه في قواعد الأمان ولا{" "}
+            تستخدمه لقرارات التخويل أو الخطط أو الأدوار. البيانات الموثوقة لكل مستخدم تُحفظ في مجموعة تملكها{" "}
+            (مثلاً حقول <code>users/{'{uid}'}</code> التي تكتبها بمفتاح خادم) محمية بقواعد الأمان، والأدوار{" "}
+            والمطالبات (claims) تُضبط فقط عبر admin API بمفتاح خادم.
+          </P>
+        </Callout>
         <Callout tone="info" title="استجابات عدم الكشف">
           <P>
             تُجيب نقطتا <code>/password/reset</code> و <code>/email/verify/request</code> دائماً بـ{" "}
@@ -284,7 +293,7 @@ final token = await client.auth.getIdToken();`,
 
       <Section id="rate-limits" title="تحديد المعدل وإسقاط المستخدم">
         <P>
-          تُطبَّق نوافذ زمنية داخل العملية الواحدة (بدون Redis أو أي خدمة حالة خارجية). تُعاد الاستجابة المُقيَّدة
+          تُطبَّق نوافذ زمنية دائمة في PostgreSQL (مشتركة بين كل نسخ الخادم، بدون Redis). تُعاد الاستجابة المُقيَّدة
           بالحالة <code>429</code> والرمز <code>TOO_MANY_REQUESTS</code> مع ترويسة <code>Retry-After</code>
           بالثواني، وفق ما هو موضح في{" "}
           <PageLink slug="reference/errors" lang="ar">مرجع رموز الأخطاء</PageLink>.
@@ -293,10 +302,16 @@ final token = await client.auth.getIdToken();`,
           head={["النقطة", "الحد", "النافذة", "مفتاح الحد"]}
           rows={[
             [<code>/sign-in/email</code>, "10 محاولات فاشلة", "15 دقيقة", <>(ip, email)</>],
+            [<code>/sign-in/email</code>, "50 محاولة فاشلة", "15 دقيقة", "لكل حساب عبر كل العناوين"],
             [<><code>/password/reset</code> و <code>/email/verify/request</code></>, "5 طلبات", "15 دقيقة", <>(ip, email) أو ip + SHA-256(bearer)</>],
             [<><code>/mfa/challenge</code> و <code>/mfa/verify</code></>, "5 محاولات فاشلة", "5 دقائق", "لكل مستخدم؛ تُبطل التذكرة"],
           ]}
         />
+        <P>
+          حد الحساب (50 محاولة فاشلة) لا يستطيع قفل المالك الحقيقي: عند امتلائه تتلقى كلمات المرور الخاطئة{" "}
+          <code>429</code>، بينما كلمة المرور الصحيحة تسجّل الدخول دائماً؛ وإلا أمكن لأي شخص يعرف بريد مستخدم{" "}
+          أن يبقيه خارج حسابه. ويظل حد (ip, email) بلا استثناء فيُبقي التخمين من مصدر واحد محدوداً.
+        </P>
         <P>
           عند تفعيل <code>enable_user_projection</code> (وهو الإعداد الافتراضي) تكتب خدمة المصادقة مستند{" "}
           <code>users/{"{uid}"}</code> عبر <code>DocumentEngine.setDocument</code> بصلاحية{" "}

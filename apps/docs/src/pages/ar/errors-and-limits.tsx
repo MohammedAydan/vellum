@@ -112,6 +112,8 @@ export default function Page() {
             [<code>MAX_WS_OUTBOUND_BUFFER_BYTES</code>, "1,048,576 (1 MiB)", <code>SLOW_CONSUMER_DISCONNECT</code>],
             [<code>RULES_AST_MAX_DEPTH</code>, "10 مستويات", <code>QUERY_TOO_COMPLEX</code>],
             [<code>RULES_AST_MAX_NODES</code>, "100 عقدة لكل قاعدة", <code>QUERY_TOO_COMPLEX</code>],
+            [<code>DOCUMENT_MAX_OBJECT_KEYS</code>, "10,000 مفتاح كائن لكل مستند (لكل كتابة داخل دُفعة أو معاملة أو استيراد ميزانيتها الخاصة)", "— (كتابة المستندات)"],
+            [<code>RULESET_MAX_OBJECT_KEYS</code>, "25,000 مفتاح كائن لكل مجموعة قواعد منشورة (400، guardCode RULESET_TOO_LARGE)", "— (حد النشر)"],
             [<code>TOMBSTONE_RETENTION_DAYS_DEFAULT</code>, "7 أيام", "— (نافذة احتفاظ)"],
             [<code>OUTBOX_RETENTION_HOURS</code>, "24 ساعة", "— (نافذة استئناف الوقت الفعلي)"],
           ]}
@@ -124,6 +126,25 @@ export default function Page() {
             <><code>MAX_TEXT_FILTER_LENGTH = 1,024</code> حرفاً لعوامل النص، و<code>MAX_TOTAL_DISJUNCTIVE_EXPANSIONS = 120</code> توسّع OR.</>,
           ]}
         />
+      </Section>
+
+      <Section id="sign-in-throttles-and-passwords" title="حدود تسجيل الدخول وكلمات المرور">
+        <Table
+          head={["الحد", "القيمة", "النطاق"]}
+          rows={[
+            ["محاولات الدخول الفاشلة", "10 لكل 15 دقيقة", "لكل (عنوان IP، بريد)؛ كلمات المرور الخاطئة تتلقى 429 TOO_MANY_REQUESTS مع Retry-After"],
+            ["محاولات الدخول الفاشلة", "50 لكل 15 دقيقة", "لكل حساب عبر كل العناوين (يحدّ من التخمين بعناوين متبدّلة)"],
+            ["إنشاء الحسابات", "30 لكل 15 دقيقة لكل (مشروع، IP)؛ وموازنة ساعية لكل مشروع", "كل محاولة تُحسب"],
+            ["طلبات إعادة تعيين كلمة المرور / تحقق البريد", "5 لكل 15 دقيقة", "لكل (IP، بريد)؛ لا تكشف وجود الحساب"],
+            ["الحد الأدنى لكلمة المرور", "8 أحرف؛ كلمات المرور الشائعة مرفوضة دائماً", "التسجيل وتغيير كلمة المرور وتأكيد إعادة التعيين"],
+          ]}
+        />
+        <P>
+          حد الحساب الكلي لا يمكن أن يقفل المالك الحقيقي أبداً: عند امتلاء الحد تحصل كلمات المرور الخاطئة على{" "}
+          <code>TOO_MANY_REQUESTS</code>، لكن كلمة المرور الصحيحة تسجّل الدخول دائماً. هذا مقصود، وإلا استطاع أي{" "}
+          شخص يعرف بريد مستخدم أن يبقيه مقفولاً خارج حسابه. التخمين من مصدر واحد يبقى محدوداً بحد (IP، البريد){" "}
+          الذي لا استثناء فيه.
+        </P>
       </Section>
 
       <Section id="handling-errors" title="التعامل الآمن مع الأخطاء وإعادة المحاولة">

@@ -2,9 +2,24 @@
 
 ## Unreleased
 
+## 0.0.8 (post-release backend patch)
+
+Backend and console fixes shipped on top of the published 0.0.8 release. No SDK or API-contract changes, so the published 0.0.8 packages (npm, pub.dev) stay valid; the backend deploy carries these fixes.
+
+### Fixed
+
+- **Ruleset publishing:** publishing security or relation rules no longer hits the 500-object-key document guard, whose error message talked about batches. Ruleset routes (publish, compile, decompile, simulate) now have their own budget of 25,000 object keys per request and a dedicated error (HTTP 400, guardCode `RULESET_TOO_LARGE`) that says how to shrink the ruleset. This also fixes the console Rules Studio Request panel, which sends the whole ruleset to `/rules/simulate`.
+- **Document key budget:** a single document may now carry up to 10,000 object keys (`DOCUMENT_MAX_OBJECT_KEYS`) instead of being rejected past 500 keys by the generic request guard, and each write inside a batch, transaction, collection import or auth users import gets that per-document budget rather than competing for one shared 500-key request cap. Oversized single documents fail with a message that actually says the document is too large; the 5 MiB batch byte cap and the 500-key cap on ordinary small request bodies are unchanged.
+- **Sign-in lockout DoS:** the per-account sign-in ceiling (50 failed attempts / 15 minutes, shared across all client addresses) could keep the real owner locked out of their account — an attacker only needed the email address. While the bucket is full, wrong passwords still get `429 TOO_MANY_REQUESTS`, but the correct password now always signs in. The per-(IP, email) limit (10 failures / 15 minutes) is unchanged and has no bypass, so single-source guessing stays capped.
+- **Weak passwords:** every self-service password choice (console sign-up, master-owner setup, end-user sign-up, password change and reset confirm) now rejects passwords from the well-known common lists (such as `12345678` or `password`, case-insensitive) with `INVALID_ARGUMENT`, in addition to the existing minimum-length and per-project composition rules.
+
+### Changed
+
+- **Docs:** the end-user `metadata` field is now clearly documented as user-controlled — never read it in security rules or use it for authorization decisions; trusted per-user data belongs in a developer-managed collection or in custom claims set with a server key. The errors-and-limits and end-user-auth pages (EN and AR) document the sign-in throttles, the password policy, and the ruleset publish budget.
+
 ## 0.0.8
 
-One release for the realtime, security-rules, auth and SDK fixes found in audits and live tests. Upgrade the SDKs together with the API. The SDKs are in beta, so some behavior changes below are breaking.
+One release for the realtime, security-rules, auth and SDK fixes found in audits and live tests. Upgrade the SDKs together with the API. The SDKs are in beta, so some behavior changes below are breaking. (See also the post-release backend patch notes above.)
 
 ### Upgrade notes
 

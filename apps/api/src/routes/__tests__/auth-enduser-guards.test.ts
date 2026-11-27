@@ -178,3 +178,30 @@ describe("sign-in lockout scope", () => {
     expect((await f.signIn("real@example.com")).status).toBe(200);
   });
 });
+
+describe("end-user per-account sign-in ceiling", () => {
+  it("cannot be used to lock the real owner out (correct password always works)", async () => {
+    const f = await fixture();
+    expect((await f.signUp("owner@example.com")).status).toBe(201);
+    // 55 failures, each from a different apparent address: the per-(ip,email)
+    // limit never trips, but the 50/15min per-account ceiling fills up.
+    for (let i = 0; i < 55; i += 1) {
+      await f.post(`${f.base}/sign-in/email`, { email: "owner@example.com", password: `wrong-${i}` }, {
+        "x-vellum-api-key": f.apiKey,
+        "x-forwarded-for": `203.0.113.${i + 1}`,
+      });
+    }
+    // Wrong guesses are now throttled account-wide...
+    const blocked = await f.post(`${f.base}/sign-in/email`, { email: "owner@example.com", password: "wrong-again" }, {
+      "x-vellum-api-key": f.apiKey,
+      "x-forwarded-for": "203.0.113.250",
+    });
+    expect(blocked.status).toBe(429);
+    // ...but the attacker still could not lock the owner out.
+    const good = await f.post(`${f.base}/sign-in/email`, { email: "owner@example.com", password: "Password123!" }, {
+      "x-vellum-api-key": f.apiKey,
+      "x-forwarded-for": "203.0.113.250",
+    });
+    expect(good.status).toBe(200);
+  });
+});

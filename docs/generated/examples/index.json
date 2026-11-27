@@ -10,9 +10,9 @@
       "description": "Health checks, then create, read, update and delete one document with @vellumdb/sdk-js.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 932
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 464
     },
     {
       "id": "crud",
@@ -23,9 +23,9 @@
       "description": "create, get, set (merge and replace), update with ifVersion, delete, and a rejected stale write.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 686
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 472
     },
     {
       "id": "field-transforms",
@@ -36,9 +36,9 @@
       "description": "increment, serverTimestamp, arrayUnion, arrayRemove and deleteField sentinels from fieldOp.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 671
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 472
     },
     {
       "id": "query",
@@ -49,9 +49,9 @@
       "description": "where, orderBy, limit and select, including disjunctive in filters, via the query builder.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 670
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 476
     },
     {
       "id": "pagination",
@@ -62,9 +62,9 @@
       "description": "Walk an ordered result set with opaque HMAC cursors using startAfter until nextCursor is null.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 699
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 473
     },
     {
       "id": "indexes",
@@ -75,9 +75,9 @@
       "description": "Create, list, query through and delete a tenant composite index using the REST API.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 748
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 471
     },
     {
       "id": "realtime-snapshot",
@@ -88,9 +88,9 @@
       "description": "Subscribe to a document and a query with onSnapshot, make writes, observe callbacks, unsubscribe.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 755
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 471
     },
     {
       "id": "batch-write",
@@ -101,9 +101,9 @@
       "description": "Mix create/set/update/delete in one atomic batch and observe precondition failure.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 756
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 471
     },
     {
       "id": "transactions",
@@ -114,9 +114,9 @@
       "description": "Commit a runTransaction and demonstrate both a forced conflict and a stale-version precondition.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 742
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 484
     },
     {
       "id": "rules",
@@ -127,9 +127,9 @@
       "description": "Publish and inspect a versioned v1 rules AST over REST, reject an invalid AST, and restore state.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 731
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 481
     },
     {
       "id": "errors",
@@ -140,9 +140,9 @@
       "description": "Trigger the canonical Vellum error codes for query complexity, quotas, conflicts and size limits.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 743
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 468
     },
     {
       "id": "rest-api",
@@ -153,9 +153,9 @@
       "description": "Use fetch directly for document CRUD, collection listing and structured query with x-project-key.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 712
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 469
     },
     {
       "id": "auth",
@@ -166,9 +166,9 @@
       "description": "Email sign-in, session inspection, server API key lifecycle and expected 401 responses.",
       "exitCode": 1,
       "restExitCode": 1,
-      "outputLines": 8,
-      "restOutputLines": 8,
-      "durationMs": 685
+      "outputLines": 10,
+      "restOutputLines": 9,
+      "durationMs": 467
     }
   ]
 }

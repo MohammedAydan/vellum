@@ -67,10 +67,34 @@ export default function Page() {
             [<code>OUTBOX_RETENTION_HOURS</code>, "24 hours", "realtime_outbox replay window"],
             [<code>TOMBSTONE_RETENTION_DAYS_DEFAULT</code>, "7 days", "Soft-deleted document retention"],
             [<><code>RULES_AST_MAX_DEPTH</code> / <code>MAX_NODES</code> / <code>MAX_EVAL_STEPS</code></>, "Depth 10 / 100 nodes / 256 eval steps", "Security rules AST"],
+            [<code>DOCUMENT_MAX_OBJECT_KEYS</code>, "10,000 object keys per document (each write in a batch, transaction or import gets its own budget)", "Document writes"],
+            [<code>RULESET_MAX_OBJECT_KEYS</code>, "25,000 object keys per published ruleset (400, guardCode RULESET_TOO_LARGE)", "Ruleset publish"],
             [<><code>DEFAULT_LOCK_TIMEOUT_MS</code> / <code>IDLE_IN_TRANSACTION</code></>, "2,000 ms lock_timeout / 15,000 ms idle_in_transaction", "Data Plane RLS transactions"],
           ]}
         />
 
+      </Section>
+
+      <Section id="sign-in-throttles-and-passwords" title="Sign-in throttles &amp; passwords">
+        <Table
+          head={["Limit", "Value", "Scope"]}
+          rows={[
+            ["Failed sign-ins", "10 per 15 minutes", "Per (IP address, email); wrong passwords get 429 TOO_MANY_REQUESTS with Retry-After"],
+            ["Failed sign-ins", "50 per 15 minutes", "Per account across all IP addresses (bounds IP-rotated guessing)"],
+            ["Sign-ups", "30 per 15 minutes per (project, IP); hourly per-project budget", "Every attempt counts"],
+            ["Password reset / email verify requests", "5 per 15 minutes", "Per (IP, email); non-enumerating"],
+            ["Password minimum", "8 characters; common passwords always rejected", "Sign-up, password change and reset confirm"],
+          ]}
+        />
+        <P>
+          The per-account ceiling can never lock the real owner out: while the bucket is full, wrong passwords
+          get <code>TOO_MANY_REQUESTS</code> but the correct password still signs in. This is deliberate —
+          otherwise anyone who knows a user&apos;s email could keep that user locked out of their own account.
+          Single-source guessing stays capped by the per-(IP, email) limit, which has no such bypass.
+        </P>
+      </Section>
+
+      <Section id="retry-guidance-section" title="Errors &amp; retry">
         <Callout tone="info" title="Retry guidance">
           For the full table of HTTP status codes and which error codes are safe to retry with
           exponential backoff, see{" "}

@@ -6,6 +6,7 @@
 export * from "./contracts/auth-port.js";
 export * from "./config-types.js";
 export * from "./crypto/password.js";
+export * from "./crypto/password-policy.js";
 export * from "./crypto/encrypt.js";
 export * from "./crypto/jwt.js";
 export * from "./realm-session.js";

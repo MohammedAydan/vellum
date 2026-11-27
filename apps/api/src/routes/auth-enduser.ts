@@ -20,6 +20,8 @@ import {
   generateTotpSecret,
   hashPassword,
   hashRecoveryCodes,
+  isCommonPassword,
+  COMMON_PASSWORD_MESSAGE,
   verifyPassword,
   verifyRecoveryCode,
   verifyTotpCode,
@@ -180,6 +182,11 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
   function assertPasswordPolicy(password: string, config: ProjectAuthConfig): void {
     if (password.length < config.passwordMinLength) {
       throw new VellumError("INVALID_ARGUMENT", `Password must be at least ${config.passwordMinLength} characters`);
+    }
+    // A platform floor every project inherits: known-common passwords are
+    // rejected no matter how lax the project's own policy is.
+    if (isCommonPassword(password)) {
+      throw new VellumError("INVALID_ARGUMENT", COMMON_PASSWORD_MESSAGE);
     }
     if (config.passwordRequireUppercase && !/[A-Z]/.test(password)) {
       throw new VellumError("INVALID_ARGUMENT", "Password must contain an uppercase letter");
