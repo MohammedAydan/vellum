@@ -33,6 +33,7 @@ import type {
   TotpEnrollmentResult,
   UpdateProfileInput,
   VerifyMfaChallengeInput,
+  DisableMfaInput,
 } from "../types.js";
 import { resolveAuthStorage, type AuthStorage } from "./auth-storage.js";
 import {
@@ -660,8 +661,11 @@ export class VellumAuthClient {
     return parseSuccessResponse(await this.request("POST", "/auth/mfa/verify", input));
   }
 
-  public async disableMfa(code: string): Promise<void> {
-    await this.request("POST", "/auth/mfa/disable", { code });
+  public disableMfa(input: DisableMfaInput): Promise<void>;
+  public disableMfa(code: string): Promise<void>;
+  public async disableMfa(codeOrInput: string | DisableMfaInput): Promise<void> {
+    const input: DisableMfaInput = typeof codeOrInput === "string" ? { code: codeOrInput } : codeOrInput;
+    await this.request("POST", "/auth/mfa/disable", input);
   }
 
   /* --------------------------------------------------------------------- */
@@ -738,10 +742,19 @@ export class VellumAuthClient {
     await this.request("DELETE", `/auth/sessions/${encodeURIComponent(sessionId)}`);
   }
 
-  public async listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }> {
+  /** Canonical identity listing (providers linked to the account + password flag). */
+  public async listIdentities(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }> {
     const payload = await this.request<Record<string, unknown>>("GET", "/auth/identities");
     const providers = Array.isArray(payload["identities"]) ? (payload["identities"] as VellumLinkedProvider[]) : [];
     return sanitizeAndClone({ providers, hasPassword: payload["hasPassword"] === true });
+  }
+
+  /**
+   * @deprecated Use {@link listIdentities} - same response, canonical name.
+   * Kept as a delegation alias; removal is a future major.
+   */
+  public async listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }> {
+    return this.listIdentities();
   }
 
   public async unlinkProvider(provider: string, options: { currentPassword?: string } = {}): Promise<void> {

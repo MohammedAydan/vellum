@@ -52,10 +52,12 @@ import type {
   DocumentReferenceInterface,
   DocumentSnapshot,
   EmailVerifyConfirmResult,
+  DisableMfaInput,
   EnrollTotpMfaInput,
   ExportResult,
   ImportDocumentInput,
   ImportResult,
+  IndexSuggestionEvent,
   ListCollectionsOptions,
   MfaRequiredResult,
   RealtimeChange,
@@ -109,6 +111,8 @@ interface RealtimeInternalState {
   currentConnectionState: ConnectionState;
   realtimeTransport: RealtimeTransport | null;
   subscriptionSeq: number;
+  /** True between the first transport fault and the next connected state: at most one error per sub per outage. */
+  outageErrorDelivered: boolean;
 }
 
 function parseSeqNumber(value: unknown): number | null {
@@ -252,6 +256,7 @@ export class VellumClient implements VellumClientInterface {
   private readonly realtimeUrl: string | null;
   private readonly realtimeHub: unknown;
   private readonly webSocketFactory: WebSocketFactory | null;
+  private readonly indexSuggestionListeners = new Set<(event: IndexSuggestionEvent) => void>();
   private readonly realtimeTransportKind: "auto" | "websocket" | "sse";
   private readonly customFetch: typeof globalThis.fetch | null;
   private readonly realtimeTransportOptions: ClientConfig["realtimeTransportOptions"];
@@ -289,8 +294,19 @@ export class VellumClient implements VellumClientInterface {
       ...(config.retryMaxDelayMs !== undefined ? { retryMaxDelayMs: config.retryMaxDelayMs } : {}),
       ...(config.retryRandomFn !== undefined ? { retryRandomFn: config.retryRandomFn } : {}),
       ...(config.warnOnMissingIndexes !== undefined ? { warnOnMissingIndexes: config.warnOnMissingIndexes } : {}),
-      ...(config.onIndexSuggestion !== undefined ? { onIndexSuggestion: config.onIndexSuggestion } : {}),
+      onIndexSuggestion: (event) => {
+        for (const listener of [...this.indexSuggestionListeners]) {
+          try {
+            listener(event);
+          } catch {
+            // A throwing listener must never break the underlying request.
+          }
+        }
+      },
     });
+    if (config.onIndexSuggestion !== undefined) {
+      this.indexSuggestionListeners.add(config.onIndexSuggestion);
+    }
 
     const readCache =
       config.cache?.enabled === true
@@ -328,6 +344,7 @@ export class VellumClient implements VellumClientInterface {
       currentConnectionState: "disconnected",
       realtimeTransport: null,
       subscriptionSeq: 0,
+      outageErrorDelivered: false,
     };
 
     this.auth = new VellumAuthClient({
@@ -344,8 +361,23 @@ export class VellumClient implements VellumClientInterface {
         : null),
       onTokenChanged: (previousToken, nextToken) => {
         this.resetCaches(false);
-        if (nextToken !== null && (nextToken === this.auth.currentUser?.accessToken ||
-          (parseJwtSubject(previousToken) !== null && parseJwtSubject(previousToken) === parseJwtSubject(nextToken)))) {
+        // An identity switch (A -> B, or sign-out) must KILL every live
+        // subscription: each one was authorized for the previous identity and
+        // the server still fans the old principal's frames into it. Only a
+        // token refresh for the SAME subject (or the first sign-in from an
+        // unauthenticated state) may reauthenticate in place. Comparing
+        // against currentUser.accessToken is wrong here: on A -> B the new
+        // token IS the current user's token, which would reauthenticate A's
+        // subscriptions as B instead of killing them.
+        const prevSubject = parseJwtSubject(previousToken);
+        const nextSubject = parseJwtSubject(nextToken);
+        // nextSubject === null (a token without a readable subject) cannot
+        // PROVE an identity switch; Vellum access tokens always carry `sub`,
+        // so treat it as a refresh rather than killing live subscriptions.
+        if (
+          nextToken !== null &&
+          (nextSubject === null || prevSubject === null || prevSubject === nextSubject)
+        ) {
           this.reauthenticateRealtime(nextToken);
         } else {
           this.cacheState.sessionEpoch += 1;
@@ -492,6 +524,7 @@ export class VellumClient implements VellumClientInterface {
     if (this.realtimeState.currentConnectionState === next) return;
     const previous = this.realtimeState.currentConnectionState;
     this.realtimeState.currentConnectionState = next;
+    if (next === "connected") this.realtimeState.outageErrorDelivered = false;
     for (const listener of [...this.realtimeState.connectionStateListeners]) {
       try {
         listener(next, previous);
@@ -505,6 +538,18 @@ export class VellumClient implements VellumClientInterface {
     this.realtimeState.connectionStateListeners.add(listener);
     return () => {
       this.realtimeState.connectionStateListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Subscribe to index-advisor suggestions (`x-vellum-index-*` response
+   * headers). Returns an Unsubscribe function. The config-time
+   * `onIndexSuggestion` callback is equivalent to registering it here.
+   */
+  public onIndexSuggestion(listener: (event: IndexSuggestionEvent) => void): () => void {
+    this.indexSuggestionListeners.add(listener);
+    return () => {
+      this.indexSuggestionListeners.delete(listener);
     };
   }
 
@@ -622,6 +667,12 @@ export class VellumClient implements VellumClientInterface {
         this.setConnectionState(mapTransportState(transportState));
       },
       onError: (error: unknown) => {
+        // A transport-level fault is a CONNECTION event, not a per-subscriber
+        // protocol error: deliver it once per outage, not once per reconnect
+        // attempt to every subscriber. Targeted protocol errors still reach
+        // their own subscriber via `error` / `sub_error` frames.
+        if (this.realtimeState.outageErrorDelivered) return;
+        this.realtimeState.outageErrorDelivered = true;
         for (const sub of this.realtimeState.activeSubscriptions.values()) {
           if (sub.onError) sub.onError(error);
         }
@@ -1236,8 +1287,10 @@ export class VellumClient implements VellumClientInterface {
       : this.auth.confirmTotpMfa(codeOrInput);
   }
 
-  public disableMfa(code: string): Promise<void> {
-    return this.auth.disableMfa(code);
+  public disableMfa(input: DisableMfaInput): Promise<void>;
+  public disableMfa(code: string): Promise<void>;
+  public disableMfa(codeOrInput: string | DisableMfaInput): Promise<void> {
+    return typeof codeOrInput === "string" ? this.auth.disableMfa(codeOrInput) : this.auth.disableMfa(codeOrInput);
   }
 
   public sendPasswordResetEmail(input: SendPasswordResetEmailInput): Promise<ActionTokenResult>;
@@ -1293,8 +1346,14 @@ export class VellumClient implements VellumClientInterface {
     return this.auth.revokeSession(sessionId);
   }
 
+  /** Canonical identity listing (alias: the deprecated {@link listLinkedProviders}). */
+  public listIdentities(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }> {
+    return this.auth.listIdentities();
+  }
+
+  /** @deprecated Use {@link listIdentities}. */
   public listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }> {
-    return this.auth.listLinkedProviders();
+    return this.auth.listIdentities();
   }
 
   public unlinkProvider(provider: string, options?: { currentPassword?: string }): Promise<void> {

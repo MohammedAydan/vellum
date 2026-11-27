@@ -19,6 +19,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_RETRY_BASE_MS = 250;
 const DEFAULT_RETRY_MAX_MS = 10_000;
+/** Minimum wait before replaying a throttled request, even when the server sends `Retry-After: 0`. */
+const DEFAULT_RETRY_AFTER_FLOOR_MS = 250;
 const MAX_INDEX_FINGERPRINTS = 512;
 
 /** Deterministic, dependency-free fallback fingerprint (FNV-1a, 32-bit). */
@@ -123,6 +125,8 @@ export interface HttpTransportOptions {
   retryBaseDelayMs?: number;
   retryMaxDelayMs?: number;
   retryRandomFn?: (() => number) | null;
+  /** Floor applied to a server-provided `Retry-After` delay. Defaults to 250ms. */
+  retryAfterFloorMs?: number;
   warnOnMissingIndexes?: boolean;
   onIndexSuggestion?: ((event: IndexSuggestionEvent) => void) | null;
 }
@@ -138,6 +142,7 @@ export class HttpTransport {
   private readonly effectiveRetryBaseMs: number;
   private readonly effectiveRetryMaxMs: number;
   private readonly retryRandom: () => number;
+  private readonly effectiveRetryAfterFloorMs: number;
   private readonly warnOnMissingIndexes: boolean;
   private readonly onIndexSuggestion: ((event: IndexSuggestionEvent) => void) | null;
   private readonly authState: { hooks: HttpAuthHooks | null } = { hooks: null };
@@ -172,6 +177,10 @@ export class HttpTransport {
         ? retryMaxDelayMs
         : DEFAULT_RETRY_MAX_MS;
     this.retryRandom = options.retryRandomFn ?? Math.random;
+    this.effectiveRetryAfterFloorMs =
+      typeof options.retryAfterFloorMs === "number" && options.retryAfterFloorMs >= 0
+        ? Math.floor(options.retryAfterFloorMs)
+        : DEFAULT_RETRY_AFTER_FLOOR_MS;
     this.warnOnMissingIndexes = options.warnOnMissingIndexes ?? true;
     this.onIndexSuggestion = options.onIndexSuggestion ?? null;
     Object.freeze(this);
@@ -461,9 +470,11 @@ export class HttpTransport {
 
       if (canRetryTransient && isTransientStatus(res.status) && attempt < this.effectiveMaxRetries) {
         const retryAfterMs = parseRetryAfterMs(getResponseHeader(res, "retry-after"));
+        // Retry-After floor: a `Retry-After: 0` (or absent-but-tiny) hint from an
+        // overloaded server must not turn the retry loop into a hammer.
         const delayMs =
           retryAfterMs !== null
-            ? retryAfterMs
+            ? Math.max(retryAfterMs, this.effectiveRetryAfterFloorMs)
             : computeReconnectBackoffMs(
                 attempt,
                 this.effectiveRetryBaseMs,
@@ -493,9 +504,16 @@ export class HttpTransport {
         details?: unknown;
         requestId?: string | undefined;
         retryAfter?: number | undefined;
+        retryable?: boolean | undefined;
       };
-      err.code = payload?.error?.code ?? "UNKNOWN_ERROR";
+      // 5xx/4xx classification when the server did not send a contract code:
+      // a 5xx is a transient SERVER_ERROR (retryable), a 4xx is a caller error
+      // (never retryable, 429 aside, which is transient).
+      err.code =
+        payload?.error?.code ??
+        (res.status === 429 ? "RATE_LIMITED" : res.status >= 500 ? "SERVER_ERROR" : "HTTP_ERROR");
       err.status = res.status;
+      err.retryable = isTransientStatus(res.status);
       err.details = payload?.error?.details ?? {};
       if (payload?.error?.requestId) {
         err.requestId = payload.error.requestId;

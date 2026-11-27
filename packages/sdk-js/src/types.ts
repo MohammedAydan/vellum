@@ -494,6 +494,11 @@ export interface EnrollTotpMfaInput {
   issuer?: string;
 }
 
+/** `disableMfa` accepts this object or a bare code string. */
+export interface DisableMfaInput {
+  code: string;
+}
+
 export interface ConfirmTotpMfaInput {
   code: string;
 }
@@ -745,6 +750,7 @@ export interface VellumClientInterface {
   confirmTotpMfa(input: ConfirmTotpMfaInput): Promise<SuccessResult>;
   confirmTotpMfa(code: string): Promise<SuccessResult>;
   /** Turn MFA off for the signed-in user. Needs a current TOTP or recovery code. */
+  disableMfa(input: DisableMfaInput): Promise<void>;
   disableMfa(code: string): Promise<void>;
   sendPasswordResetEmail(input: SendPasswordResetEmailInput): Promise<ActionTokenResult>;
   sendPasswordResetEmail(email: string): Promise<ActionTokenResult>;
@@ -755,6 +761,9 @@ export interface VellumClientInterface {
   /** Sign one of the user's other sessions out. */
   revokeSession(sessionId: string): Promise<void>;
   /** Sign-in methods linked to the account, and whether it has a password. */
+  /** Canonical identity listing. */
+  listIdentities(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }>;
+  /** @deprecated Use {@link listIdentities}. */
   listLinkedProviders(): Promise<{ providers: VellumLinkedProvider[]; hasPassword: boolean }>;
   /** Remove a linked sign-in method ("google", "github", "apple" or "password"). Refused when it is the last one. */
   unlinkProvider(provider: string, options?: { currentPassword?: string }): Promise<void>;
@@ -824,8 +833,13 @@ export interface DocumentReferenceInterface<T = Record<string, unknown>> {
   upsert(data: T, options?: DocumentUpsertOptions): Promise<unknown>;
   update(data: Record<string, unknown>, options?: DocumentUpdateOptions): Promise<unknown>;
   delete(options?: DocumentDeleteOptions): Promise<unknown>;
+  /**
+   * BREAKING (0.0.9): the callback receives a `DocumentSnapshot<T>` (not the
+   * query-shaped `RealtimeSnapshot`). Missing/deleted documents emit
+   * `exists: false` and `data() === null`; state replays are deduped.
+   */
   onSnapshot(
-    callback: (snapshot: RealtimeSnapshot<T>) => void,
+    callback: (snapshot: DocumentSnapshot<T>) => void,
     onError?: ((err: unknown) => void) | null,
     options?: RealtimeListenOptions
   ): () => void;
