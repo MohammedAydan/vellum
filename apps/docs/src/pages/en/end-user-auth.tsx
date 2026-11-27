@@ -116,6 +116,7 @@ export default function Page() {
             ["POST", <code>/sign-up/email</code>, "Creates the user and returns a session (201). Enforces password policy and registration guards."],
             ["POST", <code>/sign-in/email</code>, "Returns a session, or an MFA ticket when a verified TOTP factor exists."],
             ["POST", <code>/sign-in/anonymous</code>, "Creates an anonymous user and returns a session (201)."],
+            ["POST", <code>/upgrade-anonymous</code>, "Converts the signed-in anonymous account to email/password. The uid survives; every other session is revoked. 412 when the account is not anonymous, 409 when the email is taken."],
             ["POST", <code>/sign-in/provider</code>, "Links or creates an identity for an external provider."],
           ]}
         />

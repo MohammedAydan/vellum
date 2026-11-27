@@ -128,6 +128,7 @@ All end-user and customer-admin routes require a publishable or server API key (
 | `POST` | `/sign-up/email` | Create user + session (`email`, `password`, optional profile fields) | Session |
 | `POST` | `/sign-in/email` | Password sign-in (`email`, `password`) | Session, or `{ mfaRequired: true, mfaTicket, factors: ["totp"], expiresAt }` |
 | `POST` | `/sign-in/anonymous` | Anonymous session (optional `displayName`, `metadata`) | Session |
+| `POST` | `/upgrade-anonymous` | Converts the signed-in anonymous account to email/password; uid preserved, other sessions revoked. `412` non-anonymous, `409` email taken | User |
 | `POST` | `/sign-in/provider` | Provider sign-in for backends that verified the identity with the provider themselves. **Secret (`sk_`) key only** — returns 403 with a publishable `pk_` key | Session |
 | `POST` | `/token/refresh` | Rotate refresh token (`{ refreshToken }`); 15 s grace | Session |
 | `POST` | `/sign-out` | Revoke one session (`refreshToken`) or all (`{}` + bearer) | `{ success: true }` |
