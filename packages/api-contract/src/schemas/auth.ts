@@ -17,7 +17,8 @@ const ClaimsRecordSchema = createSafeRecordSchema({
   maxBytes: 32_768,
 });
 
-const EmailSchema = z.string().trim().toLowerCase().email().max(320);
+// 254 is the longest address SMTP allows (RFC 5321).
+const EmailSchema = z.string().trim().toLowerCase().email().max(254);
 const PasswordSchema = z.string().min(8).max(1024);
 const OpaqueTokenSchema = z
   .string()

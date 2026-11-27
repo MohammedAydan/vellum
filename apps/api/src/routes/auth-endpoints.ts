@@ -442,7 +442,7 @@ export function createCustomerAuthRoutes(
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
 
-    if (!email || !email.includes("@")) {
+    if (!email || !email.includes("@") || email.length > 254) {
       throw new VellumError("INVALID_ARGUMENT", "Please enter a valid email address");
     }
     if (!name && (typeof body.displayName === "string" || getApiKeyHeader(c))) {
