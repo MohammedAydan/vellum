@@ -9,8 +9,6 @@ analyzer:
     dead_code: error
     unused_import: error
     unused_local_variable: error
-  exclude:
-    - build/**
 
 linter:
   rules:
