@@ -508,11 +508,15 @@ export class OutboxPoller implements OutboxPollerPort {
       // delivered page tail - a late-committing transaction is never skipped,
       // it is simply delivered by a later drain once it resolves.
       const safe = await this.safeUpperBound(entry);
-      let upper = entry.watermark;
+      // Adapters without any max query (the bounded-scan bootstrap fallback)
+      // page unbounded: every row the fetch returns is committed, so the
+      // per-page watermark advance stays safe.
+      let upper: bigint | null = entry.watermark;
       if (safe !== null && safe > upper) upper = safe;
+      if (safe === null) upper = null;
       let cursor = entry.watermark;
-      while (!this.closed && entry.drainGen === gen && cursor < upper) {
-        const rows = await this.dataStore.queryOutboxSince(entry, cursor.toString(), upper.toString());
+      while (!this.closed && entry.drainGen === gen && (upper === null || cursor < upper)) {
+        const rows = await this.dataStore.queryOutboxSince(entry, cursor.toString(), upper === null ? undefined : upper.toString());
         if (entry.drainGen !== gen) return;
         if (rows.length === 0) break;
         const fresh: OutboxEvent[] = [];
@@ -525,7 +529,7 @@ export class OutboxPoller implements OutboxPollerPort {
           } catch {
             continue;
           }
-          if (seq > upper) continue;
+          if (upper !== null && seq > upper) continue;
           if (seq > pageMax) pageMax = seq;
           if (seq > entry.watermark) fresh.push(ev);
         }
