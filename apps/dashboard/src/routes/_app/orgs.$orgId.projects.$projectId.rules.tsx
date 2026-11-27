@@ -89,6 +89,8 @@ interface CompileOutcome {
   ok: boolean;
   ast: RulesAst | null;
   error: RulesDslIssue | null;
+  /** Non-blocking warning diagnostics (for example WILDCARD_OVERLAP). */
+  issues: RulesDslIssue[];
 }
 
 export interface DslTemplate {
@@ -448,7 +450,7 @@ function RulesStudioPage() {
         if (!result.ok) {
           const fallback = result.errorMessage ?? t("rules.studio.compileFailed");
           const issue = parseRulesCompileError(result.errorPayload, fallback, source);
-          if (seq !== compileSeq.current) return { ok: false, ast: null, error: issue };
+          if (seq !== compileSeq.current) return { ok: false, ast: null, error: issue, issues: [] };
           setCompiledAst(null);
           setDiagnostics([]);
           setCompileError(issue);
@@ -458,7 +460,7 @@ function RulesStudioPage() {
             lastErrorSignature.current = signature;
             toast.error(t("rules.studio.syntaxErrorToast"));
           }
-          return { ok: false, ast: null, error: issue };
+          return { ok: false, ast: null, error: issue, issues: [] };
         }
         const issues = Array.isArray(result.diagnostics)
           ? result.diagnostics.filter(isRulesDslIssue)
@@ -466,17 +468,17 @@ function RulesStudioPage() {
         if (!isVersionOneAst(result.ast)) {
           throw new Error(t("rules.invalidAst"));
         }
-        if (seq !== compileSeq.current) return { ok: true, ast: result.ast, error: null };
+        if (seq !== compileSeq.current) return { ok: true, ast: result.ast, error: null, issues };
         setCompiledAst(result.ast);
         setDiagnostics(issues);
         setCompileError(null);
         setDslStatus("valid");
         lastErrorSignature.current = "";
-        return { ok: true, ast: result.ast, error: null };
+        return { ok: true, ast: result.ast, error: null, issues };
       } catch (err) {
         const message = err instanceof Error ? err.message : t("rules.studio.compileFailed");
         const issue = parseRulesCompileError(null, message, source);
-        if (seq !== compileSeq.current) return { ok: false, ast: null, error: issue };
+        if (seq !== compileSeq.current) return { ok: false, ast: null, error: issue, issues: [] };
         setCompiledAst(null);
         setDiagnostics([]);
         setCompileError(issue);
@@ -486,7 +488,7 @@ function RulesStudioPage() {
           lastErrorSignature.current = signature;
           toast.error(t("rules.studio.syntaxErrorToast"));
         }
-        return { ok: false, ast: null, error: issue };
+        return { ok: false, ast: null, error: issue, issues: [] };
       }
     },
     [t, v1Base]
@@ -609,9 +611,17 @@ function RulesStudioPage() {
     }
   };
 
+  // Overlap warnings never block a publish silently: the first click surfaces
+  // them (and shows them in the diagnostics panel), the second click on an
+  // unchanged source publishes anyway. The key resets after any successful
+  // publish so edited rules are re-checked.
+  const publishAckRef = React.useRef<string>("");
+
   const handlePublish = async () => {
     try {
       let ast: RulesAst;
+      let warnings: RulesDslIssue[] = [];
+      let ackKey = "";
       if (mode === "dsl") {
         const outcome = await runCompile(dslSource, ++compileSeq.current, true);
         if (!outcome.ok || !outcome.ast) {
@@ -619,6 +629,8 @@ function RulesStudioPage() {
           return;
         }
         ast = outcome.ast;
+        warnings = outcome.issues;
+        ackKey = `dsl:${dslSource}`;
       } else {
         let parsed: unknown;
         try {
@@ -632,11 +644,36 @@ function RulesStudioPage() {
           return;
         }
         ast = parsed;
+        // Raw-AST publishes skip the DSL compile, so run the same static
+        // analysis here: decompile the AST, compile the DSL, surface warnings.
+        // Best-effort only; the publish call itself stays authoritative.
+        try {
+          const dec = await apiFetch<{ dsl?: unknown }>(`${v1Base}/rules/decompile`, {
+            method: "POST",
+            body: JSON.stringify({ rulesAst: ast }),
+          });
+          if (typeof dec?.dsl === "string" && dec.dsl.length > 0) {
+            const compiled = await compileProjectRules(`${v1Base}/rules/compile`, dec.dsl);
+            if (compiled.ok && Array.isArray(compiled.diagnostics)) {
+              warnings = compiled.diagnostics.filter(isRulesDslIssue);
+              ackKey = `json:${rulesJson}`;
+            }
+          }
+        } catch {
+          warnings = [];
+        }
+      }
+      if (warnings.length > 0 && ackKey !== "" && publishAckRef.current !== ackKey) {
+        publishAckRef.current = ackKey;
+        setDiagnostics(warnings);
+        toast.warning(t("rules.studio.publishWarningsConfirm", { count: warnings.length }));
+        return;
       }
       await consoleFetch(`${base}/rulesets`, {
         method: "POST",
         body: JSON.stringify({ rulesAst: ast }),
       });
+      publishAckRef.current = "";
       await refetch();
       toast.success(t("rules.publishedToast"));
     } catch (err) {

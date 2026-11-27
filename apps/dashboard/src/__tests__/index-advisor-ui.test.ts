@@ -98,3 +98,20 @@ describe("indexes page - browser-safe ?suggest= decoder", () => {
     expect(decodeSuggestPayloadLocal(encodeSuggest([validPayload()]))).toBeNull();
   });
 });
+
+describe("wildcard template suggestions (P1-3)", () => {
+  it("carries the concrete example path alongside the template", () => {
+    const payload = validPayload({
+      collectionPath: "chats/*/messages",
+      exampleCollectionPath: "chats/chat_123/messages",
+    });
+    const decoded = decodeSuggestPayloadLocal(encodeSuggest(payload));
+    expect(decoded?.collectionPath).toBe("chats/*/messages");
+    expect(decoded?.exampleCollectionPath).toBe("chats/chat_123/messages");
+  });
+
+  it("omits the example path when absent", () => {
+    const decoded = decodeSuggestPayloadLocal(encodeSuggest(validPayload()));
+    expect(decoded?.exampleCollectionPath).toBeUndefined();
+  });
+});

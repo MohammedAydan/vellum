@@ -60,6 +60,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Sparkles,
+  Wand2,
   Zap,
 } from "lucide-react";
 import { z } from "zod";
@@ -88,7 +89,10 @@ export interface SuggestField {
 export interface SuggestPayload {
   orgId: string;
   projectId: string;
+  /** Wildcard template path for nested subcollections, else the concrete path. */
   collectionPath: string;
+  /** Concrete instance path that triggered the suggestion (display only). */
+  exampleCollectionPath?: string;
   fields: SuggestField[];
   fingerprint: string;
   reason: string;
@@ -106,6 +110,29 @@ export interface Recommendation {
   totalDurationMs: number;
   status: "pending" | "applied" | "dismissed";
   lastSeenAt: string;
+}
+
+/** Browser-safe mirror of `@vellum/core`'s isTemplateCollectionPath. */
+export function isTemplateCollectionPathLocal(collectionPath: string): boolean {
+  const segments = collectionPath.split("/");
+  for (let i = 1; i < segments.length; i += 2) {
+    if (segments[i] === "*") return true;
+  }
+  return false;
+}
+
+/** Browser-safe mirror of `@vellum/core`'s canonicalizeCollectionPathToTemplate. */
+export function canonicalizeCollectionPathToTemplateLocal(collectionPath: string): string {
+  const segments = collectionPath.split("/");
+  if (segments.length < 3) return collectionPath;
+  let changed = false;
+  for (let i = 1; i < segments.length; i += 2) {
+    if (segments[i] !== "*") {
+      segments[i] = "*";
+      changed = true;
+    }
+  }
+  return changed ? segments.join("/") : collectionPath;
 }
 
 function utf8ByteLength(value: string): number {
@@ -180,10 +207,13 @@ export function decodeSuggestPayloadLocal(payload: string): SuggestPayload | nul
     fields.push({ path: fieldObj["path"], dir: fieldObj["dir"] });
   }
 
+  const exampleCollectionPath = readString("exampleCollectionPath");
+
   const decoded: SuggestPayload = {
     orgId,
     projectId,
     collectionPath,
+    ...(exampleCollectionPath !== null ? { exampleCollectionPath } : {}),
     fields,
     fingerprint,
     reason: obj["reason"],
@@ -283,6 +313,9 @@ function IndexManagerPage() {
     { id: "1", field: "", direction: "ASC" },
   ]);
   const [suggestion, setSuggestion] = React.useState<SuggestPayload | null>(null);
+  // After "generalize to template" succeeds: the concrete index it replaced,
+  // shown in a banner that offers to drop it (ADR-006 migration step).
+  const [generalizedSource, setGeneralizedSource] = React.useState<IndexRecord | null>(null);
   const [activeFingerprint, setActiveFingerprint] = React.useState<string | null>(null);
   const processedSuggestRef = React.useRef<string | null>(null);
 
@@ -405,6 +438,30 @@ function IndexManagerPage() {
     }
   };
 
+  // ADR-006 console migration: create the wildcard-template equivalent of a
+  // nested concrete index, then offer to drop the now-redundant concrete one.
+  const handleGeneralizeIndex = async (index: IndexRecord) => {
+    const template = canonicalizeCollectionPathToTemplateLocal(index.collection);
+    if (template === index.collection) return;
+    try {
+      await consoleFetch(`${base}/indexes`, {
+        method: "POST",
+        body: JSON.stringify({
+          collectionPath: template,
+          fields: index.fields.map((f) => ({
+            field: f.field,
+            direction: f.direction === "DESC" ? "desc" : "asc",
+          })),
+        }),
+      });
+      await refetch();
+      setGeneralizedSource(index);
+      toast.success(t("indexes.generalize.createdToast", { template }));
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : t("indexes.generalize.createFailed"));
+    }
+  };
+
   const handleApplyRecommendation = async (rec: Recommendation) => {
     try {
       await apiFetch(
@@ -524,8 +581,13 @@ function IndexManagerPage() {
       accessorKey: "collection",
       header: t("common.collection"),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-xs text-muted-foreground inline-flex items-center gap-1.5">
           /{row.original.collection}
+          {isTemplateCollectionPathLocal(row.original.collection) ? (
+            <Badge variant="outline" className="font-mono text-[10px] text-info border-info/40">
+              {t("indexes.templateBadge")}
+            </Badge>
+          ) : null}
         </span>
       ),
     },
@@ -586,8 +648,23 @@ function IndexManagerPage() {
       header: () => <span className="block text-right">{t("common.actions")}</span>,
       cell: ({ row }) => {
         const isBuilding = row.original.status === "BUILDING";
+        const canGeneralize =
+          !isBuilding &&
+          !isTemplateCollectionPathLocal(row.original.collection) &&
+          canonicalizeCollectionPathToTemplateLocal(row.original.collection) !== row.original.collection;
         return (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-1">
+        {canGeneralize ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            title={t("indexes.generalize.title")}
+            className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+            onClick={() => void handleGeneralizeIndex(row.original)}
+          >
+            <Wand2 className="h-3.5 w-3.5" />
+          </Button>
+        ) : null}
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
@@ -794,6 +871,11 @@ function IndexManagerPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-xs text-muted-foreground">{suggestion.reason}</p>
+            {suggestion.exampleCollectionPath ? (
+              <p className="text-[11px] text-muted-foreground/70 font-mono">
+                {t("indexes.advisor.exampleLabel")}: /{suggestion.exampleCollectionPath}
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="font-mono text-[11px]">
                 {t("indexes.advisor.collectionLabel")}: /{suggestion.collectionPath}
@@ -819,6 +901,29 @@ function IndexManagerPage() {
             </div>
           </CardContent>
         </Card>
+      ) : null}
+
+      {generalizedSource ? (
+        <div className="rounded-md border border-info/40 bg-info/10 p-3 text-xs flex flex-wrap items-center justify-between gap-2">
+          <p className="text-info-700 dark:text-info-400">
+            {t("indexes.generalize.offerDrop", { collection: generalizedSource.collection })}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setGeneralizedSource(null)}>
+              {t("indexes.generalize.keepConcrete")}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                void handleDeleteIndex(generalizedSource.id);
+                setGeneralizedSource(null);
+              }}
+            >
+              {t("indexes.generalize.dropConcrete")}
+            </Button>
+          </div>
+        </div>
       ) : null}
 
       <Card>
