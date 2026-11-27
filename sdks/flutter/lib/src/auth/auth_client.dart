@@ -820,6 +820,7 @@ class VellumAuth implements VellumAuthPort {
     return user;
   }
 
+  @override
   Future<VellumUser> updateProfile({
     String? email,
     String? displayName,
