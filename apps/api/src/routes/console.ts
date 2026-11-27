@@ -10,7 +10,7 @@
 
 import { listIndexesReconciled, refreshIndexRecord } from "../index-build.js";
 import { Hono, type Context } from "hono";
-import { VellumError, SYSTEM_LIMITS, normalizeIndexFieldSpec, parseCollectionPath,
+import { VellumError, SYSTEM_LIMITS, normalizeIndexFieldSpec,
   parseIndexCollectionPath } from "@vellum/core";
 import {
   CreateCollectionSchema,
