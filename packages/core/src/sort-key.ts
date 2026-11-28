@@ -20,9 +20,28 @@ export const TYPE_TAG = {
 
 export type SortDirection = "asc" | "desc";
 
+/** `text` marks a full-text index field: no sort order, entries carry a tsvector for `text_search`. */
+export type IndexFieldDirection = SortDirection | "text";
+
 export interface IndexFieldSpec {
   path: string;
-  dir: SortDirection;
+  dir: IndexFieldDirection;
+}
+
+/** A full-text index has exactly one field; "text" cannot be mixed with ordered fields. */
+export function assertValidIndexFields(fields: ReadonlyArray<IndexFieldSpecLike>): void {
+  const textCount = fields.filter((f) => String(f.dir ?? f.direction ?? "").toLowerCase() === "text").length;
+  if (textCount > 0 && fields.length !== 1) {
+    throw new VellumError("INVALID_ARGUMENT", "A full-text index (dir \"text\") takes exactly one field and cannot be combined with other fields");
+  }
+}
+
+/** Field path of a whole-document full-text index: the one that serves the query-level `search`. */
+export const FULL_TEXT_ALL_PATH = "*";
+
+/** True when an index definition is a full-text index (one field with dir "text"). */
+export function isFullTextIndexFields(fields: ReadonlyArray<IndexFieldSpecLike>): boolean {
+  return fields.length === 1 && String(fields[0]?.dir ?? fields[0]?.direction ?? "").toLowerCase() === "text";
 }
 
 /** Legacy/alternate field shape accepted from older console-created indexes. */
@@ -89,7 +108,8 @@ export function normalizeIndexFieldSpec(field: IndexFieldSpecLike): IndexFieldSp
     throw new VellumError("INVALID_ARGUMENT", "Composite index field requires a non-empty path");
   }
   const rawDir = field.dir ?? field.direction ?? "asc";
-  return { path, dir: String(rawDir).toLowerCase() === "desc" ? "desc" : "asc" };
+  const dirText = String(rawDir).toLowerCase();
+  return { path, dir: dirText === "desc" ? "desc" : dirText === "text" ? "text" : "asc" };
 }
 
 export interface DocumentRecordForIndex {
@@ -285,9 +305,34 @@ export function encodeCompositeSortKey(
     } else {
       val = getFieldByPath(docRecord.data, f.path);
     }
-    segments[i] = encodeSingleSortKeyValue(val, f.dir);
+    // A full-text field has no order: the entry key is empty and the tsvector carries the search.
+    segments[i] = f.dir === "text" ? Buffer.alloc(0) : encodeSingleSortKeyValue(val, f.dir);
   }
   return Buffer.concat(segments);
+}
+
+/**
+ * The text a full-text index searches for one document: the field's string value, with arrays and
+ * objects flattened to their string leaves. Returns null when the field has no text.
+ */
+export function fullTextIndexText(docRecord: DocumentRecordForIndex, indexFields: IndexFieldSpec[]): string | null {
+  const f = normalizeIndexFieldSpec(indexFields[0]!);
+  const parts: string[] = [];
+  const walk = (v: unknown, depth: number): void => {
+    if (depth > 6 || v === null || v === undefined) return;
+    if (typeof v === "string") parts.push(v);
+    else if (typeof v === "number" || typeof v === "boolean") parts.push(String(v));
+    else if (Array.isArray(v)) for (const x of v) walk(x, depth + 1);
+    else if (typeof v === "object") for (const x of Object.values(v as Record<string, unknown>)) walk(x, depth + 1);
+  };
+  if (f.path === FULL_TEXT_ALL_PATH) {
+    // Whole-document index: serves `search` (every string/number leaf plus the document id).
+    parts.push(docRecord.documentId);
+    walk(docRecord.data, 0);
+  } else {
+    walk(getFieldByPath(docRecord.data, f.path), 0);
+  }
+  return parts.length > 0 ? parts.join(" ") : null;
 }
 
 /**

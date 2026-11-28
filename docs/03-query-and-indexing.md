@@ -26,6 +26,7 @@ Queries target a single `collectionPath` within a `projectId` namespace and supp
 | `MAX_TEXT_FILTER_LENGTH` | `1,024` chars | `packages/query-engine/src/compiler.ts` | `400 QUERY_TOO_COMPLEX` (`contains_ci`, `starts_with_ci`, `text_search`) |
 | `MAX_CURSOR_TOKEN_BYTES` | `16,384` bytes | `packages/query-engine/src/cursor.ts` | `400 INVALID_CURSOR` (enforced before base64url decode) |
 | `UNINDEXED_SCAN_CAP` | `1,000` rows | `packages/query-engine/src/compiler.ts` | Safety ceiling for unindexed fallback scans (never silently truncates) |
+| `VELLUM_UNINDEXED_QUERY_MAX_CONCURRENT` | `4` per project per API process (env; `0` disables) | `packages/document-engine/src/unindexed-gate.ts` | Queries that no index serves (and that are under the document cap) run at most this many at once per project. The excess is refused with a retryable `429 RESOURCE_EXHAUSTED` (`reason: UNINDEXED_QUERY_CONCURRENCY`). |
 | `VELLUM_UNINDEXED_QUERY_MAX_DOCS` | `50,000` documents (env; `0` disables) | `packages/query-engine/src/compiler.ts` | A query no index can serve (range, `!=`, `not-in`, text filters, `search`, or an order on a non-system field) is refused with `FAILED_PRECONDITION` and a `suggestedIndex` when its collection has more live documents than this. Below the limit it runs as before. `UNINDEXED_SCAN_CAP` only limits returned rows; it never limited how many rows the database read. |
 | `SYSTEM_LIMITS.MAX_QUERY_EXECUTION_MS` | `5,000` ms | `packages/core/src/limits.ts` | Transaction-local `statement_timeout` |
 
@@ -107,6 +108,12 @@ For any field with `dir: "desc"`, every encoded byte in that segment is bitwise-
 Index definition hashes (`computeIndexDefinitionHash`) and dot-path splits (`splitFieldPath`) are memoized in bounded LRU caches (`LRU_CACHE_LIMIT = 512`).
 
 ---
+
+### 3.4 Full-Text Indexes for `text_search` (0.0.10, beta)
+
+Without an index, `text_search` scans the collection, so above the unindexed-query cap (default 50,000 documents) it is refused with `FAILED_PRECONDITION` and a `suggestedIndex` of `{ "path": "<field>", "dir": "text" }`. Create that index (a composite index whose single field has `dir: "text"`, optionally on a wildcard template such as `chats/*/messages`). Its `document_index_entries` rows carry a `tsv` tsvector of the field, served by a partial GIN index (migration `0018_fulltext_index_entries.sql`), so `text_search` on that field becomes a GIN lookup with no scan cap. Only projects that create a full-text index pay the storage. With an index, the search matches that field's text (strings, with arrays and objects flattened to their string leaves); without one it still matches the whole document JSON.
+
+The query-level `search` string uses the same mechanism: above the cap it is refused with `suggestedIndex` `{ "path": "*", "dir": "text" }`, and a whole-document full-text index (path `*`, covering the document id and every string and number leaf) serves it through the GIN lookup. With that index `search` matches whole words, like `text_search`; without one it keeps substring matching.
 
 ## 4. Row-Value Tuple Keyset Pagination & Signed Cursors
 

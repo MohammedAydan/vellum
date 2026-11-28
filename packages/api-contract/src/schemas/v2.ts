@@ -279,7 +279,7 @@ export type SimulateRulesResult = z.infer<typeof SimulateRulesResultSchema>;
 
 export const IndexRecommendationFieldSchema = z.object({
   path: z.string().min(1),
-  dir: z.enum(["asc", "desc"]),
+  dir: z.enum(["asc", "desc", "text"]),
 });
 export type IndexRecommendationField = z.infer<typeof IndexRecommendationFieldSchema>;
 

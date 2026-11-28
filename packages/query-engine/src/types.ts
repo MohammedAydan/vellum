@@ -96,7 +96,7 @@ export interface CompiledQuery {
 export interface CompositeIndexMetadata {
   id: string;
   collectionPath: string;
-  fields: Array<{ path: string; dir: "asc" | "desc" }>;
+  fields: Array<{ path: string; dir: "asc" | "desc" | "text" }>;
   status: "building" | "ready" | "failed";
 }
 

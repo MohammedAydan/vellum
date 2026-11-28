@@ -9,6 +9,8 @@ import {
   BoundedLruCache,
   VellumError,
   encodeCompositeSortKey,
+  fullTextIndexText,
+  isFullTextIndexFields,
   validateCollectionName,
 } from "@vellum/core";
 import type { WhereClause } from "@vellum/query-engine";
@@ -322,6 +324,7 @@ export class NeonStorageAdapter extends AuthMethodDelegates implements StorageAd
                 sortKey: encodeCompositeSortKey(doc, idx.fields),
                 documentId: doc.documentId,
                 path: doc.path,
+                searchText: isFullTextIndexFields(idx.fields) ? fullTextIndexText(doc, idx.fields) : null,
               };
             });
             await batchInsertIndexEntries(

@@ -27,6 +27,8 @@ import {
   validateFieldName,
   validateWireValue,
   indexCollectionPathCovers,
+  isFullTextIndexFields,
+  encodeSingleSortKeyValue,
 } from "@vellum/core";
 import { buildNestedJsonObject, escapeLikePattern } from "./operators.js";
 import type {
@@ -850,10 +852,16 @@ export function compileQueryToParameterizedSql({
   cursorMode = null,
   scanCap,
   skipProjection = false,
+  fullTextIndex = null,
+  searchIndex = null,
 }: {
   projectId: string;
   normalizedQuery: NormalizedQuery;
   matchedCompositeIndex?: CompositeIndexMetadata | null | undefined;
+  /** A ready full-text index serving the query's `text_search` clause on its field (GIN lookup, no scan). */
+  fullTextIndex?: CompositeIndexMetadata | null | undefined;
+  /** A ready whole-document full-text index (path "*") serving the query-level `search`. */
+  searchIndex?: CompositeIndexMetadata | null | undefined;
   cursor?: CursorPayload | null | undefined;
   cursorMode?: CursorMode | undefined;
   /**
@@ -888,7 +896,15 @@ export function compileQueryToParameterizedSql({
     "(d.expires_at IS NULL OR d.expires_at > now())",
   ];
 
-  if (normalizedQuery.search) {
+  if (normalizedQuery.search && searchIndex) {
+    const idxParam = addParam(params, searchIndex.id);
+    const needle = addParam(params, normalizedQuery.search);
+    predicates.push(
+      `d.path = ANY(ARRAY(SELECT fe.path FROM document_index_entries fe WHERE fe.index_id = ${idxParam}::uuid ` +
+        `AND fe.project_id = $1::uuid AND fe.collection_path = $2 ` +
+        `AND fe.tsv @@ plainto_tsquery('simple', ${needle})))`
+    );
+  } else if (normalizedQuery.search) {
     const escaped = normalizedQuery.search.replace(/[\\%_]/g, "\\$&");
     const pattern = addParam(params, `%${escaped}%`);
     predicates.push(`(d.document_id ILIKE ${pattern} ESCAPE '\\' OR d.data::text ILIKE ${pattern} ESCAPE '\\')`);
@@ -915,7 +931,20 @@ export function compileQueryToParameterizedSql({
     selectList += `, jsonb_build_object(${pairs.join(", ")}) AS "projectedData"`;
   }
 
+  const ftsPath = fullTextIndex ? fullTextIndex.fields[0]?.path : undefined;
+  let ftsServed = false;
   for (const clause of normalizedQuery.where) {
+    if (fullTextIndex && ftsPath !== undefined && clause.op === "text_search" && clause.field === ftsPath) {
+      const idxParam = addParam(params, fullTextIndex.id);
+      const needle = addParam(params, requireStringValue(clause));
+      predicates.push(
+        `d.path = ANY(ARRAY(SELECT fe.path FROM document_index_entries fe WHERE fe.index_id = ${idxParam}::uuid ` +
+          `AND fe.project_id = $1::uuid AND fe.collection_path = $2 ` +
+          `AND fe.tsv @@ plainto_tsquery('simple', ${needle})))`
+      );
+      ftsServed = true;
+      continue;
+    }
     predicates.push(compileWhereClause(clause, params));
   }
 
@@ -934,7 +963,7 @@ export function compileQueryToParameterizedSql({
     : null;
   if (cursorPredicate) predicates.push(cursorPredicate);
 
-  const maxScanRows = matchedCompositeIndex
+  const maxScanRows = matchedCompositeIndex || ftsServed
     ? null
     : scanCap === undefined
       ? UNINDEXED_SCAN_CAP
@@ -947,6 +976,12 @@ export function compileQueryToParameterizedSql({
 
   let sql: string;
   if (matchedCompositeIndex) {
+    // Bound the index scan: equality fields on the leading index columns form a key prefix, and range
+    // clauses on the next column become a key interval. Without this the index is read in order and every
+    // entry is filtered, which is O(collection) for a selective filter.
+    const bounds = compositeSortKeyBounds(normalizedQuery, matchedCompositeIndex);
+    if (bounds.lower) predicates.push(`ie.sort_key >= ${addParam(params, bounds.lower)}::bytea`);
+    if (bounds.upper) predicates.push(`ie.sort_key < ${addParam(params, bounds.upper)}::bytea`);
     const idxParam = addParam(params, matchedCompositeIndex.id);
     sql =
       `SELECT ${selectList}, encode(ie.sort_key, 'hex') AS "sortKeyHex" ` +
@@ -967,6 +1002,8 @@ export function compileQueryToParameterizedSql({
     params,
     indexUsed: matchedCompositeIndex
       ? `composite:${matchedCompositeIndex.id}`
+      : ftsServed && fullTextIndex
+        ? `fulltext:${fullTextIndex.id}`
       : hasFilters
         ? "idx_docs_data_gin_active"
         : "idx_docs_collection_id_active",
@@ -1050,7 +1087,7 @@ export function compileDeleteSelectQuery({
 
 export function computeIndexDefinitionHash(
   collectionPath: string,
-  fields: Array<{ path: string; dir: "asc" | "desc" }>
+  fields: Array<{ path: string; dir: "asc" | "desc" | "text" }>
 ): string {
   const key = JSON.stringify({ collectionPath, fields });
   const cached = lruGet(indexDefHashCache, key);
@@ -1121,7 +1158,8 @@ export function selectCompositeIndexForQuery(
       !indexCollectionPathCovers(idx.collectionPath, normalizedQuery.collectionPath) ||
       idx.status !== "ready" ||
       !Array.isArray(idx.fields) ||
-      idx.fields.length < requiredCount
+      idx.fields.length < requiredCount ||
+      isFullTextIndexFields(idx.fields)
     ) {
       continue;
     }
@@ -1197,12 +1235,13 @@ const GIN_SERVED_OPS = new Set(["==", "in", "array-contains", "array-contains-an
  * is not documentId/createdAt/updatedAt. Equality, "in" and array-contains are served by the
  * GIN index, and system-field orders by btrees.
  */
-export function isScanRiskQuery(q: NormalizedQuery): boolean {
-  if (q.search) return true;
+export function isScanRiskQuery(q: NormalizedQuery, fullTextServedField?: string, searchServed = false): boolean {
+  if (q.search && !searchServed) return true;
   const groups = [q.where, ...(q.or ?? [])];
   for (const group of groups) {
     for (const clause of group ?? []) {
       if (isIdSystemField(clause.field)) continue;
+      if (fullTextServedField !== undefined && group === q.where && clause.op === "text_search" && clause.field === fullTextServedField) continue;
       if (isTimestampSystemFieldName(clause.field) && q.orderBy[0]?.field === clause.field) continue;
       if (!GIN_SERVED_OPS.has(clause.op)) return true;
     }
@@ -1214,8 +1253,44 @@ function isTimestampSystemFieldName(field: string): boolean {
   return field === "createdAt" || field === "updatedAt";
 }
 
+/**
+ * The ready full-text index that serves this query's top-level `text_search` clause: a single-field
+ * index with dir "text" on that field whose collection (path or template) covers the query.
+ */
+export function selectFullTextIndexForQuery(
+  q: NormalizedQuery,
+  availableIndexes: CompositeIndexMetadata[] = []
+): CompositeIndexMetadata | null {
+  const searched = q.where.filter((w) => w.op === "text_search").map((w) => w.field);
+  if (searched.length === 0) return null;
+  for (const idx of availableIndexes) {
+    if (!idx || idx.status !== "ready" || !Array.isArray(idx.fields) || !isFullTextIndexFields(idx.fields)) continue;
+    if (!indexCollectionPathCovers(idx.collectionPath, q.collectionPath)) continue;
+    if (searched.includes(normalizeIndexFieldSpec(idx.fields[0]!).path)) return idx;
+  }
+  return null;
+}
+
+/** The ready whole-document full-text index (path "*") that serves the query-level `search`. */
+export function selectSearchIndexForQuery(
+  q: NormalizedQuery,
+  availableIndexes: CompositeIndexMetadata[] = []
+): CompositeIndexMetadata | null {
+  if (!q.search) return null;
+  for (const idx of availableIndexes) {
+    if (!idx || idx.status !== "ready" || !Array.isArray(idx.fields) || !isFullTextIndexFields(idx.fields)) continue;
+    if (!indexCollectionPathCovers(idx.collectionPath, q.collectionPath)) continue;
+    if (normalizeIndexFieldSpec(idx.fields[0]!).path === "*") return idx;
+  }
+  return null;
+}
+
 /** The composite index that would serve this query: equality fields, then the order or range field. */
-export function suggestCompositeIndex(q: NormalizedQuery): Array<{ path: string; dir: "asc" | "desc" }> {
+export function suggestCompositeIndex(q: NormalizedQuery): Array<{ path: string; dir: "asc" | "desc" | "text" }> {
+  // A text_search clause is served by a full-text index on its field (dir "text"), not a composite index.
+  const searched = q.where.find((w) => w.op === "text_search" && !isIdSystemField(w.field));
+  if (searched) return [{ path: searched.field, dir: "text" }];
+  if (q.search) return [{ path: "*", dir: "text" }];
   const fields: Array<{ path: string; dir: "asc" | "desc" }> = [];
   const seen = new Set<string>();
   const add = (path: string, dir: "asc" | "desc") => {
@@ -1227,4 +1302,82 @@ export function suggestCompositeIndex(q: NormalizedQuery): Array<{ path: string;
   for (const o of q.orderBy) add(o.field, o.dir);
   for (const w of q.where) if (!GIN_SERVED_OPS.has(w.op)) add(w.field, "asc");
   return fields;
+}
+
+
+/** Smallest byte string greater than every string that starts with `b`; null when `b` is all 0xFF. */
+function sortKeySuccessor(b: Buffer): Buffer | null {
+  const out = Buffer.from(b);
+  for (let i = out.length - 1; i >= 0; i -= 1) {
+    if (out[i]! < 0xff) {
+      out[i] = out[i]! + 1;
+      return out.subarray(0, i + 1);
+    }
+  }
+  return null;
+}
+
+function bufMax(a: Buffer | null, b: Buffer | null): Buffer | null {
+  if (!a) return b;
+  if (!b) return a;
+  return Buffer.compare(a, b) >= 0 ? a : b;
+}
+
+function bufMin(a: Buffer | null, b: Buffer | null): Buffer | null {
+  if (!a) return b;
+  if (!b) return a;
+  return Buffer.compare(a, b) <= 0 ? a : b;
+}
+
+function isBoundableScalar(v: unknown): boolean {
+  return (typeof v === "string") || (typeof v === "boolean") || (typeof v === "number" && Number.isFinite(v));
+}
+
+/**
+ * Key interval `[lower, upper)` on `document_index_entries.sort_key` that contains every entry able to match
+ * the query's top-level `==` and range clauses on the index's leading columns. It is a superset bound: the
+ * row predicates still run, so it only ever narrows what the index scan reads. System fields (documentId,
+ * createdAt, updatedAt) are not bounded because their wire forms differ.
+ */
+export function compositeSortKeyBounds(
+  q: NormalizedQuery,
+  idx: CompositeIndexMetadata
+): { lower: Buffer | null; upper: Buffer | null } {
+  const none = { lower: null, upper: null };
+  if (!Array.isArray(idx.fields) || idx.fields.length === 0) return none;
+  let prefix = Buffer.alloc(0);
+  let consumed = 0;
+  for (; consumed < idx.fields.length; consumed += 1) {
+    const f = normalizeIndexFieldSpec(idx.fields[consumed]!);
+    if (f.dir === "text" || isIdSystemField(f.path) || isTimestampSystemFieldName(f.path)) break;
+    const eq = q.where.filter((w) => w.field === f.path && w.op === "==");
+    if (eq.length !== 1 || !isBoundableScalar(eq[0]!.value)) break;
+    prefix = Buffer.concat([prefix, encodeSingleSortKeyValue(eq[0]!.value, f.dir)]);
+  }
+  const next = idx.fields[consumed] ? normalizeIndexFieldSpec(idx.fields[consumed]!) : null;
+  let lower: Buffer | null = prefix.length > 0 ? prefix : null;
+  let upper: Buffer | null = prefix.length > 0 ? sortKeySuccessor(prefix) : null;
+  if (next && next.dir !== "text" && !isIdSystemField(next.path) && !isTimestampSystemFieldName(next.path)) {
+    for (const w of q.where) {
+      if (w.field !== next.path || !RANGE_OPS.has(w.op) || !isBoundableScalar(w.value)) continue;
+      const enc = encodeSingleSortKeyValue(w.value, next.dir);
+      const typeStart = Buffer.concat([prefix, enc.subarray(0, 1)]);
+      const typeEnd = sortKeySuccessor(typeStart);
+      const p = Buffer.concat([prefix, enc]);
+      const pEnd = sortKeySuccessor(p);
+      const asc = next.dir === "asc";
+      let lo: Buffer | null;
+      let hi: Buffer | null;
+      switch (w.op) {
+        case ">=": [lo, hi] = asc ? [p, typeEnd] : [typeStart, pEnd]; break;
+        case ">": [lo, hi] = asc ? [pEnd, typeEnd] : [typeStart, p]; break;
+        case "<=": [lo, hi] = asc ? [typeStart, pEnd] : [p, typeEnd]; break;
+        default: [lo, hi] = asc ? [typeStart, p] : [pEnd, typeEnd]; break; // "<"
+      }
+      // `>` / `<` with an all-0xFF key has no successor: the interval is empty on that side; keep it open.
+      lower = bufMax(lower, lo);
+      upper = bufMin(upper, hi);
+    }
+  }
+  return { lower, upper };
 }

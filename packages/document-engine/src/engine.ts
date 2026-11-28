@@ -3,6 +3,7 @@
  * Orchestrates CRUD, Batch Writes, Field Transforms, Queries, and OCC Transactions.
  */
 
+import { withUnindexedQuerySlot } from "./unindexed-gate.js";
 import { formatPublicDocument } from "./document-format.js";
 import { evaluateRelationRulesForDelete, groupRelationRulesByCollection } from "./relation-integrity.js";
 import { scanReferencedBy, type ReferencedByRequest, type ReferencedByResult } from "./referenced-by.js";
@@ -35,6 +36,8 @@ import {
   encodeQueryCursor,
   decodeAndVerifyQueryCursor,
   selectCompositeIndexForQuery,
+  selectFullTextIndexForQuery,
+  selectSearchIndexForQuery,
   compileQueryToParameterizedSql,
   isScanRiskQuery,
   resolveUnindexedQueryMaxDocs,
@@ -1898,7 +1901,11 @@ export class DocumentEngine implements DocumentEnginePort {
         // The "unindexed scan cap" only ever limited returned rows. Enforce it on the collection
         // instead: a query no index can serve reads the whole collection, so refuse it above N live
         // documents and say which composite index fixes it.
-        if (!matchedIndex && isScanRiskQuery(normalizedQuery)) {
+        const fullTextIndex = selectFullTextIndexForQuery(normalizedQuery, availableIndexes);
+        const fullTextField = fullTextIndex?.fields[0]?.path;
+        const searchIndex = selectSearchIndexForQuery(normalizedQuery, availableIndexes);
+        const scanRisk = !matchedIndex && isScanRiskQuery(normalizedQuery, fullTextField, searchIndex !== null);
+        if (scanRisk) {
           const maxDocs = resolveUnindexedQueryMaxDocs();
           if (maxDocs > 0 && tx.countLiveDocumentsUpTo) {
             const live = await tx.countLiveDocumentsUpTo(normalizedQuery.collectionPath, maxDocs + 1);
@@ -1928,6 +1935,8 @@ export class DocumentEngine implements DocumentEnginePort {
           projectId: ctx.projectId,
           normalizedQuery,
           matchedCompositeIndex: matchedIndex,
+          fullTextIndex,
+          searchIndex,
           cursor: activeCursor,
           cursorMode,
           skipProjection,
@@ -1938,7 +1947,9 @@ export class DocumentEngine implements DocumentEnginePort {
         const pageDocs: DocumentRecord[] = [];
         let pageHasMore = false;
         let pageCursorDoc: QueriedDocument | null = null;
-        let batch = await tx.queryDocuments(compiledPlan);
+        const runPlan = (plan: typeof compiledPlan) =>
+          scanRisk ? withUnindexedQuerySlot(ctx.projectId, () => tx.queryDocuments(plan)) : tx.queryDocuments(plan);
+        let batch = await runPlan(compiledPlan);
         let scans = 1;
         // A collection-level `list` allow does not mean every row is readable. Each row also has to pass its
         // own `get` rule. Denied rows are skipped and the scan continues (bounded) so pages stay full and the
@@ -1978,11 +1989,13 @@ export class DocumentEngine implements DocumentEnginePort {
             projectId: ctx.projectId,
             normalizedQuery,
             matchedCompositeIndex: matchedIndex,
+            fullTextIndex,
+          searchIndex,
             cursor: resumeCursor,
             cursorMode: "startAfter",
             skipProjection,
           });
-          batch = await tx.queryDocuments(nextPlan);
+          batch = await runPlan(nextPlan);
           scans += 1;
         }
         this.telemetry.counter("db.round_trips", scans);

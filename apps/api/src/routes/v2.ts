@@ -20,6 +20,7 @@ import {
   VellumError,
   analyzeQueryIndexCoverage,
   buildIndexSuggestionHeaders,
+  isFullTextIndexFields,
   normalizeIndexFieldSpec,
   type IndexAdvisorIndex,
   type IndexAdvisorQuery,
@@ -368,11 +369,14 @@ export function createIndexAdvisor(
       const stored = await platform.dataStore.listCompositeIndexes({
         projectId: tenant.projectId,
       });
-      const existingIndexes: IndexAdvisorIndex[] = stored.map((index) => ({
-        collectionPath: index.collectionPath,
-        fields: index.fields.map((field) => normalizeIndexFieldSpec(field)),
-        status: index.status,
-      }));
+      // The advisor reasons about ordered composite indexes; full-text indexes (dir "text") are separate.
+      const existingIndexes: IndexAdvisorIndex[] = stored
+        .filter((index) => !isFullTextIndexFields(index.fields))
+        .map((index) => ({
+          collectionPath: index.collectionPath,
+          fields: index.fields.map((field) => normalizeIndexFieldSpec(field) as { path: string; dir: "asc" | "desc" }),
+          status: index.status,
+        }));
       const coverage = analyze(query, existingIndexes, {
         projectId: tenant.projectId,
         orgId: tenant.orgId,

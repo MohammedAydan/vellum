@@ -10,6 +10,7 @@ import crypto from "node:crypto";
 import {
   BoundedLruCache,
   VellumError,
+  assertValidIndexFields,
   encodeCompositeSortKey,
   getFieldByPath,
   compareWireValues,
@@ -493,7 +494,8 @@ export class DataPlaneStore extends AuthMethodDelegates implements StorageAdapte
       },
 
       createIndex: async ({ collectionPath, fields }: { collectionPath: string; fields: IndexFieldItem[] }): Promise<CompositeIndexRecord> => {
-        const definitionHash = computeIndexDefinitionHash(collectionPath, fields);
+        assertValidIndexFields(fields);
+      const definitionHash = computeIndexDefinitionHash(collectionPath, fields);
         for (const existing of this.indexes.values()) {
           if (
             existing.projectId === ctx.projectId &&
