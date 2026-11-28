@@ -108,6 +108,10 @@ Index definition hashes (`computeIndexDefinitionHash`) and dot-path splits (`spl
 
 ---
 
+### 3.4 Full-Text Indexes for `text_search` (0.0.10, beta)
+
+Without an index, `text_search` scans the collection, so above the unindexed-query cap (default 50,000 documents) it is refused with `FAILED_PRECONDITION` and a `suggestedIndex` of `{ "path": "<field>", "dir": "text" }`. Create that index (a composite index whose single field has `dir: "text"`, optionally on a wildcard template such as `chats/*/messages`). Its `document_index_entries` rows carry a `tsv` tsvector of the field, served by a partial GIN index (migration `0018_fulltext_index_entries.sql`), so `text_search` on that field becomes a GIN lookup with no scan cap. Only projects that create a full-text index pay the storage. With an index, the search matches that field's text (strings, with arrays and objects flattened to their string leaves); without one it still matches the whole document JSON.
+
 ## 4. Row-Value Tuple Keyset Pagination & Signed Cursors
 
 VELLUM does **not** expose SQL `OFFSET`. All pagination uses deterministic keyset cursors with `documentId` as the final tie-breaker.

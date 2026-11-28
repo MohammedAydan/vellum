@@ -128,6 +128,48 @@ describe.skipIf(!enabled)("wildcard template index at 50,100 documents (default 
   it("text_search above the cap is refused with a template suggestion instead of scanning", async () => {
     await expect(
       engine.executeQuery({ ...T, querySpec: { collectionPath: "chats/idx_test/messages", where: [{ field: "text", op: "text_search", value: "launch" }], limit: 10 } })
-    ).rejects.toMatchObject({ code: "FAILED_PRECONDITION", details: { suggestedIndex: { collectionPath: "chats/*/messages" } } });
+    ).rejects.toMatchObject({ code: "FAILED_PRECONDITION", details: { suggestedIndex: { collectionPath: "chats/*/messages", fields: [{ path: "text", dir: "text" }] } } });
   }, 120000);
+
+  it("Recipe 6: after creating the suggested full-text index, text_search succeeds at 50,100 docs through the GIN lookup", async () => {
+    const q = { collectionPath: "chats/idx_test/messages", where: [{ field: "text", op: "text_search" as const, value: "launch" }], limit: 100 };
+    const err = (await engine.executeQuery({ ...T, querySpec: q }).catch((e: unknown) => e)) as { details?: { suggestedIndex?: { fields: Array<{ path: string; dir: "asc" | "desc" | "text" }> } } };
+    const fields = err.details?.suggestedIndex?.fields;
+    expect(fields).toEqual([{ path: "text", dir: "text" }]);
+    await store.createCompositeIndex(T, "chats/*/messages", fields!);
+    await store.runIndexBuilderWorker();
+    const res = await engine.executeQuery({ ...T, querySpec: q });
+    // 50,100 docs, one in 1,000 says "launch day": seq 0, 1000, ... 50000 = 51 matches.
+    expect(res.documents).toHaveLength(51);
+    for (const d of res.documents) expect(String(d.data["text"])).toContain("launch");
+  }, 180000);
+
+  it("Recipe 6: aggregate() over more than 10,000 member-scoped rows returns FAILED_PRECONDITION, not PERMISSION_DENIED", async () => {
+    class RulesControl { getActiveRuleset() { return { rulesAst: { version: 1, rules: [{ match: "chats/{c}/messages/{m}", allow: { list: { op: "!=", left: { var: "auth.uid" }, right: { val: null } }, get: { op: "in", left: { var: "auth.uid" }, right: { var: "resource.data.memberIds" } } } }] } }; } incrementUsage() {} }
+    const scoped = new DocumentEngine({ controlStore: new RulesControl() as never, dataStore: store });
+    const publicKey = {
+      id: "pk", projectId: pid, name: "pk", keyType: "public", keyPrefix: "pk_t", secretHash: "h", scopes: ["documents:read"],
+      rateLimitRps: 100, lastUsedAt: null, expiresAt: null, revokedAt: null, createdBy: null, createdAt: new Date().toISOString(),
+    };
+    await expect(
+      scoped.aggregateDocuments({
+        projectId: pid,
+        apiKeyRecord: publicKey as never,
+        authContext: { uid: "u1", claims: {} },
+        request: { collectionPath: "chats/idx_test/messages", metrics: { count: { op: "count" } } },
+      } as never)
+    ).rejects.toMatchObject({ code: "FAILED_PRECONDITION", details: { reason: "SCOPED_AGGREGATE_ROW_LIMIT" } });
+  }, 180000);
+
+  it("after creating the suggested wildcard index, text_search succeeds at 50,100 docs", async () => {
+    const q = { collectionPath: "chats/idx_test/messages", where: [{ field: "text", op: "text_search" as const, value: "launch" }], limit: 10 };
+    const err = (await engine.executeQuery({ ...T, querySpec: q }).catch((e: unknown) => e)) as { details?: { suggestedIndex?: { fields: Array<{ path: string; dir: "asc" | "desc" }> } } };
+    const fields = err.details?.suggestedIndex?.fields;
+    expect(fields && fields.length).toBeGreaterThan(0);
+    await store.createCompositeIndex(T, "chats/*/messages", fields!);
+    await store.runIndexBuilderWorker();
+    const res = await engine.executeQuery({ ...T, querySpec: q });
+    expect(res.documents).toHaveLength(10);
+    for (const d of res.documents) expect(String(d.data["text"])).toContain("launch");
+  }, 180000);
 });

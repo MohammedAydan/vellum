@@ -29,7 +29,7 @@ import { referenceMatchJsonPath } from "./referenced-by.js";
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
-import { VellumError, encodeCompositeSortKey, indexCollectionPathCovers, isTemplateCollectionPath } from "@vellum/core";
+import { VellumError, assertValidIndexFields, encodeCompositeSortKey, fullTextIndexText, indexCollectionPathCovers, isFullTextIndexFields, isTemplateCollectionPath } from "@vellum/core";
 import { computeIndexDefinitionHash, type CompiledQuery, type WhereClause } from "@vellum/query-engine";
 import {
   compileAggregateSql,
@@ -432,12 +432,13 @@ export const SQL_DELETE_INDEX_ENTRIES = `DELETE FROM document_index_entries
 
 /** Shared UNNEST insert for all tenant composite-index entry writes. */
 export const SQL_INSERT_INDEX_ENTRIES = `INSERT INTO document_index_entries (
-   index_id, project_id, collection_path, sort_key, document_id, path
+   index_id, project_id, collection_path, sort_key, document_id, path, tsv
  )
  SELECT u.index_id::uuid, $1::uuid,
-        u.collection_path, u.sort_key, u.document_id, u.path
-   FROM unnest($2::uuid[], $3::text[], $4::bytea[], $5::text[], $6::text[])
-     AS u(index_id, collection_path, sort_key, document_id, path)
+        u.collection_path, u.sort_key, u.document_id, u.path,
+        CASE WHEN u.search_text IS NULL THEN NULL ELSE to_tsvector('simple', u.search_text) END
+   FROM unnest($2::uuid[], $3::text[], $4::bytea[], $5::text[], $6::text[], $7::text[])
+     AS u(index_id, collection_path, sort_key, document_id, path, search_text)
  ON CONFLICT (index_id, collection_path, sort_key, document_id) DO NOTHING`;
 
 export const SQL_INSERT_OUTBOX = `INSERT INTO realtime_outbox (
@@ -664,6 +665,8 @@ export interface IndexEntryInsert {
   sortKey: Buffer;
   documentId: string;
   path: string;
+  /** Full-text indexes only: the text to index as a tsvector. Null for ordinary composite indexes. */
+  searchText?: string | null;
 }
 
 /**
@@ -685,6 +688,7 @@ export async function batchInsertIndexEntries(
     entries.map((entry) => entry.sortKey),
     entries.map((entry) => entry.documentId),
     entries.map((entry) => entry.path),
+    entries.map((entry) => entry.searchText ?? null),
   ]);
 }
 
@@ -755,6 +759,7 @@ export function createSqlTransactionHandle(
           sortKey: encodeCompositeSortKey(row, idx.fields),
           documentId: row.documentId,
           path: row.path,
+          searchText: isFullTextIndexFields(idx.fields) ? fullTextIndexText(row, idx.fields) : null,
         });
       }
     }
@@ -1072,6 +1077,7 @@ export function createSqlTransactionHandle(
 
     async createIndex({ collectionPath, fields }: { collectionPath: string; fields: IndexFieldItem[] }): Promise<CompositeIndexRecord> {
       assertOpen();
+      assertValidIndexFields(fields);
       const definitionHash = computeIndexDefinitionHash(collectionPath, fields);
       const id = crypto.randomUUID();
       try {

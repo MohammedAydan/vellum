@@ -118,7 +118,7 @@ export const UpdateRelationRulesRequestSchema = z
 
 export const CompositeIndexFieldSchema = z.object({
   fieldPath: FieldNameSchema,
-  order: z.enum(["asc", "desc"]).default("asc"),
+  order: z.enum(["asc", "desc", "text"]).default("asc"),
 });
 
 export const CreateIndexRequestSchema = z.object({

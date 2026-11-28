@@ -27,6 +27,7 @@ import {
   validateFieldName,
   validateWireValue,
   indexCollectionPathCovers,
+  isFullTextIndexFields,
 } from "@vellum/core";
 import { buildNestedJsonObject, escapeLikePattern } from "./operators.js";
 import type {
@@ -850,10 +851,13 @@ export function compileQueryToParameterizedSql({
   cursorMode = null,
   scanCap,
   skipProjection = false,
+  fullTextIndex = null,
 }: {
   projectId: string;
   normalizedQuery: NormalizedQuery;
   matchedCompositeIndex?: CompositeIndexMetadata | null | undefined;
+  /** A ready full-text index serving the query's `text_search` clause on its field (GIN lookup, no scan). */
+  fullTextIndex?: CompositeIndexMetadata | null | undefined;
   cursor?: CursorPayload | null | undefined;
   cursorMode?: CursorMode | undefined;
   /**
@@ -915,7 +919,20 @@ export function compileQueryToParameterizedSql({
     selectList += `, jsonb_build_object(${pairs.join(", ")}) AS "projectedData"`;
   }
 
+  const ftsPath = fullTextIndex ? fullTextIndex.fields[0]?.path : undefined;
+  let ftsServed = false;
   for (const clause of normalizedQuery.where) {
+    if (fullTextIndex && ftsPath !== undefined && clause.op === "text_search" && clause.field === ftsPath) {
+      const idxParam = addParam(params, fullTextIndex.id);
+      const needle = addParam(params, requireStringValue(clause));
+      predicates.push(
+        `d.path IN (SELECT fe.path FROM document_index_entries fe WHERE fe.index_id = ${idxParam}::uuid ` +
+          `AND fe.project_id = $1::uuid AND fe.collection_path = $2 ` +
+          `AND fe.tsv @@ plainto_tsquery('simple', ${needle}))`
+      );
+      ftsServed = true;
+      continue;
+    }
     predicates.push(compileWhereClause(clause, params));
   }
 
@@ -934,7 +951,7 @@ export function compileQueryToParameterizedSql({
     : null;
   if (cursorPredicate) predicates.push(cursorPredicate);
 
-  const maxScanRows = matchedCompositeIndex
+  const maxScanRows = matchedCompositeIndex || ftsServed
     ? null
     : scanCap === undefined
       ? UNINDEXED_SCAN_CAP
@@ -967,6 +984,8 @@ export function compileQueryToParameterizedSql({
     params,
     indexUsed: matchedCompositeIndex
       ? `composite:${matchedCompositeIndex.id}`
+      : ftsServed && fullTextIndex
+        ? `fulltext:${fullTextIndex.id}`
       : hasFilters
         ? "idx_docs_data_gin_active"
         : "idx_docs_collection_id_active",
@@ -1050,7 +1069,7 @@ export function compileDeleteSelectQuery({
 
 export function computeIndexDefinitionHash(
   collectionPath: string,
-  fields: Array<{ path: string; dir: "asc" | "desc" }>
+  fields: Array<{ path: string; dir: "asc" | "desc" | "text" }>
 ): string {
   const key = JSON.stringify({ collectionPath, fields });
   const cached = lruGet(indexDefHashCache, key);
@@ -1121,7 +1140,8 @@ export function selectCompositeIndexForQuery(
       !indexCollectionPathCovers(idx.collectionPath, normalizedQuery.collectionPath) ||
       idx.status !== "ready" ||
       !Array.isArray(idx.fields) ||
-      idx.fields.length < requiredCount
+      idx.fields.length < requiredCount ||
+      isFullTextIndexFields(idx.fields)
     ) {
       continue;
     }
@@ -1197,12 +1217,13 @@ const GIN_SERVED_OPS = new Set(["==", "in", "array-contains", "array-contains-an
  * is not documentId/createdAt/updatedAt. Equality, "in" and array-contains are served by the
  * GIN index, and system-field orders by btrees.
  */
-export function isScanRiskQuery(q: NormalizedQuery): boolean {
+export function isScanRiskQuery(q: NormalizedQuery, fullTextServedField?: string): boolean {
   if (q.search) return true;
   const groups = [q.where, ...(q.or ?? [])];
   for (const group of groups) {
     for (const clause of group ?? []) {
       if (isIdSystemField(clause.field)) continue;
+      if (fullTextServedField !== undefined && group === q.where && clause.op === "text_search" && clause.field === fullTextServedField) continue;
       if (isTimestampSystemFieldName(clause.field) && q.orderBy[0]?.field === clause.field) continue;
       if (!GIN_SERVED_OPS.has(clause.op)) return true;
     }
@@ -1214,8 +1235,29 @@ function isTimestampSystemFieldName(field: string): boolean {
   return field === "createdAt" || field === "updatedAt";
 }
 
+/**
+ * The ready full-text index that serves this query's top-level `text_search` clause: a single-field
+ * index with dir "text" on that field whose collection (path or template) covers the query.
+ */
+export function selectFullTextIndexForQuery(
+  q: NormalizedQuery,
+  availableIndexes: CompositeIndexMetadata[] = []
+): CompositeIndexMetadata | null {
+  const searched = q.where.filter((w) => w.op === "text_search").map((w) => w.field);
+  if (searched.length === 0) return null;
+  for (const idx of availableIndexes) {
+    if (!idx || idx.status !== "ready" || !Array.isArray(idx.fields) || !isFullTextIndexFields(idx.fields)) continue;
+    if (!indexCollectionPathCovers(idx.collectionPath, q.collectionPath)) continue;
+    if (searched.includes(normalizeIndexFieldSpec(idx.fields[0]!).path)) return idx;
+  }
+  return null;
+}
+
 /** The composite index that would serve this query: equality fields, then the order or range field. */
-export function suggestCompositeIndex(q: NormalizedQuery): Array<{ path: string; dir: "asc" | "desc" }> {
+export function suggestCompositeIndex(q: NormalizedQuery): Array<{ path: string; dir: "asc" | "desc" | "text" }> {
+  // A text_search clause is served by a full-text index on its field (dir "text"), not a composite index.
+  const searched = q.where.find((w) => w.op === "text_search" && !isIdSystemField(w.field));
+  if (searched) return [{ path: searched.field, dir: "text" }];
   const fields: Array<{ path: string; dir: "asc" | "desc" }> = [];
   const seen = new Set<string>();
   const add = (path: string, dir: "asc" | "desc") => {

@@ -35,6 +35,7 @@ import {
   encodeQueryCursor,
   decodeAndVerifyQueryCursor,
   selectCompositeIndexForQuery,
+  selectFullTextIndexForQuery,
   compileQueryToParameterizedSql,
   isScanRiskQuery,
   resolveUnindexedQueryMaxDocs,
@@ -1898,7 +1899,9 @@ export class DocumentEngine implements DocumentEnginePort {
         // The "unindexed scan cap" only ever limited returned rows. Enforce it on the collection
         // instead: a query no index can serve reads the whole collection, so refuse it above N live
         // documents and say which composite index fixes it.
-        if (!matchedIndex && isScanRiskQuery(normalizedQuery)) {
+        const fullTextIndex = selectFullTextIndexForQuery(normalizedQuery, availableIndexes);
+        const fullTextField = fullTextIndex?.fields[0]?.path;
+        if (!matchedIndex && isScanRiskQuery(normalizedQuery, fullTextField)) {
           const maxDocs = resolveUnindexedQueryMaxDocs();
           if (maxDocs > 0 && tx.countLiveDocumentsUpTo) {
             const live = await tx.countLiveDocumentsUpTo(normalizedQuery.collectionPath, maxDocs + 1);
@@ -1928,6 +1931,7 @@ export class DocumentEngine implements DocumentEnginePort {
           projectId: ctx.projectId,
           normalizedQuery,
           matchedCompositeIndex: matchedIndex,
+          fullTextIndex,
           cursor: activeCursor,
           cursorMode,
           skipProjection,
@@ -1978,6 +1982,7 @@ export class DocumentEngine implements DocumentEnginePort {
             projectId: ctx.projectId,
             normalizedQuery,
             matchedCompositeIndex: matchedIndex,
+            fullTextIndex,
             cursor: resumeCursor,
             cursorMode: "startAfter",
             skipProjection,
