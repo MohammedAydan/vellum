@@ -38,7 +38,7 @@ export function LegalPage({ kind }: { kind: LegalKind }) {
   const doc = (LEGAL[locale as Lang] ?? LEGAL.en)[kind];
   const ar = locale === "ar";
   return (
-    <main className="mx-auto w-full max-w-2xl px-5 py-10" data-testid={`legal-${kind}`}>
+    <main className="legal-page mx-auto w-full max-w-2xl px-5 py-10" data-testid={`legal-${kind}`}>
       <Link to="/login" className="text-xs text-muted-foreground hover:underline">{ar ? "العودة" : "Back"}</Link>
       <h1 className="mt-4 text-2xl font-semibold tracking-tight">{doc.title}</h1>
       <p className="mt-2 text-sm text-muted-foreground">{doc.updated}</p>
