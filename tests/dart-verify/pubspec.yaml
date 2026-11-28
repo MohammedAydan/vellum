@@ -1,7 +1,7 @@
 name: vellum_dart_verify
 description: Cross-cutting real-backend verification harness for VELLUM (documents, auth, authorization).
 publish_to: "none"
-version: 0.0.9
+version: 0.0.10
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
