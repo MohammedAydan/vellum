@@ -344,6 +344,12 @@ jobs:
           END $$;
           SQL
 
+      - name: Wildcard index PostgreSQL integration (required, no silent skip)
+        run: WILDCARD_PG_TEST=1 corepack pnpm exec vitest run tests/integration/wildcard-index-pg.test.ts
+
+      - name: Scan cap PostgreSQL integration (required, no silent skip)
+        run: SCAN_PG_TEST=1 corepack pnpm exec vitest run tests/integration/scan-cap-pg.test.ts
+
       - name: Relations PostgreSQL integration (required, no silent skip)
         run: RELATIONS_PG_TEST=1 corepack pnpm exec vitest run tests/integration/relation-rules-pg.test.ts
 
