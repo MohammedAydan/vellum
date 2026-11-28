@@ -88,7 +88,7 @@ export const C = {
     menu: "Menu",
     copy: "Copy", copied: "Copied",
     hero: {
-      badge: "Public beta · 0.0.8",
+      badge: "Public beta · 0.0.9",
       h1a: "The document database",
       h1b: "that lives in PostgreSQL",
       lead: "Collections, typed documents, queries, relations, realtime and end-user sign-in. One database to run. No Redis, no broker, no extra moving parts.",
@@ -111,6 +111,20 @@ export const C = {
     },
     sdk: { eyebrow: "SDKs", h2: "One package per platform", p: "No native setup to add. Pick your platform and start reading and writing documents.", tabs: ["JavaScript", "Flutter"], install: ["npm install @vellumdb/sdk-js", "flutter pub add vellum_flutter"], more: "SDK guides" },
     ai: { eyebrow: "Built for AI assistants", h2: "Your coding assistant can read the docs too", p: "Vellum publishes llms.txt, a full-text version, Markdown for every page, a ready prompt for your assistant and a public OpenAPI file for the data API.", cta: "Use with AI agents" },
+    walk: {
+      eyebrow: "One query, the whole stack", h2: "Follow one query from SDK to disk",
+      steps: [
+        ["The SDK", "sdk-js", "db.collection(\"tasks\").where(...).orderBy(...) becomes one compact HTTP request. No ORM, no query builder to fight."],
+        ["The API", "REST + WS", "Authentication, project lookup and CORS checks happen once, at the edge of the data plane."],
+        ["The rules", "RULES DSL", "Your security rules compile to SQL predicates, so every row is checked inside the database, not in client code."],
+        ["PostgreSQL", "PG 16 / 18", "One parameterized statement runs against composite indexes. The same engine answers reads, writes and realtime."],
+      ],
+    },
+    aud: {
+      eyebrow: "Who it serves", h2: "Starts with one developer. Scales to the whole company.",
+      solo: { h: "For you, building alone", points: ["npm install and a quickstart that writes your first document in five minutes", "A Firebase-style API you already know, with honest SQL underneath", "MIT licensed and self-hostable - no credit card to try"] },
+      team: { h: "For your team, and its auditors", points: ["Row-level security and rules enforced in the database, not the client", "Two isolated PostgreSQL planes with least-privilege roles", "Versioned rulesets, per-project API keys and a public OpenAPI surface"] },
+    },
     faqTitle: "Frequently asked questions",
     cta: { h2: "Ship your next app on Vellum", p: "Create a project, grab a key and write your first document in a few minutes.", a: "Open the quickstart", b: "Create an account" },
     feat: {
@@ -124,7 +138,7 @@ export const C = {
       chips: ["composite indexes", "index advisor", "optimistic concurrency", "batch writes", "transactions", "cursor pagination", "text search", "field operations"],
     },
     sdks: {
-      h1: "SDKs for JavaScript and Flutter", lead: "One package per platform. Both are at version 0.0.8 and share the platform version.",
+      h1: "SDKs for JavaScript and Flutter", lead: "One package per platform. Both are at version 0.0.9 and share the platform version.",
       rows: [
         ["JavaScript and TypeScript", "Works in browsers and Node.js. Includes auto-generated ids, automatic token refresh, caching, document references and Google, GitHub and Apple sign-in.", "npm install @vellumdb/sdk-js", "ts"],
         ["Flutter", "A single Flutter package with secure token storage and system-browser sign-in built in, so you add no native setup. Third-party sign-in libraries stay optional.", "flutter pub add vellum_flutter", "dart"],
@@ -153,7 +167,7 @@ export const C = {
     menu: "القائمة",
     copy: "نسخ", copied: "تم النسخ",
     hero: {
-      badge: "نسخة تجريبية عامة · 0.0.8",
+      badge: "نسخة تجريبية عامة · 0.0.9",
       h1a: "قاعدة بيانات المستندات",
       h1b: "التي تعيش داخل PostgreSQL",
       lead: "مجموعات ومستندات منمّطة واستعلامات وعلاقات ووقت فعلي وتسجيل دخول للمستخدمين. قاعدة بيانات واحدة تشغّلها. بلا Redis ولا وسيط رسائل ولا أجزاء إضافية.",
@@ -176,6 +190,20 @@ export const C = {
     },
     sdk: { eyebrow: "الحزم البرمجية", h2: "حزمة واحدة لكل منصة", p: "لا إعداد native إضافي. اختر منصتك وابدأ بقراءة المستندات وكتابتها.", tabs: ["JavaScript", "Flutter"], install: ["npm install @vellumdb/sdk-js", "flutter pub add vellum_flutter"], more: "أدلة الحزم" },
     ai: { eyebrow: "مصمم لمساعدي الذكاء الاصطناعي", h2: "مساعدك البرمجي يستطيع قراءة التوثيق أيضًا", p: "ينشر Vellum ملف llms.txt ونسخة نصية كاملة وMarkdown لكل صفحة وتعليمات جاهزة لمساعدك وملف OpenAPI عامًا لواجهة البيانات.", cta: "الاستخدام مع وكلاء الذكاء الاصطناعي" },
+    walk: {
+      eyebrow: "استعلام واحد، المنظومة كلها", h2: "تتبّع استعلامًا واحدًا من الحزمة إلى القرص",
+      steps: [
+        ["الحزمة (SDK)", "sdk-js", "تتحول db.collection(\"tasks\").where(...).orderBy(...) إلى طلب HTTP واحد مضغوط. لا ORM ولا منشئ استعلامات يعاكسك."],
+        ["الواجهة (API)", "REST + WS", "المصادقة وتحديد المشروع وفحوص CORS تتم مرة واحدة، عند حافة مستوى البيانات."],
+        ["القواعد", "RULES DSL", "تُترجم قواعد الأمان إلى شروط SQL، فيُفحص كل صف داخل قاعدة البيانات لا في العميل."],
+        ["PostgreSQL", "PG 16 / 18", "عبارة واحدة مُمرَّرة بالمعاملات تعمل على فهارس مركّبة. والمحرك نفسه يجيب عن القراءة والكتابة والتحديث اللحظي."],
+      ],
+    },
+    aud: {
+      eyebrow: "لمن صُمم", h2: "يبدأ بمطوّر واحد. ويكبر مع الشركة كلها.",
+      solo: { h: "لك، وأنت تبني وحدك", points: ["npm install وجولة البداية تكتب أول مستند لك في خمس دقائق", "واجهة بأسلوب Firebase تعرفها مسبقًا، وبصدق SQL تحتها", "رخصة MIT واستضافة ذاتية - لا بطاقة ائتمان للتجربة"] },
+      team: { h: "لفريقك، وللمُدقّقين أيضًا", points: ["أمان على مستوى الصف وقواعد تُفرض داخل قاعدة البيانات لا في العميل", "مستويان منفصلان من PostgreSQL بأقل الصلاحيات الممكنة", "مجموعات قواعد مُرقّمة الإصدارات، ومفاتيح API لكل مشروع، وواجهة OpenAPI علنية"] },
+    },
     faqTitle: "الأسئلة الشائعة",
     cta: { h2: "أطلق تطبيقك القادم على Vellum", p: "أنشئ مشروعًا، وخذ مفتاحًا، واكتب أول مستند خلال دقائق.", a: "افتح البدء السريع", b: "أنشئ حسابًا" },
     feat: {
@@ -189,7 +217,7 @@ export const C = {
       chips: ["فهارس مركبة", "مستشار الفهارس", "تزامن تفاؤلي", "كتابة دفعية", "معاملات", "ترقيم بالمؤشر", "بحث نصي", "عمليات على الحقول"],
     },
     sdks: {
-      h1: "حزم JavaScript وFlutter", lead: "حزمة واحدة لكل منصة. كلتاهما بالإصدار 0.0.8 وتشتركان في إصدار المنصة.",
+      h1: "حزم JavaScript وFlutter", lead: "حزمة واحدة لكل منصة. كلتاهما بالإصدار 0.0.9 وتشتركان في إصدار المنصة.",
       rows: [
         ["JavaScript وTypeScript", "تعمل في المتصفح وNode.js. تشمل معرّفات تلقائية وتجديدًا تلقائيًا للرموز وتخزينًا مؤقتًا ومراجع للمستندات وتسجيل دخول عبر Google وGitHub وApple.", "npm install @vellumdb/sdk-js", "ts"],
         ["Flutter", "حزمة Flutter واحدة تتضمن تخزينًا آمنًا للرموز وتسجيل دخول عبر متصفح النظام، فلا تضيف إعداد native. مكتبات تسجيل الدخول الخارجية تبقى اختيارية.", "flutter pub add vellum_flutter", "dart"],

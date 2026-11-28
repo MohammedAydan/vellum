@@ -142,13 +142,28 @@ ${win("tasks.ts", SNIP.hero, "ts")}
   .get();`, "ts"))}
 ${plate("FIG. 03", b.s[0], win("rules", SNIP.rulesShort, "rules"))}</div></div></section>
 
-<section class="s"><div class="wrap">${shead("03", c.sdk.eyebrow)}<div class="sdk-grid"><div><h2>${c.sdk.h2}</h2><p class="sec-p">${c.sdk.p}</p>
+<section class="s"><div class="wrap">${shead("03", c.walk.eyebrow)}<h2>${c.walk.h2}</h2>
+<div class="walk">${plate("FIG. 04", c.walk.steps[0][0], win("query.ts", `const page = await db
+  .collection("tasks")
+  .where("status", "==", "open")
+  .orderBy("priority", "desc")
+  .limit(20)
+  .get();`, "ts"))}
+<div class="wrail">${c.walk.steps.map((_, i) => `<input type="radio" name="wk" id="wk${i + 1}"${i === 0 ? " checked" : ""}>`).join("")}
+<ol class="wstack">${c.walk.steps.map((s, i) => `<li><label for="wk${i + 1}"><span class="wn">${String(i + 1).padStart(2, "0")}</span>${s[0]}<span class="wtag">${s[1]}</span></label></li>`).join("")}</ol>
+<div class="wcaps">${c.walk.steps.map((s, i) => `<p class="wc c${i + 1}">${s[2]}</p>`).join("")}</div></div></div></div></section>
+
+<section class="s"><div class="wrap">${shead("04", c.sdk.eyebrow)}<div class="sdk-grid"><div><h2>${c.sdk.h2}</h2><p class="sec-p">${c.sdk.p}</p>
 ${installBox(c.sdk.install[0], c)}${installBox(c.sdk.install[1], c)}<p style="margin-top:1.2rem"><a class="btn" href="${p}/sdks">${c.sdk.more}</a></p></div>
 <div class="tabs"><input type="radio" name="t" id="tab1" checked><input type="radio" name="t" id="tab2"><div class="tabbar"><label for="tab1">${c.sdk.tabs[0]}</label><label for="tab2">${c.sdk.tabs[1]}</label></div>
 <div class="panes"><div class="pane p1">${win("app.ts", SNIP.ts, "ts")}</div><div class="pane p2">${win("main.dart", SNIP.dart, "dart")}</div></div></div></div></div></section>
 
-<section class="s"><div class="wrap">${shead("04", c.ai.eyebrow)}<div class="split"><div><h2>${c.ai.h2}</h2><p class="sec-p">${c.ai.p}</p><a class="btn" href="${docs}/ai-agents">${c.ai.cta}</a></div>
+<section class="s"><div class="wrap">${shead("05", c.ai.eyebrow)}<div class="split"><div><h2>${c.ai.h2}</h2><p class="sec-p">${c.ai.p}</p><a class="btn" href="${docs}/ai-agents">${c.ai.cta}</a></div>
 <div class="term">${win("terminal", SNIP.term, "bash")}</div></div></div></section>
+
+<section class="s"><div class="wrap">${shead("06", c.aud.eyebrow)}<h2>${c.aud.h2}</h2>
+<div class="aud"><div><h3>${c.aud.solo.h}</h3><ul>${c.aud.solo.points.map((x) => `<li>${x}</li>`).join("")}</ul></div>
+<div><h3>${c.aud.team.h}</h3><ul>${c.aud.team.points.map((x) => `<li>${x}</li>`).join("")}</ul></div></div></div></section>
 
 <section class="s"><div class="wrap"><h2>${c.faqTitle}</h2>${faqHtml(lang)}${ctaBand(c, lang)}</div></section>`;
 }
@@ -194,7 +209,7 @@ export function renderPage({ page, lang, origin, routeOf }) {
     ld.push({ "@context": "https://schema.org", "@graph": [
       org,
       { "@type": "WebSite", "@id": `${origin}/#site`, name: "Vellum", url: origin, inLanguage: ["en", "ar"], publisher: { "@id": `${origin}/#org` } },
-      { "@type": "SoftwareApplication", name: "Vellum", applicationCategory: "DeveloperApplication", operatingSystem: "Web, Node.js, Flutter", softwareVersion: "0.0.8", description: page.desc.en, url: origin, license: "https://opensource.org/licenses/MIT", publisher: { "@id": `${origin}/#org` } },
+      { "@type": "SoftwareApplication", name: "Vellum", applicationCategory: "DeveloperApplication", operatingSystem: "Web, Node.js, Flutter", softwareVersion: "0.0.9", description: page.desc.en, url: origin, license: "https://opensource.org/licenses/MIT", publisher: { "@id": `${origin}/#org` } },
     ] });
     ld.push({ "@context": "https://schema.org", "@type": "FAQPage", inLanguage: lang, mainEntity: FAQ[lang].map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) });
   } else {
