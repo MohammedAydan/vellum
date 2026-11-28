@@ -70,3 +70,64 @@ describe.skipIf(!enabled)("wildcard template index on PostgreSQL", () => {
     expect(res.rows[0].c).toBe(parents.length * perParent);
   }, 60000);
 });
+
+// Recipe 6 at the real default cap: 50,100 documents seeded in one statement.
+describe.skipIf(!enabled)("wildcard template index at 50,100 documents (default scan cap)", () => {
+  const pid = randomUUID();
+  const T = { projectId: pid, internal: true as const };
+  let store: PgStorageAdapter;
+  let engine: DocumentEngine;
+
+  beforeAll(async () => {
+    if (!url) throw new Error("wildcard index PG test requires DATA_DATABASE_URL");
+    delete process.env.VELLUM_UNINDEXED_QUERY_MAX_DOCS;
+    store = new PgStorageAdapter({ connectionString: url });
+    engine = new DocumentEngine({ controlStore: new Control() as never, dataStore: store });
+    const raw = createRawPgClient({ connectionString: url });
+    await raw.connect();
+    await raw.query("SELECT set_config('app.current_project_id', $1, false)", [pid]);
+    await raw.query(
+      `INSERT INTO documents (project_id, path, collection_path, collection_group, document_id, path_depth, data, size_bytes)
+       SELECT $1::uuid, 'chats/idx_test/messages/m' || lpad(g::text, 6, '0'), 'chats/idx_test/messages', 'messages',
+              'm' || lpad(g::text, 6, '0'), 4, jsonb_build_object('seq', g, 'text', CASE WHEN g % 1000 = 0 THEN 'launch day' ELSE 'hello' END), 60
+       FROM generate_series(0, 50099) g`,
+      [pid]
+    );
+    await raw.end();
+  }, 180000);
+
+  afterAll(async () => {
+    const raw = createRawPgClient({ connectionString: url! });
+    await raw.connect();
+    await raw.query("SELECT set_config('app.current_project_id', $1, false)", [pid]);
+    await raw.query("DELETE FROM documents WHERE project_id = $1::uuid", [pid]);
+    await raw.end();
+    await (store as unknown as { close?: () => Promise<void> }).close?.();
+  });
+
+  it("refuses unindexed orderBy(seq) with the chats/*/messages template; the template index serves it, including deep cursors", async () => {
+    const q = { collectionPath: "chats/idx_test/messages", orderBy: [{ field: "seq", dir: "asc" as const }], limit: 30 };
+    await expect(engine.executeQuery({ ...T, querySpec: q })).rejects.toMatchObject({
+      code: "FAILED_PRECONDITION",
+      details: { suggestedIndex: { collectionPath: "chats/*/messages", fields: [{ path: "seq", dir: "asc" }] } },
+    });
+    await store.createCompositeIndex(T, "chats/*/messages", [{ path: "seq", dir: "asc" }]);
+    await store.runIndexBuilderWorker();
+    const page1 = await engine.executeQuery({ ...T, querySpec: q });
+    expect(page1.documents).toHaveLength(30);
+    expect(page1.documents[0]!.data["seq"]).toBe(0);
+    let cursor = page1.nextCursor as string | undefined;
+    let last = page1;
+    for (let hop = 0; hop < 5 && cursor; hop += 1) {
+      last = await engine.executeQuery({ ...T, querySpec: { ...q, cursor } });
+      cursor = last.nextCursor as string | undefined;
+    }
+    expect(last.documents[0]!.data["seq"]).toBe(150);
+  }, 180000);
+
+  it("text_search above the cap is refused with a template suggestion instead of scanning", async () => {
+    await expect(
+      engine.executeQuery({ ...T, querySpec: { collectionPath: "chats/idx_test/messages", where: [{ field: "text", op: "text_search", value: "launch" }], limit: 10 } })
+    ).rejects.toMatchObject({ code: "FAILED_PRECONDITION", details: { suggestedIndex: { collectionPath: "chats/*/messages" } } });
+  }, 120000);
+});
