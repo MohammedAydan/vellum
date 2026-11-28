@@ -7,7 +7,7 @@ description: مرجع تقني شامل لحزمة @vellumdb/sdk-js — إعدا
 
 # JavaScript SDK (`@vellumdb/sdk-js`)
 
-المرجع التقني الشامل لحزمة `@vellumdb/sdk-js` الإصدار `0.0.1`، المستند بالكامل إلى الواجهات الفعلية في `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`.
+المرجع التقني الشامل لحزمة `@vellumdb/sdk-js` الإصدار الحالي، المستند بالكامل إلى الواجهات الفعلية في `packages/sdk-js/src/{index,types,client,field-ops,batch,read-cache,auth-client,auth-storage,realtime-transport,backoff,safe-json}.ts`.
 
 تعمل الحزمة على **Node.js 18+** والمتصفحات الحديثة وبيئات Edge، مع دعم كامل لـ TypeScript الصارم.
 

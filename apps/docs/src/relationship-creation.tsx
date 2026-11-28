@@ -1,7 +1,6 @@
 import { Callout, CodeTabs, P, Section } from "./ui";
 
-const js = `// Compatible with published @vellumdb/sdk-js 0.0.1.
-const ref = (path: string) => ({ $t: "ref" as const, $v: path });
+const js = `const ref = (path: string) => ({ $t: "ref" as const, $v: path });
 await db.doc("users/u1").create({ name: "Ada" });
 await db.doc("users/u2").create({ name: "Sam" });
 await db.doc("posts/p1").create({
@@ -52,8 +51,8 @@ export function RelationshipCreation({ lang = "en" }: { lang?: "en" | "ar" }) {
         : "Store a project-relative path such as users/u1, not a URL. include loads targets when reading. update reassigns a reference, and null unlinks it without deleting the target. A reference does not create its target, guarantee its existence, or add an inverse field."}</P>
       <Callout tone="info" title={ar ? "الإصدارات والصلاحيات" : "Versions and permissions"}>
         {ar
-          ? "المثال يعمل مع 0.0.1 المنشور. الدالة reference(path) الجديدة في JavaScript متاحة في المصدر فقط حتى إصدار تحديث؛ لا تستوردها من 0.0.1. القراءة الموسعة تفحص صلاحيات الهدف؛ الهدف الواحد المفقود أو الممنوع يرجع null، والمصفوفات تستبعد الأهداف غير المتاحة. include لا يثبت قواعد حذف دائمة."
-          : "The example works with published 0.0.1. The new JavaScript reference(path) helper is source-only until a release includes it; do not import it from 0.0.1. Expansion checks target read permission. Missing or denied scalar targets return null, while arrays omit unavailable targets. include does not install persistent delete rules."}
+          ? "الدالة reference(path) متاحة في @vellumdb/sdk-js. القراءة الموسعة تفحص صلاحيات الهدف؛ الهدف الواحد المفقود أو الممنوع يرجع null، والمصفوفات تستبعد الأهداف غير المتاحة. include لا يثبت قواعد حذف دائمة."
+          : "The JavaScript reference(path) helper is exported by @vellumdb/sdk-js. Expansion checks target read permission. Missing or denied scalar targets return null, while arrays omit unavailable targets. include does not install persistent delete rules."}
       </Callout>
     </Section>
   );

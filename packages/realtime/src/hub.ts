@@ -551,6 +551,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           type: "error",
           subId: frame.subId,
           code: "SUBSCRIPTION_LIMIT_EXCEEDED",
+          limit: SYSTEM_LIMITS.MAX_WS_SUBSCRIPTIONS_PER_CONN,
           message: `Maximum of ${SYSTEM_LIMITS.MAX_WS_SUBSCRIPTIONS_PER_CONN} active subscriptions per connection exceeded`,
         });
         return;
@@ -650,6 +651,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     // Defer live events until `initial_sync` has been sent, then flush those newer than the snapshot.
     subRecord.replaying = true;
     const snapshotVersions = new Map<string, number>();
+    let ttlWatchExpiresAt: string | null = null;
     try {
       await this.dataStore.withTransaction({ projectId }, async (tx: TxHandle) => {
       if (session.closed || session.subscriptions.get(frame.subId) !== subRecord) return;
@@ -695,6 +697,8 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
         if (doc) {
           subRecord.matchedPaths.add(doc.path);
           initialDocs.push(doc);
+          const exp = (doc as { expiresAt?: string | null }).expiresAt;
+          if (exp) ttlWatchExpiresAt = exp;
         }
       } else if (normalizedQuery) {
         // Let the database filter, order and cap the initial page instead of reading the whole
@@ -784,6 +788,62 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
     }
     // Events the snapshot already reflects (same path, version not newer) are skipped; the rest are delivered.
     await this.flushDeferredLiveEvents(session, subRecord, projectId, ruleset, snapshotVersions);
+    if (targetPath && ttlWatchExpiresAt) this.watchDocumentExpiry(session, subRecord, projectId, targetPath, ttlWatchExpiresAt);
+  }
+
+  /**
+   * A TTL expiry writes no outbox row, so a document subscriber would never learn that the document is
+   * gone. Arm one timer per subscribed document that has an `expiresAt`; when it fires, re-read the document
+   * and, if it is really gone, send the same `delete` mutation a normal delete would produce.
+   */
+  private watchDocumentExpiry(
+    session: ConnectionSession,
+    subRecord: SubscriptionRecord,
+    projectId: string,
+    path: string,
+    expiresAtIso: string
+  ): void {
+    const expiresMs = Date.parse(expiresAtIso);
+    if (!Number.isFinite(expiresMs)) return;
+    const delay = Math.min(Math.max(expiresMs - Date.now(), 0) + 25, 2_000_000_000);
+    const timer = setTimeout(() => {
+      void (async () => {
+        if (session.closed || session.subscriptions.get(subRecord.subId) !== subRecord) return;
+        if (!subRecord.matchedPaths.has(path)) return;
+        try {
+          const current = await this.dataStore.withTransaction({ projectId }, async (tx: TxHandle) => tx.getDocument(path, false));
+          if (session.closed || session.subscriptions.get(subRecord.subId) !== subRecord) return;
+          if (current) {
+            // Updated or renewed since: follow the new expiry.
+            const next = (current as { expiresAt?: string | null }).expiresAt;
+            if (next && Date.parse(next) > Date.now()) this.watchDocumentExpiry(session, subRecord, projectId, path, next);
+            return;
+          }
+          subRecord.matchedPaths.delete(path);
+          const parts = path.split("/");
+          const nowIso = new Date().toISOString();
+          session.sendFrame({
+            type: "mutation",
+            subId: subRecord.subId,
+            seqId: Number(this.watermarks.get(projectId) ?? 0n),
+            operation: "delete",
+            document: this.projectSubscriptionDocument({
+              path,
+              collectionPath: parts.slice(0, -1).join("/"),
+              collectionGroup: parts.slice(0, -1).pop() ?? "",
+              documentId: parts[parts.length - 1] ?? "",
+              data: {},
+              version: 0,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+            }, subRecord),
+          });
+        } catch {
+          // A failed re-read must not break the connection; the next write or resubscribe corrects the client.
+        }
+      })();
+    }, delay);
+    (timer as { unref?: () => void }).unref?.();
   }
 
   /** Stop deferring live events for a subscription and deliver the buffered ones in ascending seq order. */

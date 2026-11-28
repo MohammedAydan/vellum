@@ -84,4 +84,28 @@ describe("realtime: missing-document subscription lifecycle", () => {
     await hub.notifyCommittedEvents(TENANT.projectId, [event("missing_life_1", "3", "updated", ["alice"], 2)]);
     expect(frames.filter((f) => f.type === "mutation")).toHaveLength(1);
   });
+
+  it("TTL expiry: a subscribed document that expires pushes a delete mutation (exists:false), not an error", async () => {
+    const store = new DataPlaneStore();
+    const hub = new RealtimeGatewayHub({ controlStore: makeControlStore(), dataStore: store });
+    const frames: ServerFrame[] = [];
+    const session = hub.createConnectionSession((f) => frames.push(f));
+    await session.handleClientFrame({ type: "auth", projectId: TENANT.projectId, apiKey: PK });
+    hub.connections.get(session.connectionId)!.authContext.uid = "alice";
+    const ttlPath = "chats/c1/messages/ttl_doc";
+    const now = new Date().toISOString();
+    await store.putDocument(TENANT, {
+      projectId: TENANT.projectId, path: ttlPath, collectionPath: "chats/c1/messages", collectionGroup: "messages",
+      documentId: "ttl_doc", pathDepth: 4, data: { memberIds: ["alice"] }, sizeBytes: 20, version: 1,
+      createdAt: now, updatedAt: now, deletedAt: null, expiresAt: new Date(Date.now() + 400).toISOString(),
+    } as never);
+    await session.handleClientFrame({ type: "subscribe", subId: "s1", path: ttlPath });
+    const sync = frames.find((f) => f.type === "initial_sync") as Extract<ServerFrame, { type: "initial_sync" }>;
+    expect(sync.documents).toHaveLength(1);
+    await new Promise((r) => setTimeout(r, 900));
+    expect(frames.filter((f) => f.type === "error")).toHaveLength(0);
+    const del = frames.find((f) => f.type === "mutation") as Extract<ServerFrame, { type: "mutation" }> | undefined;
+    expect(del?.operation).toBe("delete");
+    expect(del?.document.path).toBe(ttlPath);
+  });
 });
