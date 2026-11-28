@@ -3,6 +3,7 @@
  * Orchestrates CRUD, Batch Writes, Field Transforms, Queries, and OCC Transactions.
  */
 
+import { withUnindexedQuerySlot } from "./unindexed-gate.js";
 import { formatPublicDocument } from "./document-format.js";
 import { evaluateRelationRulesForDelete, groupRelationRulesByCollection } from "./relation-integrity.js";
 import { scanReferencedBy, type ReferencedByRequest, type ReferencedByResult } from "./referenced-by.js";
@@ -1903,7 +1904,8 @@ export class DocumentEngine implements DocumentEnginePort {
         const fullTextIndex = selectFullTextIndexForQuery(normalizedQuery, availableIndexes);
         const fullTextField = fullTextIndex?.fields[0]?.path;
         const searchIndex = selectSearchIndexForQuery(normalizedQuery, availableIndexes);
-        if (!matchedIndex && isScanRiskQuery(normalizedQuery, fullTextField, searchIndex !== null)) {
+        const scanRisk = !matchedIndex && isScanRiskQuery(normalizedQuery, fullTextField, searchIndex !== null);
+        if (scanRisk) {
           const maxDocs = resolveUnindexedQueryMaxDocs();
           if (maxDocs > 0 && tx.countLiveDocumentsUpTo) {
             const live = await tx.countLiveDocumentsUpTo(normalizedQuery.collectionPath, maxDocs + 1);
@@ -1945,7 +1947,9 @@ export class DocumentEngine implements DocumentEnginePort {
         const pageDocs: DocumentRecord[] = [];
         let pageHasMore = false;
         let pageCursorDoc: QueriedDocument | null = null;
-        let batch = await tx.queryDocuments(compiledPlan);
+        const runPlan = (plan: typeof compiledPlan) =>
+          scanRisk ? withUnindexedQuerySlot(ctx.projectId, () => tx.queryDocuments(plan)) : tx.queryDocuments(plan);
+        let batch = await runPlan(compiledPlan);
         let scans = 1;
         // A collection-level `list` allow does not mean every row is readable. Each row also has to pass its
         // own `get` rule. Denied rows are skipped and the scan continues (bounded) so pages stay full and the
@@ -1991,7 +1995,7 @@ export class DocumentEngine implements DocumentEnginePort {
             cursorMode: "startAfter",
             skipProjection,
           });
-          batch = await tx.queryDocuments(nextPlan);
+          batch = await runPlan(nextPlan);
           scans += 1;
         }
         this.telemetry.counter("db.round_trips", scans);

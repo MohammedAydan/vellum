@@ -28,6 +28,7 @@ import {
   validateWireValue,
   indexCollectionPathCovers,
   isFullTextIndexFields,
+  encodeSingleSortKeyValue,
 } from "@vellum/core";
 import { buildNestedJsonObject, escapeLikePattern } from "./operators.js";
 import type {
@@ -975,6 +976,12 @@ export function compileQueryToParameterizedSql({
 
   let sql: string;
   if (matchedCompositeIndex) {
+    // Bound the index scan: equality fields on the leading index columns form a key prefix, and range
+    // clauses on the next column become a key interval. Without this the index is read in order and every
+    // entry is filtered, which is O(collection) for a selective filter.
+    const bounds = compositeSortKeyBounds(normalizedQuery, matchedCompositeIndex);
+    if (bounds.lower) predicates.push(`ie.sort_key >= ${addParam(params, bounds.lower)}::bytea`);
+    if (bounds.upper) predicates.push(`ie.sort_key < ${addParam(params, bounds.upper)}::bytea`);
     const idxParam = addParam(params, matchedCompositeIndex.id);
     sql =
       `SELECT ${selectList}, encode(ie.sort_key, 'hex') AS "sortKeyHex" ` +
@@ -1295,4 +1302,82 @@ export function suggestCompositeIndex(q: NormalizedQuery): Array<{ path: string;
   for (const o of q.orderBy) add(o.field, o.dir);
   for (const w of q.where) if (!GIN_SERVED_OPS.has(w.op)) add(w.field, "asc");
   return fields;
+}
+
+
+/** Smallest byte string greater than every string that starts with `b`; null when `b` is all 0xFF. */
+function sortKeySuccessor(b: Buffer): Buffer | null {
+  const out = Buffer.from(b);
+  for (let i = out.length - 1; i >= 0; i -= 1) {
+    if (out[i]! < 0xff) {
+      out[i] = out[i]! + 1;
+      return out.subarray(0, i + 1);
+    }
+  }
+  return null;
+}
+
+function bufMax(a: Buffer | null, b: Buffer | null): Buffer | null {
+  if (!a) return b;
+  if (!b) return a;
+  return Buffer.compare(a, b) >= 0 ? a : b;
+}
+
+function bufMin(a: Buffer | null, b: Buffer | null): Buffer | null {
+  if (!a) return b;
+  if (!b) return a;
+  return Buffer.compare(a, b) <= 0 ? a : b;
+}
+
+function isBoundableScalar(v: unknown): boolean {
+  return (typeof v === "string") || (typeof v === "boolean") || (typeof v === "number" && Number.isFinite(v));
+}
+
+/**
+ * Key interval `[lower, upper)` on `document_index_entries.sort_key` that contains every entry able to match
+ * the query's top-level `==` and range clauses on the index's leading columns. It is a superset bound: the
+ * row predicates still run, so it only ever narrows what the index scan reads. System fields (documentId,
+ * createdAt, updatedAt) are not bounded because their wire forms differ.
+ */
+export function compositeSortKeyBounds(
+  q: NormalizedQuery,
+  idx: CompositeIndexMetadata
+): { lower: Buffer | null; upper: Buffer | null } {
+  const none = { lower: null, upper: null };
+  if (!Array.isArray(idx.fields) || idx.fields.length === 0) return none;
+  let prefix = Buffer.alloc(0);
+  let consumed = 0;
+  for (; consumed < idx.fields.length; consumed += 1) {
+    const f = normalizeIndexFieldSpec(idx.fields[consumed]!);
+    if (f.dir === "text" || isIdSystemField(f.path) || isTimestampSystemFieldName(f.path)) break;
+    const eq = q.where.filter((w) => w.field === f.path && w.op === "==");
+    if (eq.length !== 1 || !isBoundableScalar(eq[0]!.value)) break;
+    prefix = Buffer.concat([prefix, encodeSingleSortKeyValue(eq[0]!.value, f.dir)]);
+  }
+  const next = idx.fields[consumed] ? normalizeIndexFieldSpec(idx.fields[consumed]!) : null;
+  let lower: Buffer | null = prefix.length > 0 ? prefix : null;
+  let upper: Buffer | null = prefix.length > 0 ? sortKeySuccessor(prefix) : null;
+  if (next && next.dir !== "text" && !isIdSystemField(next.path) && !isTimestampSystemFieldName(next.path)) {
+    for (const w of q.where) {
+      if (w.field !== next.path || !RANGE_OPS.has(w.op) || !isBoundableScalar(w.value)) continue;
+      const enc = encodeSingleSortKeyValue(w.value, next.dir);
+      const typeStart = Buffer.concat([prefix, enc.subarray(0, 1)]);
+      const typeEnd = sortKeySuccessor(typeStart);
+      const p = Buffer.concat([prefix, enc]);
+      const pEnd = sortKeySuccessor(p);
+      const asc = next.dir === "asc";
+      let lo: Buffer | null;
+      let hi: Buffer | null;
+      switch (w.op) {
+        case ">=": [lo, hi] = asc ? [p, typeEnd] : [typeStart, pEnd]; break;
+        case ">": [lo, hi] = asc ? [pEnd, typeEnd] : [typeStart, p]; break;
+        case "<=": [lo, hi] = asc ? [typeStart, pEnd] : [p, typeEnd]; break;
+        default: [lo, hi] = asc ? [typeStart, p] : [pEnd, typeEnd]; break; // "<"
+      }
+      // `>` / `<` with an all-0xFF key has no successor: the interval is empty on that side; keep it open.
+      lower = bufMax(lower, lo);
+      upper = bufMin(upper, hi);
+    }
+  }
+  return { lower, upper };
 }

@@ -9,7 +9,8 @@ Hardening release from the 0.0.10 sprint prompt. Beta. Each row names the test t
 ### Upgrade notes
 
 - No breaking API change. The realtime error frame for the 25-subscription cap now carries `limit: 25`. A same-identity token refresh keeps the realtime session; an identity switch still emits `SESSION_CHANGED` on purpose. There is no runtime `realtimeTransport` switch (constructor-time only).
-- No new migrations.
+- One new migration, `0018_fulltext_index_entries.sql` (nullable `tsv` column and a partial GIN index). Run migrations before the deploy.
+- `search` now matches whole words when a whole-document full-text index (path `*`) exists; without one it keeps substring matching.
 
 ### Fixes by ID
 
@@ -31,6 +32,10 @@ Hardening release from the 0.0.10 sprint prompt. Beta. Each row names the test t
 - Fail-on-0.0.9 results (the same test files run against the 0.0.9 source): FAIL on 0.0.9 and pass now: Recipe 2 case B, Recipe 2 TTL, Recipe 4.2 (1,000 subs), subscription-cap `limit` frame, Recipe 1, 3B, the 1008 test, the JS pooling test. PASS on 0.0.9 as well (they guard against regression, they do not reproduce a 0.0.9 failure): Recipe 2 case A, same-identity token refresh, Recipe 3C and Recipe 3A (WS and SSE). The 0.0.9 stalls (28s-217s, 153/157) came from the PostgreSQL poller and a per-socket frame budget; the in-memory server in these tests cannot reproduce them. 3B and the idle-poller test cover the PG path.
 - Recipe 3A against real PostgreSQL with two server processes was not run (no PostgreSQL server in the sandbox).
 - Full-text indexes: a composite index with a single field `dir: "text"` (wildcard templates supported) serves `text_search` through a tsvector GIN lookup, so it works above the 50,000-document cap. Migration `0018_fulltext_index_entries.sql` adds a nullable `tsv` column and a partial GIN index (run migrations before the deploy). Proven at 50,100 documents on PostgreSQL 16 and 18 in CI.
+- `search` is served by the same full-text mechanism through a whole-document index (`{ "path": "*", "dir": "text" }`), proven at 50,100 documents.
+- Composite-index scans are now bounded on `sort_key` by the query's leading `==` clauses and a range on the next column (a property test checks the bound never excludes a matching entry). Before, a range query on an indexed field read the index from the start and timed out at 50,100 documents.
+- Per-project cap on concurrent unindexed queries (`VELLUM_UNINDEXED_QUERY_MAX_CONCURRENT`, default 4 per API process, `0` disables): the excess gets a retryable 429 `RESOURCE_EXHAUSTED`.
+- CI runs EXPLAIN (ANALYZE) on a seeded 50,100-document collection for eq, in, array-contains, range with a composite index, orderBy on a custom field, text_search and search, and fails on a sequential scan or an index scan that filters away more than 5,000 rows. Right after a bulk load, before PostgreSQL has table statistics, the planner can still pick a scan; autovacuum analyze corrects that within about a minute.
 - Scoped `aggregate()` over more than 10,000 member-scoped rows returns FAILED_PRECONDITION (`SCOPED_AGGREGATE_ROW_LIMIT`); proven by a cap-lowered unit test and at 50,100 documents on PostgreSQL in CI.
 - `/llms-full.txt` is a rewrite to `/docs/llms-full.txt`; it needs a deploy to verify live.
 

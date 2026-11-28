@@ -1149,6 +1149,8 @@ export function createSqlTransactionHandle(
       assertOpen();
       // Compiled SQL is dynamic (operator/index shape), so it is intentionally
       // not a named prepared statement; it is still fully parameterized by the compiler.
+      // Test seam: lets the PG suite capture the exact SQL a query ran, to EXPLAIN it. No-op in production.
+      (globalThis as { __vellumPlanSpy?: (c: CompiledQuery) => void }).__vellumPlanSpy?.(compiled);
       const { rows } = await client.query(compiled.sql, compiled.params);
       const cap = compiled.maxScanRows;
       if (cap !== null) {
