@@ -95,6 +95,10 @@ class VellumOutbox {
     this.maxAge = const Duration(hours: 23),
     this.maxAttempts = 8,
     this.onDropped,
+    this.autoFlushOnReconnect = true,
+    this.autoFlushRetryBase = const Duration(seconds: 1),
+    this.autoFlushRetryMax = const Duration(seconds: 30),
+    @visibleForTesting Stream<VellumConnectionState>? connectionStates,
     bool allowWeb = false,
     Random? random,
     @visibleForTesting bool? isWeb,
@@ -109,6 +113,13 @@ class VellumOutbox {
       await clear();
       await _box.destroyKey(_scope);
     });
+    if (autoFlushOnReconnect) {
+      try {
+        _connectionSub = (connectionStates ?? client.connectionStateStream).listen(_onConnectionState);
+      } catch (_) {
+        // A client without a realtime layer simply never auto-flushes; flush() still works.
+      }
+    }
   }
 
   final VellumClient client;
@@ -125,11 +136,63 @@ class VellumOutbox {
   final int maxAttempts;
   final void Function(VellumOutboxEntry entry, VellumOutboxDropReason reason, Object? error)? onDropped;
 
+  /// Drain the queue automatically whenever the realtime connection becomes `connected`
+  /// (single-flight: overlapping triggers share one run). Set false to flush by hand.
+  final bool autoFlushOnReconnect;
+
+  /// First retry delay after an automatic flush left entries behind (doubles, with jitter, up to [autoFlushRetryMax]).
+  final Duration autoFlushRetryBase;
+  final Duration autoFlushRetryMax;
+
+  StreamSubscription<VellumConnectionState>? _connectionSub;
+  Timer? _retryTimer;
+  bool _connected = false;
+  int _retryAttempt = 0;
+
   final List<VellumOutboxEntry> _entries = <VellumOutboxEntry>[];
   bool _loaded = false;
   int _generation = 0;
   Future<void>? _flushing;
   Future<void> _lock = Future<void>.value();
+
+  void _onConnectionState(VellumConnectionState next) {
+    final isConnected = next.state == VellumRealtimeConnectionState.connected;
+    final wasConnected = _connected;
+    _connected = isConnected;
+    if (!isConnected) {
+      _retryTimer?.cancel();
+      _retryTimer = null;
+      return;
+    }
+    if (wasConnected) return; // `connected` fired twice in a row: one flush is enough.
+    _retryAttempt = 0;
+    unawaited(_autoFlush());
+  }
+
+  Future<void> _autoFlush() async {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    try {
+      await flush();
+    } catch (_) {
+      // Network and server failures keep the entries queued; the retry below handles them.
+    }
+    if (!_connected || _entries.isEmpty || client.auth.currentUser == null) return;
+    // Entries are still pending while the connection is up: retry with exponential backoff and jitter.
+    final exp = autoFlushRetryBase.inMilliseconds * (1 << (_retryAttempt < 10 ? _retryAttempt : 10));
+    final capped = exp > autoFlushRetryMax.inMilliseconds ? autoFlushRetryMax.inMilliseconds : exp;
+    final delay = Duration(milliseconds: (capped * (0.5 + _random.nextDouble() * 0.5)).floor() + 1);
+    _retryAttempt++;
+    _retryTimer = Timer(delay, () => unawaited(_autoFlush()));
+  }
+
+  /// Stops the automatic flush listener. Queued entries stay on disk.
+  Future<void> dispose() async {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    await _connectionSub?.cancel();
+    _connectionSub = null;
+  }
 
   String get _blobKey => '$_namespace.$_scope.offline.outbox.v1';
   String get _context => 'outbox';
