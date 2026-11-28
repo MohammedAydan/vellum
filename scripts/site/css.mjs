@@ -1,17 +1,17 @@
 export const CSS = `
 :root{color-scheme:dark light;
---paper:#f5f4f0;--raised:#fdfdfa;--ink:#191811;--mut:#5d594c;--dim:#8a8577;
---line:rgba(25,24,17,.16);--line2:rgba(25,24,17,.08);
---acc:#c2410c;--accfg:#fdfdfa;
---plate:#17160f;--plate-fg:#e6e2d5;--plate-mut:#8f8a7a;
+--paper:#ffffff;--raised:#ffffff;--ink:#18181b;--mut:#333338;--dim:#71717a;
+--line:rgba(0,0,0,.16);--line2:rgba(0,0,0,.08);
+--acc:#047857;--accfg:#ffffff;
+--plate:#131316;--plate-fg:rgba(250,250,250,.92);--plate-mut:#b4b4bd;
 --serif:Georgia,"Iowan Old Style","Times New Roman","Noto Serif",serif;
 --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic","Noto Sans",sans-serif;
 --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Noto Sans Mono",monospace}
 @media(prefers-color-scheme:dark){:root{
---paper:#131210;--raised:#1a1916;--ink:#e9e6dc;--mut:#a09b8c;--dim:#6f6a5e;
---line:rgba(233,230,220,.17);--line2:rgba(233,230,220,.08);
---acc:#f0642f;--accfg:#171510;
---plate:#0d0c09;--plate-fg:#ded9cb;--plate-mut:#7d7869}}
+--paper:#0b0b0c;--raised:#131316;--ink:rgba(250,250,250,.92);--mut:#b4b4bd;--dim:#71717a;
+--line:rgba(255,255,255,.16);--line2:rgba(255,255,255,.07);
+--acc:#34d399;--accfg:#06251d;
+--plate:#09090b;--plate-fg:rgba(250,250,250,.92);--plate-mut:#b4b4bd}}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 var(--sans);overflow-x:hidden}
 ::selection{background:var(--acc);color:var(--accfg)}

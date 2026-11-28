@@ -1,23 +1,10 @@
 /* Scoped to anonymous auth pages. Shared tokens keep both apps in step. */
 .auth-shell { min-height: 100svh; color: var(--foreground); background: var(--background); }
 
-/* Editorial identity: the public auth pages carry the marketing voice -
-   warm vermilion accent and a serif display face - without touching the
-   console palette behind them. Overrides are scoped to the shell only. */
+/* Editorial identity: serif display face and hairline details; colors stay
+   the shared console palette (owner ruling 2026-11-28). Scoped to the shell. */
 .auth-shell {
-  --primary: #c2410c;
-  --primary-foreground: #fff7ed;
-  --primary-hover: #9a3412;
-  --primary-active: #9a3412;
-  --ring: #c2410c;
   --serif-display: Georgia, "Iowan Old Style", "Times New Roman", "Noto Serif", serif;
-}
-.dark .auth-shell {
-  --primary: #f0642f;
-  --primary-foreground: #1c0a02;
-  --primary-hover: #fb7a45;
-  --primary-active: #fb7a45;
-  --ring: #f0642f;
 }
 .auth-shell-header { min-height: 88px; padding: 24px clamp(20px, 4vw, 64px); display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); }
 .auth-brand { display: flex; align-items: center; gap: 10px; font-family: var(--serif-display); font-weight: 700; font-size: 14px; letter-spacing: .01em; }
