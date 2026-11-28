@@ -15,10 +15,13 @@ class _Mem implements SecureKeyValue, OfflineBlobStore {
 }
 
 String _jwt() {
-  final h = base64Url.encode(utf8.encode(jsonEncode(<String, dynamic>{'alg': 'EdDSA'})));
+  final h = base64Url
+      .encode(utf8.encode(jsonEncode(<String, dynamic>{'alg': 'EdDSA'})));
   final b = base64Url.encode(utf8.encode(jsonEncode(<String, dynamic>{
     'sub': 'usr_1',
-    'exp': DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000,
+    'exp':
+        DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/
+            1000,
   })));
   return '$h.$b.sig';
 }
@@ -82,35 +85,53 @@ VellumClient _makeClient(
         if (url.endsWith('/auth/sign-out')) return <String, dynamic>{};
         final f = failWith();
         if (f != null) throw f;
-        sent.add(<String, Object?>{'method': method, 'url': url, 'headers': headers, 'body': body});
+        sent.add(<String, Object?>{
+          'method': method,
+          'url': url,
+          'headers': headers,
+          'body': body
+        });
         return <String, dynamic>{'ok': true};
       },
     );
 
-Future<void> _signIn(VellumClient c) =>
-    c.auth.signInWithEmailAndPassword(email: 'a@example.com', password: 'password123');
+Future<void> _signIn(VellumClient c) => c.auth.signInWithEmailAndPassword(
+    email: 'a@example.com', password: 'password123');
 
 void main() {
   const scope = 'scope1';
 
   group('VellumEncryptedBox', () {
-    test('round-trips, never writes plaintext, binds scope and context', () async {
+    test('round-trips, never writes plaintext, binds scope and context',
+        () async {
       final keys = _Mem();
       final box = VellumEncryptedBox(keyStore: keys);
-      final sealed = await box.seal('{"secret":"hello"}', scope: scope, context: 'a');
+      final sealed =
+          await box.seal('{"secret":"hello"}', scope: scope, context: 'a');
       expect(sealed.contains('hello'), isFalse);
-      expect(await box.open(sealed, scope: scope, context: 'a'), '{"secret":"hello"}');
+      expect(await box.open(sealed, scope: scope, context: 'a'),
+          '{"secret":"hello"}');
       expect(await box.open(sealed, scope: scope, context: 'b'), isNull);
       expect(await box.open(sealed, scope: 'other', context: 'a'), isNull);
-      expect(await VellumEncryptedBox(keyStore: keys).open(sealed, scope: scope, context: 'a'), '{"secret":"hello"}');
-      expect(await VellumEncryptedBox(keyStore: _Mem()).open(sealed, scope: scope, context: 'a'), isNull);
+      expect(
+          await VellumEncryptedBox(keyStore: keys)
+              .open(sealed, scope: scope, context: 'a'),
+          '{"secret":"hello"}');
+      expect(
+          await VellumEncryptedBox(keyStore: _Mem())
+              .open(sealed, scope: scope, context: 'a'),
+          isNull);
       final bytes = base64Decode(sealed.substring(3));
       bytes[bytes.length - 20] ^= 1;
-      expect(await box.open('v1.${base64Encode(bytes)}', scope: scope, context: 'a'), isNull);
+      expect(
+          await box.open('v1.${base64Encode(bytes)}',
+              scope: scope, context: 'a'),
+          isNull);
       expect(keys.data.keys, contains('vellum.offline.key.v1.$scope'));
     });
 
-    test('a failing read gives a memory-only key and never writes one', () async {
+    test('a failing read gives a memory-only key and never writes one',
+        () async {
       final broken = _Broken();
       final box = VellumEncryptedBox(keyStore: broken);
       final sealed = await box.seal('x', scope: scope, context: 'c');
@@ -166,19 +187,26 @@ void main() {
         allowWeb: allowWeb,
         isWeb: isWeb,
       );
-      final client = _makeClient(() => user, project: project, sent: sent, failWith: () => null);
+      final client = _makeClient(() => user,
+          project: project, sent: sent, failWith: () => null);
       cache.attach(client);
       await _signIn(client);
       return (client, cache);
     }
 
-    CachedDocument doc() => CachedDocument(path: 'users/x', value: <String, Object?>{'name': 'Zed'}, storedAt: DateTime.now());
+    CachedDocument doc() => CachedDocument(
+        path: 'users/x',
+        value: <String, Object?>{'name': 'Zed'},
+        storedAt: DateTime.now());
 
-    test('persists encrypted, restores for the same user, clear deletes the blob', () async {
+    test(
+        'persists encrypted, restores for the same user, clear deletes the blob',
+        () async {
       final (_, a) = await make();
       await a.set('k', doc());
       await a.flush();
-      final blobKey = mem.data.keys.firstWhere((k) => k.endsWith('offline.cache.v1'));
+      final blobKey =
+          mem.data.keys.firstWhere((k) => k.endsWith('offline.cache.v1'));
       expect(mem.data[blobKey]!.contains('Zed'), isFalse);
       final (_, b) = await make();
       await b.load();
@@ -187,7 +215,8 @@ void main() {
       expect(mem.data.containsKey(blobKey), isFalse);
     });
 
-    test('a different user can not read it and the blob is discarded', () async {
+    test('a different user can not read it and the blob is discarded',
+        () async {
       final (_, a) = await make();
       await a.set('k', doc());
       await a.flush();
@@ -220,25 +249,32 @@ void main() {
       await c.load(); // not signed in: nothing happens
     });
 
-    test('a full disk never throws out of the debounce and the older half is dropped', () async {
+    test(
+        'a full disk never throws out of the debounce and the older half is dropped',
+        () async {
       final disk = _FullDisk();
       final box = VellumEncryptedBox(keyStore: _Mem());
-      final cache = PersistentDocumentCacheStore(box: box, blobs: disk, saveDelay: Duration.zero);
+      final cache = PersistentDocumentCacheStore(
+          box: box, blobs: disk, saveDelay: Duration.zero);
       final client = _makeClient(() => user, sent: sent, failWith: () => null);
       cache.attach(client);
       await _signIn(client);
       disk.full = true;
       await cache.set('k1', doc()); // debounced flush fails silently
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      await expectLater(cache.flush(), throwsA(anything)); // explicit flush reports it
+      await expectLater(
+          cache.flush(), throwsA(anything)); // explicit flush reports it
       expect(await cache.get('k1'), isNotNull); // memory is unaffected
     });
 
-    test('content cached under another user is never written under the next one', () async {
+    test(
+        'content cached under another user is never written under the next one',
+        () async {
       final (client, a) = await make();
       await a.set('k', doc()); // owned by usr_1
       await a.flush();
-      final blobKey = mem.data.keys.firstWhere((k) => k.endsWith('offline.cache.v1'));
+      final blobKey =
+          mem.data.keys.firstWhere((k) => k.endsWith('offline.cache.v1'));
       final before = mem.data[blobKey];
       user = 'usr_2';
       await client.auth.signOut(); // hook clears; simulate a missed hook next
@@ -247,7 +283,9 @@ void main() {
       expect(mem.data[blobKey], isNot(before));
     });
 
-    test('a session change without sign-out hook wipes the old mirror on the next set', () async {
+    test(
+        'a session change without sign-out hook wipes the old mirror on the next set',
+        () async {
       final (client, a) = await make();
       await a.set('old', doc());
       user = 'usr_2';
@@ -264,7 +302,8 @@ void main() {
       await a.flush();
       await client.auth.signOut();
       expect(mem.data.keys.any((k) => k.endsWith('offline.cache.v1')), isFalse);
-      expect(mem.data.keys.any((k) => k.startsWith('vellum.offline.key.v1')), isFalse);
+      expect(mem.data.keys.any((k) => k.startsWith('vellum.offline.key.v1')),
+          isFalse);
     });
 
     test('on web nothing is persisted unless allowed', () async {
@@ -306,7 +345,8 @@ void main() {
       bool isWeb = false,
       bool allowWeb = false,
       OfflineBlobStore? blobs,
-      void Function(VellumOutboxEntry, VellumOutboxDropReason, Object?)? onDropped,
+      void Function(VellumOutboxEntry, VellumOutboxDropReason, Object?)?
+          onDropped,
       Stream<VellumConnectionState>? connectionStates,
       bool autoFlushOnReconnect = false,
     }) =>
@@ -325,7 +365,9 @@ void main() {
           onDropped: onDropped ?? (e, r, _) => dropped.add((e, r)),
         );
 
-    String blobOf() => mem.data.entries.firstWhere((e) => e.key.endsWith('offline.outbox.v1')).value;
+    String blobOf() => mem.data.entries
+        .firstWhere((e) => e.key.endsWith('offline.outbox.v1'))
+        .value;
     bool hasBlob() => mem.data.keys.any((k) => k.endsWith('offline.outbox.v1'));
 
     setUp(() async {
@@ -338,10 +380,15 @@ void main() {
       await _signIn(client);
     });
 
-    test('queues encrypted, replays in order with idempotency keys and no stored token', () async {
+    test(
+        'queues encrypted, replays in order with idempotency keys and no stored token',
+        () async {
       final ob = makeOutbox();
-      await ob.enqueue('PUT', '/documents/notes/n1', body: <String, Object?>{'data': <String, Object?>{'text': 'private note'}});
-      await ob.enqueue('POST', '/batchWrite', body: <String, Object?>{'writes': <Object?>[]});
+      await ob.enqueue('PUT', '/documents/notes/n1', body: <String, Object?>{
+        'data': <String, Object?>{'text': 'private note'}
+      });
+      await ob.enqueue('POST', '/batchWrite',
+          body: <String, Object?>{'writes': <Object?>[]});
       expect(blobOf().contains('private note'), isFalse);
       expect(blobOf().contains('accessToken'), isFalse);
       final again = makeOutbox();
@@ -351,41 +398,61 @@ void main() {
       expect(sent.map((s) => s['method']), <Object?>['PUT', 'POST']);
       for (final s in sent) {
         final h = (s['headers'] as Map).cast<String, String>();
-        expect(h.entries.any((e) => e.key.toLowerCase() == 'idempotency-key' && e.value.startsWith('ob_')), isTrue);
+        expect(
+            h.entries.any((e) =>
+                e.key.toLowerCase() == 'idempotency-key' &&
+                e.value.startsWith('ob_')),
+            isTrue);
       }
       expect(again.length, 0);
       expect(hasBlob(), isFalse);
     });
 
     // Recipe 7 (P1-2): no manual flush() after the connection comes back.
-    test('auto-flushes in order with idempotency keys when the connection returns, even if connected fires twice', () async {
-      final states = StreamController<VellumConnectionState>.broadcast(sync: true);
-      final ob = makeOutbox(connectionStates: states.stream, autoFlushOnReconnect: true);
-      VellumConnectionState st(VellumRealtimeConnectionState s) => VellumConnectionState(state: s);
+    test(
+        'auto-flushes in order with idempotency keys when the connection returns, even if connected fires twice',
+        () async {
+      final states =
+          StreamController<VellumConnectionState>.broadcast(sync: true);
+      final ob = makeOutbox(
+          connectionStates: states.stream, autoFlushOnReconnect: true);
+      VellumConnectionState st(VellumRealtimeConnectionState s) =>
+          VellumConnectionState(state: s);
       states.add(st(VellumRealtimeConnectionState.disconnected));
       for (final id in <String>['OFF-1', 'OFF-2', 'OFF-3']) {
-        await ob.enqueue('PUT', '/documents/notes/$id', body: <String, Object?>{'data': <String, Object?>{'id': id}});
+        await ob.enqueue('PUT', '/documents/notes/$id', body: <String, Object?>{
+          'data': <String, Object?>{'id': id}
+        });
       }
       expect(ob.length, 3);
       expect(sent, isEmpty);
       states.add(st(VellumRealtimeConnectionState.connected));
       states.add(st(VellumRealtimeConnectionState.connected));
       await Future<void>.delayed(const Duration(milliseconds: 200));
-      expect(sent.map((s) => s['url'].toString().split('/').last), <String>['OFF-1', 'OFF-2', 'OFF-3']);
+      expect(sent.map((s) => s['url'].toString().split('/').last),
+          <String>['OFF-1', 'OFF-2', 'OFF-3']);
       for (final s in sent) {
         final h = (s['headers'] as Map).cast<String, String>();
-        expect(h.entries.any((e) => e.key.toLowerCase() == 'idempotency-key' && e.value.startsWith('ob_')), isTrue);
+        expect(
+            h.entries.any((e) =>
+                e.key.toLowerCase() == 'idempotency-key' &&
+                e.value.startsWith('ob_')),
+            isTrue);
       }
       expect(ob.length, 0);
       await ob.dispose();
       await states.close();
     });
 
-    test('autoFlushOnReconnect: false leaves the queue for a manual flush', () async {
-      final states = StreamController<VellumConnectionState>.broadcast(sync: true);
-      final ob = makeOutbox(connectionStates: states.stream, autoFlushOnReconnect: false);
+    test('autoFlushOnReconnect: false leaves the queue for a manual flush',
+        () async {
+      final states =
+          StreamController<VellumConnectionState>.broadcast(sync: true);
+      final ob = makeOutbox(
+          connectionStates: states.stream, autoFlushOnReconnect: false);
       await ob.enqueue('DELETE', '/documents/a/b');
-      states.add(const VellumConnectionState(state: VellumRealtimeConnectionState.connected));
+      states.add(const VellumConnectionState(
+          state: VellumRealtimeConnectionState.connected));
       await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(sent, isEmpty);
       expect(ob.length, 1);
@@ -396,7 +463,8 @@ void main() {
       final ob = makeOutbox();
       await ob.enqueue('DELETE', '/documents/a/b');
       final otherSent = <Map<String, Object?>>[];
-      final other = _makeClient(() => userId, project: 'other', sent: otherSent, failWith: () => null);
+      final other = _makeClient(() => userId,
+          project: 'other', sent: otherSent, failWith: () => null);
       await _signIn(other);
       final obOther = makeOutbox(on: other);
       await obOther.load();
@@ -405,10 +473,16 @@ void main() {
       expect(otherSent, isEmpty);
     });
 
-    test('refuses auth endpoints, traversal, queries, oversized bodies and a full queue', () async {
+    test(
+        'refuses auth endpoints, traversal, queries, oversized bodies and a full queue',
+        () async {
       final ob = makeOutbox();
-      Matcher invalid() => throwsA(isA<VellumException>().having((e) => e.code, 'code', 'INVALID_ARGUMENT'));
-      await expectLater(ob.enqueue('POST', '/auth/sign-in/email', body: <String, Object?>{'password': 'x'}), invalid());
+      Matcher invalid() => throwsA(isA<VellumException>()
+          .having((e) => e.code, 'code', 'INVALID_ARGUMENT'));
+      await expectLater(
+          ob.enqueue('POST', '/auth/sign-in/email',
+              body: <String, Object?>{'password': 'x'}),
+          invalid());
       await expectLater(ob.enqueue('POST', '/transactions:commit'), invalid());
       await expectLater(ob.enqueue('GET', '/documents/a/b'), invalid());
       for (final bad in <String>[
@@ -429,40 +503,56 @@ void main() {
       for (var i = 0; i < 3; i++) {
         await ob.enqueue('DELETE', '/documents/a/b$i');
       }
-      await expectLater(ob.enqueue('DELETE', '/documents/a/z'),
-          throwsA(isA<VellumException>().having((e) => e.code, 'code', 'RESOURCE_EXHAUSTED')));
+      await expectLater(
+          ob.enqueue('DELETE', '/documents/a/z'),
+          throwsA(isA<VellumException>()
+              .having((e) => e.code, 'code', 'RESOURCE_EXHAUSTED')));
       expect(ob.length, 3);
     });
 
     test('total size cap refuses instead of losing data', () async {
       final ob = makeOutbox(maxEntries: 50, maxTotalBytes: 400);
-      final body = <String, Object?>{'data': <String, Object?>{'t': 'x' * 150}};
+      final body = <String, Object?>{
+        'data': <String, Object?>{'t': 'x' * 150}
+      };
       await ob.enqueue('PUT', '/documents/a/1', body: body);
       await ob.enqueue('PUT', '/documents/a/2', body: body);
-      await expectLater(ob.enqueue('PUT', '/documents/a/3', body: body),
-          throwsA(isA<VellumException>().having((e) => e.code, 'code', 'RESOURCE_EXHAUSTED')));
+      await expectLater(
+          ob.enqueue('PUT', '/documents/a/3', body: body),
+          throwsA(isA<VellumException>()
+              .having((e) => e.code, 'code', 'RESOURCE_EXHAUSTED')));
       expect(ob.length, 2);
     });
 
-    test('a failing save removes the entry again and throws RESOURCE_EXHAUSTED', () async {
+    test('a failing save removes the entry again and throws RESOURCE_EXHAUSTED',
+        () async {
       final disk = _FullDisk();
       final ob = makeOutbox(blobs: disk);
       await ob.enqueue('DELETE', '/documents/a/ok');
       disk.full = true;
-      await expectLater(ob.enqueue('DELETE', '/documents/a/nope'),
-          throwsA(isA<VellumException>().having((e) => e.code, 'code', 'RESOURCE_EXHAUSTED')));
+      await expectLater(
+          ob.enqueue('DELETE', '/documents/a/nope'),
+          throwsA(isA<VellumException>()
+              .having((e) => e.code, 'code', 'RESOURCE_EXHAUSTED')));
       expect(ob.length, 1);
     });
 
-    test('401, 403 UNAUTHENTICATED, 429 and network errors keep the entry and stop', () async {
+    test(
+        '401, 403 UNAUTHENTICATED, 429 and network errors keep the entry and stop',
+        () async {
       final ob = makeOutbox(maxAttempts: 100);
-      await ob.enqueue('PUT', '/documents/a/1', body: <String, Object?>{'data': <String, Object?>{}});
-      await ob.enqueue('PUT', '/documents/a/2', body: <String, Object?>{'data': <String, Object?>{}});
+      await ob.enqueue('PUT', '/documents/a/1',
+          body: <String, Object?>{'data': <String, Object?>{}});
+      await ob.enqueue('PUT', '/documents/a/2',
+          body: <String, Object?>{'data': <String, Object?>{}});
       for (final f in <Object>[
         Exception('offline'),
-        const VellumException(code: 'UNAUTHENTICATED', message: 'x', statusCode: 401),
-        const VellumException(code: 'UNAUTHENTICATED', message: 'x', statusCode: 403),
-        const VellumException(code: 'RATE_LIMITED', message: 'x', statusCode: 429),
+        const VellumException(
+            code: 'UNAUTHENTICATED', message: 'x', statusCode: 401),
+        const VellumException(
+            code: 'UNAUTHENTICATED', message: 'x', statusCode: 403),
+        const VellumException(
+            code: 'RATE_LIMITED', message: 'x', statusCode: 429),
         const VellumException(code: 'INTERNAL', message: 'x', statusCode: 503),
       ]) {
         failure = f;
@@ -472,31 +562,41 @@ void main() {
       expect(dropped, isEmpty);
     });
 
-    test('400, 403 PERMISSION_DENIED and 404 drop as rejected; 409 and 412 as conflict; the queue keeps going', () async {
+    test(
+        '400, 403 PERMISSION_DENIED and 404 drop as rejected; 409 and 412 as conflict; the queue keeps going',
+        () async {
       final ob = makeOutbox();
       for (var i = 0; i < 3; i++) {
-        await ob.enqueue('PUT', '/documents/a/$i', body: <String, Object?>{'data': <String, Object?>{}});
+        await ob.enqueue('PUT', '/documents/a/$i',
+            body: <String, Object?>{'data': <String, Object?>{}});
       }
-      failure = const VellumException(code: 'PERMISSION_DENIED', message: 'no', statusCode: 403);
+      failure = const VellumException(
+          code: 'PERMISSION_DENIED', message: 'no', statusCode: 403);
       await ob.flush();
       expect(ob.length, 0);
-      expect(dropped.map((d) => d.$2), everyElement(VellumOutboxDropReason.rejected));
+      expect(dropped.map((d) => d.$2),
+          everyElement(VellumOutboxDropReason.rejected));
       dropped.clear();
-      await ob.enqueue('PUT', '/documents/a/9', body: <String, Object?>{'data': <String, Object?>{}, 'ifVersion': 2});
-      failure = const VellumException(code: 'FAILED_PRECONDITION', message: 'stale', statusCode: 412);
+      await ob.enqueue('PUT', '/documents/a/9',
+          body: <String, Object?>{'data': <String, Object?>{}, 'ifVersion': 2});
+      failure = const VellumException(
+          code: 'FAILED_PRECONDITION', message: 'stale', statusCode: 412);
       await ob.flush();
       expect(dropped.single.$2, VellumOutboxDropReason.conflict);
       dropped.clear();
       await ob.enqueue('DELETE', '/documents/a/10');
-      failure = const VellumException(code: 'NOT_FOUND', message: 'x', statusCode: 404);
+      failure = const VellumException(
+          code: 'NOT_FOUND', message: 'x', statusCode: 404);
       await ob.flush();
       expect(dropped.single.$2, VellumOutboxDropReason.rejected);
     });
 
-    test('after maxAttempts transient failures the entry is dropped as failed', () async {
+    test('after maxAttempts transient failures the entry is dropped as failed',
+        () async {
       final ob = makeOutbox(maxAttempts: 3);
       await ob.enqueue('DELETE', '/documents/a/b');
-      failure = const VellumException(code: 'INTERNAL', message: 'x', statusCode: 500);
+      failure = const VellumException(
+          code: 'INTERNAL', message: 'x', statusCode: 500);
       await ob.flush();
       await ob.flush();
       expect(ob.length, 1);
@@ -524,7 +624,8 @@ void main() {
       expect(dropped, isEmpty);
     });
 
-    test('a failing save after a good replay does not make flush throw', () async {
+    test('a failing save after a good replay does not make flush throw',
+        () async {
       final disk = _FullDisk();
       final ob = makeOutbox(blobs: disk);
       await ob.enqueue('DELETE', '/documents/a/1');
@@ -537,7 +638,8 @@ void main() {
     test('attempts survive a restart', () async {
       final ob = makeOutbox(maxAttempts: 5);
       await ob.enqueue('DELETE', '/documents/a/b');
-      failure = const VellumException(code: 'INTERNAL', message: 'x', statusCode: 503);
+      failure = const VellumException(
+          code: 'INTERNAL', message: 'x', statusCode: 503);
       await ob.flush();
       final again = makeOutbox(maxAttempts: 5);
       await again.load();
@@ -554,10 +656,12 @@ void main() {
     });
 
     test('a throwing onDropped does not stall the queue', () async {
-      final ob = makeOutbox(onDropped: (e, r, _) => throw StateError('app bug'));
+      final ob =
+          makeOutbox(onDropped: (e, r, _) => throw StateError('app bug'));
       await ob.enqueue('DELETE', '/documents/a/1');
       await ob.enqueue('DELETE', '/documents/a/2');
-      failure = const VellumException(code: 'NOT_FOUND', message: 'x', statusCode: 404);
+      failure = const VellumException(
+          code: 'NOT_FOUND', message: 'x', statusCode: 404);
       await ob.flush();
       expect(ob.length, 0);
     });
@@ -585,14 +689,17 @@ void main() {
       expect(dropped.single.$2, VellumOutboxDropReason.otherUser);
     });
 
-    test('sign-out clears the queue, destroys the key and stops a running flush', () async {
+    test(
+        'sign-out clears the queue, destroys the key and stops a running flush',
+        () async {
       final ob = makeOutbox();
       await ob.enqueue('DELETE', '/documents/a/1');
       await ob.enqueue('DELETE', '/documents/a/2');
       await client.auth.signOut();
       expect(ob.length, 0);
       expect(hasBlob(), isFalse);
-      expect(mem.data.keys.any((k) => k.startsWith('vellum.offline.key.v1')), isFalse);
+      expect(mem.data.keys.any((k) => k.startsWith('vellum.offline.key.v1')),
+          isFalse);
     });
 
     test('the user changing mid-flush stops the run', () async {
@@ -621,7 +728,8 @@ void main() {
     test('enqueueSet and enqueueDelete build guarded writes', () async {
       final ob = makeOutbox();
       final ref = client.collection('notes').doc('n1');
-      final e1 = await ob.enqueueSet(ref, <String, Object?>{'t': 1}, ifVersion: 4);
+      final e1 =
+          await ob.enqueueSet(ref, <String, Object?>{'t': 1}, ifVersion: 4);
       expect(e1.path, '/documents/notes/n1');
       expect(e1.body!['ifVersion'], 4);
       final e2 = await ob.enqueueDelete(ref, ifVersion: 4);

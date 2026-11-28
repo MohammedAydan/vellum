@@ -92,7 +92,8 @@ void main() {
       expect((await ref.get()).data(), <String, Object?>{'a': 1});
     });
 
-    test('explicit ids resolve a missing document as exists == false', () async {
+    test('explicit ids resolve a missing document as exists == false',
+        () async {
       final ref = _client({}, <String>[]).collection('posts').doc('missing');
       final snap = await ref.get();
       expect(snap.exists, isFalse);

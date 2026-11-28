@@ -90,7 +90,8 @@ class PersistentDocumentCacheStore implements DocumentCacheStore {
     _ownerUid = uid;
     final sealed = await _blobs.read(_blobKey);
     if (sealed == null) return;
-    final clear = await _box.open(sealed, scope: _scope, context: _context(uid));
+    final clear =
+        await _box.open(sealed, scope: _scope, context: _context(uid));
     if (clear == null) {
       // Other user, other project, lost key or tampered: start clean.
       await _blobs.delete(_blobKey);
@@ -167,7 +168,8 @@ class PersistentDocumentCacheStore implements DocumentCacheStore {
       try {
         await _blobs.write(
           _blobKey,
-          await _box.seal(jsonEncode(live), scope: _scope, context: _context(uid)),
+          await _box.seal(jsonEncode(live),
+              scope: _scope, context: _context(uid)),
         );
         return;
       } catch (_) {

@@ -740,7 +740,8 @@ class VellumAuth implements VellumAuthPort {
   }
 
   @override
-  Future<void> unlinkProvider(String provider, {String? currentPassword}) async {
+  Future<void> unlinkProvider(String provider,
+      {String? currentPassword}) async {
     await client.request(
       'DELETE',
       '/auth/identities/${Uri.encodeComponent(provider)}',
@@ -786,6 +787,7 @@ class VellumAuth implements VellumAuthPort {
   /// Pass [currentPassword] when changing [email] on an account that has a
   /// password. `password` is not forwarded; use [changePassword] to change it.
   @override
+
   /// D3: one-call anonymous -> email/password upgrade. The uid, custom
   /// claims and metadata survive; every OTHER session of the account is
   /// revoked while this one keeps working. Throws FAILED_PRECONDITION when

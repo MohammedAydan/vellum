@@ -5,14 +5,16 @@ import 'package:vellum_flutter/vellum_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 String _jwt(Map<String, dynamic> payload) {
-  final header = base64Url.encode(utf8.encode(jsonEncode(<String, dynamic>{'alg': 'EdDSA'})));
+  final header = base64Url
+      .encode(utf8.encode(jsonEncode(<String, dynamic>{'alg': 'EdDSA'})));
   final body = base64Url.encode(utf8.encode(jsonEncode(payload)));
   return '$header.$body.signature';
 }
 
 final String _futureToken = _jwt(<String, dynamic>{
   'sub': 'usr_1',
-  'exp': DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000,
+  'exp': DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/
+      1000,
 });
 
 Map<String, dynamic> _user() => <String, dynamic>{
@@ -32,7 +34,8 @@ Map<String, dynamic> _user() => <String, dynamic>{
       'lastSignInAt': null,
     };
 
-Map<String, dynamic> _session(String token, {String refreshToken = 'refresh_1'}) =>
+Map<String, dynamic> _session(String token,
+        {String refreshToken = 'refresh_1'}) =>
     <String, dynamic>{
       'user': _user(),
       'accessToken': token,
@@ -51,7 +54,9 @@ void main() {
         projectId: 'p',
         apiKey: 'pk_test',
         httpTransport: (method, url, headers, body) async {
-          if (url.endsWith('/auth/sign-up/email')) return _session(_futureToken);
+          if (url.endsWith('/auth/sign-up/email')) {
+            return _session(_futureToken);
+          }
           return <String, dynamic>{};
         },
       );
@@ -110,14 +115,19 @@ void main() {
       var refreshCalls = 0;
       final refreshed = _jwt(<String, dynamic>{
         'sub': 'usr_1',
-        'exp': DateTime.now().add(const Duration(hours: 2)).millisecondsSinceEpoch ~/ 1000,
+        'exp': DateTime.now()
+                .add(const Duration(hours: 2))
+                .millisecondsSinceEpoch ~/
+            1000,
       });
       final client = VellumClient(
         endpoint: 'http://localhost:8080',
         projectId: 'p',
         apiKey: 'pk_test',
         httpTransport: (method, url, headers, body) async {
-          if (url.endsWith('/auth/sign-up/email')) return _session(_futureToken);
+          if (url.endsWith('/auth/sign-up/email')) {
+            return _session(_futureToken);
+          }
           if (url.endsWith('/auth/token/refresh')) {
             refreshCalls++;
             return <String, dynamic>{
@@ -149,7 +159,9 @@ void main() {
   });
 
   group('Automatic bearer injection', () {
-    test('document requests carry the signed-in bearer token and both API key headers', () async {
+    test(
+        'document requests carry the signed-in bearer token and both API key headers',
+        () async {
       final captured = <Map<String, String>>[];
       final client = VellumClient(
         endpoint: 'http://localhost:8080',
@@ -157,7 +169,9 @@ void main() {
         apiKey: 'pk_test',
         httpTransport: (method, url, headers, body) async {
           captured.add(Map<String, String>.from(headers));
-          if (url.endsWith('/auth/sign-up/email')) return _session(_futureToken);
+          if (url.endsWith('/auth/sign-up/email')) {
+            return _session(_futureToken);
+          }
           if (url.contains('/documents/')) {
             return <String, dynamic>{
               'documentId': 'u1',
@@ -184,14 +198,21 @@ void main() {
   });
 
   group('Silent session refresh', () {
-    test('pre-flight refreshes a token expiring within 60 s before a REST call', () async {
+    test('pre-flight refreshes a token expiring within 60 s before a REST call',
+        () async {
       final expiring = _jwt(<String, dynamic>{
         'sub': 'usr_1',
-        'exp': DateTime.now().add(const Duration(seconds: 20)).millisecondsSinceEpoch ~/ 1000,
+        'exp': DateTime.now()
+                .add(const Duration(seconds: 20))
+                .millisecondsSinceEpoch ~/
+            1000,
       });
       final refreshed = _jwt(<String, dynamic>{
         'sub': 'usr_1',
-        'exp': DateTime.now().add(const Duration(hours: 2)).millisecondsSinceEpoch ~/ 1000,
+        'exp': DateTime.now()
+                .add(const Duration(hours: 2))
+                .millisecondsSinceEpoch ~/
+            1000,
       });
       var refreshCalls = 0;
       final documentHeaders = <Map<String, String>>[];
@@ -225,14 +246,19 @@ void main() {
 
       expect(refreshCalls, greaterThanOrEqualTo(1));
       expect(documentHeaders, hasLength(1));
-      expect(documentHeaders.single['Authorization'], equals('Bearer $refreshed'));
+      expect(
+          documentHeaders.single['Authorization'], equals('Bearer $refreshed'));
       client.auth.dispose();
     });
 
-    test('a 401 forces exactly one refresh and replays the request once', () async {
+    test('a 401 forces exactly one refresh and replays the request once',
+        () async {
       final refreshed = _jwt(<String, dynamic>{
         'sub': 'usr_1',
-        'exp': DateTime.now().add(const Duration(hours: 2)).millisecondsSinceEpoch ~/ 1000,
+        'exp': DateTime.now()
+                .add(const Duration(hours: 2))
+                .millisecondsSinceEpoch ~/
+            1000,
       });
       var refreshCalls = 0;
       var documentAttempts = 0;
@@ -242,7 +268,9 @@ void main() {
         projectId: 'p',
         apiKey: 'pk_test',
         httpTransport: (method, url, headers, body) async {
-          if (url.endsWith('/auth/sign-up/email')) return _session(_futureToken);
+          if (url.endsWith('/auth/sign-up/email')) {
+            return _session(_futureToken);
+          }
           if (url.endsWith('/auth/token/refresh')) {
             refreshCalls++;
             return _session(refreshed, refreshToken: 'refresh_2');
@@ -277,7 +305,8 @@ void main() {
       expect(snap.data()?['name'], equals('Ada'));
       expect(refreshCalls, equals(1));
       expect(documentAttempts, equals(2));
-      expect(documentHeaders[0]['Authorization'], equals('Bearer $_futureToken'));
+      expect(
+          documentHeaders[0]['Authorization'], equals('Bearer $_futureToken'));
       expect(documentHeaders[1]['Authorization'], equals('Bearer $refreshed'));
       client.auth.dispose();
     });
@@ -306,7 +335,10 @@ void main() {
             ..statusCode = 400
             ..headers.contentType = ContentType.json
             ..write(jsonEncode(<String, dynamic>{
-              'error': <String, dynamic>{'code': 'INVALID_ARGUMENT', 'message': 'bad request'},
+              'error': <String, dynamic>{
+                'code': 'INVALID_ARGUMENT',
+                'message': 'bad request'
+              },
             }));
         }
         // '/empty' intentionally writes no body.
@@ -321,19 +353,23 @@ void main() {
     String urlFor(String path) =>
         'http://${server.address.host}:${server.port}$path';
 
-    test('returns arrays without throwing and coerces them to an empty map', () async {
-      final decoded = await defaultHttpTransport('GET', urlFor('/array'), <String, String>{}, null);
+    test('returns arrays without throwing and coerces them to an empty map',
+        () async {
+      final decoded = await defaultHttpTransport(
+          'GET', urlFor('/array'), <String, String>{}, null);
       expect(decoded, isA<List<Object?>>());
       expect((decoded as List<Object?>).length, equals(2));
       expect(asStringDynamicMap(decoded), isEmpty);
     });
 
     test('handles scalar and empty bodies', () async {
-      final scalar = await defaultHttpTransport('GET', urlFor('/scalar'), <String, String>{}, null);
+      final scalar = await defaultHttpTransport(
+          'GET', urlFor('/scalar'), <String, String>{}, null);
       expect(scalar, equals(42));
       expect(asStringDynamicMap(scalar), isEmpty);
 
-      final empty = await defaultHttpTransport('GET', urlFor('/empty'), <String, String>{}, null);
+      final empty = await defaultHttpTransport(
+          'GET', urlFor('/empty'), <String, String>{}, null);
       expect(empty, isNull);
       expect(asStringDynamicMap(empty), isEmpty);
     });
@@ -341,7 +377,8 @@ void main() {
     test('maps error payloads into VellumException', () async {
       expect(
         defaultHttpTransport('GET', urlFor('/error'), <String, String>{}, null),
-        throwsA(isA<VellumException>().having((error) => error.code, 'code', equals('INVALID_ARGUMENT'))),
+        throwsA(isA<VellumException>()
+            .having((error) => error.code, 'code', equals('INVALID_ARGUMENT'))),
       );
     });
   });

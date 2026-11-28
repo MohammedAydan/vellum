@@ -34,7 +34,9 @@ void main() {
     expect(client.authTokenStorage, isA<SecureAuthTokenStorage>());
   });
 
-  test('first launch after a fresh install clears a session left in the Keychain (iOS/macOS)', () async {
+  test(
+      'first launch after a fresh install clears a session left in the Keychain (iOS/macOS)',
+      () async {
     final store = _MapStorage()
       ..data['vellum_access_token'] = 'stale-access'
       ..data['vellum_refresh_token'] = 'stale-refresh'

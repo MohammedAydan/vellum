@@ -48,14 +48,17 @@ Map<String, dynamic> _session(String token) => <String, dynamic>{
 Future<void> _pump() => Future<void>.delayed(Duration.zero);
 
 HttpTransport _transport(
-  Future<Object?> Function(String method, String url, Map<String, String> headers,
-      Map<String, dynamic>? body) handler,
+  Future<Object?> Function(String method, String url,
+          Map<String, String> headers, Map<String, dynamic>? body)
+      handler,
 ) =>
     handler;
 
 void main() {
   group('Client configuration aliases', () {
-    test('baseUrl is used verbatim and realtimeEndpoint falls back to its origin', () async {
+    test(
+        'baseUrl is used verbatim and realtimeEndpoint falls back to its origin',
+        () async {
       final captured = <String>[];
       final client = VellumClient(
         baseUrl: 'https://api.example.test/v1/projects/p',
@@ -221,7 +224,9 @@ void main() {
   });
 
   group('Sign-out modes', () {
-    test('signOut(allSessions: true) omits the refresh token and uses the bearer', () async {
+    test(
+        'signOut(allSessions: true) omits the refresh token and uses the bearer',
+        () async {
       final bodies = <Map<String, dynamic>?>[];
       final headers = <Map<String, String>>[];
       final client = VellumClient(
@@ -256,7 +261,8 @@ void main() {
       client.auth.dispose();
     });
 
-    test('default signOut revokes only the current session without a bearer', () async {
+    test('default signOut revokes only the current session without a bearer',
+        () async {
       final bodies = <Map<String, dynamic>?>[];
       final headers = <Map<String, String>>[];
       final client = VellumClient(
@@ -287,7 +293,8 @@ void main() {
   });
 
   group('Profile and token endpoints', () {
-    test('getUser fetches GET /auth/user and preserves token material', () async {
+    test('getUser fetches GET /auth/user and preserves token material',
+        () async {
       final urls = <String>[];
       final client = VellumClient(
         endpoint: 'http://localhost:8080',
@@ -319,7 +326,8 @@ void main() {
       client.auth.dispose();
     });
 
-    test('confirmEmailVerification(token) updates the signed-in user', () async {
+    test('confirmEmailVerification(token) updates the signed-in user',
+        () async {
       final client = VellumClient(
         endpoint: 'http://localhost:8080',
         projectId: 'p',
@@ -346,7 +354,8 @@ void main() {
       client.auth.dispose();
     });
 
-    test('sendPasswordResetEmail(email) posts the email positionally', () async {
+    test('sendPasswordResetEmail(email) posts the email positionally',
+        () async {
       final client = VellumClient(
         endpoint: 'http://localhost:8080',
         projectId: 'p',
@@ -359,12 +368,15 @@ void main() {
           return <String, dynamic>{};
         }),
       );
-      final result = await client.auth.sendPasswordResetEmail('alice@example.com');
+      final result =
+          await client.auth.sendPasswordResetEmail('alice@example.com');
       expect(result.success, isTrue);
       client.auth.dispose();
     });
 
-    test('updateProfile(password:) never forwards password to the v1 patch endpoint', () async {
+    test(
+        'updateProfile(password:) never forwards password to the v1 patch endpoint',
+        () async {
       Map<String, dynamic>? capturedBody;
       final client = VellumClient(
         endpoint: 'http://localhost:8080',
@@ -385,7 +397,8 @@ void main() {
         email: 'alice@example.com',
         password: 'password123',
       );
-      await client.auth.updateProfile(displayName: 'Grace', password: 'new-secret');
+      await client.auth
+          .updateProfile(displayName: 'Grace', password: 'new-secret');
 
       expect(capturedBody?['displayName'], equals('Grace'));
       expect(capturedBody?.containsKey('password'), isFalse);
@@ -453,7 +466,8 @@ void main() {
   });
 
   group('Document operation aliases', () {
-    test('setDoc/getDoc/updateDoc/deleteDoc hit the canonical endpoints', () async {
+    test('setDoc/getDoc/updateDoc/deleteDoc hit the canonical endpoints',
+        () async {
       final calls = <String>[];
       final client = VellumClient(
         endpoint: 'http://localhost:8080',
@@ -473,12 +487,15 @@ void main() {
         }),
       );
 
-      await client.setDoc('users/u1', <String, dynamic>{'name': 'Ada'}, merge: true);
+      await client.setDoc('users/u1', <String, dynamic>{'name': 'Ada'},
+          merge: true);
       final snap = await client.getDoc('users/u1');
       await client.updateDoc('users/u1', <String, dynamic>{'name': 'Grace'});
       await client.deleteDoc('users/u1');
 
-      expect(calls, equals(<String>[
+      expect(
+          calls,
+          equals(<String>[
             'PUT /documents/users/u1',
             'GET /documents/users/u1',
             'PATCH /documents/users/u1',
@@ -549,11 +566,15 @@ void main() {
           .toQuerySpec();
 
       expect(spec['collectionPath'], equals('orders'));
-      expect(spec['where'], equals(<Map<String, dynamic>>[
+      expect(
+          spec['where'],
+          equals(<Map<String, dynamic>>[
             <String, dynamic>{'field': 'status', 'op': '==', 'value': 'open'},
             <String, dynamic>{'field': 'amount', 'op': '>=', 'value': 50},
           ]));
-      expect(spec['orderBy'], equals(<Map<String, String>>[
+      expect(
+          spec['orderBy'],
+          equals(<Map<String, String>>[
             <String, String>{'field': 'createdAt', 'dir': 'desc'},
           ]));
       expect(spec['limit'], equals(25));
@@ -569,10 +590,14 @@ void main() {
           )
           .toQuerySpec();
 
-      expect(spec['where'], equals(<Map<String, dynamic>>[
+      expect(
+          spec['where'],
+          equals(<Map<String, dynamic>>[
             <String, dynamic>{'field': 'status', 'op': '==', 'value': 'active'},
           ]));
-      expect(spec['orderBy'], equals(<Map<String, String>>[
+      expect(
+          spec['orderBy'],
+          equals(<Map<String, String>>[
             <String, String>{'field': 'createdAt', 'dir': 'asc'},
           ]));
       expect(spec.containsKey('startAfter'), isFalse);

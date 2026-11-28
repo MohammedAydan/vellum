@@ -60,8 +60,8 @@ void main() {
     );
     expect(calls, hasLength(1));
     expect(calls.single['url'], endsWith('/batchWrite'));
-    final writes =
-        ((calls.single['body'] as Map)['writes'] as List).cast<Map<String, Object?>>();
+    final writes = ((calls.single['body'] as Map)['writes'] as List)
+        .cast<Map<String, Object?>>();
     expect(writes, hasLength(3));
     expect(writes[0]['path'], ref.path);
     final parentData = writes[0]['data'] as Map;

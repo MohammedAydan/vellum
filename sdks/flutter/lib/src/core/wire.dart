@@ -5,9 +5,11 @@ part of '../../vellum_flutter_core.dart';
 class FieldOp {
   FieldOp._();
 
-  static JsonMap serverTimestamp() => const <String, Object?>{'\$op': 'serverTimestamp'};
+  static JsonMap serverTimestamp() =>
+      const <String, Object?>{'\$op': 'serverTimestamp'};
 
-  static JsonMap increment(num by) => <String, Object?>{'\$op': 'inc', 'by': by};
+  static JsonMap increment(num by) =>
+      <String, Object?>{'\$op': 'inc', 'by': by};
 
   static JsonMap arrayUnion(JsonList elements) => <String, Object?>{
         '\$op': 'arrayUnion',
@@ -19,7 +21,8 @@ class FieldOp {
         'elements': elements,
       };
 
-  static JsonMap deleteField() => const <String, Object?>{'\$op': 'deleteField'};
+  static JsonMap deleteField() =>
+      const <String, Object?>{'\$op': 'deleteField'};
 }
 
 /// Declarative Atomic Field Values matching Specification Section 8 & Firebase conventions
@@ -32,7 +35,8 @@ class FieldValue {
 
   static JsonMap arrayUnion(JsonList elements) => FieldOp.arrayUnion(elements);
 
-  static JsonMap arrayRemove(JsonList elements) => FieldOp.arrayRemove(elements);
+  static JsonMap arrayRemove(JsonList elements) =>
+      FieldOp.arrayRemove(elements);
 
   static JsonMap delete() => FieldOp.deleteField();
 
@@ -145,11 +149,14 @@ class VellumWire {
     if (value is Map) {
       final map = asStringDynamicMap(value);
       return map.map<String, Object?>(
-        (String k, Object? v) => MapEntry<String, Object?>(k, decodeWireValue(v)),
+        (String k, Object? v) =>
+            MapEntry<String, Object?>(k, decodeWireValue(v)),
       );
     }
     if (value is List) {
-      return value.map<Object?>((Object? item) => decodeWireValue(item)).toList();
+      return value
+          .map<Object?>((Object? item) => decodeWireValue(item))
+          .toList();
     }
     return value;
   }

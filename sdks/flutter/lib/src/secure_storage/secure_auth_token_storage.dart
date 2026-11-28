@@ -43,7 +43,8 @@ class _FlutterSecureKeyValue implements SecureKeyValue {
 
 /// The platform secure store as a [SecureKeyValue] (Keychain on Apple platforms,
 /// Keystore-wrapped on Android). Used for the offline encryption key.
-SecureKeyValue defaultSecureKeyValue() => const _FlutterSecureKeyValue(_defaultSecureStore);
+SecureKeyValue defaultSecureKeyValue() =>
+    const _FlutterSecureKeyValue(_defaultSecureStore);
 
 /// Session storage backed by the platform secure store, with a graceful
 /// fallback: when the secure store is unavailable (no keyring on a Linux
@@ -63,7 +64,9 @@ class SecureAuthTokenStorage implements AuthTokenStorage {
   })  : _store = storage ?? const _FlutterSecureKeyValue(_defaultSecureStore),
         _prefix = namespace,
         _firstLaunchCheck = firstLaunchCheck ??
-            (storage == null ? (() => _sharedPrefsFirstLaunch(namespace)) : null),
+            (storage == null
+                ? (() => _sharedPrefsFirstLaunch(namespace))
+                : null),
         _clearOnFirstLaunch = clearOnFirstLaunch ??
             (!kIsWeb &&
                 (defaultTargetPlatform == TargetPlatform.iOS ||
@@ -81,7 +84,8 @@ class SecureAuthTokenStorage implements AuthTokenStorage {
   final bool _clearOnFirstLaunch;
   Future<void>? _freshInstallGuard;
 
-  Future<void> _ensureFreshInstall() => _freshInstallGuard ??= _runFreshInstallGuard();
+  Future<void> _ensureFreshInstall() =>
+      _freshInstallGuard ??= _runFreshInstallGuard();
 
   Future<void> _runFreshInstallGuard() async {
     final check = _firstLaunchCheck;

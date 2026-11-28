@@ -39,7 +39,8 @@ typedef VellumConfirmationCodeCallback = void Function(String code);
 /// The server derives the same code from the challenge it stored.
 String vellumConfirmationCode(String challenge) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  final digest = crypto.sha256.convert(utf8.encode('vellum-confirm:$challenge')).bytes;
+  final digest =
+      crypto.sha256.convert(utf8.encode('vellum-confirm:$challenge')).bytes;
   return String.fromCharCodes(<int>[
     for (var i = 0; i < 6; i++) alphabet.codeUnitAt(digest[i] & 31),
   ]);
@@ -89,7 +90,8 @@ class VellumOAuth {
         _resume = resumeSignals,
         _random = random ?? Random.secure();
 
-  static Future<String> _noLauncher(Uri url, String scheme) => Future<String>.error(
+  static Future<String> _noLauncher(Uri url, String scheme) =>
+      Future<String>.error(
         const VellumException(
           code: 'UNSUPPORTED',
           message: 'Polling sign-in does not use a launcher',
@@ -145,14 +147,16 @@ class VellumOAuth {
     return _run(provider, true, currentPassword);
   }
 
-  Future<VellumAuthResult> _run(String provider, bool link, [String? currentPassword]) async {
+  Future<VellumAuthResult> _run(String provider, bool link,
+      [String? currentPassword]) async {
     final verifier = _token(48);
     final state = _token(16);
     final challenge = base64Url
         .encode(crypto.sha256.convert(utf8.encode(verifier)).bytes)
         .replaceAll('=', '');
     if (_openUrl != null) {
-      return _signInPolling(provider, verifier, challenge, link, currentPassword);
+      return _signInPolling(
+          provider, verifier, challenge, link, currentPassword);
     }
     final prepared = await sessionFactory?.call();
     try {

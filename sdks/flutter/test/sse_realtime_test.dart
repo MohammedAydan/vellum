@@ -312,7 +312,8 @@ void main() {
       await channel.sink.close();
     });
 
-    test('falls back when the WebSocket opens but never delivers a frame (Track 3 stall)',
+    test(
+        'falls back when the WebSocket opens but never delivers a frame (Track 3 stall)',
         () async {
       var fellBack = false;
       final channel = FallbackWebSocketChannel(

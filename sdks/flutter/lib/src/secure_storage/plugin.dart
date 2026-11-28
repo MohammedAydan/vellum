@@ -1,7 +1,6 @@
 import 'package:vellum_flutter/vellum_flutter_core.dart';
 import 'secure_auth_token_storage.dart';
 
-
 /// Registers [SecureAuthTokenStorage] as the default session store.
 ///
 /// Flutter calls [registerWith] automatically at app start on Android, iOS,

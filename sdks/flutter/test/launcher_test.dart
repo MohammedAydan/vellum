@@ -32,7 +32,8 @@ void main() {
     final redirect = Uri.parse('http://127.0.0.1:$port/callback');
     final result = awaitLoopbackCallback(redirect, () async {
       final client = HttpClient();
-      final other = await client.getUrl(Uri.parse('http://127.0.0.1:$port/other'));
+      final other =
+          await client.getUrl(Uri.parse('http://127.0.0.1:$port/other'));
       expect((await other.close()).statusCode, 404);
       final req = await client.getUrl(
         Uri.parse('http://127.0.0.1:$port/callback?vellum_code=abc&state=xyz'),
@@ -62,14 +63,16 @@ void main() {
     );
   });
 
-  test('createVellumOAuth without a redirect URI uses redirect-less sign-in', () {
+  test('createVellumOAuth without a redirect URI uses redirect-less sign-in',
+      () {
     final client = VellumClient(
       endpoint: 'https://api.example.com',
       projectId: 'p',
       apiKey: 'pk_test_abc',
       httpTransport: (m, u, h, b) async => <String, dynamic>{},
     );
-    final oauth = createVellumOAuth(auth: client.auth, onConfirmationCode: (_) {});
+    final oauth =
+        createVellumOAuth(auth: client.auth, onConfirmationCode: (_) {});
     expect(oauth.redirectUri, '');
     client.auth.dispose();
   });

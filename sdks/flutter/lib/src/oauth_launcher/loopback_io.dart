@@ -16,7 +16,8 @@ class LoopbackListener {
   final Uri redirect;
 
   Future<void> _onRequest(HttpRequest request) async {
-    final matches = request.uri.path == (redirect.path.isEmpty ? '/' : redirect.path);
+    final matches =
+        request.uri.path == (redirect.path.isEmpty ? '/' : redirect.path);
     request.response.headers.contentType = ContentType.html;
     if (!matches) {
       request.response.statusCode = HttpStatus.notFound;
@@ -35,7 +36,8 @@ class LoopbackListener {
   }
 
   /// Opens the browser, then waits for the redirect (or [timeout]).
-  Future<String> wait(Future<void> Function() openBrowser, Duration timeout) async {
+  Future<String> wait(
+      Future<void> Function() openBrowser, Duration timeout) async {
     await openBrowser();
     return _done.future.timeout(timeout);
   }
@@ -48,7 +50,8 @@ class LoopbackListener {
 
 /// Binds the loopback port of [redirect] (port 0 means any free port).
 Future<LoopbackListener> bindLoopbackListener(Uri redirect) async {
-  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, redirect.port);
+  final server =
+      await HttpServer.bind(InternetAddress.loopbackIPv4, redirect.port);
   return LoopbackListener._(server, redirect.replace(port: server.port));
 }
 

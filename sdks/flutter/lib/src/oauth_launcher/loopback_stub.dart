@@ -14,7 +14,8 @@ class LoopbackListener {
   Future<void> close() async {}
 }
 
-Future<LoopbackListener> bindLoopbackListener(Uri redirect) => throw _unsupported;
+Future<LoopbackListener> bindLoopbackListener(Uri redirect) =>
+    throw _unsupported;
 
 Future<String> awaitLoopbackCallback(
   Uri redirect,

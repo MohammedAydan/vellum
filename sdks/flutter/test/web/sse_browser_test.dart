@@ -49,24 +49,30 @@ void main() {
   test('SSE realtime streams incrementally in a real browser', () async {
     final host = spawnHybridCode(_serverCode);
     final port = await host.stream.first as int;
-    final channel =
-        SseWebSocketChannel(Uri.parse('http://127.0.0.1:$port/v1/realtime/stream'));
+    final channel = SseWebSocketChannel(
+        Uri.parse('http://127.0.0.1:$port/v1/realtime/stream'));
     final watch = Stopwatch()..start();
     final seen = <String, int>{};
     final done = Completer<void>();
     final sub = channel.stream.listen((Object? data) {
       final frame = jsonDecode(data as String) as Map<String, Object?>;
-      seen.putIfAbsent(frame['type']! as String, () => watch.elapsedMilliseconds);
-      if (seen.containsKey('auth_ack') && seen.containsKey('mutation') && !done.isCompleted) {
+      seen.putIfAbsent(
+          frame['type']! as String, () => watch.elapsedMilliseconds);
+      if (seen.containsKey('auth_ack') &&
+          seen.containsKey('mutation') &&
+          !done.isCompleted) {
         done.complete();
       }
     });
-    channel.sink.add(jsonEncode(<String, Object?>{'type': 'auth', 'projectId': 'p', 'apiKey': 'k'}));
-    channel.sink.add(jsonEncode(<String, Object?>{'type': 'subscribe', 'subId': 's1', 'path': 'c'}));
+    channel.sink.add(jsonEncode(
+        <String, Object?>{'type': 'auth', 'projectId': 'p', 'apiKey': 'k'}));
+    channel.sink.add(jsonEncode(
+        <String, Object?>{'type': 'subscribe', 'subId': 's1', 'path': 'c'}));
     await done.future.timeout(const Duration(seconds: 15));
     await sub.cancel();
     await channel.sink.close();
     expect(seen['mutation']! - seen['auth_ack']!, greaterThan(900),
-        reason: 'frames arrived together: the browser buffered the stream ($seen)');
+        reason:
+            'frames arrived together: the browser buffered the stream ($seen)');
   });
 }

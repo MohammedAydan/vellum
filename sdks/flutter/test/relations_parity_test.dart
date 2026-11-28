@@ -102,13 +102,13 @@ class _FakeWebSocketChannel implements WebSocketChannel {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-List<JsonMap> _subscribeFrames(_FakeWebSocketChannel channel) => channel
-    .fakeSink.sent
-    .map((String raw) => RealtimeFrames.decode(raw))
-    .whereType<Map<String, dynamic>>()
-    .where((Map<String, dynamic> f) => f['type'] == 'subscribe')
-    .map((Map<String, dynamic> f) => f.cast<String, Object?>())
-    .toList();
+List<JsonMap> _subscribeFrames(_FakeWebSocketChannel channel) =>
+    channel.fakeSink.sent
+        .map((String raw) => RealtimeFrames.decode(raw))
+        .whereType<Map<String, dynamic>>()
+        .where((Map<String, dynamic> f) => f['type'] == 'subscribe')
+        .map((Map<String, dynamic> f) => f.cast<String, Object?>())
+        .toList();
 
 void main() {
   group('referencedBy (reverse lookup parity)', () {
@@ -133,16 +133,16 @@ void main() {
       );
 
       final page = await client.collection('users').doc('u1').referencedBy(
-            collection: 'orders',
-            field: 'customerId',
-            limit: 25,
-            cursor: 'cursor-prev',
-            select: <String>['total'],
-            include: <Object>[
-              'customer',
-              const VellumInclude(field: 'items', select: <String>['sku']),
-            ],
-          );
+        collection: 'orders',
+        field: 'customerId',
+        limit: 25,
+        cursor: 'cursor-prev',
+        select: <String>['total'],
+        include: <Object>[
+          'customer',
+          const VellumInclude(field: 'items', select: <String>['sku']),
+        ],
+      );
 
       expect(captured.method, equals('POST'));
       expect(captured.url, endsWith('/documents:referencedBy'));
@@ -192,7 +192,8 @@ void main() {
 
       expect(page.documents.single.data(), equals(42));
       expect(page.nextCursor, isNull);
-      expect(captured.body, equals(<String, Object?>{'targetPath': 'users/u1'}));
+      expect(
+          captured.body, equals(<String, Object?>{'targetPath': 'users/u1'}));
     });
 
     test('tolerates an empty page that still carries a cursor', () async {
@@ -224,14 +225,10 @@ void main() {
         realtimeBackoff: (_) => 5,
       );
 
-      final sub = client
-          .collection('users')
-          .doc('u1')
-          .snapshots(
-            resolveIncludes: true,
-            include: <Object>['author'],
-          )
-          .listen((_) {});
+      final sub = client.collection('users').doc('u1').snapshots(
+        resolveIncludes: true,
+        include: <Object>['author'],
+      ).listen((_) {});
       await Future<void>.delayed(Duration.zero);
       channel.pushFrame(<String, dynamic>{'type': 'auth_ack'});
       await Future<void>.delayed(Duration.zero);
@@ -263,16 +260,13 @@ void main() {
         realtimeBackoff: (_) => 5,
       );
 
-      final sub = client
-          .collection('orders')
-          .where('status', '==', 'open')
-          .snapshots(
-            resolveIncludes: true,
-            include: <Object>[
-              const VellumInclude(field: 'customer', as: 'buyer'),
-            ],
-          )
-          .listen((_) {});
+      final sub =
+          client.collection('orders').where('status', '==', 'open').snapshots(
+        resolveIncludes: true,
+        include: <Object>[
+          const VellumInclude(field: 'customer', as: 'buyer'),
+        ],
+      ).listen((_) {});
       await Future<void>.delayed(Duration.zero);
       channel.pushFrame(<String, dynamic>{'type': 'auth_ack'});
       await Future<void>.delayed(Duration.zero);
@@ -306,11 +300,9 @@ void main() {
       );
 
       final snapshots = <DocumentSnapshot<JsonMap>>[];
-      final sub = client
-          .collection('orders')
-          .doc('o1')
-          .snapshots(resolveIncludes: true, include: <Object>['customer'])
-          .listen(snapshots.add);
+      final sub = client.collection('orders').doc('o1').snapshots(
+          resolveIncludes: true,
+          include: <Object>['customer']).listen(snapshots.add);
       await Future<void>.delayed(Duration.zero);
       channel.pushFrame(<String, dynamic>{'type': 'auth_ack'});
       await Future<void>.delayed(Duration.zero);
@@ -367,8 +359,7 @@ void main() {
       });
 
       final client = VellumClient(
-        baseUrl:
-            'http://127.0.0.1:${server.port}/v1/projects/p',
+        baseUrl: 'http://127.0.0.1:${server.port}/v1/projects/p',
         projectId: 'p',
         apiKey: 'pk_test_secret_123',
         maxRetries: 0,

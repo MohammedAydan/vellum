@@ -14,12 +14,14 @@ sealed class VellumResult<T extends Object, E extends Object> {
   bool get isErr => this is VellumErr<T, E>;
 }
 
-final class VellumOk<T extends Object, E extends Object> extends VellumResult<T, E> {
+final class VellumOk<T extends Object, E extends Object>
+    extends VellumResult<T, E> {
   const VellumOk(this.value);
   final T value;
 }
 
-final class VellumErr<T extends Object, E extends Object> extends VellumResult<T, E> {
+final class VellumErr<T extends Object, E extends Object>
+    extends VellumResult<T, E> {
   const VellumErr(this.error);
   final E error;
 }
@@ -61,7 +63,8 @@ final class DocumentPathId {
   final String value;
 
   @override
-  bool operator ==(Object other) => other is DocumentPathId && other.value == value;
+  bool operator ==(Object other) =>
+      other is DocumentPathId && other.value == value;
 
   @override
   int get hashCode => value.hashCode;
@@ -108,6 +111,7 @@ abstract interface class VellumAuthPort {
     String? displayName,
     JsonMap? metadata,
   });
+
   /// Resolves to [VellumMfaRequired] when the account has a second factor, like
   /// the other sign-in methods. No session is stored in that case.
   Future<VellumAuthResult> signInWithOAuth({
@@ -121,6 +125,7 @@ abstract interface class VellumAuthPort {
     String? photoUrl,
     JsonMap? metadata,
   });
+
   /// Browser-based Google / GitHub sign-in is driven by [VellumOAuth] (and the
   /// `vellum_flutter_oauth` package); these are its building blocks.
   ///
@@ -191,6 +196,7 @@ abstract interface class VellumAuthPort {
     required String token,
     required String newPassword,
   });
+
   /// Active sessions (devices) of the signed-in user.
   Future<List<VellumSessionInfo>> listSessions();
 
@@ -220,6 +226,7 @@ abstract interface class VellumAuthPort {
   Future<void> deleteAccount({String? password});
   Future<AuthActionResult> sendEmailVerification({String? email});
   Future<void> confirmEmailVerification(String token);
+
   /// D3: upgrade the anonymous account to email/password (uid preserved,
   /// other sessions revoked).
   Future<VellumUser> upgradeAnonymousWithEmailAndPassword({

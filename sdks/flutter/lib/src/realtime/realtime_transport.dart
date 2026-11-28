@@ -7,7 +7,9 @@ String vellumRealtimeUrl(String endpoint) {
   if (value.startsWith('ws://') || value.startsWith('wss://')) {
     return value.endsWith('/v1/realtime') ? value : '$value/v1/realtime';
   }
-  value = value.replaceFirst(RegExp(r'^http://'), 'ws://').replaceFirst(RegExp(r'^https://'), 'wss://');
+  value = value
+      .replaceFirst(RegExp(r'^http://'), 'ws://')
+      .replaceFirst(RegExp(r'^https://'), 'wss://');
   return value.endsWith('/v1/realtime') ? value : '$value/v1/realtime';
 }
 
@@ -39,7 +41,12 @@ typedef RealtimeChannelFactory = WebSocketChannel Function(Uri url);
 
 /// Connection state of the realtime transport, surfaced on the client as
 /// `connectionState` / `connectionStateStream` (Track 3).
-enum VellumRealtimeConnectionState { connecting, connected, reconnecting, disconnected }
+enum VellumRealtimeConnectionState {
+  connecting,
+  connected,
+  reconnecting,
+  disconnected
+}
 
 /// Connection state plus the transport kind actually in use (Track 3).
 class VellumConnectionState {
@@ -71,7 +78,8 @@ class VellumRealtimeTransport {
   final Future<JsonMap> Function() auth;
   final void Function(JsonMap frame) onFrame;
   final void Function(Object error)? onError;
-  final void Function(VellumRealtimeConnectionState state)? onConnectionStateChange;
+  final void Function(VellumRealtimeConnectionState state)?
+      onConnectionStateChange;
   final RealtimeChannelFactory channelFactory;
   final Duration heartbeatInterval;
   final Duration pongTimeout;
@@ -91,7 +99,8 @@ class VellumRealtimeTransport {
   int _lastReconnectDelayMs = 500;
   DateTime _lastPongAt = DateTime.now();
 
-  final Map<String, _TrackedSubscription> _subscriptions = <String, _TrackedSubscription>{};
+  final Map<String, _TrackedSubscription> _subscriptions =
+      <String, _TrackedSubscription>{};
   final List<String> _outboundQueue = <String>[];
   final List<Completer<void>> _connectWaiters = <Completer<void>>[];
 
@@ -107,9 +116,11 @@ class VellumRealtimeTransport {
     this.connectTimeout = const Duration(seconds: 10),
     this.maxOutboundQueueSize = 256,
     int Function(int attempt)? backoffMs,
-  })  : channelFactory = channelFactory ?? ((uri) => WebSocketChannel.connect(uri)),
+  })  : channelFactory =
+            channelFactory ?? ((uri) => WebSocketChannel.connect(uri)),
         _useCustomBackoff = backoffMs != null,
-        backoffMs = backoffMs ?? ((attempt) => computeReconnectBackoffMs(attempt));
+        backoffMs =
+            backoffMs ?? ((attempt) => computeReconnectBackoffMs(attempt));
 
   bool get isAuthenticated => _authenticated;
 
@@ -174,7 +185,8 @@ class VellumRealtimeTransport {
   void unsubscribe(String subId) {
     _subscriptions.remove(subId);
     if (_closed) return;
-    final frame = RealtimeFrames.encode({'type': 'unsubscribe', 'subId': subId});
+    final frame =
+        RealtimeFrames.encode({'type': 'unsubscribe', 'subId': subId});
     if (_authenticated && _channel != null) {
       _channel?.sink.add(frame);
     } else {
@@ -201,7 +213,9 @@ class VellumRealtimeTransport {
     _connectTimer?.cancel();
     _connectTimer = null;
     for (final waiter in _connectWaiters) {
-      if (!waiter.isCompleted) waiter.completeError(StateError('Realtime transport closed'));
+      if (!waiter.isCompleted) {
+        waiter.completeError(StateError('Realtime transport closed'));
+      }
     }
     _connectWaiters.clear();
     _outboundQueue.clear();
@@ -217,7 +231,9 @@ class VellumRealtimeTransport {
     _emitConnectionState(VellumRealtimeConnectionState.connecting);
     _connectTimer?.cancel();
     _connectTimer = Timer(connectTimeout, () {
-      if (!_authenticated) _fail(TimeoutException('Realtime connection timed out'));
+      if (!_authenticated) {
+        _fail(TimeoutException('Realtime connection timed out'));
+      }
     });
 
     WebSocketChannel channel;
@@ -374,7 +390,9 @@ class VellumRealtimeTransport {
     _authenticated = false;
     if (_closed) return;
     for (final waiter in _connectWaiters) {
-      if (!waiter.isCompleted) waiter.completeError(StateError('Realtime connection closed'));
+      if (!waiter.isCompleted) {
+        waiter.completeError(StateError('Realtime connection closed'));
+      }
     }
     _connectWaiters.clear();
     _scheduleReconnect();

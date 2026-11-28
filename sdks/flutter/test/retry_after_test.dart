@@ -2,7 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vellum_flutter/vellum_flutter.dart';
 
 void main() {
-  test('VellumException.retryAfter reads the Retry-After header or retryAfterSeconds', () {
+  test(
+      'VellumException.retryAfter reads the Retry-After header or retryAfterSeconds',
+      () {
     const fromHeader = VellumException(
       code: 'TOO_MANY_REQUESTS',
       message: 'slow down',

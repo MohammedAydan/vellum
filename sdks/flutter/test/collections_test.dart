@@ -46,7 +46,10 @@ Map<String, dynamic> _collectionJson({
       'description': description,
       'defaultTtlSeconds': defaultTtlSeconds,
       'schemaValidation': schemaValidation ??
-          <String, dynamic>{'requiredFields': <String>['email'], 'strict': true},
+          <String, dynamic>{
+            'requiredFields': <String>['email'],
+            'strict': true
+          },
       'isSystem': false,
       'metadata': <String, dynamic>{},
       'createdAt': '2026-11-01T00:00:00.000Z',
@@ -58,7 +61,8 @@ Map<String, dynamic> _collectionJson({
 
 void main() {
   group('Flutter SDK collections lifecycle', () {
-    test('listCollections maps stats and forwards search/limit/cursor', () async {
+    test('listCollections maps stats and forwards search/limit/cursor',
+        () async {
       late String method;
       late String url;
       final client = _client((m, u, h, b) {
@@ -101,7 +105,8 @@ void main() {
       expect(users.name, equals('users'));
       expect(users.description, equals('User directory'));
       expect(users.defaultTtlSeconds, equals(3600));
-      expect(users.schemaValidation?['requiredFields'], equals(<String>['email']));
+      expect(
+          users.schemaValidation?['requiredFields'], equals(<String>['email']));
       expect(users.documentCount, equals(7));
       expect(users.storageBytes, equals(2048));
       expect(users.createdAt, equals('2026-11-01T00:00:00.000Z'));
@@ -156,7 +161,9 @@ void main() {
 
       expect(method, equals('POST'));
       expect(url, equals('$_base/collections'));
-      expect(body, equals(<String, dynamic>{
+      expect(
+          body,
+          equals(<String, dynamic>{
             'name': 'users',
             'description': 'User directory',
             'defaultTtlSeconds': 3600,
@@ -200,7 +207,8 @@ void main() {
       expect(info.toJson()['documentCount'], equals(7));
     });
 
-    test('getCollectionInfo returns null on 404 and on an empty body', () async {
+    test('getCollectionInfo returns null on 404 and on an empty body',
+        () async {
       var calls = 0;
       final client = _client((m, u, h, b) {
         calls++;
@@ -247,7 +255,8 @@ void main() {
         url = u;
         body = b;
         return VellumHttpResponse(
-          body: _collectionJson(description: 'Renamed', defaultTtlSeconds: 7200),
+          body:
+              _collectionJson(description: 'Renamed', defaultTtlSeconds: 7200),
         );
       });
 
@@ -259,7 +268,9 @@ void main() {
 
       expect(method, equals('PATCH'));
       expect(url, equals('$_base/collections/users'));
-      expect(body, equals(<String, dynamic>{
+      expect(
+          body,
+          equals(<String, dynamic>{
             'description': 'Renamed',
             'defaultTtlSeconds': 7200,
           }));
@@ -285,7 +296,9 @@ void main() {
       expect(url, equals('$_base/collections/users/clear'));
       expect(result.deletedCount, equals(12));
       expect(result.freedBytes, equals(4096));
-      expect(result.toJson(), equals(<String, dynamic>{
+      expect(
+          result.toJson(),
+          equals(<String, dynamic>{
             'deletedCount': 12,
             'freedBytes': 4096,
           }));
@@ -335,12 +348,14 @@ void main() {
         });
       });
 
-      final result = await client.importDocuments('users', docs,
-          mode: 'insert_only');
+      final result =
+          await client.importDocuments('users', docs, mode: 'insert_only');
 
       expect(method, equals('POST'));
       expect(url, equals('$_base/collections/users/import'));
-      expect(body, equals(<String, dynamic>{
+      expect(
+          body,
+          equals(<String, dynamic>{
             'documents': docs,
             'mode': 'insert_only',
           }));
@@ -366,7 +381,9 @@ void main() {
         const <Map<String, dynamic>>[],
       );
 
-      expect(body, equals(<String, dynamic>{
+      expect(
+          body,
+          equals(<String, dynamic>{
             'documents': <dynamic>[],
           }));
       expect(result.errors, isEmpty);
@@ -403,13 +420,16 @@ void main() {
       expect(params['cursor'], equals('cur_prev'));
       expect(result.documents, hasLength(1));
       expect(result.documents.first['id'], equals('u1'));
-      expect(result.documents.first['data'], equals(<String, dynamic>{
+      expect(
+          result.documents.first['data'],
+          equals(<String, dynamic>{
             'email': 'a@example.com',
           }));
       expect(result.nextCursor, equals('cur_next'));
     });
 
-    test('collection names are percent-encoded across every endpoint', () async {
+    test('collection names are percent-encoded across every endpoint',
+        () async {
       const String name = 'a b/c';
       final urls = <String>[];
       final client = _client((m, u, h, b) {

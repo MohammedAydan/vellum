@@ -107,7 +107,8 @@ class VellumOutbox {
         _scope = vellumOfflineScope(client.endpoint, client.projectId),
         _namespace = namespace,
         _persist = !(isWeb ?? kIsWeb) || allowWeb,
-        maxTotalBytes = maxTotalBytes ?? ((isWeb ?? kIsWeb) ? 1024 * 1024 : 2 * 1024 * 1024),
+        maxTotalBytes = maxTotalBytes ??
+            ((isWeb ?? kIsWeb) ? 1024 * 1024 : 2 * 1024 * 1024),
         _random = random ?? Random.secure() {
     client.addSignOutHook(() async {
       await clear();
@@ -115,7 +116,8 @@ class VellumOutbox {
     });
     if (autoFlushOnReconnect) {
       try {
-        _connectionSub = (connectionStates ?? client.connectionStateStream).listen(_onConnectionState);
+        _connectionSub = (connectionStates ?? client.connectionStateStream)
+            .listen(_onConnectionState);
       } catch (_) {
         // A client without a realtime layer simply never auto-flushes; flush() still works.
       }
@@ -134,7 +136,8 @@ class VellumOutbox {
   final int maxTotalBytes;
   final Duration maxAge;
   final int maxAttempts;
-  final void Function(VellumOutboxEntry entry, VellumOutboxDropReason reason, Object? error)? onDropped;
+  final void Function(VellumOutboxEntry entry, VellumOutboxDropReason reason,
+      Object? error)? onDropped;
 
   /// Drain the queue automatically whenever the realtime connection becomes `connected`
   /// (single-flight: overlapping triggers share one run). Set false to flush by hand.
@@ -164,7 +167,9 @@ class VellumOutbox {
       _retryTimer = null;
       return;
     }
-    if (wasConnected) return; // `connected` fired twice in a row: one flush is enough.
+    if (wasConnected) {
+      return; // `connected` fired twice in a row: one flush is enough.
+    }
     _retryAttempt = 0;
     unawaited(_autoFlush());
   }
@@ -177,11 +182,18 @@ class VellumOutbox {
     } catch (_) {
       // Network and server failures keep the entries queued; the retry below handles them.
     }
-    if (!_connected || _entries.isEmpty || client.auth.currentUser == null) return;
+    if (!_connected || _entries.isEmpty || client.auth.currentUser == null) {
+      return;
+    }
     // Entries are still pending while the connection is up: retry with exponential backoff and jitter.
-    final exp = autoFlushRetryBase.inMilliseconds * (1 << (_retryAttempt < 10 ? _retryAttempt : 10));
-    final capped = exp > autoFlushRetryMax.inMilliseconds ? autoFlushRetryMax.inMilliseconds : exp;
-    final delay = Duration(milliseconds: (capped * (0.5 + _random.nextDouble() * 0.5)).floor() + 1);
+    final exp = autoFlushRetryBase.inMilliseconds *
+        (1 << (_retryAttempt < 10 ? _retryAttempt : 10));
+    final capped = exp > autoFlushRetryMax.inMilliseconds
+        ? autoFlushRetryMax.inMilliseconds
+        : exp;
+    final delay = Duration(
+        milliseconds:
+            (capped * (0.5 + _random.nextDouble() * 0.5)).floor() + 1);
     _retryAttempt++;
     _retryTimer = Timer(delay, () => unawaited(_autoFlush()));
   }
@@ -198,17 +210,23 @@ class VellumOutbox {
   String get _context => 'outbox';
 
   int get length => _entries.length;
-  List<VellumOutboxEntry> get pending => List<VellumOutboxEntry>.unmodifiable(_entries);
+  List<VellumOutboxEntry> get pending =>
+      List<VellumOutboxEntry>.unmodifiable(_entries);
 
-  static final RegExp _badEncoded = RegExp(r'%(2e|2f|5c)', caseSensitive: false);
+  static final RegExp _badEncoded =
+      RegExp(r'%(2e|2f|5c)', caseSensitive: false);
 
   static bool _allowed(String method, String path) {
     final m = method.toUpperCase();
     if (path == '/batchWrite') return m == 'POST';
     const prefix = '/documents/';
     if (!path.startsWith(prefix)) return false;
-    if (!(m == 'POST' || m == 'PUT' || m == 'PATCH' || m == 'DELETE')) return false;
-    if (path.contains('?') || path.contains('#') || path.contains('\\')) return false;
+    if (!(m == 'POST' || m == 'PUT' || m == 'PATCH' || m == 'DELETE')) {
+      return false;
+    }
+    if (path.contains('?') || path.contains('#') || path.contains('\\')) {
+      return false;
+    }
     if (_badEncoded.hasMatch(path)) return false;
     final segments = path.substring(prefix.length).split('/');
     if (segments.isEmpty) return false;
@@ -277,16 +295,19 @@ class VellumOutbox {
           'a': e.attempts,
         },
     ]);
-    await _blobs.write(_blobKey, await _box.seal(json, scope: _scope, context: _context));
+    await _blobs.write(
+        _blobKey, await _box.seal(json, scope: _scope, context: _context));
   }
 
-  int _bodySize(JsonMap? body) => body == null ? 0 : utf8.encode(jsonEncode(body)).length;
+  int _bodySize(JsonMap? body) =>
+      body == null ? 0 : utf8.encode(jsonEncode(body)).length;
 
   String _id() => base64Url
       .encode(List<int>.generate(12, (_) => _random.nextInt(256)))
       .replaceAll('=', '');
 
-  void _notify(VellumOutboxEntry entry, VellumOutboxDropReason reason, Object? error) {
+  void _notify(
+      VellumOutboxEntry entry, VellumOutboxDropReason reason, Object? error) {
     try {
       onDropped?.call(entry, reason, error);
     } catch (_) {
@@ -367,11 +388,12 @@ class VellumOutbox {
     bool merge = false,
     int? ifVersion,
   }) =>
-      enqueue('PUT', '/documents/${encodeVellumPath(ref.path)}', body: <String, Object?>{
-        'data': replaceVellumDocumentReferences(ref.toJson(value)),
-        'merge': merge,
-        if (ifVersion != null) 'ifVersion': ifVersion,
-      });
+      enqueue('PUT', '/documents/${encodeVellumPath(ref.path)}',
+          body: <String, Object?>{
+            'data': replaceVellumDocumentReferences(ref.toJson(value)),
+            'merge': merge,
+            if (ifVersion != null) 'ifVersion': ifVersion,
+          });
 
   /// Queues `update` for [ref], optionally guarded by [ifVersion].
   Future<VellumOutboxEntry> enqueueUpdate(
@@ -379,10 +401,12 @@ class VellumOutbox {
     JsonMap patch, {
     int? ifVersion,
   }) =>
-      enqueue('PATCH', '/documents/${encodeVellumPath(ref.path)}', body: <String, Object?>{
-        'data': replaceVellumDocumentReferences(expandVellumUpdatePaths(patch)),
-        if (ifVersion != null) 'ifVersion': ifVersion,
-      });
+      enqueue('PATCH', '/documents/${encodeVellumPath(ref.path)}',
+          body: <String, Object?>{
+            'data':
+                replaceVellumDocumentReferences(expandVellumUpdatePaths(patch)),
+            if (ifVersion != null) 'ifVersion': ifVersion,
+          });
 
   /// Queues a delete. With [ifVersion] it goes through `/batchWrite`, since the
   /// delete route carries the version in a query string, which is not queueable.
@@ -396,14 +420,19 @@ class VellumOutbox {
     }
     return enqueue('POST', '/batchWrite', body: <String, Object?>{
       'writes': <Object?>[
-        <String, Object?>{'type': 'delete', 'path': path, 'ifVersion': ifVersion},
+        <String, Object?>{
+          'type': 'delete',
+          'path': path,
+          'ifVersion': ifVersion
+        },
       ],
     });
   }
 
   /// Replays queued writes in order. Concurrent calls share one run. A
   /// [clear] (sign-out) stops a running replay.
-  Future<void> flush() => _flushing ??= _locked(_flush).whenComplete(() => _flushing = null);
+  Future<void> flush() =>
+      _flushing ??= _locked(_flush).whenComplete(() => _flushing = null);
 
   static VellumOutboxDropReason? _dropReason(VellumException err) {
     switch (err.statusCode) {
@@ -411,7 +440,9 @@ class VellumOutbox {
       case 404:
         return VellumOutboxDropReason.rejected;
       case 403:
-        return err.code == 'PERMISSION_DENIED' ? VellumOutboxDropReason.rejected : null;
+        return err.code == 'PERMISSION_DENIED'
+            ? VellumOutboxDropReason.rejected
+            : null;
       case 409:
       case 412:
         return VellumOutboxDropReason.conflict;
@@ -477,7 +508,9 @@ class VellumOutbox {
       // Keep it and stop. Only a server answer of 5xx counts as an attempt:
       // being offline, a signed-out session (401, 403 UNAUTHENTICATED), 408 and
       // 429 say nothing about the entry itself and must never make it expire.
-      if (failure is VellumException && failure.statusCode >= 500) entry.attempts++;
+      if (failure is VellumException && failure.statusCode >= 500) {
+        entry.attempts++;
+      }
       if (entry.attempts >= maxAttempts) {
         _entries.removeAt(0);
         _notify(entry, VellumOutboxDropReason.failed, failure);

@@ -28,7 +28,8 @@ class VellumInclude {
         if (as != null) 'as': as!,
         if (select != null) 'select': select!,
         if (include != null && include!.isNotEmpty)
-          'include': include!.map((VellumInclude item) => item.toJson()).toList(),
+          'include':
+              include!.map((VellumInclude item) => item.toJson()).toList(),
       };
 }
 
@@ -39,7 +40,9 @@ class AggregateMetric {
 
   const AggregateMetric({required this.op, this.field});
 
-  const AggregateMetric.count() : op = 'count', field = null;
+  const AggregateMetric.count()
+      : op = 'count',
+        field = null;
   const AggregateMetric.sum(String this.field) : op = 'sum';
   const AggregateMetric.avg(String this.field) : op = 'avg';
   const AggregateMetric.min(String this.field) : op = 'min';
@@ -190,7 +193,8 @@ class VellumIndexSuggestion {
 }
 
 /// Hook invoked once per newly-seen index suggestion (see `setOnIndexSuggestion`).
-typedef IndexSuggestionCallback = void Function(VellumIndexSuggestion suggestion);
+typedef IndexSuggestionCallback = void Function(
+    VellumIndexSuggestion suggestion);
 
 /// Process-wide fingerprint ledger — a suggestion is only announced once.
 final Set<String> _seenIndexFingerprints = <String>{};
@@ -231,7 +235,8 @@ DocumentSnapshot<T>? snapshotFromWire<T>(Object? raw, FromVellum<T> fromJson) {
   final rawVersion = map['version'];
   final version = rawVersion is num ? rawVersion.toInt() : 0;
   final rawData = map['data'];
-  final data = rawData is Map ? rawData.cast<String, Object?>() : <String, Object?>{};
+  final data =
+      rawData is Map ? rawData.cast<String, Object?>() : <String, Object?>{};
   final rawIncluded = map['_included'];
   final included = rawIncluded is Map
       ? Map<String, Object?>.unmodifiable(rawIncluded.cast<String, Object?>())
@@ -301,7 +306,8 @@ class VellumCollectionInfo {
     return VellumCollectionInfo(
       id: json['id'] is String ? json['id'] as String : '',
       name: json['name'] is String ? json['name'] as String : '',
-      description: json['description'] is String ? json['description'] as String : null,
+      description:
+          json['description'] is String ? json['description'] as String : null,
       defaultTtlSeconds: _collectionNullableInt(json['defaultTtlSeconds']),
       schemaValidation: json['schemaValidation'] is Map
           ? Map<String, Object?>.unmodifiable(
@@ -348,18 +354,21 @@ class ListCollectionsResult {
     if (raw is List) {
       for (final Object? item in raw) {
         if (item is Map) {
-          collections.add(VellumCollectionInfo.fromJson(item.cast<String, Object?>()));
+          collections
+              .add(VellumCollectionInfo.fromJson(item.cast<String, Object?>()));
         }
       }
     }
     return ListCollectionsResult(
       collections: List<VellumCollectionInfo>.unmodifiable(collections),
-      nextCursor: json['nextCursor'] is String ? json['nextCursor'] as String : null,
+      nextCursor:
+          json['nextCursor'] is String ? json['nextCursor'] as String : null,
     );
   }
 
   JsonMap toJson() => <String, Object?>{
-        'collections': collections.map((VellumCollectionInfo c) => c.toJson()).toList(),
+        'collections':
+            collections.map((VellumCollectionInfo c) => c.toJson()).toList(),
         'nextCursor': nextCursor,
       };
 }
@@ -432,7 +441,8 @@ class ImportResult {
     if (raw is List) {
       for (final Object? item in raw) {
         if (item is Map) {
-          errors.add(Map<String, Object?>.unmodifiable(item.cast<String, Object?>()));
+          errors.add(
+              Map<String, Object?>.unmodifiable(item.cast<String, Object?>()));
         }
       }
     }
@@ -466,13 +476,15 @@ class ExportResult {
     if (raw is List) {
       for (final Object? item in raw) {
         if (item is Map) {
-          documents.add(Map<String, Object?>.unmodifiable(item.cast<String, Object?>()));
+          documents.add(
+              Map<String, Object?>.unmodifiable(item.cast<String, Object?>()));
         }
       }
     }
     return ExportResult(
       documents: List<JsonMap>.unmodifiable(documents),
-      nextCursor: json['nextCursor'] is String ? json['nextCursor'] as String : null,
+      nextCursor:
+          json['nextCursor'] is String ? json['nextCursor'] as String : null,
     );
   }
 
