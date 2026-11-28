@@ -18,7 +18,7 @@ test.describe("Legal pages and alpha notice", () => {
   test("terms and privacy pages are public and carry the full disclaimer", async ({ page }, testInfo) => {
     await page.goto("http://127.0.0.1:3000/terms");
     await expect(page.getByTestId("legal-terms")).toBeVisible();
-    await expect(page.getByText("No uptime or stability guarantee")).toBeVisible();
+    await expect(page.getByText("No uptime or continuity guarantee")).toBeVisible();
     await expect(page.getByText("AS AVAILABLE").first()).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("terms-desktop.png"), fullPage: true });
     await page.goto("http://127.0.0.1:3000/privacy");
