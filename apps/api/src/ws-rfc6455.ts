@@ -9,7 +9,7 @@
  *  - 64 KiB hard cap on frames/payloads, enforced BEFORE any buffer allocation.
  *  - RFC 6455 §5.5 control frame max 125-byte cap & safe JSON prototype-pollution guard.
  *  - 5 s auth timeout, 30 s ping/pong heartbeat + idle timeout cleanup.
- *  - 60 messages/minute/socket rolling window with 1008 policy-close.
+ *  - 600 non-keepalive messages/minute/socket rolling window with 1008 policy-close.
  *  - Real socket backpressure via `socket.bufferedAmount` / `socket.writableLength`.
  *  - Graceful 1001 Going Away close frames on shutdown.
  */
@@ -29,7 +29,7 @@ export const MAX_WS_FRAME_BYTES = 65_536;
 /** RFC 6455 §5.5: control frames MUST have payload length <= 125 bytes. */
 const MAX_WS_CONTROL_FRAME_BYTES = 125;
 /** Rolling-window ceiling on client messages per socket (contract §5). */
-export const MAX_WS_MESSAGES_PER_MINUTE = 60;
+export const MAX_WS_MESSAGES_PER_MINUTE = 600;
 const MESSAGE_WINDOW_MS = 60_000;
 export const DEFAULT_AUTH_TIMEOUT_MS = 5_000;
 export const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
@@ -370,7 +370,10 @@ export function attachRealtimeWebSocketServer(
           const allowedForProject =
             projectForOrigin !== null && (await options.isProjectOriginAllowed!(projectForOrigin, pendingOrigin).catch(() => false));
           if (!allowedForProject) {
-            sendError("PERMISSION_DENIED", "Origin is not allowed for this project");
+            sendError(
+              "PERMISSION_DENIED",
+              `Origin ${pendingOrigin} is not allowed for this project. Add it to the API key allowed origins in the Console, or use a dev-flagged key for localhost (any port).`
+            );
             closeWith(1008, "Origin not allowed");
             return;
           }
@@ -404,8 +407,10 @@ export function attachRealtimeWebSocketServer(
       lastActivityAt = Date.now();
       awaitingPong = false;
 
-      // Enforce the cap BEFORE Buffer.concat or any payload allocation.
-      if (chunk.length > maxFrameBytes || buffer.length + chunk.length > maxFrameBytes) {
+      // Enforce the cap BEFORE Buffer.concat or any payload allocation. The per-frame cap is enforced from each
+      // frame's declared length by the decoder; this bound only limits unparsed bytes held per socket. It has to
+      // allow several small frames that TCP delivered in one chunk (a chat burst), so it is not the frame cap.
+      if (buffer.length + chunk.length > maxFrameBytes + 2 * MAX_WS_FRAME_BYTES) {
         rejectOversizedFrame();
         return;
       }
@@ -451,27 +456,6 @@ export function attachRealtimeWebSocketServer(
         }
         if (decoded.opcode !== 0x1) continue;
 
-        // Enforce the per-socket message-rate ceiling before parsing/handling
-        // the frame so a flood cannot reach the realtime hub.
-        const now = Date.now();
-        while (
-          messageTimestamps.length > 0 &&
-          (messageTimestamps[0] ?? 0) <= now - MESSAGE_WINDOW_MS
-        ) {
-          messageTimestamps.shift();
-        }
-        messageTimestamps.push(now);
-        if (messageTimestamps.length > MAX_WS_MESSAGES_PER_MINUTE) {
-          sendError(
-            "WS_POLICY_VIOLATION",
-            `WebSocket message rate exceeds ${MAX_WS_MESSAGES_PER_MINUTE} messages per minute`
-          );
-          closeWith(1008, "WS_POLICY_VIOLATION");
-          options.onPolicyViolation?.(clientIp, "WS_MESSAGE_RATE_EXCEEDED");
-          socket.destroy();
-          return;
-        }
-
         let clientFrame: unknown;
         try {
           let forbiddenKey: string | null = null;
@@ -493,6 +477,28 @@ export function attachRealtimeWebSocketServer(
         } catch {
           sendError("INVALID_ARGUMENT", "Invalid frame payload");
           continue;
+        }
+        // Per-socket message-rate ceiling, enforced before the frame reaches the hub. Keepalive
+        // frames (`ping` / `pong`) are exempt, so heartbeats never eat into the budget a chat burst needs.
+        if (!isKeepaliveFrame(clientFrame)) {
+          const now = Date.now();
+          while (
+            messageTimestamps.length > 0 &&
+            (messageTimestamps[0] ?? 0) <= now - MESSAGE_WINDOW_MS
+          ) {
+            messageTimestamps.shift();
+          }
+          messageTimestamps.push(now);
+          if (messageTimestamps.length > MAX_WS_MESSAGES_PER_MINUTE) {
+            sendError(
+              "WS_POLICY_VIOLATION",
+              `WS_POLICY_VIOLATION (reason: MESSAGE_RATE): ${messageTimestamps.length} client messages in 60s exceeds the limit of ${MAX_WS_MESSAGES_PER_MINUTE} per minute per socket. Batch work over fewer frames or reuse the socket.`
+            );
+            closeWith(1008, "WS_POLICY_VIOLATION: MESSAGE_RATE");
+            options.onPolicyViolation?.(clientIp, "WS_MESSAGE_RATE_EXCEEDED");
+            socket.destroy();
+            return;
+          }
         }
         // Deliberately not awaited: every rejection is handled inside handleFrame.
         void handleFrame(clientFrame);
@@ -525,6 +531,12 @@ export function attachRealtimeWebSocketServer(
       };
     },
   };
+}
+
+function isKeepaliveFrame(frame: unknown): boolean {
+  if (typeof frame !== "object" || frame === null) return false;
+  const type = (frame as { type?: unknown }).type;
+  return type === "ping" || type === "pong";
 }
 
 function isAuthFrame(frame: unknown): boolean {

@@ -111,6 +111,8 @@ export interface ClientConfig {
     pongTimeoutMs?: number;
     connectTimeoutMs?: number;
     maxOutboundQueueSize?: number;
+    /** Maximum pooled sockets (25 subscriptions each). Default 40. Set 1 to disable pooling. */
+    maxSockets?: number;
   } | null;
   /**
    * Print a clickable one-line index suggestion when the server reports a

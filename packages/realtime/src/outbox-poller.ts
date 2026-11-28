@@ -93,6 +93,9 @@ export interface OutboxPollerOptions {
 }
 
 /** How often a failed LISTEN subscription is retried. */
+/** Delay before re-draining a tenant whose notified seq is still above the safe watermark. */
+const GAP_REDRAIN_MS = 100;
+
 const LISTEN_RETRY_MS = 15_000;
 
 /** A drain running longer than this is treated as stuck (for example on a connection that died) and replaced. */
@@ -110,6 +113,9 @@ interface TenantState extends TenantContext {
   currentTask: Promise<void> | null;
   /** Set when a NOTIFY arrives while drain() is already in flight so we re-drain immediately. */
   pendingRescan: boolean;
+  /** Highest seq a NOTIFY announced; a drain that ends below it re-drains soon (commit-gap follow-up). */
+  highestNotified: bigint;
+  gapTimer: NodeJS.Timeout | null;
   attempts: number;
   retryTimer: NodeJS.Timeout | null;
 }
@@ -241,6 +247,10 @@ export class OutboxPoller implements OutboxPollerPort {
     }
     for (const tenant of this.tenants.values()) {
       tenant.pendingRescan = false;
+      if (tenant.gapTimer) {
+        clearTimeout(tenant.gapTimer);
+        tenant.gapTimer = null;
+      }
       if (tenant.retryTimer) {
         clearTimeout(tenant.retryTimer);
         tenant.retryTimer = null;
@@ -292,6 +302,7 @@ export class OutboxPoller implements OutboxPollerPort {
     if (!this.hasLiveSession(note.projectId)) return;
     const observed = BigInt(note.seqId);
     const entry = this.registerTenant(note);
+    if (observed > entry.highestNotified) entry.highestNotified = observed;
     if (entry.initialized && observed > entry.watermark + 1n) {
       // Explicit gap detection: the wake-up skipped at least one sequence.
       // Never fast-forward watermark here — drain() will fetch every row > watermark
@@ -420,6 +431,8 @@ export class OutboxPoller implements OutboxPollerPort {
         drainGen: 0,
         currentTask: null,
         pendingRescan: false,
+        highestNotified: 0n,
+        gapTimer: null,
         attempts: 0,
         retryTimer: null,
       };
@@ -546,6 +559,10 @@ export class OutboxPoller implements OutboxPollerPort {
         entry.watermark = pageMax;
         if (rows.length < this.batchSize) break;
       }
+      // Commit-gap follow-up: a NOTIFY announced a seq above the safe watermark (a lower-seq
+      // transaction was still in flight). Nothing else would wake this tenant until the next
+      // poll, so re-drain on a short bounded delay until the watermark covers it.
+      if (entry.drainGen === gen && entry.highestNotified > entry.watermark) this.scheduleGapRedrain(entry);
     })();
 
     this.inFlightTasks.add(task);
@@ -569,6 +586,15 @@ export class OutboxPoller implements OutboxPollerPort {
           this.drain(entry);
         }
       });
+  }
+
+  private scheduleGapRedrain(entry: TenantState): void {
+    if (!this.started || this.closed || entry.gapTimer) return;
+    entry.gapTimer = setTimeout(() => {
+      entry.gapTimer = null;
+      this.drain(entry);
+    }, GAP_REDRAIN_MS);
+    entry.gapTimer.unref();
   }
 
   private scheduleRetry(entry: TenantState): void {

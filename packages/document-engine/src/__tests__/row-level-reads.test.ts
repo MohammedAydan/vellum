@@ -112,9 +112,10 @@ describe("row-level reads: list allow does not expose rows whose get denies", ()
   it("P1-2: the fallback refuses collections past the row-filter cap, and 0 disables it", async () => {
     process.env["VELLUM_AGGREGATE_ROW_FILTER_MAX"] = "2";
     try {
+      // Recipe 6 (P1-1.2): a row-limit error, not PERMISSION_DENIED.
       await expect(
         engine.aggregateDocuments({ ...asA, request: { collectionPath: "conversations", metrics: { count: { op: "count" } } } })
-      ).rejects.toThrow(VellumError);
+      ).rejects.toMatchObject({ code: "FAILED_PRECONDITION", details: { reason: "SCOPED_AGGREGATE_ROW_LIMIT" } });
     } finally {
       delete process.env["VELLUM_AGGREGATE_ROW_FILTER_MAX"];
     }

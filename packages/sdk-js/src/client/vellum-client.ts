@@ -20,7 +20,8 @@ import { computeReconnectBackoffMs, createAbortError, sleepWithSignal } from "..
 import { normalizeEndpoint, validateProjectConfig } from "../core/config.js";
 import { HttpTransport } from "../core/http-transport.js";
 import { encodePathSegment, encodeResourcePath, sanitizeAndClone } from "../core/safe-json.js";
-import { RealtimeTransport, toRealtimeUrl } from "../realtime/realtime-transport.js";
+import { toRealtimeUrl } from "../realtime/realtime-transport.js";
+import { PooledRealtimeTransport, type RealtimeTransportPort } from "../realtime/pooled-transport.js";
 import { SseSocket } from "../realtime/sse-socket.js";
 import { createFallbackSocketFactory } from "../realtime/fallback-socket.js";
 import { defaultWebSocketFactory } from "../realtime/realtime-transport.js";
@@ -110,7 +111,7 @@ interface RealtimeInternalState {
   readonly hubConnections: Set<HubConnection>;
   readonly connectionStateListeners: Set<ConnectionStateListener>;
   currentConnectionState: ConnectionState;
-  realtimeTransport: RealtimeTransport | null;
+  realtimeTransport: RealtimeTransportPort | null;
   subscriptionSeq: number;
   /** True between the first transport fault and the next connected state: at most one error per sub per outage. */
   outageErrorDelivered: boolean;
@@ -695,10 +696,10 @@ export class VellumClient implements VellumClientInterface {
     });
   }
 
-  private ensureTransport(): RealtimeTransport {
+  private ensureTransport(): RealtimeTransportPort {
     if (this.realtimeState.realtimeTransport) return this.realtimeState.realtimeTransport;
     const opts = this.realtimeTransportOptions;
-    this.realtimeState.realtimeTransport = new RealtimeTransport({
+    this.realtimeState.realtimeTransport = new PooledRealtimeTransport({
       url: this.realtimeUrl ?? toRealtimeUrl(this.endpoint),
       auth: async () => {
         const token = await this.auth.getValidAccessToken(false);
@@ -729,6 +730,7 @@ export class VellumClient implements VellumClientInterface {
       ...(opts?.pongTimeoutMs !== undefined ? { pongTimeoutMs: opts.pongTimeoutMs } : {}),
       ...(opts?.connectTimeoutMs !== undefined ? { connectTimeoutMs: opts.connectTimeoutMs } : {}),
       ...(opts?.maxOutboundQueueSize !== undefined ? { maxOutboundQueueSize: opts.maxOutboundQueueSize } : {}),
+      ...(opts?.maxSockets !== undefined ? { maxSockets: opts.maxSockets } : {}),
     });
     return this.realtimeState.realtimeTransport;
   }

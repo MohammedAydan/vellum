@@ -17,6 +17,7 @@ import {
 } from "../routes/health.js";
 import { defaultReadinessProbe } from "../composition/root.js";
 import { errorHandler } from "../middleware/error-handler.js";
+import { requestId } from "../middleware/request-id.js";
 
 /**
  * Health hardening (0.0.9): the unauthenticated readiness endpoint is a strict
@@ -179,5 +180,29 @@ describe("database-connectivity error mapping", () => {
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("INTERNAL");
+  });
+});
+
+// Recipe 5 (P0-4): a data_db outage on any data/realtime route is a JSON 503 with Retry-After and X-Request-Id.
+describe("data_db outage on data and realtime routes", () => {
+  it.each([
+    ["PUT", "/v1/projects/p/documents/presence/u1"],
+    ["POST", "/v1/projects/p/batchWrite"],
+    ["POST", "/v1/realtime/stream"],
+  ])("%s %s returns structured 503, never a text/plain 500/502", async (method, route) => {
+    const app = new Hono();
+    app.use("*", requestId());
+    app.onError(errorHandler);
+    app.all("*", () => {
+      throw Object.assign(new Error("Your account or project has exceeded the quota"), { code: "53000" });
+    });
+    const res = await app.fetch(new Request(`http://localhost${route}`, { method }));
+    expect(res.status).toBe(503);
+    expect(res.headers.get("content-type")).toContain("application/json");
+    expect(res.headers.get("retry-after")).toBe("5");
+    expect(res.headers.get("x-request-id")).toMatch(/^req_/);
+    const raw = await res.text();
+    expect(raw).not.toContain("53000");
+    expect(JSON.parse(raw).error.code).toBe("SERVICE_UNAVAILABLE");
   });
 });

@@ -148,6 +148,10 @@
   ],
   "rewrites": [
     {
+      "source": "/llms-full.txt",
+      "destination": "/docs/llms-full.txt"
+    },
+    {
       "source": "/admin/:path((?!assets/).*)",
       "destination": "/admin"
     },

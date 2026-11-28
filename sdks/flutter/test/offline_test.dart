@@ -307,8 +307,12 @@ void main() {
       bool allowWeb = false,
       OfflineBlobStore? blobs,
       void Function(VellumOutboxEntry, VellumOutboxDropReason, Object?)? onDropped,
+      Stream<VellumConnectionState>? connectionStates,
+      bool autoFlushOnReconnect = false,
     }) =>
         VellumOutbox(
+          autoFlushOnReconnect: autoFlushOnReconnect,
+          connectionStates: connectionStates,
           client: on ?? client,
           box: VellumEncryptedBox(keyStore: mem),
           blobs: blobs ?? mem,
@@ -351,6 +355,41 @@ void main() {
       }
       expect(again.length, 0);
       expect(hasBlob(), isFalse);
+    });
+
+    // Recipe 7 (P1-2): no manual flush() after the connection comes back.
+    test('auto-flushes in order with idempotency keys when the connection returns, even if connected fires twice', () async {
+      final states = StreamController<VellumConnectionState>.broadcast(sync: true);
+      final ob = makeOutbox(connectionStates: states.stream, autoFlushOnReconnect: true);
+      VellumConnectionState st(VellumRealtimeConnectionState s) => VellumConnectionState(state: s);
+      states.add(st(VellumRealtimeConnectionState.disconnected));
+      for (final id in <String>['OFF-1', 'OFF-2', 'OFF-3']) {
+        await ob.enqueue('PUT', '/documents/notes/$id', body: <String, Object?>{'data': <String, Object?>{'id': id}});
+      }
+      expect(ob.length, 3);
+      expect(sent, isEmpty);
+      states.add(st(VellumRealtimeConnectionState.connected));
+      states.add(st(VellumRealtimeConnectionState.connected));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(sent.map((s) => s['url'].toString().split('/').last), <String>['OFF-1', 'OFF-2', 'OFF-3']);
+      for (final s in sent) {
+        final h = (s['headers'] as Map).cast<String, String>();
+        expect(h.entries.any((e) => e.key.toLowerCase() == 'idempotency-key' && e.value.startsWith('ob_')), isTrue);
+      }
+      expect(ob.length, 0);
+      await ob.dispose();
+      await states.close();
+    });
+
+    test('autoFlushOnReconnect: false leaves the queue for a manual flush', () async {
+      final states = StreamController<VellumConnectionState>.broadcast(sync: true);
+      final ob = makeOutbox(connectionStates: states.stream, autoFlushOnReconnect: false);
+      await ob.enqueue('DELETE', '/documents/a/b');
+      states.add(const VellumConnectionState(state: VellumRealtimeConnectionState.connected));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(sent, isEmpty);
+      expect(ob.length, 1);
+      await states.close();
     });
 
     test('never replays into a different project', () async {

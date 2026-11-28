@@ -849,6 +849,7 @@ export function compileQueryToParameterizedSql({
   cursor = null,
   cursorMode = null,
   scanCap,
+  skipProjection = false,
 }: {
   projectId: string;
   normalizedQuery: NormalizedQuery;
@@ -861,6 +862,11 @@ export function compileQueryToParameterizedSql({
    * public-query default of `UNINDEXED_SCAN_CAP`.
    */
   scanCap?: number | null | undefined;
+  /**
+   * Fetch whole documents even when the query has a `select`. Security rules (`allow get`) read
+   * fields the caller did not select, so projection has to happen after rule evaluation.
+   */
+  skipProjection?: boolean | undefined;
 }): CompiledQuery {
   if (typeof projectId !== "string" || projectId.length === 0) {
     throw new VellumError("INVALID_ARGUMENT", "projectId must be a non-empty string");
@@ -888,7 +894,7 @@ export function compileQueryToParameterizedSql({
     predicates.push(`(d.document_id ILIKE ${pattern} ESCAPE '\\' OR d.data::text ILIKE ${pattern} ESCAPE '\\')`);
   }
 
-  const projectionFields = normalizedQuery.select && normalizedQuery.select.length > 0
+  const projectionFields = !skipProjection && normalizedQuery.select && normalizedQuery.select.length > 0
     ? [...normalizedQuery.select]
     : null;
 
