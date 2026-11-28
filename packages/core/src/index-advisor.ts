@@ -14,6 +14,8 @@
 
 import crypto from "node:crypto";
 
+import { canonicalizeCollectionPathToTemplate, indexCollectionPathCovers } from "./index-templates.js";
+
 /** Canonical index field direction (kept local so this module stays self-contained). */
 export type IndexAdvisorDirection = "asc" | "desc";
 
@@ -29,7 +31,10 @@ export interface IndexAdvisorIndex {
 export interface IndexSuggestionPayload {
   orgId: string;
   projectId: string;
+  /** The wildcard template path (`chats/{*}/messages` shape) when the query hit a nested collection, else the concrete path. */
   collectionPath: string;
+  /** The concrete instance path that triggered the suggestion, kept for display when it differs from the template. */
+  exampleCollectionPath?: string;
   fields: Array<{ path: string; dir: IndexAdvisorDirection }>;
   fingerprint: string;
   reason: string;
@@ -216,7 +221,7 @@ export function analyzeQueryIndexCoverage(
 
   if (!covered) {
     for (const index of existingIndexes) {
-      if (!index || index.collectionPath !== collectionPath) continue;
+      if (!index || !indexCollectionPathCovers(index.collectionPath, collectionPath)) continue;
       if (index.status !== undefined && index.status !== "ready") continue;
       const indexFields: IndexField[] = Array.isArray(index.fields)
         ? index.fields.map((field) => ({
@@ -248,15 +253,20 @@ export function analyzeQueryIndexCoverage(
   reason = humanReason(equalityFields, sortFields, rangeFields, sortDirs, Array.from(allFields));
   result.reason = reason;
 
+  // Nested subcollections are suggested as wildcard templates so one accepted
+  // suggestion covers every parent's instance, not just the one that triggered it.
+  const suggestionPath = canonicalizeCollectionPathToTemplate(collectionPath);
+
   const fingerprint = crypto
     .createHash("sha256")
-    .update(`${options.projectId}:${collectionPath}:${JSON.stringify(canonical)}`, "utf8")
+    .update(`${options.projectId}:${suggestionPath}:${JSON.stringify(canonical)}`, "utf8")
     .digest("hex");
 
   const payload: IndexSuggestionPayload = {
     orgId: options.orgId,
     projectId: options.projectId,
-    collectionPath,
+    collectionPath: suggestionPath,
+    ...(suggestionPath !== collectionPath ? { exampleCollectionPath: collectionPath } : {}),
     fields: canonical,
     fingerprint,
     reason,
@@ -330,10 +340,13 @@ export function decodeSuggestPayload(payload: string): IndexSuggestionPayload | 
     fields.push({ path: fieldObj["path"], dir: fieldObj["dir"] });
   }
 
+  const exampleCollectionPath = readString("exampleCollectionPath");
+
   const decoded: IndexSuggestionPayload = {
     orgId,
     projectId,
     collectionPath,
+    ...(exampleCollectionPath !== null ? { exampleCollectionPath } : {}),
     fields,
     fingerprint,
     reason: obj["reason"],

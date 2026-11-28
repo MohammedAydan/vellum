@@ -83,13 +83,29 @@ export function extractClientIp(
   c: Context,
   trustedProxyHops: number = getTrustedProxyHops()
 ): string {
-  const directAddr = normalizeIpCandidate(c.req.header("x-vellum-remote-addr"));
+  return extractClientIpFromHeaders((name) => c.req.header(name), c.req.header("x-vellum-remote-addr"), trustedProxyHops);
+}
+
+/**
+ * Header-accessor form of {@link extractClientIp} for contexts without a Hono
+ * `Context` (for example the raw WebSocket HTTP upgrade request): pass a
+ * lower-case header lookup and the socket-level peer address. Applies the same
+ * spoof-resistant rules: `TRUST_CLOUDFLARE_IP`, the Vercel-set
+ * `x-vercel-forwarded-for`, rightmost-untrusted-hop `x-forwarded-for`,
+ * `x-real-ip`, then the direct address.
+ */
+export function extractClientIpFromHeaders(
+  header: (name: string) => string | undefined,
+  rawDirectAddr: string | undefined | null,
+  trustedProxyHops: number = getTrustedProxyHops()
+): string {
+  const directAddr = normalizeIpCandidate(rawDirectAddr);
 
   if (trustedProxyHops > 0) {
     // Any client can send cf-connecting-ip. It is only trustworthy when every request really passes
     // through Cloudflare, so it is ignored unless TRUST_CLOUDFLARE_IP=true, and never on Vercel.
     if (process.env["TRUST_CLOUDFLARE_IP"] === "true" && !process.env["VERCEL"]) {
-      const cfIp = normalizeIpCandidate(c.req.header("cf-connecting-ip"));
+      const cfIp = normalizeIpCandidate(header("cf-connecting-ip"));
       if (cfIp) return cfIp;
     }
 
@@ -97,11 +113,11 @@ export function extractClientIp(
     // the real client address even when `x-forwarded-for` carries extra hops (for example a rewrite from
     // another deployment). Without it, every user behind such a hop would share one rate-limit bucket.
     if (process.env["VERCEL"] !== undefined && process.env["VERCEL"] !== "") {
-      const vercelIp = normalizeIpCandidate(c.req.header("x-vercel-forwarded-for")?.split(",")[0]);
+      const vercelIp = normalizeIpCandidate(header("x-vercel-forwarded-for")?.split(",")[0]);
       if (vercelIp) return vercelIp;
     }
 
-    const forwarded = c.req.header("x-forwarded-for");
+    const forwarded = header("x-forwarded-for");
     if (typeof forwarded === "string" && forwarded.length > 0) {
       const hops = forwarded
         .split(",")
@@ -114,7 +130,7 @@ export function extractClientIp(
       }
     }
 
-    const realIp = normalizeIpCandidate(c.req.header("x-real-ip"));
+    const realIp = normalizeIpCandidate(header("x-real-ip"));
     if (realIp) return realIp;
   }
 

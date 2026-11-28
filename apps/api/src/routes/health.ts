@@ -33,12 +33,13 @@ import { extractClientIp } from "../middleware/security.js";
 
 export const healthRoutes = new Hono();
 
-const SERVICE_VERSION = "0.0.8";
+const SERVICE_VERSION = "0.0.9";
 const PROCESS_STARTED_AT = Date.now();
 const PROBE_TIMEOUT_MS = 3_000;
-// Successful probes are cached long enough to keep PostgreSQL connection
-// churn near zero under load-balancer polling; failures are retried quickly.
-const PROBE_CACHE_TTL_OK_MS = 20_000;
+// Successful probes are cached just long enough to keep PostgreSQL connection
+// churn low under load-balancer polling while still noticing an outage within
+// seconds; failures are retried quickly.
+const PROBE_CACHE_TTL_OK_MS = 8_000;
 const PROBE_CACHE_TTL_FAIL_MS = 5_000;
 // An expired entry is still served (stale-while-revalidate) for this long
 // while a background refresh runs, so probe latency never sits on the
@@ -80,6 +81,7 @@ let activeReadinessProbe: ReadinessProbePort = defaultReadinessProbe;
 export function setReadinessProbe(probe: ReadinessProbePort): void {
   activeReadinessProbe = probe;
   cachedReadiness = null;
+  lastReportedDbOutageAt = 0;
 }
 
 /** Test hook: clear the readiness rate-limit windows. */
@@ -129,6 +131,7 @@ interface MigrationProbeResult {
 
 interface CachedReadiness {
   ready: boolean;
+  computedAt: number;
   checks: {
     controlDb: SqlProbeResult;
     dataDb: SqlProbeResult;
@@ -141,6 +144,22 @@ interface CachedReadiness {
 
 let cachedReadiness: CachedReadiness | null = null;
 let inFlightReadiness: Promise<CachedReadiness> | null = null;
+// Set when a real (non-probe) request fails with a database-connectivity
+// error. A cached OK computed before that moment must not be served stale.
+let lastReportedDbOutageAt = 0;
+
+/**
+ * Called by the central error handler when any request fails with a
+ * connect-class database error: expire a healthy cached readiness result
+ * immediately so the next readiness check re-probes instead of reporting
+ * ready through an outage.
+ */
+export function reportDatabaseConnectivityFailure(): void {
+  lastReportedDbOutageAt = Date.now();
+  if (cachedReadiness && cachedReadiness.ready && cachedReadiness.expiresAt > lastReportedDbOutageAt) {
+    cachedReadiness = { ...cachedReadiness, expiresAt: lastReportedDbOutageAt };
+  }
+}
 
 function databaseMode(): string {
   return (process.env["DATABASE_MODE"] ?? "memory").toLowerCase();
@@ -369,7 +388,10 @@ async function evaluatePostgresReadiness(): Promise<CachedReadiness> {
   }
   // Stale-while-revalidate: serve the last result and refresh in the
   // background so probe latency never sits on the readiness request path.
-  if (cachedReadiness && now - cachedReadiness.expiresAt < PROBE_STALE_GRACE_MS) {
+  // Exception: a real request has reported a database-connectivity failure
+  // newer than the cached result - probe synchronously instead of serving
+  // a stale OK through an outage.
+  if (cachedReadiness && now - cachedReadiness.expiresAt < PROBE_STALE_GRACE_MS && lastReportedDbOutageAt < cachedReadiness.computedAt) {
     if (!inFlightReadiness) {
       void refreshPostgresReadiness().catch(() => undefined);
     }
@@ -420,6 +442,7 @@ function refreshPostgresReadiness(): Promise<CachedReadiness> {
     const ready = Object.values(checks).every((check) => check.state === "ok");
     const entry: CachedReadiness = {
       ready,
+      computedAt: Date.now(),
       checks,
       expiresAt: Date.now() + (ready ? PROBE_CACHE_TTL_OK_MS : PROBE_CACHE_TTL_FAIL_MS),
     };

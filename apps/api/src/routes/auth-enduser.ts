@@ -1638,7 +1638,8 @@ export function createAuthEndUserRoutes(platform: VellumPlatformContext): Hono {
     const body = parseOrThrow(MfaVerifyRequestSchema, await c.req.json());
     const mfa = await storage.getAuthMfa(tenant.ctx, user.id);
     if (!mfa) throw new VellumError("FAILED_PRECONDITION", "TOTP enrollment has not been started");
-    if (mfa.verified) return c.json({ verified: true });
+    // Even when MFA is already enabled the code is validated (and burned, for
+    // TOTP) below: an early { verified: true } return here accepted ANY code.
     const secret = decryptSecret(mfa.secretEncrypted, masterKey());
     const recoveryIndex = /^[A-Z2-7]{10}$/.test(body.code)
       ? verifyRecoveryCode(body.code, mfa.recoveryCodesHashed)

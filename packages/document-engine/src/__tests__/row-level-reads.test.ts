@@ -62,12 +62,70 @@ describe("row-level reads: list allow does not expose rows whose get denies", ()
     expect(res.documents).toHaveLength(12);
   });
 
-  it("aggregate and count are refused when get depends on each document", async () => {
-    await expect(
-      engine.aggregateDocuments({ ...asC, request: { collectionPath: "conversations", metrics: { count: { op: "count" } } } })
-    ).rejects.toThrow(VellumError);
+  it("P1-2: member-scoped get rules aggregate over visible rows instead of a blanket 403", async () => {
+    // Outsider: no visible rows, count is 0 (not an error).
+    const outsider = await engine.aggregateDocuments({
+      ...asC,
+      request: { collectionPath: "conversations", metrics: { count: { op: "count" } } },
+    });
+    expect(outsider.rows[0]).toMatchObject({ count: 0 });
+
+    // Participant: count and sum cover exactly the rows a query would return.
+    const a = await engine.aggregateDocuments({
+      ...asA,
+      request: {
+        collectionPath: "conversations",
+        metrics: { count: { op: "count" }, total: { op: "sum", field: "n" }, biggest: { op: "max", field: "n" } },
+      },
+    });
+    expect(a.rows[0]).toMatchObject({ count: 4, total: 18, biggest: 9 });
+
+    // Filters apply before visibility, exactly like a query.
+    const filtered = await engine.aggregateDocuments({
+      ...asA,
+      request: {
+        collectionPath: "conversations",
+        where: [{ field: "n", op: ">=", value: 6 }],
+        metrics: { count: { op: "count" } },
+      },
+    });
+    expect(filtered.rows[0]).toMatchObject({ count: 2 });
+
+    // A server key still uses the native SQL path and sees every row.
     const server = await engine.aggregateDocuments({ ...TENANT, apiKeyRecord: SERVER, request: { collectionPath: "conversations", metrics: { count: { op: "count" } } } });
     expect(server.rows[0]).toMatchObject({ count: 12 });
+  });
+
+  it("P1-2: group-by fallback groups only visible rows", async () => {
+    const res = await engine.aggregateDocuments({
+      ...asA,
+      request: {
+        collectionPath: "conversations",
+        groupBy: ["participantIds"],
+        metrics: { count: { op: "count" } },
+      },
+    });
+    expect(res.rows).toHaveLength(1);
+    expect(res.rows[0]).toMatchObject({ count: 4 });
+  });
+
+  it("P1-2: the fallback refuses collections past the row-filter cap, and 0 disables it", async () => {
+    process.env["VELLUM_AGGREGATE_ROW_FILTER_MAX"] = "2";
+    try {
+      await expect(
+        engine.aggregateDocuments({ ...asA, request: { collectionPath: "conversations", metrics: { count: { op: "count" } } } })
+      ).rejects.toThrow(VellumError);
+    } finally {
+      delete process.env["VELLUM_AGGREGATE_ROW_FILTER_MAX"];
+    }
+    process.env["VELLUM_AGGREGATE_ROW_FILTER_MAX"] = "0";
+    try {
+      await expect(
+        engine.aggregateDocuments({ ...asA, request: { collectionPath: "conversations", metrics: { count: { op: "count" } } } })
+      ).rejects.toThrow(VellumError);
+    } finally {
+      delete process.env["VELLUM_AGGREGATE_ROW_FILTER_MAX"];
+    }
   });
 
   it("aggregate is allowed when get does not depend on the document", async () => {

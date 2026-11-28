@@ -123,7 +123,7 @@ describe("@vellum/storage - batched prepared statements", () => {
     const legacy = new RecordingClient();
     await legacy.query(SQL_INSERT_DOCUMENTS_UNNEST, [TENANT.projectId]);
     await legacy.query(SQL_DELETE_INDEX_ENTRIES, [TENANT.projectId, []]);
-    await legacy.query(SQL_GET_INDEXES, [TENANT.projectId, "users"]);
+    await legacy.query(SQL_GET_INDEXES, [TENANT.projectId]);
     for (const doc of docs) {
       await legacy.query(
         `INSERT INTO document_index_entries (index_id, path) VALUES ($1::uuid, $2)`,
@@ -134,7 +134,7 @@ describe("@vellum/storage - batched prepared statements", () => {
 
     // Current implementation: one UNNEST insert for all derived entries.
     const current = new RecordingClient();
-    current.rowsFor = (text) => (text === SQL_GET_INDEXES ? [{ id: "idx", fields: FIELDS }] : []);
+    current.rowsFor = (text) => (text === SQL_GET_INDEXES ? [{ id: "idx", fields: FIELDS, collectionPath: "users" }] : []);
     const currentTx = createSqlTransactionHandle(asPgClient(current), TENANT, { preparedStatements: true });
     await currentTx.putDocumentRows(docs);
     const currentCalls = current.calls.length;

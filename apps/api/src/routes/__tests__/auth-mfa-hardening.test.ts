@@ -29,6 +29,16 @@ async function fixture() {
 }
 
 describe("TOTP MFA hardening", () => {
+  it("validates the code on /mfa/verify even when MFA is already enabled", async () => {
+    const f = await fixture();
+    // Arbitrary wrong code: 401 (was a cosmetic 200 { verified: true }).
+    expect((await f.call("/mfa/verify", { code: "000000" }, f.accessToken)).status).toBe(401);
+    // A fresh valid code still verifies (and is burned: replaying it fails).
+    const code = f.freshCode();
+    expect((await f.call("/mfa/verify", { code }, f.accessToken)).status).toBe(200);
+    expect((await f.call("/mfa/verify", { code }, f.accessToken)).status).toBe(401);
+  });
+
   it("does not let a session re-enroll and thereby switch MFA off", async () => {
     const f = await fixture();
     const again = await f.call("/mfa/enroll", {}, f.accessToken);

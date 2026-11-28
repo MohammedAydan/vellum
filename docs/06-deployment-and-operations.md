@@ -92,11 +92,11 @@ When `NODE_ENV=production`, the server **refuses to start** if:
 | Endpoint | Touches PG? | Production Info Disclosure | Behavior |
 | :--- | :---: | :--- | :--- |
 | `GET /health` | No | Minimal (`status`, `uptimeMs`, `timestamp`) | Kubernetes/LB liveness probe. Always `200` while event loop is responsive. |
-| `GET /ready` | Yes (3 s cache) | Minimal (`status`, `ready`, `timestamp`) | Kubernetes/LB readiness probe. Returns `200` (`ready`), `503` (`unready`), or `503` (`draining`). |
+| `GET /ready` | Yes (8 s cache) | Minimal (`status`, `ready`, `timestamp`) | Kubernetes/LB readiness probe. Returns `200` (`ready`), `503` (`unready`), or `503` (`draining`). |
 | `GET /v1/health/live` | No | Process-only | Docker `HEALTHCHECK` target (`interval: 15s`, `timeout: 3s`, `retries: 3`). |
-| `GET /v1/health/ready` | Yes (3 s cache) | Masks PG version & PID in prod | Runs 5 real parallel probes: `controlDb` (`SELECT 1`), `dataDb` (`SELECT 1`), `controlMigrations` (table + missing + SHA-256 checksum drift), `dataMigrations`, and `realtimeListen` (`LISTEN`/`UNLISTEN`). |
+| `GET /v1/health/ready` | Yes (8 s cache) | Masks PG version & PID in prod | Runs 5 real parallel probes: `controlDb` (`SELECT 1`), `dataDb` (`SELECT 1`), `controlMigrations` (table + missing + SHA-256 checksum drift), `dataMigrations`, and `realtimeListen` (`LISTEN`/`UNLISTEN`). |
 
-All PostgreSQL readiness probes share a **single-flight in-flight promise** and a **3-second TTL cache** (`PROBE_CACHE_TTL_MS = 3_000`, `PROBE_TIMEOUT_MS = 3_000`) so rapid load-balancer checks or unauthenticated probe floods can never exhaust database connections.
+All PostgreSQL readiness probes share a **single-flight in-flight promise** and a short TTL cache (`PROBE_CACHE_TTL_OK_MS = 8_000`, `PROBE_CACHE_TTL_FAIL_MS = 5_000`, `PROBE_TIMEOUT_MS = 3_000`) so rapid load-balancer checks or unauthenticated probe floods can never exhaust database connections. An expired success entry may be served stale for up to 60 s while a background refresh runs - except that a connect-class database error seen by any real request expires the healthy cache immediately (`reportDatabaseConnectivityFailure`), so readiness flips within one probe round of an actual outage.
 
 ### 3.2 Graceful Draining Shutdown Sequence (`apps/api/src/node-server.ts`)
 

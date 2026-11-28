@@ -10,7 +10,8 @@
 
 import { listIndexesReconciled, refreshIndexRecord } from "../index-build.js";
 import { Hono, type Context } from "hono";
-import { VellumError, SYSTEM_LIMITS, normalizeIndexFieldSpec, parseCollectionPath } from "@vellum/core";
+import { VellumError, SYSTEM_LIMITS, normalizeIndexFieldSpec,
+  parseIndexCollectionPath } from "@vellum/core";
 import {
   CreateCollectionSchema,
   UpdateCollectionSchema,
@@ -695,7 +696,8 @@ function requireDocumentData(body: unknown): Record<string, unknown> {
     const projectId = c.req.param("projectId");
     const { project } = await engineContext(c, projectId, true);
     const body = await c.req.json();
-    parseCollectionPath(body.collectionPath as string);
+    // Index records may be concrete paths or wildcard templates (`*` only at document-id positions).
+    parseIndexCollectionPath(body.collectionPath as string);
     if (!Array.isArray(body.fields) || body.fields.length === 0) {
       throw new VellumError("INVALID_ARGUMENT", "Composite index requires a non-empty 'fields' array");
     }

@@ -589,3 +589,49 @@ describe("@vellum/query-engine", () => {
       expect(matchedIndex?.id).toBe("idx-exact");
     });
   });
+
+describe("Wildcard template index selection (P1-3)", () => {
+  const nestedQuery = {
+    collectionPath: "chats/chat_9/messages",
+    where: [{ field: "senderId", op: "==" as const, value: "u1" }],
+    orderBy: [{ field: "createdAt", dir: "desc" as const }],
+    or: [],
+    limit: 10,
+    select: null,
+    startAt: null,
+    startAfter: null,
+  };
+
+  const templateIdx = {
+    id: "idx-template",
+    collectionPath: "chats/*/messages",
+    fields: [
+      { path: "senderId", dir: "asc" as const },
+      { path: "createdAt", dir: "desc" as const },
+    ],
+    status: "ready" as const,
+  };
+
+  it("selects a ready template index for a matching concrete query path", () => {
+    const { matchedIndex } = selectCompositeIndexForQuery(nestedQuery, [templateIdx]);
+    expect(matchedIndex?.id).toBe("idx-template");
+  });
+
+  it("ignores templates whose literal segments or depth differ", () => {
+    expect(
+      selectCompositeIndexForQuery(nestedQuery, [{ ...templateIdx, id: "x", collectionPath: "rooms/*/messages" }]).matchedIndex
+    ).toBeNull();
+    expect(
+      selectCompositeIndexForQuery(nestedQuery, [{ ...templateIdx, id: "y", collectionPath: "chats/*/files" }]).matchedIndex
+    ).toBeNull();
+    expect(
+      selectCompositeIndexForQuery(nestedQuery, [{ ...templateIdx, id: "z", collectionPath: "chats/*" }]).matchedIndex
+    ).toBeNull();
+  });
+
+  it("prefers a concrete index over a template at equal width", () => {
+    const concrete = { ...templateIdx, id: "idx-concrete", collectionPath: "chats/chat_9/messages" };
+    const { matchedIndex } = selectCompositeIndexForQuery(nestedQuery, [templateIdx, concrete]);
+    expect(matchedIndex?.id).toBe("idx-concrete");
+  });
+});

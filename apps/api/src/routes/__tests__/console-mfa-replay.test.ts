@@ -41,14 +41,17 @@ describe("console TOTP MFA replay protection (S9)", () => {
     expect((await f.post("/disable", { code: fresh })).status).toBe(200);
   });
 
-  it("the same fresh code cannot be used twice", async () => {
+  it("/verify validates and burns the code even when MFA is already enabled", async () => {
     const f = fixture();
     const setup = await (await f.post("/setup", {})).json() as { secret: string };
     const code = generateTotpCode(setup.secret);
     expect((await f.post("/verify", { code })).status).toBe(200);
-    // /verify is idempotent for an enabled record but must not consume or
-    // re-accept the spent code pathologically: a second enable attempt with a
-    // different account code shape still reports enabled.
-    expect((await f.post("/verify", { code })).status).toBe(200);
+    // The spent code is rejected on replay (was a cosmetic 200).
+    expect((await f.post("/verify", { code })).status).toBe(401);
+    // An arbitrary wrong code is rejected too.
+    expect((await f.post("/verify", { code: "000000" })).status).toBe(401);
+    // A fresh code from the next step still verifies.
+    const fresh = generateTotpCode(setup.secret, Date.now() + 30_000);
+    expect((await f.post("/verify", { code: fresh })).status).toBe(200);
   });
 });

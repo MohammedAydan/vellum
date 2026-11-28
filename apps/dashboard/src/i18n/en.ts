@@ -427,6 +427,7 @@ export const en: TranslationDictionary = {
   "rules.studio.syntaxErrorTitle": "Syntax error",
   "rules.studio.syntaxErrorToast": "DSL syntax error — fix the highlighted line before publishing",
   "rules.studio.compileFailed": "DSL compilation failed",
+  "rules.studio.publishWarningsConfirm": "{count} overlap warning(s) need review. See the diagnostics panel, then press Publish again to publish anyway.",
   "rules.studio.errorAt": "line {line}, column {column}",
   "rules.studio.diagnostics": "Warnings (non-fatal)",
   "rules.studio.decompileFailed": "Could not decompile the active ruleset — showing a safe default DSL",
@@ -479,6 +480,14 @@ export const en: TranslationDictionary = {
   "indexes.dropDescription":
     "This will delete index entries for '{id}' and may cause queries that rely on it to be rejected.",
   "indexes.dropConfirm": "Drop Index",
+  "indexes.templateBadge": "template",
+  "indexes.generalize.title": "Generalize to wildcard template",
+  "indexes.generalize.createdToast": "Template index {template} created",
+  "indexes.generalize.createFailed": "Could not create the template index",
+  "indexes.generalize.offerDrop":
+    "The new template covers /{collection} and every sibling subcollection. The concrete index is now redundant; queries keep working if you drop it.",
+  "indexes.generalize.keepConcrete": "Keep it",
+  "indexes.generalize.dropConcrete": "Drop concrete index",
   "indexes.loadFailed": "Failed to load composite indexes",
   "indexes.activeTitle": "Active Composite Indexes",
   "indexes.activeDescription":
@@ -837,6 +846,7 @@ export const en: TranslationDictionary = {
   "indexes.advisor.empty": "No pending index recommendations right now.",
   "indexes.advisor.pendingCount": "{count} pending",
   "indexes.advisor.collectionLabel": "Collection",
+  "indexes.advisor.exampleLabel": "Triggered by",
   "indexes.advisor.hits": "{count} hits",
   "indexes.advisor.maxLatency": "Max {ms} ms",
   "indexes.advisor.createOneClick": "Create Index (1-Click)",

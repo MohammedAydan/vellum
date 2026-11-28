@@ -133,12 +133,49 @@ export function startNodeApiServer({
         if (res.writableEnded || res.destroyed) return;
 
         res.statusCode = webRes.status;
-        webRes.headers.forEach((val: string, key: string) => res.setHeader(key, val));
-        // Write raw bytes: `webRes.text()` would UTF-8-decode compressed bodies and
-        // corrupt the gzip magic bytes (0x1f 0x8b), causing Z_DATA_ERROR in clients
-        // that transparently decompress responses advertised with Content-Encoding.
-        const resBody = Buffer.from(await webRes.arrayBuffer());
-        res.end(resBody);
+        webRes.headers.forEach((val: string, key: string) => {
+          // A streamed body has no known length; let Node chunk it.
+          if (webRes.body && key.toLowerCase() === "content-length") return;
+          res.setHeader(key, val);
+        });
+        if (webRes.body) {
+          // Stream the body (SSE realtime, large payloads): flush headers now so
+          // clients see the response start immediately, honor backpressure, and
+          // cancel the upstream stream when the client goes away. Buffering the
+          // whole body here (the old arrayBuffer path) never flushed long-lived
+          // streams such as /v1/realtime/stream.
+          res.flushHeaders();
+          const reader = webRes.body.getReader();
+          let cancelled = false;
+          const cancelUpstream = (): void => {
+            if (cancelled) return;
+            cancelled = true;
+            void reader.cancel().catch(() => undefined);
+          };
+          res.on("close", cancelUpstream);
+          try {
+            for (;;) {
+              if (res.writableEnded || res.destroyed) {
+                cancelUpstream();
+                break;
+              }
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value && value.byteLength > 0) {
+                if (!res.write(Buffer.from(value))) {
+                  await new Promise<void>((resolve) => res.once("drain", resolve));
+                }
+              }
+            }
+          } catch {
+            cancelUpstream();
+          } finally {
+            res.off("close", cancelUpstream);
+            if (!res.writableEnded && !res.destroyed) res.end();
+          }
+        } else {
+          res.end();
+        }
       } catch (err: unknown) {
         if (!res.writableEnded && !res.destroyed) {
           res.statusCode = 500;
