@@ -119,7 +119,7 @@ describe.skipIf(!enabled)("wildcard template index at 50,100 documents (default 
     let cursor = page1.nextCursor as string | undefined;
     let last = page1;
     for (let hop = 0; hop < 5 && cursor; hop += 1) {
-      last = await engine.executeQuery({ ...T, querySpec: { ...q, cursor } });
+      last = await engine.executeQuery({ ...T, querySpec: { ...q, startAfter: cursor } });
       cursor = last.nextCursor as string | undefined;
     }
     expect(last.documents[0]!.data["seq"]).toBe(150);
