@@ -39,6 +39,8 @@ import { createCustomerAuthRoutes, sha256Hex } from "./routes/auth-endpoints.js"
 import { createConsoleRoutes } from "./routes/console.js";
 import { createMfaRoutes } from "./routes/mfa.js";
 import { createUsageRoutes } from "./routes/usage.js";
+import { createPlatformCostRoutes } from "./routes/platform-cost.js";
+import { platformUsageMetering } from "./middleware/platform-usage.js";
 import { createAuthEndUserRoutes } from "./routes/auth-enduser.js";
 import { createAuthCustomerAdminRoutes } from "./routes/auth-customer-admin.js";
 import { createAuthSuperAdminRoutes } from "./routes/auth-super-admin.js";
@@ -59,9 +61,9 @@ import type { ControlPlaneRepository } from "@vellum/database-control";
 import type { StorageAdapter, CollectionSchemaValidation } from "@vellum/storage";
 import type { RealtimeGatewayHub } from "@vellum/realtime";
 import type { DocumentEngine, BatchMutation, IncludeSpec } from "@vellum/document-engine";
-import type { StructuredLogger, SlidingWindowRateLimiter } from "@vellum/observability";
+import { PlatformUsageMeter, type StructuredLogger, type SlidingWindowRateLimiter } from "@vellum/observability";
 import type { ThreatDetector } from "@vellum/security";
-import type { UsageMeteringEngine, QuotaGuard } from "@vellum/billing";
+import type { PlatformUsageCounters, UsageMeteringEngine, QuotaGuard } from "@vellum/billing";
 import { listIndexesReconciled, refreshIndexRecord } from "./index-build.js";
 import { createRealtimeSseRoutes } from "./routes/realtime-sse.js";
 import { loadProject } from "./project-lookup.js";
@@ -116,6 +118,8 @@ export interface VellumPlatformContext {
   /** Security Fortress: in-process threat detector, O(1) metering and quota guard. */
   threatDetector: ThreatDetector;
   metering: UsageMeteringEngine;
+  /** Platform cost meter (requests, CPU time, bytes). Built by the composition root; a local meter is used when absent. */
+  platformUsage?: PlatformUsageMeter | undefined;
   quota: QuotaGuard;
   /** HKDF-derived signing keys for the audit and billing hash chains. */
   chainKeys: { security: Buffer; billing: Buffer };
@@ -131,6 +135,32 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
     platform.indexRecommendationRecorder ??
     createPlatformIndexRecommendationRecorder(platform.controlStore, platform.logger);
   const adviseIndex = createIndexAdvisor(platform, recorder);
+
+  /** Platform cost counters: the composition root owns the durable flusher. */
+  const platformUsage = platform.platformUsage ?? new PlatformUsageMeter();
+
+  /** Totals this process has observed, used when no durable buckets exist yet. */
+  const platformUsageTotals = (): PlatformUsageCounters => {
+    const totals: PlatformUsageCounters = {
+      requestsRead: 0,
+      requestsWrite: 0,
+      requestsOther: 0,
+      cpuMs: 0,
+      bytesIn: 0,
+      bytesOut: 0,
+      realtimeFrames: 0,
+    };
+    for (const bucket of platformUsage.snapshot()) {
+      totals.requestsRead += bucket.counts.requests_read;
+      totals.requestsWrite += bucket.counts.requests_write;
+      totals.requestsOther += bucket.counts.requests_other;
+      totals.cpuMs += bucket.counts.cpu_ms;
+      totals.bytesIn += bucket.counts.bytes_in;
+      totals.bytesOut += bucket.counts.bytes_out;
+      totals.realtimeFrames += bucket.counts.realtime_frames;
+    }
+    return totals;
+  };
 
   /** Never let advisor or recorder failures reach a document request path. */
   async function adviseQuery(
@@ -154,6 +184,10 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
 
   // 1. Global Middleware
   app.use("*", requestId());
+
+  // Platform cost metering wraps every request (console, admin, auth and the
+  // document plane) so the cost console can price all of it.
+  app.use("*", platformUsageMetering(platformUsage));
 
   // Security Fortress ingress pipeline (contract §5). Registered immediately
   // after requestId so every subsequent middleware and handler is protected.
@@ -491,6 +525,9 @@ export function createVellumApp(platform: VellumPlatformContext): Hono {
 
   // 4.3 Usage & metering (session-authenticated, live PostgreSQL reads)
   app.route("/v1", createUsageRoutes(platform.controlStore, platform.sessionService, platform.dataStore));
+
+  // 4.3.1 Platform cost accounting (operator-only reads, price-book write)
+  app.route("/v1", createPlatformCostRoutes(platform.controlStore, platform.superAdminSessionService, platformUsageTotals));
 
   // 4.4 End-User Auth REST tiers (project-scoped, customer admin, super admin)
   app.route(
