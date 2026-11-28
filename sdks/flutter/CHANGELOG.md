@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.9
+
+Lockstep release with the platform (beta). Works with the 0.0.8 API, and the 0.0.9 API is recommended. Upgrade the API, JS SDK and Flutter SDK together.
+
+- `connectionState` / `connectionStateStream` report the live transport (`websocket` or `sse`), with a deduplicated initial emit.
+- A missing or deleted document delivers a snapshot with `exists == false`, and identical `(exists, version)` states are delivered once.
+- The WebSocket to SSE fallback timer is cleared on the first delivered frame, not on open, so the fallback no longer stalls.
+- An identity switch ends the old identity's live subscriptions, and one transport error is delivered per subscription per outage instead of one per reconnect attempt.
+- `client.auth.upgradeAnonymousWithEmailAndPassword({email, password})` keeps the uid, links a password identity and revokes other sessions. A taken email returns 409 and a non-anonymous caller 412.
+- `listIdentities()` is the canonical name, with a deprecated alias. `disableMfa` accepts a code or `{ code }`.
+- A `Retry-After` floor of 250 ms, and 5xx/4xx errors carry a `retryable` flag.
+
+Full platform notes are in the root CHANGELOG.
+
 ## 0.0.8
 
 Lockstep release with the platform. Works with the 0.0.7 API, and the 0.0.8 API is recommended.

@@ -14,26 +14,44 @@ jobs:
       contents: read
       id-token: write # OIDC trusted publishing (no long-lived npm token)
     steps:
+      - name: Check npm publishing is available
+        id: gate
+        env:
+          NPM_OIDC: ${{ vars.NPM_TRUSTED_PUBLISHING }}
+        run: |
+          if [ "$NPM_OIDC" = "true" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::npm publishing skipped: npm trusted publishing is not enabled (set repository variable NPM_TRUSTED_PUBLISHING=true once it is). Publish manually."
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.enabled == 'true'
 
       - name: Set up Node.js 22
+        if: steps.gate.outputs.enabled == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Enable pnpm via Corepack
+        if: steps.gate.outputs.enabled == 'true'
         run: |
           corepack enable
           corepack prepare pnpm@10.15.0 --activate
 
       - name: Install dependencies
+        if: steps.gate.outputs.enabled == 'true'
         run: corepack pnpm install --frozen-lockfile
 
       # Trusted publishing requires npm CLI >= 11.5.1; Node 22 ships an older one.
       - name: Update npm CLI
+        if: steps.gate.outputs.enabled == 'true'
         run: npm install -g npm@latest
 
       - name: Check tag matches package version
+        if: steps.gate.outputs.enabled == 'true'
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           PKG_VERSION=$(node -p "require('./packages/sdk-js/package.json').version")
@@ -43,6 +61,7 @@ jobs:
           fi
 
       - name: Skip when this version is already on npm
+        if: steps.gate.outputs.enabled == 'true'
         id: npm_state
         run: |
           PKG_VERSION=$(node -p "require('./packages/sdk-js/package.json').version")
@@ -54,11 +73,11 @@ jobs:
           fi
 
       - name: Build @vellumdb/sdk-js
-        if: steps.npm_state.outputs.published == 'false'
+        if: steps.gate.outputs.enabled == 'true' && (steps.npm_state.outputs.published == 'false')
         run: corepack pnpm --filter @vellumdb/sdk-js build
 
       - name: Publish to npm
-        if: steps.npm_state.outputs.published == 'false'
+        if: steps.gate.outputs.enabled == 'true' && (steps.npm_state.outputs.published == 'false')
         working-directory: packages/sdk-js
         run: npm publish --provenance
 
@@ -68,9 +87,23 @@ jobs:
     permissions:
       id-token: write # OIDC automated publishing (no long-lived credentials)
     steps:
+      - name: Check pub.dev publishing is available
+        id: gate
+        env:
+          PUBDEV_OIDC: ${{ vars.PUBDEV_AUTOMATED_PUBLISHING }}
+        run: |
+          if [ "$PUBDEV_OIDC" = "true" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::pub.dev publishing skipped: automated publishing is not enabled (repository variable PUBDEV_AUTOMATED_PUBLISHING=true). Publish manually."
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.enabled == 'true'
 
       - uses: subosito/flutter-action@v2
+        if: steps.gate.outputs.enabled == 'true'
         with:
           channel: stable
           cache: true
@@ -78,8 +111,10 @@ jobs:
       # vellum_flutter is a Flutter package, so the generic Dart publish workflow cannot
       # resolve it. setup-dart provides the pub.dev OIDC token; Flutter's pub publishes it.
       - uses: dart-lang/setup-dart@v1
+        if: steps.gate.outputs.enabled == 'true'
 
       - name: Skip when this version is already on pub.dev
+        if: steps.gate.outputs.enabled == 'true'
         id: pub_state
         run: |
           PKG_VERSION=$(sed -n 's/^version: *//p' sdks/flutter/pubspec.yaml | head -1)
@@ -91,14 +126,14 @@ jobs:
           fi
 
       - name: Check tag matches pubspec version
-        if: steps.pub_state.outputs.published == 'false'
+        if: steps.gate.outputs.enabled == 'true' && (steps.pub_state.outputs.published == 'false')
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           PKG_VERSION=$(sed -n 's/^version: *//p' sdks/flutter/pubspec.yaml | head -1)
           [ "$TAG_VERSION" = "$PKG_VERSION" ] || { echo "Tag $GITHUB_REF_NAME does not match $PKG_VERSION"; exit 1; }
 
       - name: Publish to pub.dev
-        if: steps.pub_state.outputs.published == 'false'
+        if: steps.gate.outputs.enabled == 'true' && (steps.pub_state.outputs.published == 'false')
         working-directory: sdks/flutter
         run: |
           flutter pub get
