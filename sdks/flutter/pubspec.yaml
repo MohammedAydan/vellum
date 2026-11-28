@@ -1,6 +1,6 @@
 name: vellum_flutter
 description: Official Flutter SDK for VELLUM. Encrypted persistent sessions, Google and GitHub sign-in, reactive auth, OCC transactions, typed models and realtime streams.
-version: 0.0.10
+version: 0.0.9
 homepage: https://github.com/MohammedAydan/vellum
 repository: https://github.com/MohammedAydan/vellum/tree/main/sdks/flutter
 issue_tracker: https://github.com/MohammedAydan/vellum/issues
