@@ -13,3 +13,4 @@ export * from "./index-templates.js";
 export * from "./contracts/branded-ids.js";
 export * from "./contracts/cache-policy.js";
 export * from "./contracts/json.js";
+export * from "./auto-index-policy.js";
