@@ -216,7 +216,7 @@ void main() {
     final life = <String>[];
     final ttl = <String>[];
     final errors = <Object>[];
-    String tag(DocumentSnapshot s) => '${s.exists}:${s.exists ? s.version : 0}';
+    String tag(DocumentSnapshot<Map<String, Object?>> s) => '${s.exists}:${s.exists ? s.version : 0}';
     final s1 = client.doc('chats/c1/messages/missing_life_2').snapshots().listen((s) => life.add(tag(s)), onError: errors.add);
     final s2 = client.doc('chats/c1/messages/ttl_life').snapshots().listen((s) => ttl.add(tag(s)), onError: errors.add);
     try {
