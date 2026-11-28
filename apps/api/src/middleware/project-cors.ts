@@ -29,6 +29,7 @@ const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i
 
 /** One diagnostic per (project, origin) per process, not per request. */
 const devBypassLogged = new Set<string>();
+const rejectedLogged = new Set<string>();
 
 /** Development escape hatch: a dev-flagged publishable key opens localhost origins. */
 async function isDevLocalhostAllowed(store: ProjectCorsStore, projectId: string, normalizedOrigin: string): Promise<boolean> {
@@ -127,7 +128,16 @@ export function createProjectCors(
     if (EXCLUDED.some((re) => re.test(rest ?? ""))) return next();
     const normalized = normalizeStrictOrigin(origin);
     if (!normalized || isGloballyAllowed(origin)) return next();
-    if (!(await isAllowed(projectId ?? "", normalized))) return next();
+    if (!(await isAllowed(projectId ?? "", normalized))) {
+      const key = `${projectId}|${normalized}`;
+      if (!rejectedLogged.has(key)) {
+        rejectedLogged.add(key);
+        console.warn(
+          `[project-cors] origin ${normalized} is not allowed for project ${projectId}: add it to an active API key's allowedOrigins (a browser blocks the response without this).`
+        );
+      }
+      return next();
+    }
 
     const headers = {
       "access-control-allow-origin": origin,
