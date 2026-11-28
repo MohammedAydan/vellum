@@ -10,7 +10,7 @@ import type { ControlPlaneRepository } from "@vellum/database-control";
 import type { StorageAdapter } from "@vellum/storage";
 import { DocumentEngine } from "@vellum/document-engine";
 import { RealtimeGatewayHub } from "@vellum/realtime";
-import { StructuredLogger, SlidingWindowRateLimiter } from "@vellum/observability";
+import { PlatformUsageMeter, StructuredLogger, SlidingWindowRateLimiter } from "@vellum/observability";
 import {
   createInMemoryRevocationStore,
   getDefaultPepper,
@@ -22,6 +22,7 @@ import { createMemoryAdapters } from "./composition/root.js";
 import { createVellumApp, type VellumPlatformContext } from "./app.js";
 import { createPlatformIndexRecommendationRecorder } from "./routes/v2.js";
 import { createFortressServices } from "./middleware/fortress.js";
+import { hasQueryPool, persistPlatformUsage, rollupPlatformUsage } from "./platform-usage-flush.js";
 
 export interface CreatePlatformOptions {
   controlStore?: ControlPlaneRepository;
@@ -152,6 +153,18 @@ export function createVellumPlatform({
     logger
   );
 
+  // Platform cost meter: 60s buckets flushed into the control plane. Without a
+  // PostgreSQL control store (tests, offline mode) the meter keeps its counters
+  // in memory so the console still shows what this process observed.
+  const platformUsage = new PlatformUsageMeter({
+    onFlush: hasQueryPool(activeControlStore)
+      ? async (buckets) => {
+          await persistPlatformUsage(activeControlStore, buckets);
+        }
+      : undefined,
+  });
+  if (hasQueryPool(activeControlStore)) platformUsage.start(60_000);
+
   const context: VellumPlatformContext = {
     controlStore: activeControlStore,
     dataStore: activeDataStore,
@@ -168,6 +181,7 @@ export function createVellumPlatform({
     ...(corsOrigins ? { corsOrigins } : {}),
     threatDetector: fortress.threatDetector,
     metering: fortress.metering,
+    platformUsage,
     quota: fortress.quota,
     chainKeys: fortress.chainKeys,
   };
@@ -184,6 +198,8 @@ export function createVellumPlatform({
     outboxEventsPurged: number;
     tombstonesPurged: number;
     ttlPurged: number;
+    platformUsageRolledDays: number;
+    platformUsagePrunedMinutes: number;
   }> {
     const indexResult = await activeDataStore.runIndexBuilderWorker();
     const outboxResult = await activeDataStore.runOutboxCompactionWorker();
@@ -191,11 +207,16 @@ export function createVellumPlatform({
     // V2 Document TTL: expired live rows are purged in bounded 500-row batches
     // from a dedicated maintenance tick (never from the request path).
     const ttlResult = (await activeDataStore.runTtlSweeperWorker?.(500)) ?? { purgedCount: 0 };
+    // Platform cost: fold finished minutes into the daily rollup and prune raw
+    // rows past the retention window. Bounded and idempotent per tick.
+    const platformUsageRollup = await rollupPlatformUsage(activeControlStore);
     return {
       indexesBuilt: indexResult.builtCount,
       outboxEventsPurged: outboxResult.purgedCount,
       tombstonesPurged: tombstoneResult.purgedCount,
       ttlPurged: ttlResult.purgedCount,
+      platformUsageRolledDays: platformUsageRollup.rolledDays,
+      platformUsagePrunedMinutes: platformUsageRollup.prunedMinutes,
     };
   }
 
@@ -214,6 +235,8 @@ export function createVellumPlatform({
     runMaintenanceWorkers,
     /** Durable shutdown hook for buffered index telemetry. */
     flushIndexRecommendations: () => indexRecommendationRecorder.flush(),
+    /** Platform cost meter: the server stops it (final flush) on shutdown. */
+    platformUsage,
     threatDetector: fortress.threatDetector,
     metering: fortress.metering,
     quota: fortress.quota,

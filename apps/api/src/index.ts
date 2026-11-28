@@ -162,6 +162,7 @@ export async function createVellumPlatformFromEnv() {
       flushOnShutdown(adapters.controlStore)
     );
     await runBoundedShutdownStep("metering.stop", () => platform.metering.stop());
+    await runBoundedShutdownStep("platformUsage.stop", () => platform.platformUsage.stop());
     await runBoundedShutdownStep("indexRecommendations.flush", () =>
       platform.flushIndexRecommendations()
     );

@@ -8,3 +8,4 @@ export * from "./metering-engine.js";
 export * from "./quota-guard.js";
 export * from "./billing-calculator.js";
 export * from "./webhook-verifier.js";
+export * from "./platform-cost.js";
