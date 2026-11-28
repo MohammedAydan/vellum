@@ -370,7 +370,10 @@ export function attachRealtimeWebSocketServer(
           const allowedForProject =
             projectForOrigin !== null && (await options.isProjectOriginAllowed!(projectForOrigin, pendingOrigin).catch(() => false));
           if (!allowedForProject) {
-            sendError("PERMISSION_DENIED", "Origin is not allowed for this project");
+            sendError(
+              "PERMISSION_DENIED",
+              `Origin ${pendingOrigin} is not allowed for this project. Add it to the API key allowed origins in the Console, or use a dev-flagged key for localhost (any port).`
+            );
             closeWith(1008, "Origin not allowed");
             return;
           }
