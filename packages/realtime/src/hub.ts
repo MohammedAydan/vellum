@@ -673,8 +673,25 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           }
           snapshotLookups = found;
         }
-        authorizeOperation({ apiKeyRecord, rulesetRecord: ruleset,
-          operation: "get", path: targetPath, authContext, resourceData: doc?.data ?? null, lookups: snapshotLookups });
+        try {
+          authorizeOperation({ apiKeyRecord, rulesetRecord: ruleset,
+            operation: "get", path: targetPath, authContext, resourceData: doc?.data ?? null, lookups: snapshotLookups });
+        } catch (error) {
+          // Missing or TTL-expired target: same three-valued semantics as REST `doc.get()`. An authenticated
+          // caller that passes the collection `list` gate, and whose `get` rule denies only because `resource`
+          // is absent, gets an empty initial_sync (exists:false) instead of PERMISSION_DENIED. Everything else
+          // stays denied so the subscribe cannot be used as an existence oracle.
+          if (doc || !(error instanceof VellumError && error.code === "PERMISSION_DENIED") || authContext.uid === null) throw error;
+          const collectionPath = targetPath.split("/").slice(0, -1).join("/");
+          try {
+            authorizeOperation({ apiKeyRecord, rulesetRecord: ruleset, operation: "list",
+              path: `${collectionPath}/__collection_check__`, authContext, collectionLevel: true, resourceData: null });
+            authorizeOperation({ apiKeyRecord, rulesetRecord: ruleset, operation: "get", path: targetPath,
+              authContext, resourceData: null, optimisticResource: true, lookups: snapshotLookups });
+          } catch {
+            throw error;
+          }
+        }
         if (doc) {
           subRecord.matchedPaths.add(doc.path);
           initialDocs.push(doc);

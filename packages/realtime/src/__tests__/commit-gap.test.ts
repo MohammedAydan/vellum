@@ -23,7 +23,7 @@ describe("out-of-order commit visibility", () => {
     const poller = new OutboxPoller({
       bus: { async publish() {}, async subscribe() { return () => {}; }, async close() {} },
       dataStore: store,
-      sink: { connections, async notifyCommittedEvents(_p, evs) { for (const e of evs) delivered.push(e.seqId); } } as never,
+      sink: { connections, async notifyCommittedEvents(_p: string, evs: OutboxEvent[]) { for (const e of evs) delivered.push(e.seqId); } } as never,
       pollIntervalMs: 50,
       healthyTenantPollMs: 60_000, // polling is effectively off; only the gap follow-up can deliver
     });
