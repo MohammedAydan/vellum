@@ -281,4 +281,25 @@ describe("live WS server", () => {
     responsive.socket.destroy();
     await new Promise((resolve) => setTimeout(resolve, 350)); // allow server-side close + IP counter decrement
   });
+  // P0-1: legitimate chat bursts must not be closed with 1008; the close names its reason.
+  it("allows a 300-frame burst plus heartbeats, then closes a flood with a diagnostic MESSAGE_RATE reason", async () => {
+    const client = connect({ origin: ALLOWED_ORIGIN, autoPong: true });
+    expect(await client.handshake).toContain("101 Switching Protocols");
+    client.socket.write(maskedClientFrame({ type: "auth", projectId: TENANT.projectId, apiKey: API_KEY }));
+    await waitFor(() => client.frames.some((f) => f["type"] === "auth_ack"));
+    const send = async (frame: Record<string, unknown>) => {
+      client.socket.write(maskedClientFrame(frame));
+      await new Promise((resolve) => setImmediate(resolve)); // keep each frame in its own TCP chunk
+    };
+    for (let i = 0; i < 300; i += 1) await send({ type: "unsubscribe", subId: `s${i}` });
+    for (let i = 0; i < 300; i += 1) await send({ type: "ping" });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(client.socket.destroyed).toBe(false);
+    expect(client.frames.some((f) => f["code"] === "WS_POLICY_VIOLATION")).toBe(false);
+    for (let i = 0; i < 400 && !client.socket.destroyed; i += 1) await send({ type: "unsubscribe", subId: `t${i}` });
+    await waitFor(() => client.frames.some((f) => f["code"] === "WS_POLICY_VIOLATION"));
+    expect(JSON.stringify(client.frames)).toContain("MESSAGE_RATE");
+    client.socket.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  });
 });
