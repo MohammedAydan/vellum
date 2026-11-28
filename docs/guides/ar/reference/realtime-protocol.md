@@ -117,3 +117,11 @@ wss://<host>/v1/realtime
 - نقاط اتصال الوقت الفعلي في JS SDK (`webSocketFactory`، `realtimeHub`): [JavaScript SDK](../sdks/javascript.md)
 - تدفقات الوقت الفعلي في Flutter: [Flutter SDK](../sdks/flutter.md)
 - الدليل المعماري: [النشر والتشغيل](../../../06-deployment-and-operations.md)
+
+## حدود الاتصال وتجميع المقابس وصندوق الكتابة
+
+- يقبل الاتصال الواحد 25 اشتراكا كحد أقصى (`MAX_WS_SUBSCRIPTIONS_PER_CONN = 25`). الاشتراك رقم 26 يحصل على `{ "type": "error", "code": "SUBSCRIPTION_LIMIT_EXCEEDED" }` لذلك `subId`. حزمة `@vellumdb/sdk-js` وحزمة `vellum_flutter` تجمعان حتى 25 اشتراكا على مقبس واحد وتفتحان مقبسا إضافيا لكل 25 اشتراكا بعدها (حتى 40 مقبسا). الخيار `maxSockets` يحدد السقف، والقيمة 1 توقف التجميع.
+- يسمح لكل مقبس بحتى 600 إطار عميل في الدقيقة، من غير إطارات `ping` و`pong`. عند تجاوز ذلك يغلق الخادم الاتصال بالرمز `1008` والسبب `WS_POLICY_VIOLATION: MESSAGE_RATE`.
+- الكتابة دون اتصال: `PersistentWriteOutbox` في JS و`VellumOutbox` في Flutter تضعان الكتابات في طابور مع Idempotency-Key وتعيد إرسالها بالترتيب. `VellumOutbox` يفرغ الطابور تلقائيا عند عودة الاتصال (`autoFlushOnReconnect`، الافتراضي true).
+- استخدم `listIdentities()` لعرض مزودي تسجيل الدخول المرتبطين. الدالة `listLinkedProviders()` قديمة.
+- في تطوير Vite المحلي: أضف أصل التطوير إلى الأصول المسموحة لمفتاح API في لوحة التحكم (يقبل `http://localhost:*` و`http://127.0.0.1:*` مع مفتاح تطوير)، أو احذف ترويسة origin في وكيل التطوير.
