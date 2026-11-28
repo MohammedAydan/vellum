@@ -123,7 +123,7 @@ export default function Page() {
           )}
         />
         <P>
-          Codes are stable and documented in{" "}
+          Codes are fixed and documented in{" "}
           <PageLink slug="reference/errors">Error codes &amp; retry guidance</PageLink>; the numeric
           quotas behind them are in{" "}
           <PageLink slug="errors-and-limits">Quotas &amp; limits</PageLink>.

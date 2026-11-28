@@ -14,3 +14,12 @@
 [role="alertdialog"][data-state] {
   translate: none !important;
 }
+
+/* Public legal pages carry the same editorial voice as the auth shell. */
+.legal-page h1,
+.legal-page h2 {
+  font-family: Georgia, "Iowan Old Style", "Times New Roman", "Noto Serif", serif;
+  letter-spacing: -.01em;
+}
+[dir="rtl"] .legal-page h1,
+[dir="rtl"] .legal-page h2 { letter-spacing: 0; }

@@ -8,8 +8,8 @@ export default function Page() {
 
       <Section id="alpha" title="Alpha status and no guarantees">
         <UL items={[
-          <><strong>Active development:</strong> VELLUM is currently under continuous development (Alpha/Beta). It is not a final, stable product.</>,
-          <><strong>No uptime or stability guarantee:</strong> there is no service level agreement (SLA). We do not guarantee that the service will keep running, stay stable, or keep test data safe. APIs and services may change in breaking ways, be modified, or be shut down completely and permanently at any time without prior notice.</>,
+          <><strong>Active development:</strong> VELLUM is currently under continuous development (Alpha/Beta). It is not a finished 1.0 product.</>,
+          <><strong>No uptime or continuity guarantee:</strong> there is no service level agreement (SLA). We do not guarantee that the service will keep running, stay unchanged, or keep test data safe. APIs and services may change in breaking ways, be modified, or be shut down completely and permanently at any time without prior notice.</>,
           <><strong>Full disclaimer:</strong> the service is provided &quot;AS IS&quot; and &quot;AS AVAILABLE&quot;, without any express or implied warranties, including merchantability, fitness for a particular purpose and non-infringement. You alone bear the full personal and legal responsibility for deciding to use it in any project. To the fullest extent permitted by law, the developers and owners of the project are not liable for any direct or indirect damages, including data loss, lost profits or business interruption, that result from use of the service or from its interruption.</>,
         ]} />
       </Section>
@@ -24,7 +24,7 @@ export default function Page() {
       </Section>
 
       <Section id="limits" title="Technical limits">
-        <P>The service enforces request, document, query and rate limits described in <PageLink slug="errors-and-limits">Quotas &amp; limits</PageLink>. Limits can change during Alpha. We may throttle or suspend usage that threatens the stability or security of the service.</P>
+        <P>The service enforces request, document, query and rate limits described in <PageLink slug="errors-and-limits">Quotas &amp; limits</PageLink>. Limits can change during Alpha. We may throttle or suspend usage that threatens the reliability or security of the service.</P>
       </Section>
 
       <Section id="ip" title="Intellectual property">
