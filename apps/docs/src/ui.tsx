@@ -253,7 +253,7 @@ export function AlphaNotice({ lang = "en" }: { lang?: Lang }) {
       {ar ? (
         <>
           VELLUM قيد التطوير المستمر (Alpha/Beta) وليست منتجاً نهائياً بعد. لا توجد اتفاقية مستوى خدمة (SLA)،
-          ولا نضمن استمرار الخدمة أو استقرارها أو سلامة البيانات التجريبية، وقد تتغير الواجهات أو تتوقف في أي وقت
+          ولا نضمن استمرار الخدمة أو ثباتها أو سلامة البيانات التجريبية، وقد تتغير الواجهات أو تتوقف في أي وقت
           دون إشعار. تُقدَّم الخدمة «كما هي» (AS IS) و«حسب التوفر» (AS AVAILABLE) دون أي ضمانات، وتتحمل وحدك
           مسؤولية استخدامها في مشاريعك. راجع <PageLink slug="terms" lang="ar">شروط الاستخدام</PageLink> و
           <PageLink slug="privacy" lang="ar">سياسة الخصوصية</PageLink>.
@@ -261,7 +261,7 @@ export function AlphaNotice({ lang = "en" }: { lang?: Lang }) {
       ) : (
         <>
           VELLUM is in active development (Alpha/Beta) and is not a finished 1.0 product. There is no SLA.
-          We do not guarantee uptime, stability or the safety of test data, and APIs or services may change or be
+          We do not guarantee uptime, continuity or the safety of test data, and APIs or services may change or be
           shut down at any time without notice. The service is provided &quot;AS IS&quot; and &quot;AS AVAILABLE&quot;
           without warranties, and you alone are responsible for deciding to use it in your projects. See the{" "}
           <PageLink slug="terms">Terms of Service</PageLink> and the <PageLink slug="privacy">Privacy Policy</PageLink>.

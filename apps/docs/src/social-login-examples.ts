@@ -1,5 +1,5 @@
 // Examples for the Social sign-in page (Google, GitHub and Apple).
-// They mirror @vellumdb/sdk-js and vellum_flutter after 0.0.8.
+// They mirror @vellumdb/sdk-js and vellum_flutter after 0.0.9.
 
 export const popupTs = `// Call from a click handler so the browser allows the popup.
 const result = await db.signInWithPopup("google"); // or "github" or "apple"
@@ -108,7 +108,7 @@ await db.signInWithPopup("apple");
 await db.signInWithAppleIdToken(identityToken, { nonce: rawNonce, authorizationCode });`;
 
 export const flutterPubspec = `dependencies:
-  vellum_flutter: ^0.0.8 # browser sign-in is built in`;
+  vellum_flutter: ^0.0.9 # browser sign-in is built in`;
 
 export const androidManifest = `<!-- inside the existing <activity> of your MainActivity -->
 <intent-filter>
