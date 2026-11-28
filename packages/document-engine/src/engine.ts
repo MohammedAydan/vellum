@@ -2093,7 +2093,7 @@ export class DocumentEngine implements DocumentEnginePort {
    * averages never touch hidden documents, so no oracle or timing side
    * channel opens on forbidden fields. Paging is bounded by
    * {@link resolveAggregateRowFilterMax}; past the cap the request is refused
-   * with PERMISSION_DENIED exactly as before, so a collection-scale scan
+   * with FAILED_PRECONDITION (a row limit, not an auth error), so a collection-scale scan
    * never runs on the request path.
    */
   private async aggregateViaVisibleRows(
@@ -2119,10 +2119,12 @@ export class DocumentEngine implements DocumentEnginePort {
       });
       for (const doc of page.documents) visible.push(doc);
       if (visible.length > maxRows) {
+        // A row-count limit, not an authorization failure: FAILED_PRECONDITION (never PERMISSION_DENIED) so
+        // developers do not mistake the cap for a rules problem.
         throw new VellumError(
-          "PERMISSION_DENIED",
-          `Aggregates and counts on '${request.collectionPath}' are not allowed because its get rule depends on each document and the readable set exceeds ${maxRows} rows. Narrow the filters, read the documents with a query, or use a server key.`,
-          { collectionPath: request.collectionPath, maxRows }
+          "FAILED_PRECONDITION",
+          `Scoped aggregate exceeds the ${maxRows}-row limit: the get rule of '${request.collectionPath}' depends on each document, so only the rows you can read are counted and there are more than ${maxRows}. Narrow the filters, read the documents with a query, or use a server key.`,
+          { collectionPath: request.collectionPath, maxRows, reason: "SCOPED_AGGREGATE_ROW_LIMIT" }
         );
       }
       if (page.nextCursor === null || page.documents.length === 0) break;
