@@ -130,4 +130,16 @@ describe.skipIf(!enabled)("wildcard template index at 50,100 documents (default 
       engine.executeQuery({ ...T, querySpec: { collectionPath: "chats/idx_test/messages", where: [{ field: "text", op: "text_search", value: "launch" }], limit: 10 } })
     ).rejects.toMatchObject({ code: "FAILED_PRECONDITION", details: { suggestedIndex: { collectionPath: "chats/*/messages" } } });
   }, 120000);
+
+  it("after creating the suggested wildcard index, text_search succeeds at 50,100 docs", async () => {
+    const q = { collectionPath: "chats/idx_test/messages", where: [{ field: "text", op: "text_search" as const, value: "launch" }], limit: 10 };
+    const err = (await engine.executeQuery({ ...T, querySpec: q }).catch((e: unknown) => e)) as { details?: { suggestedIndex?: { fields: Array<{ path: string; dir: "asc" | "desc" }> } } };
+    const fields = err.details?.suggestedIndex?.fields;
+    expect(fields && fields.length).toBeGreaterThan(0);
+    await store.createCompositeIndex(T, "chats/*/messages", fields!);
+    await store.runIndexBuilderWorker();
+    const res = await engine.executeQuery({ ...T, querySpec: q });
+    expect(res.documents).toHaveLength(10);
+    for (const d of res.documents) expect(String(d.data["text"])).toContain("launch");
+  }, 180000);
 });
