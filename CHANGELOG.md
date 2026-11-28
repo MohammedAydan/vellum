@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+## 0.0.10 (beta)
+
+Hardening release from the 0.0.10 sprint prompt. Beta. Each row names the test that fails on 0.0.9 where one could be run; "untested" means no automated proof exists yet.
+
+### Upgrade notes
+
+- No breaking API change. The realtime error frame for the 25-subscription cap now carries `limit: 25`. A same-identity token refresh keeps the realtime session; an identity switch still emits `SESSION_CHANGED` on purpose. There is no runtime `realtimeTransport` switch (constructor-time only).
+- No new migrations.
+
+### Fixes by ID
+
+| ID | What shipped | Verified by |
+| :-- | :-- | :-- |
+| P0-1 | Outbox gap re-drain and 1s idle poll (no 28s-217s stalls); 1008 policy close root cause (per-socket frame budget and coalescing check in `ws-rfc6455.ts`); one LISTEN client per process; subscription-cap frame with `limit`; leak churn test | `packages/realtime` tests, `subscription-cap.test.ts`, `tests/integration/sdk-ws-realtime/recipes.test.ts` (Recipes 3A/3B/3C/4) |
+| P0-2 | `.select([...])` projection under per-doc `allow get` rules | Recipe 1 test (incl. `or()` variant and key-leak assertion) |
+| P0-3 | Missing-document realtime subscribe, TTL-expiry delete push | `missing-doc-subscribe.test.ts` |
+| P0-4 | `data_db` outage 503 + health endpoints | health tests (503 test) |
+| P1-1 | Wildcard index at 50,100 docs (PG), aggregate FAILED_PRECONDITION clarity, dev CORS localhost bypass and one-time rejected-origin warning, per-project `signupPerIpLimit` | `tests/integration/wildcard-index-pg.test.ts` (CI, PG16/18), `project-cors.test.ts`, `auth-signup-ip-limit.test.ts` |
+| P1-2 | Flutter outbox auto-flush on reconnect | Flutter tests (CI) |
+| P1-3 | Flutter missing-doc lifecycle and WS pooling parity | `sdks/flutter/test/realtime_removed_doc_test.dart` |
+| P1-4 | JS missing-doc `onSnapshot`, WS auto-pooling, 5xx retry/backoff | `realtime-pooling.test.ts`, `realtime-removed-doc.test.ts`, `http-5xx-backoff.test.ts`, Recipes 2/3/4 |
+| Track D | Docs synced (EN/AR), stale 0.0.1 caveats removed, ADR-006 corrected, ADR-008 added | docs checks in CI |
+
+### Known gaps
+
+- Recipe 3A runs in-memory; the PG poller stall is covered by 3B and the idle-poller test.
+- `/llms-full.txt` is a rewrite to `/docs/llms-full.txt`; it needs a deploy to verify live.
+- Not re-run on a 0.0.9 worktree: Recipes 2, 3A, 3C, 4.2, TTL push and cap frame (fail-before proven only for Recipes 1, 3B, the 1008 test and the pooling test).
+
+
 ## 0.0.9 (beta)
 
 Remediation release across security, realtime, both SDKs and docs. The API, JS SDK and Flutter SDK ship together; the JS SDK contains one intentional breaking change (P0-4). The version constant bump lands with the final remediation track; this section maps every finding ID to what shipped, where, and how it was verified.
