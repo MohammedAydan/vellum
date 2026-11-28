@@ -36,6 +36,9 @@ export function assertValidIndexFields(fields: ReadonlyArray<IndexFieldSpecLike>
   }
 }
 
+/** Field path of a whole-document full-text index: the one that serves the query-level `search`. */
+export const FULL_TEXT_ALL_PATH = "*";
+
 /** True when an index definition is a full-text index (one field with dir "text"). */
 export function isFullTextIndexFields(fields: ReadonlyArray<IndexFieldSpecLike>): boolean {
   return fields.length === 1 && String(fields[0]?.dir ?? fields[0]?.direction ?? "").toLowerCase() === "text";
@@ -322,7 +325,13 @@ export function fullTextIndexText(docRecord: DocumentRecordForIndex, indexFields
     else if (Array.isArray(v)) for (const x of v) walk(x, depth + 1);
     else if (typeof v === "object") for (const x of Object.values(v as Record<string, unknown>)) walk(x, depth + 1);
   };
-  walk(getFieldByPath(docRecord.data, f.path), 0);
+  if (f.path === FULL_TEXT_ALL_PATH) {
+    // Whole-document index: serves `search` (every string/number leaf plus the document id).
+    parts.push(docRecord.documentId);
+    walk(docRecord.data, 0);
+  } else {
+    walk(getFieldByPath(docRecord.data, f.path), 0);
+  }
   return parts.length > 0 ? parts.join(" ") : null;
 }
 

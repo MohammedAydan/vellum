@@ -144,6 +144,17 @@ describe.skipIf(!enabled)("wildcard template index at 50,100 documents (default 
     for (const d of res.documents) expect(String(d.data["text"])).toContain("launch");
   }, 180000);
 
+  it("search is served by the whole-document full-text index at 50,100 docs", async () => {
+    const q = { collectionPath: "chats/idx_test/messages", search: "launch", limit: 100 };
+    const err = (await engine.executeQuery({ ...T, querySpec: q }).catch((e: unknown) => e)) as { details?: { suggestedIndex?: { fields: Array<{ path: string; dir: "asc" | "desc" | "text" }> } } };
+    const fields = err.details?.suggestedIndex?.fields;
+    expect(fields).toEqual([{ path: "*", dir: "text" }]);
+    await store.createCompositeIndex(T, "chats/*/messages", fields!);
+    await store.runIndexBuilderWorker();
+    const res = await engine.executeQuery({ ...T, querySpec: q });
+    expect(res.documents).toHaveLength(51);
+  }, 180000);
+
   it("Recipe 6: aggregate() over more than 10,000 member-scoped rows returns FAILED_PRECONDITION, not PERMISSION_DENIED", async () => {
     class RulesControl { getActiveRuleset() { return { rulesAst: { version: 1, rules: [{ match: "chats/{c}/messages/{m}", allow: { list: { op: "!=", left: { var: "auth.uid" }, right: { val: null } }, get: { op: "!=", left: { var: "resource.data.seq" }, right: { val: null } } } }] } }; } incrementUsage() {} }
     const scoped = new DocumentEngine({ controlStore: new RulesControl() as never, dataStore: store });

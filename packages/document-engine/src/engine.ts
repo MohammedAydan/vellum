@@ -36,6 +36,7 @@ import {
   decodeAndVerifyQueryCursor,
   selectCompositeIndexForQuery,
   selectFullTextIndexForQuery,
+  selectSearchIndexForQuery,
   compileQueryToParameterizedSql,
   isScanRiskQuery,
   resolveUnindexedQueryMaxDocs,
@@ -1901,7 +1902,8 @@ export class DocumentEngine implements DocumentEnginePort {
         // documents and say which composite index fixes it.
         const fullTextIndex = selectFullTextIndexForQuery(normalizedQuery, availableIndexes);
         const fullTextField = fullTextIndex?.fields[0]?.path;
-        if (!matchedIndex && isScanRiskQuery(normalizedQuery, fullTextField)) {
+        const searchIndex = selectSearchIndexForQuery(normalizedQuery, availableIndexes);
+        if (!matchedIndex && isScanRiskQuery(normalizedQuery, fullTextField, searchIndex !== null)) {
           const maxDocs = resolveUnindexedQueryMaxDocs();
           if (maxDocs > 0 && tx.countLiveDocumentsUpTo) {
             const live = await tx.countLiveDocumentsUpTo(normalizedQuery.collectionPath, maxDocs + 1);
@@ -1932,6 +1934,7 @@ export class DocumentEngine implements DocumentEnginePort {
           normalizedQuery,
           matchedCompositeIndex: matchedIndex,
           fullTextIndex,
+          searchIndex,
           cursor: activeCursor,
           cursorMode,
           skipProjection,
@@ -1983,6 +1986,7 @@ export class DocumentEngine implements DocumentEnginePort {
             normalizedQuery,
             matchedCompositeIndex: matchedIndex,
             fullTextIndex,
+          searchIndex,
             cursor: resumeCursor,
             cursorMode: "startAfter",
             skipProjection,

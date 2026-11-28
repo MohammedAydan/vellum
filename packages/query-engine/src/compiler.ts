@@ -852,12 +852,15 @@ export function compileQueryToParameterizedSql({
   scanCap,
   skipProjection = false,
   fullTextIndex = null,
+  searchIndex = null,
 }: {
   projectId: string;
   normalizedQuery: NormalizedQuery;
   matchedCompositeIndex?: CompositeIndexMetadata | null | undefined;
   /** A ready full-text index serving the query's `text_search` clause on its field (GIN lookup, no scan). */
   fullTextIndex?: CompositeIndexMetadata | null | undefined;
+  /** A ready whole-document full-text index (path "*") serving the query-level `search`. */
+  searchIndex?: CompositeIndexMetadata | null | undefined;
   cursor?: CursorPayload | null | undefined;
   cursorMode?: CursorMode | undefined;
   /**
@@ -892,7 +895,15 @@ export function compileQueryToParameterizedSql({
     "(d.expires_at IS NULL OR d.expires_at > now())",
   ];
 
-  if (normalizedQuery.search) {
+  if (normalizedQuery.search && searchIndex) {
+    const idxParam = addParam(params, searchIndex.id);
+    const needle = addParam(params, normalizedQuery.search);
+    predicates.push(
+      `d.path = ANY(ARRAY(SELECT fe.path FROM document_index_entries fe WHERE fe.index_id = ${idxParam}::uuid ` +
+        `AND fe.project_id = $1::uuid AND fe.collection_path = $2 ` +
+        `AND fe.tsv @@ plainto_tsquery('simple', ${needle})))`
+    );
+  } else if (normalizedQuery.search) {
     const escaped = normalizedQuery.search.replace(/[\\%_]/g, "\\$&");
     const pattern = addParam(params, `%${escaped}%`);
     predicates.push(`(d.document_id ILIKE ${pattern} ESCAPE '\\' OR d.data::text ILIKE ${pattern} ESCAPE '\\')`);
@@ -1217,8 +1228,8 @@ const GIN_SERVED_OPS = new Set(["==", "in", "array-contains", "array-contains-an
  * is not documentId/createdAt/updatedAt. Equality, "in" and array-contains are served by the
  * GIN index, and system-field orders by btrees.
  */
-export function isScanRiskQuery(q: NormalizedQuery, fullTextServedField?: string): boolean {
-  if (q.search) return true;
+export function isScanRiskQuery(q: NormalizedQuery, fullTextServedField?: string, searchServed = false): boolean {
+  if (q.search && !searchServed) return true;
   const groups = [q.where, ...(q.or ?? [])];
   for (const group of groups) {
     for (const clause of group ?? []) {
@@ -1253,11 +1264,26 @@ export function selectFullTextIndexForQuery(
   return null;
 }
 
+/** The ready whole-document full-text index (path "*") that serves the query-level `search`. */
+export function selectSearchIndexForQuery(
+  q: NormalizedQuery,
+  availableIndexes: CompositeIndexMetadata[] = []
+): CompositeIndexMetadata | null {
+  if (!q.search) return null;
+  for (const idx of availableIndexes) {
+    if (!idx || idx.status !== "ready" || !Array.isArray(idx.fields) || !isFullTextIndexFields(idx.fields)) continue;
+    if (!indexCollectionPathCovers(idx.collectionPath, q.collectionPath)) continue;
+    if (normalizeIndexFieldSpec(idx.fields[0]!).path === "*") return idx;
+  }
+  return null;
+}
+
 /** The composite index that would serve this query: equality fields, then the order or range field. */
 export function suggestCompositeIndex(q: NormalizedQuery): Array<{ path: string; dir: "asc" | "desc" | "text" }> {
   // A text_search clause is served by a full-text index on its field (dir "text"), not a composite index.
   const searched = q.where.find((w) => w.op === "text_search" && !isIdSystemField(w.field));
   if (searched) return [{ path: searched.field, dir: "text" }];
+  if (q.search) return [{ path: "*", dir: "text" }];
   const fields: Array<{ path: string; dir: "asc" | "desc" }> = [];
   const seen = new Set<string>();
   const add = (path: string, dir: "asc" | "desc") => {
