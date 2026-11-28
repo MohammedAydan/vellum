@@ -131,7 +131,7 @@ for await (const doc of db.collection("events").stream({ pageSize: 100, signal: 
   console.log(doc.id, doc.data());
 }
 
-// Auto-chunked bulk writes (published 0.0.1 defaults to 500; explicitly use the API cap of 100)
+// Auto-chunked bulk writes (the API cap is 100 writes per request)
 const writes = [{ type: "set", path: "events/demo", data: { severity: "error" } }];
 const result = await db.batchWriteChunked(writes, {
   chunkSize: 100,
@@ -179,10 +179,11 @@ db.dispose();`}
 
       <Callout tone="warning" title="Account changes and realtime">
         Recreate realtime subscriptions after signing in, signing out, or switching users.
-        The next SDK fixes end old subscriptions at that boundary so one account cannot keep
-        another account's live data. For published 0.0.1, dispose the old client and create a
-        new client per account boundary; do not share cached clients between users. Custom
-        getAuthToken providers must reset subscriptions when their identity changes.
+        The SDK ends old subscriptions at that boundary with a SESSION_CHANGED error, so one
+        account cannot keep another account's live data; subscribe again afterwards. A token
+        refresh for the same user keeps subscriptions alive. Do not share cached clients
+        between users. Custom getAuthToken providers must reset subscriptions when their
+        identity changes.
       </Callout>
       <Section id="modular-architecture" title="Modular architecture &amp; tamper-proofing">
         <P>

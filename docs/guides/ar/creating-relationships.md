@@ -4,7 +4,7 @@
 
 ## JavaScript وTypeScript
 
-المثال يعمل مع الإصدار المنشور `@vellumdb/sdk-js` رقم 0.0.1. المتغير `db` يمثل عميل المشروع بعد تهيئته، مع صلاحية كتابة المستندات المستخدمة.
+المثال يعمل مع `@vellumdb/sdk-js`. المتغير `db` يمثل عميل المشروع بعد تهيئته، مع صلاحية كتابة المستندات المستخدمة.
 
 ```ts
 const ref = (path: string) => ({ $t: "ref" as const, $v: path });
@@ -32,11 +32,11 @@ do {
 } while (cursor !== undefined);
 ```
 
-أضفنا في الشفرة المصدرية الدالة `reference(path)` للتحقق من المسار وإنتاج نفس المرجع. بعد تثبيت إصدار يحتوي عليها، استبدل تعريف `ref` المحلي بـ `import { reference as ref } from "@vellumdb/sdk-js"`. الإصدار المنشور 0.0.1 لا يصدّر هذه الدالة، لذلك يستخدم المثال أعلاه القيمة الموسومة مباشرة.
+تصدّر الحزمة `@vellumdb/sdk-js` الدالة `reference(path)` للتحقق من المسار وإنتاج نفس المرجع. استبدل تعريف `ref` المحلي بـ `import { reference as ref } from "@vellumdb/sdk-js"`.
 
 ## Flutter وDart
 
-المتغير `client` يمثل عميل المشروع بعد تهيئته. الدالة `VellumWire.reference` موجودة في الإصدار المنشور `vellum_flutter` رقم 0.0.1.
+المتغير `client` يمثل عميل المشروع بعد تهيئته. الدالة `VellumWire.reference` موجودة في `vellum_flutter`.
 
 ```dart
 await client.doc('users/u1').create({'name': 'Ada'});
