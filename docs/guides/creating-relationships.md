@@ -42,11 +42,11 @@ do {
 } while (cursor !== undefined);
 ```
 
-The source tree also exports a validated `reference(path)` helper. After installing a release containing that helper, replace the local `ref` function with `import { reference as ref } from "@vellumdb/sdk-js"`. Older releases (0.0.1) do not export it.
+`@vellumdb/sdk-js` exports a validated `reference(path)` helper. Use `import { reference as ref } from "@vellumdb/sdk-js"` instead of a local `ref` function.
 
 ## Flutter and Dart
 
-`client` is an initialized project client. `VellumWire.reference` is available in published `vellum_flutter` 0.0.1.
+`client` is an initialized project client. `VellumWire.reference` is available in `vellum_flutter`.
 
 ```dart
 await client.doc('users/u1').create({'name': 'Ada'});

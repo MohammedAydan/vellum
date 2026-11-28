@@ -116,3 +116,12 @@ See [Errors](./errors.md) for the full canonical set.
 - JS SDK realtime seams (`webSocketFactory`, `realtimeHub`): [JavaScript SDK](../sdks/javascript.md)
 - Flutter realtime streams: [Flutter SDK](../sdks/flutter.md)
 - Architecture narrative: [Deployment & Operations](../../06-deployment-and-operations.md)
+
+
+## Connection limits, pooling and the outbox
+
+- A connection accepts at most `MAX_WS_SUBSCRIPTIONS_PER_CONN = 25` subscriptions. The 26th gets `{ "type": "error", "code": "SUBSCRIPTION_LIMIT_EXCEEDED" }` for that `subId`. `@vellumdb/sdk-js` and `vellum_flutter` multiplex up to 25 subscriptions on one socket and open an extra pooled socket for each further 25 (up to 40 sockets). `realtimeTransportOptions.maxSockets` (JS) / `maxSockets` (Flutter) sets the cap; 1 turns pooling off.
+- Each socket may send up to 600 non-heartbeat client frames per minute. `ping` and `pong` frames are not counted. Beyond that the server closes with `1008` and reason `WS_POLICY_VIOLATION: MESSAGE_RATE`.
+- Offline writes: `PersistentWriteOutbox` (JS) and `VellumOutbox` (Flutter) queue writes with an Idempotency-Key and replay them in order. `VellumOutbox` flushes by itself when the connection becomes `connected` (`autoFlushOnReconnect`, default true).
+- Use `listIdentities()` to list linked sign-in providers. `listLinkedProviders()` is deprecated.
+- Local Vite dev: add the dev origin to Console Allowed Origins (`http://localhost:*` and `http://127.0.0.1:*` are accepted), or strip the header in the dev proxy: `proxy.on('proxyReqWs', (req) => req.removeHeader('origin'))`.
