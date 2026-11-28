@@ -468,11 +468,9 @@ export function createMfaRoutes(options: MfaRouteOptions): Hono {
     if (!record) {
       throw new VellumError("FAILED_PRECONDITION", "MFA setup must be initiated before verification");
     }
-    if (record.enabled === true) {
-      limiter.reset(throttleKey);
-      return c.json({ enabled: true } as const);
-    }
 
+    // Always validate and burn the code, even when MFA is already enabled:
+    // a cosmetic 200 for any code lets a replayed code look accepted.
     const { secret } = await decryptOrFail(record);
     if (!/^\d{6}$/.test(code) || !verifyTotp(secret, code)) {
       throw new VellumError("UNAUTHENTICATED", "Invalid TOTP verification code");
@@ -481,7 +479,9 @@ export function createMfaRoutes(options: MfaRouteOptions): Hono {
       throw new VellumError("UNAUTHENTICATED", "Invalid TOTP verification code");
     }
 
-    await store.upsert({ ...record, enabled: true, verifiedAt: new Date().toISOString() });
+    if (record.enabled !== true) {
+      await store.upsert({ ...record, enabled: true, verifiedAt: new Date().toISOString() });
+    }
     limiter.reset(throttleKey);
     await audit(c, "mfa.verify", { status: "enabled" });
     return c.json({ enabled: true } as const);

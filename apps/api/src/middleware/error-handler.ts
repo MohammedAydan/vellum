@@ -7,6 +7,7 @@
 import type { ErrorHandler } from "hono";
 import { VellumError, ERROR_HTTP_STATUS } from "@vellum/core";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { reportDatabaseConnectivityFailure } from "../routes/health.js";
 
 /** Patterns indicating internal DB/network/runtime errors that must never leak. */
 const INTERNAL_LEAK_RE =
@@ -78,6 +79,9 @@ export const errorHandler: ErrorHandler = (err, c) => {
   if (!(err instanceof VellumError)) {
     const connectCode = dbConnectErrorCode(err);
     if (connectCode !== null) {
+      // A real request just proved the database is unreachable: flip the
+      // readiness cache now instead of letting it serve a stale OK.
+      reportDatabaseConnectivityFailure();
       c.header("Retry-After", "5");
       return c.json(
         {

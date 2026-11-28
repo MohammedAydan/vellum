@@ -13,6 +13,7 @@ import {
   healthRoutes,
   setReadinessProbe,
   resetReadinessRateLimits,
+  reportDatabaseConnectivityFailure,
 } from "../routes/health.js";
 import { defaultReadinessProbe } from "../composition/root.js";
 import { errorHandler } from "../middleware/error-handler.js";
@@ -115,6 +116,22 @@ describe("health endpoint hardening", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { status: string };
     expect(body.status).toBe("alive");
+  });
+
+  it("a connect-class DB error on a real request flips cached readiness immediately", async () => {
+    const options = { failData: false };
+    installProbe(options);
+    const ok = await healthRoutes.fetch(new Request("http://localhost/health/ready"));
+    expect(ok.status).toBe(200);
+    // The database falls over; a real request surfaces a connect-class error
+    // and the error handler reports it, expiring the healthy cache on the spot.
+    options.failData = true;
+    reportDatabaseConnectivityFailure();
+    const res = await healthRoutes.fetch(new Request("http://localhost/health/ready"));
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { ready: boolean; checks: Record<string, { state: string }> };
+    expect(body.ready).toBe(false);
+    expect(body.checks["dataDb"]?.state).toBe("failed");
   });
 
   it("rate-limits unauthenticated readiness floods", async () => {
