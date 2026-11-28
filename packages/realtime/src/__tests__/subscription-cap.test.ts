@@ -63,3 +63,24 @@ describe("realtime: per-connection subscription cap", () => {
     expect(err?.["limit"]).toBe(25);
   });
 });
+
+// P0-4 leak audit: connection churn must leave no per-connection state behind (no LISTEN is opened per
+// connection; the process owns one dedicated LISTEN client).
+describe("realtime: connection churn leaves no state behind", () => {
+  it("200 connections x 5 subscriptions opened and closed leave the hub empty", async () => {
+    const hub = new RealtimeGatewayHub({ controlStore: makeControlStore(), dataStore: new DataPlaneStore() });
+    for (let c = 0; c < 200; c += 1) {
+      const session = hub.createConnectionSession(() => undefined);
+      await session.handleClientFrame({ type: "auth", projectId: TENANT.projectId, apiKey: PK });
+      hub.connections.get(session.connectionId)!.authContext.uid = "alice";
+      for (let i = 0; i < 5; i += 1) {
+        await session.handleClientFrame({ type: "subscribe", subId: `s${i}`, path: `chats/c1/messages/m${c}_${i}` });
+      }
+      session.close();
+    }
+    expect(hub.connections.size).toBe(0);
+    const h = hub as unknown as { subscriptionIndex: Map<string, unknown>; connectionsByProject: Map<string, Set<unknown>> };
+    expect(h.subscriptionIndex.size).toBe(0);
+    expect([...h.connectionsByProject.values()].every((set) => set.size === 0)).toBe(true);
+  });
+});
