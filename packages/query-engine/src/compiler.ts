@@ -926,9 +926,9 @@ export function compileQueryToParameterizedSql({
       const idxParam = addParam(params, fullTextIndex.id);
       const needle = addParam(params, requireStringValue(clause));
       predicates.push(
-        `d.path IN (SELECT fe.path FROM document_index_entries fe WHERE fe.index_id = ${idxParam}::uuid ` +
+        `d.path = ANY(ARRAY(SELECT fe.path FROM document_index_entries fe WHERE fe.index_id = ${idxParam}::uuid ` +
           `AND fe.project_id = $1::uuid AND fe.collection_path = $2 ` +
-          `AND fe.tsv @@ plainto_tsquery('simple', ${needle}))`
+          `AND fe.tsv @@ plainto_tsquery('simple', ${needle})))`
       );
       ftsServed = true;
       continue;
