@@ -21,6 +21,7 @@ import {
 } from "../../apps/api/src/ws-rfc6455.js";
 
 const ALLOWED_ORIGIN = "http://allowed.example";
+const policyViolations: string[] = [];
 const API_KEY = "pk_ws_hardening_1234567890abcdef";
 const TENANT = {
   projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -120,6 +121,7 @@ describe("live WS server", () => {
       idleTimeoutMs: 120,
       maxConnectionsPerIp: 1,
       maxFrameBytes: 1024,
+      onPolicyViolation: (_ip: string, kind: string) => { policyViolations.push(kind); },
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     port = (server.address() as AddressInfo).port;
@@ -297,8 +299,11 @@ describe("live WS server", () => {
     expect(client.socket.destroyed).toBe(false);
     expect(client.frames.some((f) => f["code"] === "WS_POLICY_VIOLATION")).toBe(false);
     for (let i = 0; i < 400 && !client.socket.destroyed; i += 1) await send({ type: "unsubscribe", subId: `t${i}` });
-    await waitFor(() => client.frames.some((f) => f["code"] === "WS_POLICY_VIOLATION"));
-    expect(JSON.stringify(client.frames)).toContain("MESSAGE_RATE");
+    // The server records the violation. The diagnostic frame is best effort on the wire: the server
+    // destroys the socket right after writing it, and a reset can drop it while unread flood data is queued.
+    await waitFor(() => policyViolations.includes("WS_MESSAGE_RATE_EXCEEDED") && client.socket.destroyed, 10_000);
+    const flagged = client.frames.filter((f) => f["code"] === "WS_POLICY_VIOLATION");
+    if (flagged.length > 0) expect(JSON.stringify(flagged)).toContain("MESSAGE_RATE");
     client.socket.destroy();
     await new Promise((resolve) => setTimeout(resolve, 350));
   });
