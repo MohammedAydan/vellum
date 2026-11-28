@@ -7,8 +7,8 @@ const root=resolve(import.meta.dirname,'../../../..');
 const read=(path:string)=>readFileSync(resolve(root,path),'utf8');
 describe('docs remediation contracts',()=>{
  it('uses published packages with supported runtimes instead of a stale source pin',()=>{
-   expect(betaJavaScriptInstall).toContain('npm install @vellumdb/sdk-js@0.0.9');
-   expect(betaDartInstall).toContain('vellum_flutter: ^0.0.9');
+   expect(betaJavaScriptInstall).toContain('npm install @vellumdb/sdk-js@0.0.10');
+   expect(betaDartInstall).toContain('vellum_flutter: ^0.0.10');
    expect(betaJavaScriptInstall).toContain('Node.js 22+');
    expect(betaDartInstall).toContain('Dart 3.4+');
    expect(betaJavaScriptInstall).not.toContain('git clone');
