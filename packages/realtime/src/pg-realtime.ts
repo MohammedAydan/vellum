@@ -78,7 +78,7 @@ export function createPgRealtimeInfrastructure(
     // every second only duplicates what NOTIFY already wakes; 10s is the
     // missed-notify net. The noop bus (placeholder LISTEN) is never healthy,
     // so it keeps every-cycle polling.
-    healthyTenantPollMs: listenIsPlaceholder ? 0 : (options.healthyTenantPollMs ?? 10_000),
+    healthyTenantPollMs: listenIsPlaceholder ? 0 : (options.healthyTenantPollMs ?? 1_000),
   };
   if (options.onError) pollerOptions.onError = options.onError;
   const poller = new OutboxPoller(pollerOptions);

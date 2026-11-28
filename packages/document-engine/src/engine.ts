@@ -1920,17 +1920,21 @@ export class DocumentEngine implements DocumentEnginePort {
           }
         }
 
+        const queryBypass = this.resolveBypassRules(ctx);
+        // Per-row `get` rules read fields the caller may not have selected, so rows are fetched whole
+        // and `select` is applied by formatPublicDoc after rule evaluation (never leaks unselected fields).
+        const skipProjection = !queryBypass;
         const compiledPlan = compileQueryToParameterizedSql({
           projectId: ctx.projectId,
           normalizedQuery,
           matchedCompositeIndex: matchedIndex,
           cursor: activeCursor,
           cursorMode,
+          skipProjection,
         });
 
         // Execute the compiled plan inside the tenant transaction. On Postgres/Neon
         // this is real SQL; on the in-memory adapter it is the equivalent evaluator.
-        const queryBypass = this.resolveBypassRules(ctx);
         const pageDocs: DocumentRecord[] = [];
         let pageHasMore = false;
         let pageCursorDoc: QueriedDocument | null = null;
@@ -1976,6 +1980,7 @@ export class DocumentEngine implements DocumentEnginePort {
             matchedCompositeIndex: matchedIndex,
             cursor: resumeCursor,
             cursorMode: "startAfter",
+            skipProjection,
           });
           batch = await tx.queryDocuments(nextPlan);
           scans += 1;
