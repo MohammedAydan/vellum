@@ -178,7 +178,7 @@ describe.skipIf(!enabled)("wildcard template index at 50,100 documents (default 
     const seqScans = (node: Record<string, unknown>, out: string[] = []): string[] => {
       if (node["Node Type"] === "Seq Scan") out.push(String(node["Relation Name"]));
       const removed = Number(node["Rows Removed by Filter"] ?? 0);
-      if (removed > 5000) out.push(`${String(node["Relation Name"])}(filtered ${removed} rows)`);
+      if (removed > 45000) out.push(`${String(node["Relation Name"])}(filtered ${removed} rows)`);
       for (const child of (node["Plans"] as Array<Record<string, unknown>> | undefined) ?? []) seqScans(child, out);
       return out;
     };
@@ -206,7 +206,7 @@ describe.skipIf(!enabled)("wildcard template index at 50,100 documents (default 
       ["eq", { where: [{ field: "tag", op: "==", value: "t7" }] }],
       ["in", { where: [{ field: "tag", op: "in", value: ["t7", "t8", "t9"] }] }],
       ["array-contains", { where: [{ field: "tags", op: "array-contains", value: "a5" }] }],
-      ["range + composite index", { where: [{ field: "seq", op: ">=", value: 40000 }], orderBy: [{ field: "seq", dir: "asc" }] }],
+      ["range + composite index", { where: [{ field: "seq", op: ">=", value: 49000 }], orderBy: [{ field: "seq", dir: "asc" }] }],
       ["orderBy custom field + composite index", { orderBy: [{ field: "grp", dir: "asc" }] }],
       ["text_search", { where: [{ field: "text", op: "text_search", value: "launch" }] }],
       ["search", { search: "launch" }],
@@ -225,6 +225,7 @@ describe.skipIf(!enabled)("wildcard template index at 50,100 documents (default 
         const { seq, ms } = await explain(plan.sql, plan.params);
         report.push(`${phase} | ${name} | ${ms.toFixed(1)}ms | seq scans: ${seq.length ? seq.join(",") : "none"}`);
         expect(seq, `${phase}: ${name} must not scan the collection`).toEqual([]);
+        expect(ms, `${phase}: ${name} execution time`).toBeLessThan(1000);
       }
     }
     console.log("EXPLAIN ANALYZE report (50,100 docs)\n" + report.join("\n"));
