@@ -161,15 +161,16 @@ VellumOAuth createVellumOAuth({
         if (kIsWeb) {
           throw const VellumException(
             code: 'UNSUPPORTED',
-            message: 'Loopback sign-in does not support Flutter web. Pass your own VellumOAuthLauncher.',
+            message:
+                'Loopback sign-in does not support Flutter web. Pass your own VellumOAuthLauncher.',
             statusCode: 0,
           );
         }
         final listener = await bindLoopbackListener(parsed);
         return VellumOAuthSession(
           redirectUri: listener.redirect.toString(),
-          launcher: (Uri url, String scheme) =>
-              listener.wait(() => _openInBrowser(url), const Duration(minutes: 5)),
+          launcher: (Uri url, String scheme) => listener.wait(
+              () => _openInBrowser(url), const Duration(minutes: 5)),
           close: listener.close,
         );
       },

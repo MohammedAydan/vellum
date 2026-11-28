@@ -182,4 +182,21 @@ describe("localhost development bypass (dev-flagged keys)", () => {
       warn.mockRestore();
     }
   });
+  it("a project origin entry http://localhost:* allows any local port on REST and the shared WS/SSE checker, nothing else", async () => {
+    const { app, store } = setup([key({ allowedOrigins: ["http://localhost:*", "http://127.0.0.1:*"] })]);
+    for (const o of ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:8080", "http://localhost"]) {
+      const res = await app.fetch(req("/v1/projects/p1/collections/a", o));
+      expect(res.headers.get("access-control-allow-origin")).toBe(o);
+      expect(res.headers.get("access-control-allow-credentials")).toBeNull();
+    }
+    for (const o of ["https://localhost:3000", "http://localhost.evil.example:3000", "http://[::1]:3000", "https://evil.example"]) {
+      const res = await app.fetch(req("/v1/projects/p1/collections/a", o));
+      expect(res.headers.get("access-control-allow-origin")).toBeNull();
+    }
+    const allowed = createProjectOriginChecker(store);
+    expect(await allowed("p1", "http://localhost:4321")).toBe(true);
+    expect(await allowed("p1", "http://127.0.0.1:9")).toBe(true);
+    expect(await allowed("p1", "http://localhost.evil.example:4321")).toBe(false);
+    expect(await allowed("p2", "http://localhost:4321")).toBe(false);
+  });
 });

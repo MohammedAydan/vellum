@@ -124,7 +124,12 @@ void main() {
   test('a missing document reports exists == false once', () async {
     final h = await docHarness();
     try {
-      await h.send({'type': 'initial_sync', 'subId': h.subId, 'seqId': 1, 'documents': []});
+      await h.send({
+        'type': 'initial_sync',
+        'subId': h.subId,
+        'seqId': 1,
+        'documents': []
+      });
       await Future<void>.delayed(const Duration(milliseconds: 500));
       expect(h.seen, [false]);
     } finally {
@@ -141,8 +146,19 @@ void main() {
       'data': {'n': 1}
     };
     try {
-      await h.send({'type': 'initial_sync', 'subId': h.subId, 'seqId': 1, 'documents': [doc]});
-      await h.send({'type': 'mutation', 'subId': h.subId, 'seqId': 2, 'operation': 'update', 'document': doc});
+      await h.send({
+        'type': 'initial_sync',
+        'subId': h.subId,
+        'seqId': 1,
+        'documents': [doc]
+      });
+      await h.send({
+        'type': 'mutation',
+        'subId': h.subId,
+        'seqId': 2,
+        'operation': 'update',
+        'document': doc
+      });
       await Future<void>.delayed(const Duration(milliseconds: 500));
       expect(h.seen, [true]);
     } finally {
@@ -150,7 +166,8 @@ void main() {
     }
   });
 
-  test('connectionState stream reports connecting then connected with transport kind (Track 3)',
+  test(
+      'connectionState stream reports connecting then connected with transport kind (Track 3)',
       () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final listener = server.listen((request) async {
@@ -190,7 +207,9 @@ void main() {
   });
 
   // Recipe 2 (Flutter): missing -> created (v1, once) -> updated (v2) -> deleted / TTL-expired, no duplicates.
-  test('missing-document lifecycle: false, true v1 once, true v2, then false on delete and TTL expiry', () async {
+  test(
+      'missing-document lifecycle: false, true v1 once, true v2, then false on delete and TTL expiry',
+      () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final sockets = <WebSocket>[];
     final subIds = <String>[];
@@ -200,7 +219,9 @@ void main() {
       sockets.add(socket);
       socket.listen((raw) {
         final frame = jsonDecode(raw as String) as Map;
-        if (frame['type'] == 'auth') socket.add(jsonEncode({'type': 'auth_ack'}));
+        if (frame['type'] == 'auth') {
+          socket.add(jsonEncode({'type': 'auth_ack'}));
+        }
         if (frame['type'] == 'subscribe') {
           subIds.add(frame['subId'] as String);
           if (subIds.length == 2 && !ready.isCompleted) ready.complete();
@@ -212,25 +233,74 @@ void main() {
         projectId: 'project',
         apiKey: 'pk_test',
         realtimeMode: VellumRealtimeMode.websocket,
-        httpTransport: (method, url, headers, body) async => <String, Object?>{});
+        httpTransport: (method, url, headers, body) async =>
+            <String, Object?>{});
     final life = <String>[];
     final ttl = <String>[];
     final errors = <Object>[];
-    String tag(DocumentSnapshot<Map<String, Object?>> s) => '${s.exists}:${s.exists ? s.version : 0}';
-    final s1 = client.doc('chats/c1/messages/missing_life_2').snapshots().listen((s) => life.add(tag(s)), onError: errors.add);
-    final s2 = client.doc('chats/c1/messages/ttl_life').snapshots().listen((s) => ttl.add(tag(s)), onError: errors.add);
+    String tag(DocumentSnapshot<Map<String, Object?>> s) =>
+        '${s.exists}:${s.exists ? s.version : 0}';
+    final s1 = client
+        .doc('chats/c1/messages/missing_life_2')
+        .snapshots()
+        .listen((s) => life.add(tag(s)), onError: errors.add);
+    final s2 = client
+        .doc('chats/c1/messages/ttl_life')
+        .snapshots()
+        .listen((s) => ttl.add(tag(s)), onError: errors.add);
     try {
       await ready.future.timeout(const Duration(seconds: 3));
-      Map<String, Object?> doc(String id, int v) => {'documentId': id, 'path': 'chats/c1/messages/$id', 'version': v, 'data': {'memberIds': ['alice']}};
+      Map<String, Object?> doc(String id, int v) => {
+            'documentId': id,
+            'path': 'chats/c1/messages/$id',
+            'version': v,
+            'data': {
+              'memberIds': ['alice']
+            }
+          };
       void send(Map<String, Object?> f) => sockets.first.add(jsonEncode(f));
       final lifeSub = subIds[0];
       final ttlSub = subIds[1];
-      send({'type': 'initial_sync', 'subId': lifeSub, 'seqId': 1, 'documents': []});
-      send({'type': 'initial_sync', 'subId': ttlSub, 'seqId': 1, 'documents': [doc('ttl_life', 1)]});
-      send({'type': 'mutation', 'subId': lifeSub, 'seqId': 2, 'operation': 'create', 'document': doc('missing_life_2', 1)});
-      send({'type': 'mutation', 'subId': lifeSub, 'seqId': 3, 'operation': 'update', 'document': doc('missing_life_2', 2)});
-      send({'type': 'mutation', 'subId': lifeSub, 'seqId': 4, 'operation': 'delete', 'document': doc('missing_life_2', 2)});
-      send({'type': 'mutation', 'subId': ttlSub, 'seqId': 5, 'operation': 'delete', 'document': doc('ttl_life', 0)});
+      send({
+        'type': 'initial_sync',
+        'subId': lifeSub,
+        'seqId': 1,
+        'documents': []
+      });
+      send({
+        'type': 'initial_sync',
+        'subId': ttlSub,
+        'seqId': 1,
+        'documents': [doc('ttl_life', 1)]
+      });
+      send({
+        'type': 'mutation',
+        'subId': lifeSub,
+        'seqId': 2,
+        'operation': 'create',
+        'document': doc('missing_life_2', 1)
+      });
+      send({
+        'type': 'mutation',
+        'subId': lifeSub,
+        'seqId': 3,
+        'operation': 'update',
+        'document': doc('missing_life_2', 2)
+      });
+      send({
+        'type': 'mutation',
+        'subId': lifeSub,
+        'seqId': 4,
+        'operation': 'delete',
+        'document': doc('missing_life_2', 2)
+      });
+      send({
+        'type': 'mutation',
+        'subId': ttlSub,
+        'seqId': 5,
+        'operation': 'delete',
+        'document': doc('ttl_life', 0)
+      });
       await Future<void>.delayed(const Duration(milliseconds: 600));
       expect(life, ['false:0', 'true:1', 'true:2', 'false:0']);
       expect(ttl, ['true:1', 'false:0']);

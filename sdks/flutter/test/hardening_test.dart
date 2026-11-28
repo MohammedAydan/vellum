@@ -69,7 +69,8 @@ class _FakeWebSocketSink implements WebSocketSink {
 }
 
 class _FakeWebSocketChannel implements WebSocketChannel {
-  final StreamController<dynamic> incoming = StreamController<dynamic>.broadcast();
+  final StreamController<dynamic> incoming =
+      StreamController<dynamic>.broadcast();
   final _FakeWebSocketSink fakeSink = _FakeWebSocketSink();
   final Completer<void> readyCompleter = Completer<void>()..complete();
 
@@ -133,7 +134,9 @@ void main() {
 
     tearDown(() => client.dispose());
 
-    test('rejects traversal, encoded traversal, query/fragment, and control chars', () {
+    test(
+        'rejects traversal, encoded traversal, query/fragment, and control chars',
+        () {
       const dangerousPaths = <String>[
         '.',
         '..',
@@ -180,18 +183,22 @@ void main() {
       );
     });
 
-    test('URI-encodes safe special characters in document path segments', () async {
+    test('URI-encodes safe special characters in document path segments',
+        () async {
       await client.collection('users').doc('alice smith+1').get();
       expect(
         capturedUrls.single,
-        equals('GET https://api.example.test/v1/projects/proj_1/documents/users/alice%20smith%2B1'),
+        equals(
+            'GET https://api.example.test/v1/projects/proj_1/documents/users/alice%20smith%2B1'),
       );
     });
   });
 
   group('Security: safe token redaction in toString()', () {
-    test('auth, session, client, and exception toString() never leak secrets', () {
-      const secretAccess = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.secret_access_sig';
+    test('auth, session, client, and exception toString() never leak secrets',
+        () {
+      const secretAccess =
+          'eyJhbGciOiJIUzI1' 'NiJ9.eyJzdWIiOiJ1MSJ9.secret_access_sig';
       const secretRefresh = 'rt_super_secret_refresh_token_123';
       const secretApiKey = 'pk_live_super_secret_api_key_456';
       const secretMfa = 'mfa_secret_ticket_789';
@@ -228,7 +235,8 @@ void main() {
         apiKey: secretApiKey,
         authStorage: storage,
       );
-      final tx = TransactionContext(client: client, transactionToken: secretTxToken);
+      final tx =
+          TransactionContext(client: client, transactionToken: secretTxToken);
       const err = VellumException(
         code: 'UNAUTHORIZED',
         message: 'Rejected Bearer $secretAccess for key $secretApiKey',
@@ -254,7 +262,8 @@ void main() {
   });
 
   group('Security: monotonic sessionEpoch guard', () {
-    test('in-flight refresh cannot resurrect a session after signOut()', () async {
+    test('in-flight refresh cannot resurrect a session after signOut()',
+        () async {
       final refreshGate = Completer<Map<String, dynamic>>();
       final token1 = _jwt(const Duration(hours: 1));
       final token2 = _jwt(const Duration(hours: 2));
@@ -300,7 +309,8 @@ void main() {
       client.dispose();
     });
 
-    test('in-flight refresh cannot resurrect a session after dispose()', () async {
+    test('in-flight refresh cannot resurrect a session after dispose()',
+        () async {
       final refreshGate = Completer<Map<String, dynamic>>();
       final token1 = _jwt(const Duration(hours: 1));
       final token2 = _jwt(const Duration(hours: 2));
@@ -336,7 +346,8 @@ void main() {
   });
 
   group('Resilience: timeout, retries, Retry-After, and write safety', () {
-    test('throws structured REQUEST_TIMEOUT VellumException on timeout', () async {
+    test('throws structured REQUEST_TIMEOUT VellumException on timeout',
+        () async {
       final client = VellumClient(
         endpoint: 'http://localhost:8080',
         projectId: 'p',
@@ -358,7 +369,9 @@ void main() {
       client.dispose();
     });
 
-    test('retries safe reads (GET, POST /query, POST /documents:aggregate) on 429/5xx', () async {
+    test(
+        'retries safe reads (GET, POST /query, POST /documents:aggregate) on 429/5xx',
+        () async {
       var getAttempts = 0;
       var queryAttempts = 0;
       var aggAttempts = 0;
@@ -406,7 +419,9 @@ void main() {
               throw http.ClientException('connection reset');
             }
             return <String, dynamic>{
-              'rows': <Map<String, dynamic>>[<String, dynamic>{'count': 5}],
+              'rows': <Map<String, dynamic>>[
+                <String, dynamic>{'count': 5}
+              ],
             };
           }
           return <String, dynamic>{};
@@ -426,7 +441,9 @@ void main() {
       client.dispose();
     });
 
-    test('never retries writes without idempotencyKey, but retries writes with idempotencyKey', () async {
+    test(
+        'never retries writes without idempotencyKey, but retries writes with idempotencyKey',
+        () async {
       var unsafePutAttempts = 0;
       var safePutAttempts = 0;
       String? capturedKey;
@@ -492,7 +509,8 @@ void main() {
       expect(parsed, equals(const Duration(seconds: 5)));
     });
 
-    test('httpClientTransport preserves Retry-After on 429 and retries cleanly', () async {
+    test('httpClientTransport preserves Retry-After on 429 and retries cleanly',
+        () async {
       var calls = 0;
       final client = VellumClient(
         baseUrl: 'https://api.example.test/v1/projects/p',
@@ -535,7 +553,9 @@ void main() {
   });
 
   group('Resilience: single-flight 401 refresh coalescing', () {
-    test('parallel 401 storm triggers exactly one refresh and replays all requests', () async {
+    test(
+        'parallel 401 storm triggers exactly one refresh and replays all requests',
+        () async {
       final token1 = _jwt(const Duration(hours: 1));
       final token2 = _jwt(const Duration(hours: 2));
       var refreshCalls = 0;
@@ -590,7 +610,8 @@ void main() {
 
       final snaps = await Future.wait(futures);
       expect(refreshCalls, equals(1));
-      expect(snaps.map((s) => s.id).toList(), equals(<String>['u1', 'u2', 'u3', 'u4', 'u5']));
+      expect(snaps.map((s) => s.id).toList(),
+          equals(<String>['u1', 'u2', 'u3', 'u4', 'u5']));
       client.dispose();
     });
   });
@@ -612,7 +633,9 @@ void main() {
       }
     });
 
-    test('tracks resumeSeqId across reconnects and bounds offline outbound queue', () async {
+    test(
+        'tracks resumeSeqId across reconnects and bounds offline outbound queue',
+        () async {
       final channels = <_FakeWebSocketChannel>[];
       final received = <Map<String, dynamic>>[];
 
@@ -678,7 +701,8 @@ void main() {
       expect(transport.outboundQueueLength, equals(0));
     });
 
-    test('any inbound frame counts as liveness, a silent socket does not', () async {
+    test('any inbound frame counts as liveness, a silent socket does not',
+        () async {
       final channels = <_FakeWebSocketChannel>[];
       final errors = <Object>[];
       final transport = VellumRealtimeTransport(
@@ -702,7 +726,8 @@ void main() {
       // Data frames (no pongs) every 10 ms for 120 ms: no reconnect.
       for (var i = 0; i < 12; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 10));
-        channels.first.pushFrame(<String, dynamic>{'type': 'mutation', 'subId': 'x'});
+        channels.first
+            .pushFrame(<String, dynamic>{'type': 'mutation', 'subId': 'x'});
       }
       expect(channels, hasLength(1));
       expect(errors, isEmpty);
@@ -719,10 +744,12 @@ void main() {
         auth: () async => <String, dynamic>{},
         onFrame: (_) {},
       );
-      expect(t.heartbeatInterval + t.pongTimeout, lessThanOrEqualTo(const Duration(seconds: 50)));
+      expect(t.heartbeatInterval + t.pongTimeout,
+          lessThanOrEqualTo(const Duration(seconds: 50)));
     });
 
-    test('heartbeat detects dead socket on pong timeout and triggers reconnect', () async {
+    test('heartbeat detects dead socket on pong timeout and triggers reconnect',
+        () async {
       final channels = <_FakeWebSocketChannel>[];
       final errors = <Object>[];
 
@@ -755,8 +782,11 @@ void main() {
     });
   });
 
-  group('Enterprise DX: pagination streams, chunked batches, and GET coalescing', () {
-    test('streamPages() and streamDocuments() lazily iterate cursor pages', () async {
+  group(
+      'Enterprise DX: pagination streams, chunked batches, and GET coalescing',
+      () {
+    test('streamPages() and streamDocuments() lazily iterate cursor pages',
+        () async {
       final seenCursors = <String?>[];
       final client = VellumClient(
         endpoint: 'http://localhost:8080',
@@ -798,13 +828,19 @@ void main() {
         },
       );
 
-      final docs = await client.collection('items').streamDocuments(pageSize: 2).toList();
-      expect(docs.map((d) => d.id).toList(), equals(<String>['d1', 'd2', 'd3']));
+      final docs = await client
+          .collection('items')
+          .streamDocuments(pageSize: 2)
+          .toList();
+      expect(
+          docs.map((d) => d.id).toList(), equals(<String>['d1', 'd2', 'd3']));
       expect(seenCursors, equals(<String?>[null, 'cur_2']));
       client.dispose();
     });
 
-    test('writeBatchChunked and VellumWriteBatch.commitChunked split into chunks with idempotency keys', () async {
+    test(
+        'writeBatchChunked and VellumWriteBatch.commitChunked split into chunks with idempotency keys',
+        () async {
       final chunkSizes = <int>[];
       final idempotencyKeys = <String?>[];
 
@@ -838,7 +874,9 @@ void main() {
       client.dispose();
     });
 
-    test('chunked writes default to the server limit of 100 and never exceed it', () async {
+    test(
+        'chunked writes default to the server limit of 100 and never exceed it',
+        () async {
       final sizes = <int>[];
       final client = VellumClient(
         endpoint: 'http://localhost:8080',
@@ -851,7 +889,11 @@ void main() {
       );
       final writes = <Map<String, Object?>>[
         for (var i = 0; i < 250; i++)
-          <String, Object?>{'type': 'set', 'path': 'items/i$i', 'data': <String, Object?>{'i': i}},
+          <String, Object?>{
+            'type': 'set',
+            'path': 'items/i$i',
+            'data': <String, Object?>{'i': i}
+          },
       ];
       await client.writeBatchChunked(writes);
       expect(sizes, equals(<int>[100, 100, 50]));
@@ -861,7 +903,8 @@ void main() {
       client.dispose();
     });
 
-    test('single-flight GET coalescing dedupes concurrent identical GETs', () async {
+    test('single-flight GET coalescing dedupes concurrent identical GETs',
+        () async {
       var networkCalls = 0;
       final gate = Completer<Map<String, dynamic>>();
 

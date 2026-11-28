@@ -85,14 +85,18 @@ void main() {
     test('generates atomic operations payload', () {
       expect(FieldValue.serverTimestamp(), equals({'\$op': 'serverTimestamp'}));
       expect(FieldValue.increment(5), equals({'\$op': 'inc', 'by': 5}));
-      expect(FieldValue.arrayUnion(['a', 'b']), equals({
-        '\$op': 'arrayUnion',
-        'elements': ['a', 'b'],
-      }));
-      expect(FieldValue.arrayRemove(['c']), equals({
-        '\$op': 'arrayRemove',
-        'elements': ['c'],
-      }));
+      expect(
+          FieldValue.arrayUnion(['a', 'b']),
+          equals({
+            '\$op': 'arrayUnion',
+            'elements': ['a', 'b'],
+          }));
+      expect(
+          FieldValue.arrayRemove(['c']),
+          equals({
+            '\$op': 'arrayRemove',
+            'elements': ['c'],
+          }));
       expect(FieldValue.delete(), equals({'\$op': 'deleteField'}));
       expect(FieldValue.deleteField(), equals({'\$op': 'deleteField'}));
     });
@@ -222,7 +226,10 @@ void main() {
           if (url.endsWith('/transactions:commit')) {
             commitCalled = true;
             expect(body?['transactionToken'], equals('tok_xyz987'));
-            return {'status': 'committed', 'commitTimestamp': '2026-11-15T00:00:00Z'};
+            return {
+              'status': 'committed',
+              'commitTimestamp': '2026-11-15T00:00:00Z'
+            };
           }
           if (method == 'GET') {
             return {
@@ -336,23 +343,33 @@ void main() {
           .orderBy('priority', dir: 'desc')
           .startAfter('opaque-cursor');
 
-      expect(query.toRealtimeQuerySpec(), equals(<String, dynamic>{
-        'collectionPath': 'tasks',
-        'where': <Map<String, dynamic>>[
-          <String, dynamic>{'field': 'ownerId', 'op': '==', 'value': 'user-1'},
-        ],
-        'orderBy': <Map<String, dynamic>>[
-          <String, dynamic>{'field': 'priority', 'direction': 'desc'},
-        ],
-        'limit': 50,
-      }));
+      expect(
+          query.toRealtimeQuerySpec(),
+          equals(<String, dynamic>{
+            'collectionPath': 'tasks',
+            'where': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'field': 'ownerId',
+                'op': '==',
+                'value': 'user-1'
+              },
+            ],
+            'orderBy': <Map<String, dynamic>>[
+              <String, dynamic>{'field': 'priority', 'direction': 'desc'},
+            ],
+            'limit': 50,
+          }));
     });
 
     test('converts endpoints to the canonical realtime URL', () {
-      expect(vellumRealtimeUrl('http://localhost:8080'), equals('ws://localhost:8080/v1/realtime'));
-      expect(vellumRealtimeUrl('https://api.example.com/'), equals('wss://api.example.com/v1/realtime'));
-      expect(vellumRealtimeUrl('ws://host:9000'), equals('ws://host:9000/v1/realtime'));
-      expect(vellumRealtimeUrl('wss://host/v1/realtime'), equals('wss://host/v1/realtime'));
+      expect(vellumRealtimeUrl('http://localhost:8080'),
+          equals('ws://localhost:8080/v1/realtime'));
+      expect(vellumRealtimeUrl('https://api.example.com/'),
+          equals('wss://api.example.com/v1/realtime'));
+      expect(vellumRealtimeUrl('ws://host:9000'),
+          equals('ws://host:9000/v1/realtime'));
+      expect(vellumRealtimeUrl('wss://host/v1/realtime'),
+          equals('wss://host/v1/realtime'));
     });
 
     test('encodes and decodes protocol frames', () {

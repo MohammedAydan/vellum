@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.10
+
+Lockstep release with the platform (beta). Upgrade the API, JS SDK and Flutter SDK together.
+
+- Missing-document `doc.snapshots()` lifecycle: `exists == false` first, then the document when it is created, then `exists == false` again on delete or TTL expiry.
+- `VellumOutbox` flushes automatically when the connection returns.
+- Realtime uses pooled sockets (up to 25 subscriptions per socket), and a server `SUBSCRIPTION_LIMIT_EXCEEDED` frame now carries `limit`.
+- Backoff on 5xx and `Retry-After` handling are covered by tests.
+- pub.dev score: the library no longer shares a name with its re-export (dartdoc could not generate docs), the package ships an `example/`, and this changelog lists the current version.
+
 ## 0.0.9
 
 Lockstep release with the platform (beta). Works with the 0.0.8 API, and the 0.0.9 API is recommended. Upgrade the API, JS SDK and Flutter SDK together.

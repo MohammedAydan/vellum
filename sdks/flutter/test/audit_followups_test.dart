@@ -5,7 +5,9 @@ import 'package:vellum_flutter/src/oauth_launcher/loopback_io.dart';
 import 'package:vellum_flutter/vellum_flutter.dart';
 
 VellumClient _client(
-  Future<Map<String, dynamic>> Function(String method, String url, Map<String, Object?>? body) handler, {
+  Future<Map<String, dynamic>> Function(
+          String method, String url, Map<String, Object?>? body)
+      handler, {
   DocumentCacheStore? cacheStore,
 }) =>
     VellumClient(
@@ -32,7 +34,8 @@ void main() {
         }
         return <String, dynamic>{};
       });
-      final result = await client.auth.signInWithOAuth(provider: 'google', idToken: 'x');
+      final result =
+          await client.auth.signInWithOAuth(provider: 'google', idToken: 'x');
       expect(result, isA<VellumMfaRequired>());
       expect((result as VellumMfaRequired).mfaTicket, 'mfa_1');
       expect(result.factors, <String>['totp']);
@@ -43,16 +46,21 @@ void main() {
   });
 
   group('transactions', () {
-    test('get on a missing document is an exists:false snapshot, create stages a create write', () async {
+    test(
+        'get on a missing document is an exists:false snapshot, create stages a create write',
+        () async {
       Map<String, Object?>? commitBody;
       final client = _client((m, url, body) async {
-        if (url.endsWith('/transactions:begin')) return <String, dynamic>{'transactionToken': 'tok'};
+        if (url.endsWith('/transactions:begin')) {
+          return <String, dynamic>{'transactionToken': 'tok'};
+        }
         if (url.endsWith('/transactions:commit')) {
           commitBody = body;
           return <String, dynamic>{'status': 'committed'};
         }
         if (m == 'GET') {
-          throw const VellumException(code: 'NOT_FOUND', message: 'nope', statusCode: 404);
+          throw const VellumException(
+              code: 'NOT_FOUND', message: 'nope', statusCode: 404);
         }
         return <String, dynamic>{};
       });
@@ -78,15 +86,20 @@ void main() {
 
     test('other read errors still throw', () async {
       final client = _client((m, url, body) async {
-        if (url.endsWith('/transactions:begin')) return <String, dynamic>{'transactionToken': 'tok'};
+        if (url.endsWith('/transactions:begin')) {
+          return <String, dynamic>{'transactionToken': 'tok'};
+        }
         if (m == 'GET') {
-          throw const VellumException(code: 'PERMISSION_DENIED', message: 'no', statusCode: 403);
+          throw const VellumException(
+              code: 'PERMISSION_DENIED', message: 'no', statusCode: 403);
         }
         return <String, dynamic>{};
       });
       await expectLater(
-        client.runTransaction((tx) => tx.get(client.collection('users').doc('u1'))),
-        throwsA(isA<VellumException>().having((e) => e.code, 'code', 'PERMISSION_DENIED')),
+        client.runTransaction(
+            (tx) => tx.get(client.collection('users').doc('u1'))),
+        throwsA(isA<VellumException>()
+            .having((e) => e.code, 'code', 'PERMISSION_DENIED')),
       );
     });
 
@@ -94,10 +107,15 @@ void main() {
       final store = MemoryDocumentCacheStore();
       await store.set(
         'users/u1',
-        CachedDocument(path: 'users/u1', value: <String, Object?>{'a': 1}, storedAt: DateTime.now()),
+        CachedDocument(
+            path: 'users/u1',
+            value: <String, Object?>{'a': 1},
+            storedAt: DateTime.now()),
       );
       final client = _client((m, url, body) async {
-        if (url.endsWith('/transactions:begin')) return <String, dynamic>{'transactionToken': 'tok'};
+        if (url.endsWith('/transactions:begin')) {
+          return <String, dynamic>{'transactionToken': 'tok'};
+        }
         return <String, dynamic>{'status': 'committed'};
       }, cacheStore: store);
       await client.runTransaction((tx) async {
@@ -109,13 +127,15 @@ void main() {
 
   group('loopback with port 0', () {
     test('binds a free port and reports it in the redirect', () async {
-      final listener = await bindLoopbackListener(Uri.parse('http://127.0.0.1:0/callback'));
+      final listener =
+          await bindLoopbackListener(Uri.parse('http://127.0.0.1:0/callback'));
       try {
         expect(listener.redirect.port, greaterThan(0));
         final port = listener.redirect.port;
         final result = listener.wait(() async {
           final c = HttpClient();
-          final req = await c.getUrl(Uri.parse('http://127.0.0.1:$port/callback?vellum_code=abc&state=s'));
+          final req = await c.getUrl(Uri.parse(
+              'http://127.0.0.1:$port/callback?vellum_code=abc&state=s'));
           await (await req.close()).drain<void>();
           c.close();
         }, const Duration(seconds: 10));
@@ -127,13 +147,16 @@ void main() {
       }
     });
 
-    test('VellumOAuth sends the real port to the API and closes the listener', () async {
+    test('VellumOAuth sends the real port to the API and closes the listener',
+        () async {
       String? sentRedirect;
       late VellumClient client;
       client = _client((m, url, body) async {
         if (url.endsWith('/auth/oauth/google/start')) {
           sentRedirect = body?['redirectUri'] as String?;
-          return <String, dynamic>{'authorizeUrl': 'https://accounts.google.com/auth'};
+          return <String, dynamic>{
+            'authorizeUrl': 'https://accounts.google.com/auth'
+          };
         }
         return <String, dynamic>{};
       });
@@ -144,10 +167,12 @@ void main() {
         redirectUri: 'http://127.0.0.1:0/callback',
         launcher: (u, s) => Future<String>.error(StateError('unused')),
         sessionFactory: () async {
-          final listener = await bindLoopbackListener(Uri.parse('http://127.0.0.1:0/callback'));
+          final listener = await bindLoopbackListener(
+              Uri.parse('http://127.0.0.1:0/callback'));
           return made = VellumOAuthSession(
             redirectUri: listener.redirect.toString(),
-            launcher: (u, s) async => 'http://127.0.0.1/callback?error=access_denied',
+            launcher: (u, s) async =>
+                'http://127.0.0.1/callback?error=access_denied',
             close: () async {
               closed = true;
               await listener.close();
@@ -157,7 +182,8 @@ void main() {
       );
       await expectLater(
         oauth.signIn('google'),
-        throwsA(isA<VellumException>().having((e) => e.code, 'code', 'PERMISSION_DENIED')),
+        throwsA(isA<VellumException>()
+            .having((e) => e.code, 'code', 'PERMISSION_DENIED')),
       );
       expect(Uri.parse(sentRedirect!).port, greaterThan(0));
       expect(sentRedirect, made!.redirectUri);
@@ -165,10 +191,16 @@ void main() {
       client.auth.dispose();
     });
 
-    test('systemBrowserLauncher refuses port 0 and createVellumOAuth accepts it', () {
-      expect(() => systemBrowserLauncher(redirectUri: 'http://127.0.0.1:0/callback'), throwsArgumentError);
+    test(
+        'systemBrowserLauncher refuses port 0 and createVellumOAuth accepts it',
+        () {
+      expect(
+          () =>
+              systemBrowserLauncher(redirectUri: 'http://127.0.0.1:0/callback'),
+          throwsArgumentError);
       final client = _client((m, url, body) async => <String, dynamic>{});
-      final oauth = createVellumOAuth(auth: client.auth, redirectUri: 'http://127.0.0.1:0/callback');
+      final oauth = createVellumOAuth(
+          auth: client.auth, redirectUri: 'http://127.0.0.1:0/callback');
       expect(oauth.sessionFactory, isNotNull);
       client.auth.dispose();
     });
@@ -177,19 +209,25 @@ void main() {
 
 void transactionRollback() {
   group('transaction rollback', () {
-    test('rolls back before a conflict retry and when the callback throws, original error kept', () async {
+    test(
+        'rolls back before a conflict retry and when the callback throws, original error kept',
+        () async {
       final rollbacks = <String>[];
       var begins = 0;
       var commits = 0;
       final client = _client((m, url, body) async {
-        if (url.endsWith('/transactions:begin')) return <String, dynamic>{'transactionToken': 'tok_${begins++}'};
+        if (url.endsWith('/transactions:begin')) {
+          return <String, dynamic>{'transactionToken': 'tok_${begins++}'};
+        }
         if (url.endsWith('/transactions:rollback')) {
           rollbacks.add(body!['transactionToken'] as String);
-          throw Exception('rollback failed'); // must never replace the original outcome
+          throw Exception(
+              'rollback failed'); // must never replace the original outcome
         }
         if (url.endsWith('/transactions:commit')) {
           if (commits++ == 0) {
-            throw const VellumException(code: 'ABORTED_CONFLICT', message: 'conflict', statusCode: 409);
+            throw const VellumException(
+                code: 'ABORTED_CONFLICT', message: 'conflict', statusCode: 409);
           }
           return <String, dynamic>{'status': 'committed'};
         }
@@ -206,10 +244,13 @@ void transactionRollback() {
       expect(rollbacks, <String>['tok_0', 'tok_2']);
     });
 
-    test('no rollback after a successful commit or on SESSION_CHANGED', () async {
+    test('no rollback after a successful commit or on SESSION_CHANGED',
+        () async {
       var rollbacks = 0;
       final client = _client((m, url, body) async {
-        if (url.endsWith('/transactions:begin')) return <String, dynamic>{'transactionToken': 't'};
+        if (url.endsWith('/transactions:begin')) {
+          return <String, dynamic>{'transactionToken': 't'};
+        }
         if (url.endsWith('/transactions:rollback')) {
           rollbacks++;
           return <String, dynamic>{};
@@ -219,9 +260,10 @@ void transactionRollback() {
       await client.runTransaction((tx) async => 1);
       expect(rollbacks, 0);
       await expectLater(
-        client.runTransaction<void>((tx) async =>
-            throw const VellumException(code: 'SESSION_CHANGED', message: 'x', statusCode: 401)),
-        throwsA(isA<VellumException>().having((e) => e.code, 'code', 'SESSION_CHANGED')),
+        client.runTransaction<void>((tx) async => throw const VellumException(
+            code: 'SESSION_CHANGED', message: 'x', statusCode: 401)),
+        throwsA(isA<VellumException>()
+            .having((e) => e.code, 'code', 'SESSION_CHANGED')),
       );
       expect(rollbacks, 0);
     });
@@ -230,11 +272,14 @@ void transactionRollback() {
 
 void batchPreconditions() {
   group('batch write preconditions', () {
-    test('flat wire format with ifVersion and exists, 412 surfaces as an exception', () async {
+    test(
+        'flat wire format with ifVersion and exists, 412 surfaces as an exception',
+        () async {
       Map<String, Object?>? sent;
       final client = _client((m, url, body) async {
         sent = body;
-        throw const VellumException(code: 'FAILED_PRECONDITION', message: 'stale', statusCode: 412);
+        throw const VellumException(
+            code: 'FAILED_PRECONDITION', message: 'stale', statusCode: 412);
       });
       final a = client.collection('items').doc('a');
       final b = client.collection('items').doc('b');
@@ -243,19 +288,33 @@ void batchPreconditions() {
           .set(a, <String, Object?>{'n': 1}, ifVersion: 3)
           .update(b, <String, Object?>{'n': 2}, ifVersion: 7, exists: true)
           .delete(client.collection('items').doc('c'), exists: false)
-          .create(client.collection('items').doc('d'), <String, Object?>{'n': 4});
+          .create(
+              client.collection('items').doc('d'), <String, Object?>{'n': 4});
       await expectLater(
         batch.commit(),
-        throwsA(isA<VellumException>().having((e) => e.statusCode, 'status', 412)),
+        throwsA(
+            isA<VellumException>().having((e) => e.statusCode, 'status', 412)),
       );
       final writes = (sent!['writes'] as List).cast<Map<String, Object?>>();
       expect(writes[0], <String, Object?>{
-        'type': 'set', 'path': 'items/a', 'data': <String, Object?>{'n': 1}, 'merge': false, 'ifVersion': 3,
+        'type': 'set',
+        'path': 'items/a',
+        'data': <String, Object?>{'n': 1},
+        'merge': false,
+        'ifVersion': 3,
       });
       expect(writes[1], <String, Object?>{
-        'type': 'update', 'path': 'items/b', 'data': <String, Object?>{'n': 2}, 'ifVersion': 7, 'exists': true,
+        'type': 'update',
+        'path': 'items/b',
+        'data': <String, Object?>{'n': 2},
+        'ifVersion': 7,
+        'exists': true,
       });
-      expect(writes[2], <String, Object?>{'type': 'delete', 'path': 'items/c', 'exists': false});
+      expect(writes[2], <String, Object?>{
+        'type': 'delete',
+        'path': 'items/c',
+        'exists': false
+      });
       expect(writes[3]['type'], 'create');
       expect(writes[3].containsKey('ifVersion'), isFalse);
     });

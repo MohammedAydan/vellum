@@ -368,7 +368,8 @@ class VellumClient implements VellumClientPort {
   /// [DocumentCacheStore] to persist to disk, or set `enableCache: false`.
   final DocumentCacheStore? documentCache;
 
-  final List<Future<void> Function()> _signOutHooks = <Future<void> Function()>[];
+  final List<Future<void> Function()> _signOutHooks =
+      <Future<void> Function()>[];
 
   /// Registers cleanup that runs when the user signs out (the offline outbox
   /// uses it to drop queued writes). Hook errors never block sign-out.
@@ -387,6 +388,7 @@ class VellumClient implements VellumClientPort {
     final store = documentCache;
     if (store != null) unawaited(store.clear().catchError((Object _) {}));
   }
+
   String? _customToken;
 
   /// Injects an externally issued bearer token. It wins over [getAuthToken]
@@ -397,6 +399,7 @@ class VellumClient implements VellumClientPort {
     _customToken = next;
     realtime.refreshCredentials();
   }
+
   final HttpTransport httpTransport;
   final TokenStoragePort authTokenStorage;
   final String? realtimeUrlOverride;
@@ -431,7 +434,8 @@ class VellumClient implements VellumClientPort {
           VellumRealtimeMode.websocket => 'websocket',
           VellumRealtimeMode.sse => 'sse',
         };
-    return VellumConnectionState(state: realtime.connectionState, transportKind: kind);
+    return VellumConnectionState(
+        state: realtime.connectionState, transportKind: kind);
   }
 
   /// Broadcast stream of realtime connection-state transitions (Track 3).
@@ -700,7 +704,9 @@ class VellumClient implements VellumClientPort {
       final slash = path.lastIndexOf('/');
       if (slash > 0) {
         // Collection queries that included this document are no longer exact.
-        unawaited(store.deletePrefix('${path.substring(0, slash)}/').catchError((Object _) {}));
+        unawaited(store
+            .deletePrefix('${path.substring(0, slash)}/')
+            .catchError((Object _) {}));
       }
     }
   }

@@ -54,9 +54,11 @@ void main() {
       httpTransport: (method, url, headers, body) async {
         if (url.endsWith('/auth/oauth/google/start') ||
             url.endsWith('/auth/oauth/github/start')) {
-          starts.add(<String, Object?>{'url': url, 'body': body, 'headers': headers});
+          starts.add(
+              <String, Object?>{'url': url, 'body': body, 'headers': headers});
           return <String, dynamic>{
-            'authorizeUrl': 'https://accounts.google.com/o/oauth2/v2/auth?state=sealed',
+            'authorizeUrl':
+                'https://accounts.google.com/o/oauth2/v2/auth?state=sealed',
           };
         }
         posts.add(<String, Object?>{'url': url, 'body': body});
@@ -90,11 +92,12 @@ void main() {
     );
     final result = await oauth.signIn('google');
     expect(result, isA<VellumSession>());
-    expect(starts.single['url'], endsWith('/v1/projects/prj_1/auth/oauth/google/start'));
+    expect(starts.single['url'],
+        endsWith('/v1/projects/prj_1/auth/oauth/google/start'));
     expect(starts.single['url'].toString(), isNot(contains('pk_test_abc')));
     expect(started.toString(), isNot(contains('pk_test_abc')));
-    expect(
-        (starts.single['headers']! as Map).values.join(','), contains('pk_test_abc'));
+    expect((starts.single['headers']! as Map).values.join(','),
+        contains('pk_test_abc'));
     final startBody = starts.single['body']! as Map;
     expect(startBody['redirectUri'], 'myapp://auth-callback');
     final sent = posts.single['body']! as Map;
@@ -178,7 +181,9 @@ void main() {
         <String, Object?>{'idToken': 'id.tok.en', 'nonce': 'n'});
   });
 
-  test('signInWithAppleIdToken posts the token, nonce, code and first-time name', () async {
+  test(
+      'signInWithAppleIdToken posts the token, nonce, code and first-time name',
+      () async {
     final result = await client.auth.signInWithAppleIdToken(
       idToken: 'apple.id.token',
       nonce: 'raw-nonce',

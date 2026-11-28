@@ -27,6 +27,22 @@ export interface ProjectCorsStore {
 /** http(s) origins on localhost / 127.0.0.1 / [::1], any port. */
 const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 
+/**
+ * Project allowed-origin entry that opens a local dev server on any port: `http://localhost:*`,
+ * `http://127.0.0.1:*` or `http://[::1]:*` (http or https). No other wildcard is accepted.
+ */
+const LOCAL_WILDCARD_ENTRY = /^(https?):\/\/(localhost|127\.0\.0\.1|\[::1\]):\*$/i;
+
+/** True when a stored allowed-origin entry admits the (already normalized) request origin. */
+export function originEntryMatches(rawEntry: string, normalizedOrigin: string): boolean {
+  const wild = LOCAL_WILDCARD_ENTRY.exec(rawEntry.trim());
+  if (wild) {
+    const m = /^(https?):\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.exec(normalizedOrigin);
+    return !!m && m[1]!.toLowerCase() === wild[1]!.toLowerCase() && m[2]!.toLowerCase() === wild[2]!.toLowerCase();
+  }
+  return normalizeStrictOrigin(rawEntry) === normalizedOrigin;
+}
+
 /** One diagnostic per (project, origin) per process, not per request. */
 const devBypassLogged = new Set<string>();
 const rejectedLogged = new Set<string>();
@@ -71,7 +87,7 @@ export function createProjectOriginChecker(store: ProjectCorsStore): (projectId:
     const normalized = normalizeStrictOrigin(origin);
     if (!normalized || !projectId) return false;
     const origins = await store.listActiveApiKeyOrigins(projectId);
-    if (origins.some((raw) => normalizeStrictOrigin(raw) === normalized)) return true;
+    if (origins.some((raw) => originEntryMatches(raw, normalized))) return true;
     return isDevLocalhostAllowed(store, projectId, normalized);
   };
 }
@@ -88,7 +104,7 @@ export function createProjectCors(
   async function isAllowed(projectId: string, normalizedOrigin: string): Promise<boolean> {
     const origins = await store.listActiveApiKeyOrigins(projectId);
     for (const raw of origins) {
-      if (normalizeStrictOrigin(raw) === normalizedOrigin) return true;
+      if (originEntryMatches(raw, normalizedOrigin)) return true;
     }
     return isDevLocalhostAllowed(store, projectId, normalizedOrigin);
   }

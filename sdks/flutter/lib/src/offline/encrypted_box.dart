@@ -102,7 +102,8 @@ class VellumEncryptedBox {
     return SecretKey(raw);
   }
 
-  List<int> _aad(String scope, String context) => utf8.encode('$scope|$context');
+  List<int> _aad(String scope, String context) =>
+      utf8.encode('$scope|$context');
 
   /// Returns `v1.<base64(nonce|cipher|mac)>`.
   Future<String> seal(
@@ -129,7 +130,8 @@ class VellumEncryptedBox {
     if (!sealed.startsWith('v1.')) return null;
     try {
       final data = base64Decode(sealed.substring(3));
-      final box = SecretBox.fromConcatenation(data, nonceLength: 12, macLength: 16);
+      final box =
+          SecretBox.fromConcatenation(data, nonceLength: 12, macLength: 16);
       final clear = await _algo.decrypt(
         box,
         secretKey: await _loadKey(scope),

@@ -6,7 +6,7 @@
 /// Matches the v1 Tagged Wire Format (`$t` / `$v`), REST `/v1` API, OCC transactions,
 /// `withConverter<T>()` type-safe model mapping, and WebSocket Realtime protocol with
 /// full-jitter exponential backoff (`t0 = 500ms`, `tMax = 30000ms`).
-library vellum_flutter;
+library;
 
 import 'dart:async';
 import 'dart:convert';

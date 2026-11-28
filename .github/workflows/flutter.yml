@@ -70,6 +70,31 @@ jobs:
         working-directory: sdks/flutter
       - run: flutter test
         working-directory: sdks/flutter
+      - name: Dart formatting must be clean (pub.dev static analysis points)
+        working-directory: sdks/flutter
+        run: |
+          dart format --output=none --set-exit-if-changed . || {
+            dart format .
+            git diff > /tmp/format.patch
+            echo "Files need formatting; patch uploaded as an artifact."
+            exit 1
+          }
+      - name: Upload format patch
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dart-format-patch
+          path: /tmp/format.patch
+          if-no-files-found: ignore
+      - name: pub.dev score (pana) must be 160/160
+        working-directory: sdks/flutter
+        run: |
+          dart pub global activate pana
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          pana --no-warning --json . > /tmp/pana.json
+          jq '{granted: .scores.grantedPoints, max: .scores.maxPoints}' /tmp/pana.json
+          jq -r '.report.sections[] | select(.grantedPoints < .maxPoints) | "\(.title): \(.grantedPoints)/\(.maxPoints)\n\(.summary)"' /tmp/pana.json
+          test "$(jq .scores.grantedPoints /tmp/pana.json)" = "$(jq .scores.maxPoints /tmp/pana.json)"
 
   build:
     name: Build ${{ matrix.target }}

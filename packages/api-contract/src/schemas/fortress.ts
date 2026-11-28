@@ -59,8 +59,11 @@ export const KeyRestrictionsSchema = z
       .array(
         z
           .string()
-          .url()
           .max(2_048)
+          .refine(
+            (val) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]):\*$/i.test(val) || (!val.includes("*") && z.string().url().safeParse(val).success),
+            "Origin must be a URL, or http(s)://localhost:* / 127.0.0.1:* / [::1]:* for local development"
+          )
           .refine((val) => !CONTROL_CHAR_REGEX.test(val), "Origin contains invalid control characters")
       )
       .max(100)

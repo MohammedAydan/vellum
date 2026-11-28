@@ -13,7 +13,8 @@ typedef V2Handler = VellumHttpResponse Function(
 );
 
 final String _apiKey = 'pk_test_secret_123';
-final String _bearer = 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMSJ9.signature_value';
+final String _bearer =
+    'Bearer eyJhbGciOiJIUzI1' 'NiJ9.eyJzdWIiOiJ1c3JfMSJ9.signature_value';
 
 int _unique = 0;
 String _fingerprint(String label) => 'fp-v2-$label-${_unique++}';
@@ -89,7 +90,9 @@ void main() {
           VellumInclude(field: 'profile', select: <String>['avatar']),
         ],
       );
-      expect(include.toJson(), equals(<String, dynamic>{
+      expect(
+          include.toJson(),
+          equals(<String, dynamic>{
             'field': 'author',
             'collection': 'users',
             'as': 'writer',
@@ -123,7 +126,8 @@ void main() {
   group('Query V2 serialization', () {
     late VellumClient client;
     setUp(() {
-      client = _client((m, u, h, b) => const VellumHttpResponse(body: <String, dynamic>{}));
+      client = _client(
+          (m, u, h, b) => const VellumHttpResponse(body: <String, dynamic>{}));
     });
 
     test('include() accepts string shorthands and VellumInclude specs', () {
@@ -132,7 +136,9 @@ void main() {
         'author',
         const VellumInclude(field: 'comments', collection: 'comments'),
       ]);
-      expect(q.toQuerySpec()['include'], equals(<Map<String, dynamic>>[
+      expect(
+          q.toQuerySpec()['include'],
+          equals(<Map<String, dynamic>>[
             <String, dynamic>{'field': 'author'},
             <String, dynamic>{'field': 'comments', 'collection': 'comments'},
           ]));
@@ -143,7 +149,9 @@ void main() {
     test('select() serializes dot paths without mutating the receiver', () {
       final base = client.collection('users');
       final q = base.select(const <String>['name', 'author.profile.email']);
-      expect(q.toQuerySpec()['select'], equals(<String>[
+      expect(
+          q.toQuerySpec()['select'],
+          equals(<String>[
             'name',
             'author.profile.email',
           ]));
@@ -170,25 +178,39 @@ void main() {
           .where('slug', 'starts_with_ci', 'doc')
           .where('body', 'text_search', 'database')
           .toQuerySpec();
-      expect(spec['where'], equals(<Map<String, dynamic>>[
-            <String, dynamic>{'field': 'title', 'op': 'contains_ci', 'value': 'hello'},
-            <String, dynamic>{'field': 'slug', 'op': 'starts_with_ci', 'value': 'doc'},
-            <String, dynamic>{'field': 'body', 'op': 'text_search', 'value': 'database'},
+      expect(
+          spec['where'],
+          equals(<Map<String, dynamic>>[
+            <String, dynamic>{
+              'field': 'title',
+              'op': 'contains_ci',
+              'value': 'hello'
+            },
+            <String, dynamic>{
+              'field': 'slug',
+              'op': 'starts_with_ci',
+              'value': 'doc'
+            },
+            <String, dynamic>{
+              'field': 'body',
+              'op': 'text_search',
+              'value': 'database'
+            },
           ]));
     });
 
     test('include/select/or also flow into the realtime query spec', () {
       final spec = client
           .collection('posts')
-          .include(const <Object>['author'])
-          .select(const <String>['title'])
-          .or(<List<Map<String, dynamic>>>[
-            <Map<String, dynamic>>[
-              <String, dynamic>{'field': 'status', 'op': '==', 'value': 'open'},
-            ],
-          ])
-          .toRealtimeQuerySpec();
-      expect(spec['include'], equals(<Map<String, dynamic>>[
+          .include(const <Object>['author']).select(
+              const <String>['title']).or(<List<Map<String, dynamic>>>[
+        <Map<String, dynamic>>[
+          <String, dynamic>{'field': 'status', 'op': '==', 'value': 'open'},
+        ],
+      ]).toRealtimeQuerySpec();
+      expect(
+          spec['include'],
+          equals(<Map<String, dynamic>>[
             <String, dynamic>{'field': 'author'},
           ]));
       expect(spec['select'], equals(<String>['title']));
@@ -216,16 +238,24 @@ void main() {
       body = null;
     });
 
-    test('count() posts the metrics body and returns rows.first.count', () async {
+    test('count() posts the metrics body and returns rows.first.count',
+        () async {
       final client = recordingClient(<String, dynamic>{
-        'rows': <Map<String, dynamic>>[<String, dynamic>{'count': 7}],
+        'rows': <Map<String, dynamic>>[
+          <String, dynamic>{'count': 7}
+        ],
         'executionTimeMs': 1.5,
       });
-      final result = await client.collection('orders').where('status', '==', 'open').count();
+      final result = await client
+          .collection('orders')
+          .where('status', '==', 'open')
+          .count();
       expect(result, equals(7));
       expect(method, equals('POST'));
       expect(url, endsWith('/documents:aggregate'));
-      expect(body, equals(<String, dynamic>{
+      expect(
+          body,
+          equals(<String, dynamic>{
             'collectionPath': 'orders',
             'where': <Map<String, dynamic>>[
               <String, dynamic>{'field': 'status', 'op': '==', 'value': 'open'},
@@ -238,22 +268,30 @@ void main() {
 
     test('sum() posts a sum metric and returns the numeric result', () async {
       final client = recordingClient(<String, dynamic>{
-        'rows': <Map<String, dynamic>>[<String, dynamic>{'sum': 123.5}],
+        'rows': <Map<String, dynamic>>[
+          <String, dynamic>{'sum': 123.5}
+        ],
       });
       final result = await client.collection('orders').sum('total');
       expect(result, equals(123.5));
-      expect(body?['metrics'], equals(<String, dynamic>{
+      expect(
+          body?['metrics'],
+          equals(<String, dynamic>{
             'sum': <String, dynamic>{'op': 'sum', 'field': 'total'},
           }));
     });
 
     test('avg() posts an avg metric and returns the numeric result', () async {
       final client = recordingClient(<String, dynamic>{
-        'rows': <Map<String, dynamic>>[<String, dynamic>{'avg': 41}],
+        'rows': <Map<String, dynamic>>[
+          <String, dynamic>{'avg': 41}
+        ],
       });
       final result = await client.collection('orders').avg('total');
       expect(result, equals(41));
-      expect(body?['metrics'], equals(<String, dynamic>{
+      expect(
+          body?['metrics'],
+          equals(<String, dynamic>{
             'avg': <String, dynamic>{'op': 'avg', 'field': 'total'},
           }));
     });
@@ -275,7 +313,9 @@ void main() {
       expect(result['rows'], isA<List<Object?>>());
       expect(result['executionTimeMs'], equals(2.0));
       expect(body?['groupBy'], equals(<String>['status']));
-      expect(body?['metrics'], equals(<String, dynamic>{
+      expect(
+          body?['metrics'],
+          equals(<String, dynamic>{
             'n': <String, dynamic>{'op': 'count'},
             'maxTotal': <String, dynamic>{'op': 'max', 'field': 'total'},
           }));
@@ -283,16 +323,23 @@ void main() {
 
     test('deleteWhere() posts bulk-delete and returns deletedCount', () async {
       final client = recordingClient(<String, dynamic>{'deletedCount': 12});
-      final result = await client.collection('orders')
+      final result = await client
+          .collection('orders')
           .where('status', '==', 'stale')
           .deleteWhere(limit: 250);
       expect(result, equals(12));
       expect(method, equals('POST'));
       expect(url, endsWith('/documents:bulk-delete'));
-      expect(body, equals(<String, dynamic>{
+      expect(
+          body,
+          equals(<String, dynamic>{
             'collectionPath': 'orders',
             'where': <Map<String, dynamic>>[
-              <String, dynamic>{'field': 'status', 'op': '==', 'value': 'stale'},
+              <String, dynamic>{
+                'field': 'status',
+                'op': '==',
+                'value': 'stale'
+              },
             ],
             'limit': 250,
           }));
@@ -335,7 +382,9 @@ void main() {
       );
       expect(method, equals('PUT'));
       expect(url, endsWith('/documents/posts/p1'));
-      expect(body, equals(<String, dynamic>{
+      expect(
+          body,
+          equals(<String, dynamic>{
             'data': <String, dynamic>{'title': 'x'},
             'merge': false,
             'ttlSeconds': 3600,
@@ -350,7 +399,9 @@ void main() {
         ttlSeconds: 60,
       );
       expect(method, equals('POST'));
-      expect(body, equals(<String, dynamic>{
+      expect(
+          body,
+          equals(<String, dynamic>{
             'data': <String, dynamic>{'title': 'x'},
             'ttlSeconds': 60,
           }));
@@ -366,19 +417,25 @@ void main() {
       expect(body?['expiresAt'], equals('2026-12-01T00:00:00.000Z'));
     });
 
-    test('get(include:, select:) sends JSON query params and typed snapshot fields', () async {
+    test(
+        'get(include:, select:) sends JSON query params and typed snapshot fields',
+        () async {
       final snap = await client.doc('posts/p1').get(
         include: <Object>['author'],
         select: const <String>['title', 'author.name'],
       );
       expect(method, equals('GET'));
       final params = Uri.parse(url).queryParameters;
-      expect(jsonDecode(params['include']!), equals(<Map<String, dynamic>>[
+      expect(
+          jsonDecode(params['include']!),
+          equals(<Map<String, dynamic>>[
             <String, dynamic>{'field': 'author'},
           ]));
-      expect(jsonDecode(params['select']!), equals(<String>['title', 'author.name']));
+      expect(jsonDecode(params['select']!),
+          equals(<String>['title', 'author.name']));
       final author = snap.included['author'];
-      expect(author is Map<String, Object?> ? author['name'] : null, equals('Ada'));
+      expect(author is Map<String, Object?> ? author['name'] : null,
+          equals('Ada'));
       expect(snap.redactedRefs, equals(<String>['users/private']));
     });
 
@@ -395,7 +452,8 @@ void main() {
   });
 
   group('Index advisor warnings', () {
-    test('requestMap handles plain bodies and VellumHttpResponse bodies', () async {
+    test('requestMap handles plain bodies and VellumHttpResponse bodies',
+        () async {
       final plain = await requestMap(
         (m, u, h, b) async => <String, dynamic>{'ok': true},
         'GET',
@@ -417,7 +475,8 @@ void main() {
       expect(wrapped, equals(<String, dynamic>{'ok': 2}));
     });
 
-    test('first sighting prints a multi-line warning and invokes the callback', () async {
+    test('first sighting prints a multi-line warning and invokes the callback',
+        () async {
       final suggestions = <VellumIndexSuggestion>[];
       final fp = _fingerprint('first');
       final client = _client(
@@ -474,7 +533,8 @@ void main() {
       expect(suggestions, hasLength(2));
     });
 
-    test('warnOnMissingIndexes: false disables both print and callback', () async {
+    test('warnOnMissingIndexes: false disables both print and callback',
+        () async {
       final suggestions = <VellumIndexSuggestion>[];
       final client = _client(
         (m, u, h, b) => VellumHttpResponse(
@@ -551,18 +611,21 @@ void main() {
       expect(output.contains('eyJhbGciOiJIUzI1NiJ9'), isFalse);
     });
 
-    test('missing fingerprint falls back to a hashed URL that still dedupes', () async {
+    test('missing fingerprint falls back to a hashed URL that still dedupes',
+        () async {
       final suggestions = <VellumIndexSuggestion>[];
       final url = 'http://localhost:3000/indexes?suggest=fallback-${_unique++}';
-      final client = _client((m, u, h, b) => VellumHttpResponse(
-            body: <String, dynamic>{'documents': <dynamic>[]},
-            headers: <String, String>{
-              'x-vellum-index-url': url,
-              'x-vellum-index-suggestion': jsonEncode(<String, dynamic>{
-                'reason': 'no fingerprint supplied',
-              }),
-            },
-          ), onIndexSuggestion: suggestions.add);
+      final client = _client(
+          (m, u, h, b) => VellumHttpResponse(
+                body: <String, dynamic>{'documents': <dynamic>[]},
+                headers: <String, String>{
+                  'x-vellum-index-url': url,
+                  'x-vellum-index-suggestion': jsonEncode(<String, dynamic>{
+                    'reason': 'no fingerprint supplied',
+                  }),
+                },
+              ),
+          onIndexSuggestion: suggestions.add);
       final lines = await _capturePrint(() async {
         await client.collection('orders').get();
         await client.collection('orders').get();

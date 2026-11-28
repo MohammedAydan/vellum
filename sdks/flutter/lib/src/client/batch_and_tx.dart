@@ -75,9 +75,8 @@ class VellumWriteBatch {
   }
 
   /// Submits all queued writes in a single atomic `/batchWrite` request.
-  Future<JsonMap> commit({String? idempotencyKey}) =>
-      client.batchWrite(List<JsonMap>.from(_writes),
-          idempotencyKey: idempotencyKey);
+  Future<JsonMap> commit({String? idempotencyKey}) => client
+      .batchWrite(List<JsonMap>.from(_writes), idempotencyKey: idempotencyKey);
 
   /// Submits all queued writes split into chunks of at most [chunkSize].
   Future<List<JsonMap>> commitChunked({

@@ -72,11 +72,14 @@ void main() {
 
   test('networkFirst throws offline when nothing is stored', () async {
     final s = _Server()..online = false;
-    expect(s.client().collection('posts').doc('a').get(),
-        throwsA(isA<VellumException>().having((e) => e.code, 'code', 'NETWORK_ERROR')));
+    expect(
+        s.client().collection('posts').doc('a').get(),
+        throwsA(isA<VellumException>()
+            .having((e) => e.code, 'code', 'NETWORK_ERROR')));
   });
 
-  test('a deleted document is never masked by stored data (exists == false)', () async {
+  test('a deleted document is never masked by stored data (exists == false)',
+      () async {
     final s = _Server();
     final ref = s.client().collection('posts').doc('a');
     await ref.get();
@@ -127,7 +130,10 @@ void main() {
     final ref = s.client(enableCache: false).collection('posts').doc('a');
     await ref.get();
     s.online = false;
-    expect(ref.get(), throwsA(isA<VellumException>().having((e) => e.code, 'code', 'NETWORK_ERROR')));
+    expect(
+        ref.get(),
+        throwsA(isA<VellumException>()
+            .having((e) => e.code, 'code', 'NETWORK_ERROR')));
   });
 
   test(

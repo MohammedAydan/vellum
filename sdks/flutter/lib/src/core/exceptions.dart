@@ -27,7 +27,8 @@ class VellumException implements Exception {
   });
 
   @override
-  String toString() => 'VellumException($code [$statusCode]): ${_redactSecrets(message)}';
+  String toString() =>
+      'VellumException($code [$statusCode]): ${_redactSecrets(message)}';
 }
 
 /// Defense-in-depth: never let a token or API key leak into printed output.

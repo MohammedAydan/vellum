@@ -4,8 +4,10 @@ import 'package:http/testing.dart';
 import 'package:vellum_flutter/vellum_flutter.dart';
 
 void main() {
-  test('a network failure surfaces as a typed NETWORK_ERROR with status 0', () async {
-    final mock = MockClient((_) async => throw http.ClientException('Failed host lookup'));
+  test('a network failure surfaces as a typed NETWORK_ERROR with status 0',
+      () async {
+    final mock = MockClient(
+        (_) async => throw http.ClientException('Failed host lookup'));
     final db = VellumClient(
       projectId: 'p',
       apiKey: 'pk_t',

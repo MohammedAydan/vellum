@@ -440,7 +440,8 @@ class FallbackWebSocketChannel extends StreamChannelMixin<Object?>
     // back via _attach.
     _openTimer = Timer(_openTimeout, () {
       if (!_usingFallback && !_gotMessage) {
-        _useFallback(TimeoutException('WebSocket delivered no frame before the open timeout'));
+        _useFallback(TimeoutException(
+            'WebSocket delivered no frame before the open timeout'));
       }
     });
     channel.ready.then((_) {

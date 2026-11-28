@@ -13,16 +13,21 @@ class VellumRealtimeManager implements VellumRealtimePort {
   /// Maximum pooled sockets (40 x 25 = 1,000 subscriptions). Set to 1 to disable pooling.
   final int maxSockets;
   final List<VellumRealtimeTransport> _transports = <VellumRealtimeTransport>[];
-  final Map<String, VellumRealtimeTransport> _shardOf = <String, VellumRealtimeTransport>{};
-  final Map<VellumRealtimeTransport, int> _shardCounts = <VellumRealtimeTransport, int>{};
+  final Map<String, VellumRealtimeTransport> _shardOf =
+      <String, VellumRealtimeTransport>{};
+  final Map<VellumRealtimeTransport, int> _shardCounts =
+      <VellumRealtimeTransport, int>{};
 
   /// Number of sockets currently allocated (visible for tests and diagnostics).
   int get socketCount => _transports.length;
-  VellumRealtimeTransport? get _transport => _transports.isEmpty ? null : _transports.first;
+  VellumRealtimeTransport? get _transport =>
+      _transports.isEmpty ? null : _transports.first;
   final Map<String, void Function(JsonMap)> _frameHandlers =
       <String, void Function(JsonMap)>{};
-  final Map<String, void Function(Object)> _errorHandlers = <String, void Function(Object)>{};
-  final Map<String, void Function()> _closeHandlers = <String, void Function()>{};
+  final Map<String, void Function(Object)> _errorHandlers =
+      <String, void Function(Object)>{};
+  final Map<String, void Function()> _closeHandlers =
+      <String, void Function()>{};
   int _counter = 0;
   VellumRealtimeConnectionState _connectionState =
       VellumRealtimeConnectionState.disconnected;
@@ -80,7 +85,8 @@ class VellumRealtimeManager implements VellumRealtimePort {
         if (onError != null) {
           onError(const VellumException(
             code: 'SUBSCRIPTION_LIMIT_EXCEEDED',
-            message: 'Too many active subscriptions: $subscriptionsPerSocket per socket, '
+            message:
+                'Too many active subscriptions: $subscriptionsPerSocket per socket, '
                 'limited by maxSockets',
             statusCode: 0,
           ));
@@ -89,7 +95,8 @@ class VellumRealtimeManager implements VellumRealtimePort {
       }
       late final VellumRealtimeTransport created;
       created = VellumRealtimeTransport(
-        url: vellumSanitizeRealtimeUri(client.realtimeUrlOverride ?? vellumRealtimeUrl(client.realtimeEndpoint)),
+        url: vellumSanitizeRealtimeUri(client.realtimeUrlOverride ??
+            vellumRealtimeUrl(client.realtimeEndpoint)),
         auth: () async {
           final token = await client.resolveAuthToken();
           return <String, Object?>{
@@ -117,7 +124,9 @@ class VellumRealtimeManager implements VellumRealtimePort {
         },
         // Only the first socket drives the client's connection state.
         onConnectionStateChange: (VellumRealtimeConnectionState st) {
-          if (_transports.isEmpty || identical(_transports.first, created)) _onConnectionState(st);
+          if (_transports.isEmpty || identical(_transports.first, created)) {
+            _onConnectionState(st);
+          }
         },
         channelFactory: client.webSocketChannelFactory ??
             switch (client.realtimeMode) {
