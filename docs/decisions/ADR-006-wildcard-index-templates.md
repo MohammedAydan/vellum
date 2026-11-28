@@ -11,11 +11,12 @@ Collections crossing 50,000 documents fail unindexed scan-risk queries with
 `FAILED_PRECONDITION`, which requires reusable wildcard composite index templates
 (`chats/*/messages`) to scale across tenants.
 
-An earlier revision of this ADR deferred the work to 0.0.10 on safety grounds: coverage
+An earlier revision of this ADR deferred the work on safety grounds: coverage
 correctness is load-bearing, the change is cross-layer, and acceptance required
->50k-document end-to-end benchmarks on a throwaway database. The project owner then
-ruled that there is no 0.0.10 and every fix ships in 0.0.9. This revision records the
-design as implemented, benchmarked and shipped.
+>50k-document end-to-end benchmarks on a throwaway database. The work then shipped in
+0.0.9 without the deferral. This revision records the design as implemented, benchmarked
+and shipped. 0.0.10 adds a Postgres integration test for template coverage
+(`tests/integration/wildcard-index-pg.test.ts`) that runs in CI.
 
 ## Decision
 Ship wildcard collection templates across all four layers at once, exactly the
