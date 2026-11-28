@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { createProjectCors, createProjectOriginChecker, type ProjectCorsStore } from "../middleware/project-cors.js";
 
@@ -169,5 +169,17 @@ describe("localhost development bypass (dev-flagged keys)", () => {
     expect(await allowed("p1", "http://[::1]:8080")).toBe(true);
     expect(await allowed("p1", "https://evil.example")).toBe(false);
     expect(await allowed("p2", "http://localhost:5173")).toBe(false);
+  });
+  it("logs one server-side hint per project and origin when an origin is rejected", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const { app } = setup([key()]);
+      for (let i = 0; i < 3; i += 1) await app.fetch(req("/v1/projects/p1/collections/a", "https://blocked.example"));
+      const hints = warn.mock.calls.filter((c) => String(c[0]).includes("https://blocked.example"));
+      expect(hints).toHaveLength(1);
+      expect(String(hints[0]?.[0])).toContain("allowedOrigins");
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
