@@ -551,6 +551,7 @@ export class RealtimeGatewayHub implements RealtimeGatewayPort {
           type: "error",
           subId: frame.subId,
           code: "SUBSCRIPTION_LIMIT_EXCEEDED",
+          limit: SYSTEM_LIMITS.MAX_WS_SUBSCRIPTIONS_PER_CONN,
           message: `Maximum of ${SYSTEM_LIMITS.MAX_WS_SUBSCRIPTIONS_PER_CONN} active subscriptions per connection exceeded`,
         });
         return;

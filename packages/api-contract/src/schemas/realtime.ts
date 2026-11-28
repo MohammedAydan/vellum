@@ -90,6 +90,8 @@ export const ServerErrorFrameSchema = z.object({
   subId: z.string().optional(),
   code: ErrorCodeEnum,
   message: z.string(),
+  /** Set with SUBSCRIPTION_LIMIT_EXCEEDED: the per-connection subscription limit. */
+  limit: z.number().int().positive().optional(),
 });
 
 export const ServerPongFrameSchema = z.object({
